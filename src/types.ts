@@ -18,6 +18,7 @@ export interface ShippingItem {
   status: ShippingStatus;
   source: 'Warehouse' | 'Pickup' | 'Store';
   price?: number;
+  quantity?: number;
 }
 
 export interface ShippingQuote {
@@ -41,6 +42,7 @@ export interface Appointment {
   time: string;
   address: string;
   phone: string;
+  customerName?: string;
   status: 'Scheduled' | 'Completed' | 'Cancelled';
   items: ShippingItem[];
   paymentStatus: 'Pending' | 'Paid';

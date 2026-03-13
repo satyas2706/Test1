@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import fs from "fs";
 
 dotenv.config();
 
@@ -106,10 +107,12 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     // In production, serve static files from dist
-    app.use(express.static("dist"));
-    app.get("*", (req, res) => {
-      res.sendFile("dist/index.html", { root: "." });
-    });
+    if (fs.existsSync("dist")) {
+      app.use(express.static("dist"));
+      app.get("*", (req, res) => {
+        res.sendFile("dist/index.html", { root: "." });
+      });
+    }
   }
 
   app.listen(PORT, "0.0.0.0", () => {

@@ -14,6 +14,7 @@ import {
   CreditCard, 
   AlertTriangle, 
   Plus, 
+  PlusCircle,
   Trash2, 
   ChevronRight, 
   CheckCircle2, 
@@ -37,8 +38,12 @@ import {
   Check,
   Phone,
   Edit3,
+  Upload,
+  X,
   XCircle,
-  Bell
+  Bell,
+  Heart,
+  Lock,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -102,10 +107,21 @@ export default function App() {
   const [cartMode, setCartMode] = useState<'Warehouse' | 'Pickup'>('Pickup');
   const [selectedPickupDate, setSelectedPickupDate] = useState(PICKUP_SLOTS[0].date);
   const [selectedPickupTime, setSelectedPickupTime] = useState(PICKUP_SLOTS[0].times[0]);
+  const [pickupName, setPickupName] = useState('');
   const [pickupPhone, setPickupPhone] = useState('');
-  const [pickupAddress, setPickupAddress] = useState('');
+  const [pickupAddress, setPickupAddress] = useState({
+    street: '',
+    apartment: '',
+    city: '',
+    state: '',
+    zip: ''
+  });
   const [pickupLanguage, setPickupLanguage] = useState('English');
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; checked: boolean }>({ connected: false, checked: false });
+  const [isGuestMode, setIsGuestMode] = useState(false);
+  const [guestEmail, setGuestEmail] = useState('');
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [categories, setCategories] = useState(['Pooja', 'Return Gifts', 'Decorative']);
 
   // Home Section States
   const [qCountry, setQCountry] = useState(COUNTRIES[0]);
@@ -152,8 +168,12 @@ export default function App() {
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
 
   const handleSchedulePickup = () => {
-    if (!pickupPhone || !pickupAddress) {
-      alert('Please provide your phone number and pickup address.');
+    if (!currentUser) {
+      setShowLoginModal(true);
+      return;
+    }
+    if (!pickupName || !pickupPhone || !pickupAddress.street || !pickupAddress.city) {
+      alert('Please provide your name, phone number, street address, and city.');
       return;
     }
     setShowPickupChoiceModal(true);
@@ -161,25 +181,28 @@ export default function App() {
 
   const confirmPickup = (type: 'AllAgent' | 'Mixed') => {
     const assignedAgent = type === 'AllAgent' ? agents[Math.floor(Math.random() * agents.length)] : undefined;
+    const fullAddress = `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}, ${pickupAddress.city}, ${pickupAddress.state} ${pickupAddress.zip}`;
     
     const newAppointment: Appointment = { 
       id: 'WO-' + Math.random().toString(36).substr(2, 6).toUpperCase(),
       date: selectedPickupDate, 
       time: selectedPickupTime, 
-      address: pickupAddress, 
+      address: fullAddress, 
       phone: pickupPhone,
+      customerName: pickupName,
       status: 'Scheduled',
       items: [],
       paymentStatus: 'Pending',
-      customerId: currentUser?.id || '',
+      customerId: currentUser?.id || 'guest-user',
       pickupType: type,
       assignedAgent: assignedAgent,
       assignedAgentId: assignedAgent?.id,
       languagePreference: pickupLanguage
     };
     setAppointments([...appointments, newAppointment]);
+    setPickupName('');
     setPickupPhone('');
-    setPickupAddress('');
+    setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
     setPickupLanguage('English');
     setShowPickupChoiceModal(false);
   };
@@ -199,25 +222,30 @@ export default function App() {
     setEditingPickupId(apt.id);
     setSelectedPickupDate(apt.date);
     setSelectedPickupTime(apt.time);
+    setPickupName(apt.customerName || '');
     setPickupPhone(apt.phone);
-    setPickupAddress(apt.address);
+    // Parse address back if possible, or just set street
+    setPickupAddress({ street: apt.address, apartment: '', city: '', state: '', zip: '' });
     setPickupLanguage(apt.languagePreference || 'English');
     setCartMode('Pickup');
     setActiveTab('cart');
   };
 
   const saveEditedPickup = () => {
+    const fullAddress = `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}, ${pickupAddress.city}, ${pickupAddress.state} ${pickupAddress.zip}`;
     setAppointments(prev => prev.map(a => a.id === editingPickupId ? {
       ...a,
       date: selectedPickupDate,
       time: selectedPickupTime,
+      customerName: pickupName,
       phone: pickupPhone,
-      address: pickupAddress,
+      address: fullAddress,
       languagePreference: pickupLanguage
     } : a));
     setEditingPickupId(null);
+    setPickupName('');
     setPickupPhone('');
-    setPickupAddress('');
+    setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
     setPickupLanguage('English');
     alert('Pickup schedule updated successfully!');
   };
@@ -293,7 +321,7 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Sync currentUser with session
+  // Sync currentUser with session or Guest Mode
   useEffect(() => {
     if (session?.user) {
       setCurrentUser({
@@ -302,10 +330,17 @@ export default function App() {
         email: session.user.email || '',
         role: (session.user.user_metadata?.role as UserRole) || 'Customer'
       });
+    } else if (isGuestMode) {
+      setCurrentUser({
+        id: 'guest-user',
+        name: guestEmail === 'admin@jiffex.com' ? 'Admin User' : 'Guest User',
+        email: guestEmail || 'guest@example.com',
+        role: guestEmail === 'admin@jiffex.com' ? 'Admin' : 'Customer'
+      });
     } else {
       setCurrentUser(null);
     }
-  }, [session]);
+  }, [session, isGuestMode]);
 
   // Fetch orders when currentUser or activeTab changes
   useEffect(() => {
@@ -330,11 +365,30 @@ export default function App() {
     return shippingCost + itemsCost;
   }, [items, totalWeight, address.country]);
 
-  const addItem = async (item: Omit<ShippingItem, 'id' | 'status' | 'source'>, source: 'Warehouse' | 'Pickup' | 'Store') => {
-    const hasActivePickup = appointments.some(a => a.status === 'Scheduled');
+  const addItem = async (item: Omit<ShippingItem, 'id' | 'status' | 'source'>, source: 'Warehouse' | 'Pickup' | 'Store', force = false) => {
+    const activePickup = appointments.find(a => a.status === 'Scheduled');
+    const hasActivePickup = !!activePickup;
+    const isMixedPickup = activePickup?.pickupType === 'Mixed';
     
-    if (hasActivePickup && !showConflictModal.show) {
+    if (hasActivePickup && !isMixedPickup && !showConflictModal.show && !force) {
       setShowConflictModal({ show: true, item, source });
+      return;
+    }
+
+    // Check if item already exists in cart (same name and source)
+    const existingItemIndex = items.findIndex(i => i.name === item.name && i.source === source);
+
+    if (existingItemIndex !== -1) {
+      // Increment quantity
+      const updatedItems = [...items];
+      const existingItem = updatedItems[existingItemIndex];
+      updatedItems[existingItemIndex] = {
+        ...existingItem,
+        quantity: (existingItem.quantity || 1) + 1,
+        weight: existingItem.weight + item.weight // Also update total weight for this entry
+      };
+      setItems(updatedItems);
+      setShowConflictModal({ show: false, item: null, source: null });
       return;
     }
 
@@ -343,6 +397,7 @@ export default function App() {
       id: Math.random().toString(36).substr(2, 9),
       status: source === 'Store' ? 'Received at Warehouse' : 'Pending',
       source,
+      quantity: 1,
     };
     
     // Optimistic update
@@ -368,11 +423,20 @@ export default function App() {
   };
 
   const removeStoreItem = (name: string) => {
-    const index = items.findLastIndex(i => i.name === name && i.source === 'Store');
+    const index = items.findIndex(i => i.name === name && i.source === 'Store');
     if (index !== -1) {
-      const newItems = [...items];
-      newItems.splice(index, 1);
-      setItems(newItems);
+      const updatedItems = [...items];
+      const item = updatedItems[index];
+      if (item.quantity && item.quantity > 1) {
+        updatedItems[index] = {
+          ...item,
+          quantity: item.quantity - 1,
+          weight: item.weight - (item.weight / item.quantity) // This is tricky if weights are different, but for store items they are same
+        };
+      } else {
+        updatedItems.splice(index, 1);
+      }
+      setItems(updatedItems);
     }
   };
 
@@ -462,6 +526,17 @@ export default function App() {
   };
 
   const handleCheckout = async () => {
+    if (!currentUser) {
+      setShowLoginModal(true);
+      return;
+    }
+
+    const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled');
+    if (hasScheduledPickup) {
+      alert("You have an active agent pickup scheduled. To ensure all your items are shipped together, payment is only available once the agent has collected your items and they are received at our warehouse.");
+      return;
+    }
+
     const pendingItems = items.filter(i => i.status === 'Pending');
     if (pendingItems.length > 0) {
       alert(`You have ${pendingItems.length} item(s) with PENDING status. All items must be 'Received at Warehouse' before you can proceed to checkout.`);
@@ -474,51 +549,19 @@ export default function App() {
 
   // --- Components ---
 
-  const HomeSection = useMemo(() => {
-    if (!currentUser) return null;
+   const HomeSection = useMemo(() => {
     return (
       <div className="space-y-12">
-        {/* Shipping Announcement Banner */}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="relative overflow-hidden bg-indigo-600 rounded-3xl p-1 shadow-xl shadow-indigo-200"
-        >
-          <div className="bg-white/10 backdrop-blur-md rounded-[22px] px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 border border-white/20">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-lg shrink-0">
-                <Truck size={24} className="animate-bounce" />
-              </div>
-              <div>
-                <h3 className="text-white font-black text-lg leading-tight">Next Shipping to USA</h3>
-                <p className="text-indigo-100 text-sm font-medium">Scheduled for <span className="text-white font-bold underline decoration-amber-400 decoration-2 underline-offset-4">15-Mar-2026</span></p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:block h-8 w-px bg-white/20" />
-              <div className="text-center md:text-right">
-                <div className="text-xs font-bold text-indigo-200 uppercase tracking-widest mb-1">Status</div>
-                <div className="flex items-center gap-2 bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter border border-emerald-500/30">
-                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                  Booking Open
-                </div>
-              </div>
-              <button 
-                onClick={() => setActiveTab('cart')}
-                className="bg-white text-indigo-600 px-6 py-3 rounded-xl font-black text-sm hover:bg-indigo-50 transition-all shadow-lg active:scale-95"
-              >
-                Place Your Orders
-              </button>
-            </div>
-          </div>
-          
-          {/* Decorative background elements */}
-          <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
-          <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-32 h-32 bg-indigo-400/20 rounded-full blur-3xl" />
-        </motion.div>
-
         {/* Hero Message */}
         <div className="text-center max-w-4xl mx-auto space-y-8">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-full text-xs font-black uppercase tracking-widest border border-emerald-100 shadow-sm"
+          >
+            <MapPin size={14} className="animate-pulse" />
+            Operating only in Hyderabad, India
+          </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -566,6 +609,50 @@ export default function App() {
             </button>
           </motion.div>
         </div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="relative overflow-hidden rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-700 p-12 text-white shadow-2xl"
+        >
+          <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl" />
+          
+          <div className="relative z-10 max-w-3xl mx-auto text-center space-y-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur rounded-full text-xs font-bold uppercase tracking-widest">
+              <Heart size={14} className="text-pink-300 fill-pink-300" /> Made for the Global Indian
+            </div>
+            <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
+              Stop waiting for a <span className="text-indigo-200 italic">friend's suitcase.</span>
+            </h2>
+            <p className="text-xl text-indigo-100 leading-relaxed font-medium">
+              Your connection to home shouldn't depend on someone else's travel plans. 
+              Whether it's your mother's handmade sweets, that specific wedding outfit, or the comfort of Indian spices—we bring India to your doorstep.
+            </p>
+            <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                  <Clock size={24} />
+                </div>
+                <div className="text-left">
+                  <div className="text-sm font-bold">No More Waiting</div>
+                  <div className="text-xs text-indigo-200">Ship whenever you want</div>
+                </div>
+              </div>
+              <div className="w-px h-8 bg-white/20 hidden sm:block" />
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                  <Users size={24} />
+                </div>
+                <div className="text-left">
+                  <div className="text-sm font-bold">No More Asking</div>
+                  <div className="text-xs text-indigo-200">Independence in shipping</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
           {/* Quote Calculator */}
@@ -717,259 +804,323 @@ export default function App() {
         </div>
       </div>
     );
-  }, [qCountry, qWeight, setActiveTab, setQuote, addItem, storeProducts]);
+  }, [qCountry, qWeight, setActiveTab, setQuote, addItem, storeProducts, currentUser]);
 
-  const AdminDashboard = useMemo(() => {
-    if (!currentUser) return null;
-    const stats = [
-      { label: 'Total Shipments', value: orders.length + appointments.length, icon: Package, color: 'bg-blue-500' },
-      { label: 'Pending Pickups', value: appointments.filter(a => a.status === 'Scheduled').length, icon: Clock, color: 'bg-amber-500' },
-      { label: 'Active Shipments', value: orders.filter(o => o.status !== 'Delivered').length, icon: Truck, color: 'bg-indigo-500' },
-      { label: 'Total Revenue', value: `₹${orders.reduce((sum, o) => sum + o.totalCost, 0).toLocaleString()}`, icon: BarChart3, color: 'bg-emerald-500' },
-    ];
-
-    const handleAddAgent = () => {
-      if (!newAgent.name || !newAgent.phone) return;
-      const agent: AgentProfile = {
-        id: 'AG-' + Math.random().toString(36).substr(2, 4).toUpperCase(),
-        ...newAgent,
-        status: 'Active'
-      };
-      setAgents([...agents, agent]);
-      setNewAgent({ name: '', phone: '', email: '', vehicleNumber: '' });
+const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, newProduct: any, setNewProduct: any) => {
+  const file = e.target.files?.[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setNewProduct({ ...newProduct, image: reader.result as string });
     };
+    reader.readAsDataURL(file);
+  }
+};
 
-    const handleAssignAgent = (aptId: string, agentId: string) => {
-      const agent = agents.find(a => a.id === agentId);
-      if (!agent) return;
-      
-      setAppointments(prev => prev.map(apt => 
-        apt.id === aptId ? { ...apt, assignedAgent: agent, assignedAgentId: agent.id } : apt
-      ));
+interface AdminDashboardProps {
+  currentUser: User | null;
+  orders: Order[];
+  appointments: Appointment[];
+  setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>;
+  agents: AgentProfile[];
+  setAgents: React.Dispatch<React.SetStateAction<AgentProfile[]>>;
+  newAgent: any;
+  setNewAgent: React.Dispatch<React.SetStateAction<any>>;
+  categories: string[];
+  setCategories: React.Dispatch<React.SetStateAction<string[]>>;
+  adminTab: 'Overview' | 'Agents' | 'Inventory';
+  setAdminTab: React.Dispatch<React.SetStateAction<'Overview' | 'Agents' | 'Inventory'>>;
+  newProduct: Partial<StoreProduct>;
+  setNewProduct: React.Dispatch<React.SetStateAction<Partial<StoreProduct>>>;
+  storeProducts: StoreProduct[];
+  setStoreProducts: React.Dispatch<React.SetStateAction<StoreProduct[]>>;
+}
+
+const AdminDashboard = ({
+  currentUser,
+  orders,
+  appointments,
+  setAppointments,
+  agents,
+  setAgents,
+  newAgent,
+  setNewAgent,
+  categories,
+  setCategories,
+  adminTab,
+  setAdminTab,
+  newProduct,
+  setNewProduct,
+  storeProducts,
+  setStoreProducts
+}: AdminDashboardProps) => {
+  const [categoryInput, setCategoryInput] = useState('');
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [editPriceValue, setEditPriceValue] = useState<string>('');
+
+  if (!currentUser) return null;
+  const stats = [
+    { label: 'Total Shipments', value: orders.length + appointments.length, icon: Package, color: 'bg-blue-500' },
+    { label: 'Pending Pickups', value: appointments.filter(a => a.status === 'Scheduled').length, icon: Clock, color: 'bg-amber-500' },
+    { label: 'Active Shipments', value: orders.filter(o => o.status !== 'Delivered').length, icon: Truck, color: 'bg-indigo-500' },
+    { label: 'Total Revenue', value: `₹${orders.reduce((sum, o) => sum + o.totalCost, 0).toLocaleString()}`, icon: BarChart3, color: 'bg-emerald-500' },
+  ];
+
+  const handleAddAgent = () => {
+    if (!newAgent.name || !newAgent.phone) return;
+    const agent: AgentProfile = {
+      id: 'AG-' + Math.random().toString(36).substr(2, 4).toUpperCase(),
+      ...newAgent,
+      status: 'Active'
     };
+    setAgents([...agents, agent]);
+    setNewAgent({ name: '', phone: '', email: '', vehicleNumber: '' });
+  };
 
-    return (
-      <div className="space-y-8">
-        <div className="flex items-center justify-between">
-          <h2 className="text-3xl font-black text-slate-900">Admin Dashboard</h2>
-          <div className="flex gap-2 bg-slate-100 p-1 rounded-xl">
-            <button 
-              onClick={() => setAdminTab('Overview')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${adminTab === 'Overview' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-            >
-              Overview
-            </button>
-            <button 
-              onClick={() => setAdminTab('Agents')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${adminTab === 'Agents' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-            >
-              Manage Agents
-            </button>
-            <button 
-              onClick={() => setAdminTab('Inventory')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${adminTab === 'Inventory' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-            >
-              Inventory
-            </button>
-          </div>
+  const handleAssignAgent = (aptId: string, agentId: string) => {
+    const agent = agents.find(a => a.id === agentId);
+    if (!agent) return;
+    
+    setAppointments(prev => prev.map(apt => 
+      apt.id === aptId ? { ...apt, assignedAgent: agent, assignedAgentId: agent.id } : apt
+    ));
+  };
+
+  const handleAddCategory = () => {
+    if (categoryInput && !categories.includes(categoryInput)) {
+      setCategories([...categories, categoryInput]);
+      setCategoryInput('');
+    }
+  };
+
+  const handleDeleteCategory = (cat: string) => {
+    setCategories(categories.filter(c => c !== cat));
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-black text-slate-900">Admin Dashboard</h2>
+        <div className="flex gap-2 bg-slate-100 p-1 rounded-xl">
+          <button 
+            onClick={() => setAdminTab('Overview')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${adminTab === 'Overview' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+          >
+            Overview
+          </button>
+          <button 
+            onClick={() => setAdminTab('Agents')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${adminTab === 'Agents' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+          >
+            Manage Agents
+          </button>
+          <button 
+            onClick={() => setAdminTab('Inventory')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${adminTab === 'Inventory' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+          >
+            Inventory
+          </button>
         </div>
+      </div>
 
-        {adminTab === 'Overview' ? (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {stats.map((stat, i) => (
-                <motion.div 
-                  key={stat.label}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm"
-                >
-                  <div className={`w-12 h-12 ${stat.color} text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg`}>
-                    <stat.icon size={24} />
-                  </div>
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{stat.label}</div>
-                  <div className="text-2xl font-black text-slate-900">{stat.value}</div>
-                </motion.div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <Clock className="text-amber-500" /> Recent Appointments
-                </h3>
-                <div className="space-y-4">
-                  {appointments.length === 0 ? (
-                    <p className="text-center text-slate-400 py-8">No appointments scheduled</p>
-                  ) : (
-                    appointments.map(apt => (
-                      <div key={apt.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-bold text-slate-900">{apt.id}</div>
-                            <div className="text-xs text-slate-500">{apt.date} at {apt.time}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-xs font-bold text-indigo-600">{apt.phone}</div>
-                            <div className="text-[10px] text-slate-400 uppercase font-bold">{apt.status}</div>
-                          </div>
-                        </div>
-
-                        {apt.assignedAgent ? (
-                          <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-indigo-100">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
-                                <Users size={16} />
-                              </div>
-                              <div>
-                                <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Assigned Agent</div>
-                                <div className="text-xs font-bold text-slate-900">{apt.assignedAgent.name}</div>
-                              </div>
-                            </div>
-                            <button 
-                              onClick={() => setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, assignedAgent: undefined, assignedAgentId: undefined } : a))}
-                              className="text-[10px] text-red-500 font-bold hover:underline"
-                            >
-                              Change
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <select 
-                              className="flex-1 p-2 rounded-lg bg-white border border-slate-200 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                              onChange={(e) => handleAssignAgent(apt.id, e.target.value)}
-                              defaultValue=""
-                            >
-                              <option value="" disabled>Select Agent to Assign</option>
-                              {agents.filter(a => a.status === 'Active').map(agent => (
-                                <option key={agent.id} value={agent.id}>{agent.name}</option>
-                              ))}
-                            </select>
-                            <div className="px-3 py-2 bg-amber-100 text-amber-700 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center gap-1">
-                              <AlertTriangle size={12} /> Unassigned
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
+      {adminTab === 'Overview' ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {stats.map((stat, i) => (
+              <motion.div 
+                key={stat.label}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+                className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm"
+              >
+                <div className={`w-12 h-12 ${stat.color} text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg`}>
+                  <stat.icon size={24} />
                 </div>
-              </div>
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{stat.label}</div>
+                <div className="text-2xl font-black text-slate-900">{stat.value}</div>
+              </motion.div>
+            ))}
+          </div>
 
-              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <Truck className="text-indigo-500" /> Recent Shipments
-                </h3>
-                <div className="space-y-4">
-                  {orders.length === 0 ? (
-                    <p className="text-center text-slate-400 py-8">No shipments found</p>
-                  ) : (
-                    orders.map(order => (
-                      <div key={order.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                <Clock className="text-amber-500" /> Recent Appointments
+              </h3>
+              <div className="space-y-4">
+                {appointments.length === 0 ? (
+                  <p className="text-center text-slate-400 py-8">No appointments scheduled</p>
+                ) : (
+                  appointments.map(apt => (
+                    <div key={apt.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
+                      <div className="flex items-center justify-between">
                         <div>
-                          <div className="font-bold text-slate-900">{order.id}</div>
-                          <div className="text-xs text-slate-500">{order.destination.country} • {order.totalWeight}kg</div>
+                          <div className="font-bold text-slate-900">{apt.id}</div>
+                          <div className="text-xs font-bold text-indigo-600">{apt.customerName || 'Customer'}</div>
+                          <div className="text-xs text-slate-500">{apt.date} at {apt.time}</div>
                         </div>
                         <div className="text-right">
-                          <div className="text-sm font-black text-slate-900">₹{order.totalCost}</div>
-                          <div className="text-[10px] text-indigo-600 uppercase font-bold">{order.status}</div>
+                          <div className="text-xs font-bold text-indigo-600">{apt.phone}</div>
+                          <div className="text-[10px] text-slate-400 uppercase font-bold">{apt.status}</div>
                         </div>
                       </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </>
-        ) : adminTab === 'Agents' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm h-fit">
-              <h3 className="text-xl font-bold mb-6">Add New Agent</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Full Name</label>
-                  <input 
-                    type="text" 
-                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    placeholder="Agent Name"
-                    value={newAgent.name}
-                    onChange={e => setNewAgent({...newAgent, name: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Phone Number</label>
-                  <input 
-                    type="tel" 
-                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    placeholder="+91 XXXXX XXXXX"
-                    value={newAgent.phone}
-                    onChange={e => setNewAgent({...newAgent, phone: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Email Address</label>
-                  <input 
-                    type="email" 
-                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    placeholder="agent@jiffex.com"
-                    value={newAgent.email}
-                    onChange={e => setNewAgent({...newAgent, email: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Vehicle Number</label>
-                  <input 
-                    type="text" 
-                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    placeholder="KA-01-XX-XXXX"
-                    value={newAgent.vehicleNumber}
-                    onChange={e => setNewAgent({...newAgent, vehicleNumber: e.target.value})}
-                  />
-                </div>
-                <button 
-                  onClick={handleAddAgent}
-                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
-                >
-                  Create Agent Profile
-                </button>
+
+                      {apt.assignedAgent ? (
+                        <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-indigo-100">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
+                              <Users size={16} />
+                            </div>
+                            <div>
+                              <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Assigned Agent</div>
+                              <div className="text-xs font-bold text-slate-900">{apt.assignedAgent.name}</div>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, assignedAgent: undefined, assignedAgentId: undefined } : a))}
+                            className="text-[10px] text-red-500 font-bold hover:underline"
+                          >
+                            Change
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <select 
+                            className="flex-1 p-2 rounded-lg bg-white border border-slate-200 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                            onChange={(e) => handleAssignAgent(apt.id, e.target.value)}
+                            defaultValue=""
+                          >
+                            <option value="" disabled>Select Agent to Assign</option>
+                            {agents.filter(a => a.status === 'Active').map(agent => (
+                              <option key={agent.id} value={agent.id}>{agent.name}</option>
+                            ))}
+                          </select>
+                          <div className="px-3 py-2 bg-amber-100 text-amber-700 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center gap-1">
+                            <AlertTriangle size={12} /> Unassigned
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
-            <div className="lg:col-span-2 space-y-4">
-              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                <h3 className="text-xl font-bold mb-6">Active Agents ({agents.length})</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {agents.map(agent => (
-                    <div key={agent.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-start gap-4">
-                      <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-                        <UserIcon size={24} />
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                <Truck className="text-indigo-500" /> Recent Shipments
+              </h3>
+              <div className="space-y-4">
+                {orders.length === 0 ? (
+                  <p className="text-center text-slate-400 py-8">No shipments found</p>
+                ) : (
+                  orders.map(order => (
+                    <div key={order.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <div>
+                        <div className="font-bold text-slate-900">{order.id}</div>
+                        <div className="text-xs text-slate-500">{order.destination.country} • {order.totalWeight}kg</div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-slate-900 truncate">{agent.name}</div>
-                        <div className="text-xs text-slate-500">{agent.phone}</div>
-                        <div className="text-[10px] text-slate-400 mt-1">{agent.vehicleNumber || 'No Vehicle'}</div>
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase">
-                            {agent.status}
-                          </span>
-                          <button 
-                            onClick={() => setAgents(agents.filter(a => a.id !== agent.id))}
-                            className="text-[10px] text-red-500 font-bold hover:underline"
-                          >
-                            Remove
-                          </button>
-                        </div>
+                      <div className="text-right">
+                        <div className="text-sm font-black text-slate-900">₹{order.totalCost}</div>
+                        <div className="text-[10px] text-indigo-600 uppercase font-bold">{order.status}</div>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm h-fit">
+        </>
+      ) : adminTab === 'Agents' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-1 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm h-fit">
+            <h3 className="text-xl font-bold mb-6">Add New Agent</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Full Name</label>
+                <input 
+                  type="text" 
+                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                  placeholder="Agent Name"
+                  value={newAgent.name}
+                  onChange={e => setNewAgent({...newAgent, name: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Phone Number</label>
+                <input 
+                  type="tel" 
+                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                  placeholder="+91 XXXXX XXXXX"
+                  value={newAgent.phone}
+                  onChange={e => setNewAgent({...newAgent, phone: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Email Address</label>
+                <input 
+                  type="email" 
+                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                  placeholder="agent@jiffex.com"
+                  value={newAgent.email}
+                  onChange={e => setNewAgent({...newAgent, email: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Vehicle Number</label>
+                <input 
+                  type="text" 
+                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                  placeholder="KA-01-XX-XXXX"
+                  value={newAgent.vehicleNumber}
+                  onChange={e => setNewAgent({...newAgent, vehicleNumber: e.target.value})}
+                />
+              </div>
+              <button 
+                onClick={handleAddAgent}
+                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+              >
+                Create Agent Profile
+              </button>
+            </div>
+          </div>
+
+          <div className="lg:col-span-2 space-y-4">
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+              <h3 className="text-xl font-bold mb-6">Active Agents ({agents.length})</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {agents.map(agent => (
+                  <div key={agent.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-start gap-4">
+                    <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+                      <UserIcon size={24} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-900 truncate">{agent.name}</div>
+                      <div className="text-xs text-slate-500">{agent.phone}</div>
+                      <div className="text-[10px] text-slate-400 mt-1">{agent.vehicleNumber || 'No Vehicle'}</div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase">
+                          {agent.status}
+                        </span>
+                        <button 
+                          onClick={() => setAgents(agents.filter(a => a.id !== agent.id))}
+                          className="text-[10px] text-red-500 font-bold hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-1 space-y-8">
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm h-fit">
               <h3 className="text-xl font-bold mb-6">Add New Product</h3>
               <div className="space-y-4">
                 <div>
@@ -988,7 +1139,7 @@ export default function App() {
                     <input 
                       type="number" 
                       className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                      value={newProduct.price}
+                      value={newProduct.price || ''}
                       onChange={e => setNewProduct({...newProduct, price: Number(e.target.value)})}
                     />
                   </div>
@@ -998,7 +1149,7 @@ export default function App() {
                       type="number" 
                       step="0.1"
                       className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                      value={newProduct.weight}
+                      value={newProduct.weight || ''}
                       onChange={e => setNewProduct({...newProduct, weight: Number(e.target.value)})}
                     />
                   </div>
@@ -1010,20 +1161,39 @@ export default function App() {
                     value={newProduct.category}
                     onChange={e => setNewProduct({...newProduct, category: e.target.value as any})}
                   >
-                    <option value="Pooja">Pooja</option>
-                    <option value="Return Gifts">Return Gifts</option>
-                    <option value="Decorative">Decorative</option>
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Image URL</label>
-                  <input 
-                    type="text" 
-                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    placeholder="https://..."
-                    value={newProduct.image}
-                    onChange={e => setNewProduct({...newProduct, image: e.target.value})}
-                  />
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Product Image</label>
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        className="flex-1 p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                        placeholder="Image URL (https://...)"
+                        value={newProduct.image}
+                        onChange={e => setNewProduct({...newProduct, image: e.target.value})}
+                      />
+                      <label className="cursor-pointer px-4 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center hover:bg-slate-200 transition-all border border-slate-200">
+                        <Upload size={18} />
+                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, newProduct, setNewProduct)} />
+                      </label>
+                    </div>
+                    {newProduct.image && (
+                      <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200">
+                        <img src={newProduct.image} className="w-full h-full object-cover" alt="Preview" referrerPolicy="no-referrer" />
+                        <button 
+                          onClick={() => setNewProduct({...newProduct, image: ''})}
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <button 
                   onClick={() => {
@@ -1037,7 +1207,7 @@ export default function App() {
                       weight: newProduct.weight || 0.5
                     };
                     setStoreProducts([...storeProducts, prod]);
-                    setNewProduct({ name: '', price: 0, category: 'Pooja', image: '', weight: 0 });
+                    setNewProduct({ name: '', price: 0, category: categories[0], image: '', weight: 0 });
                   }}
                   className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
                 >
@@ -1046,47 +1216,117 @@ export default function App() {
               </div>
             </div>
 
-            <div className="lg:col-span-2 space-y-4">
-              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                <h3 className="text-xl font-bold mb-6">Store Inventory ({storeProducts.length})</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {storeProducts.map(product => (
-                    <div key={product.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center gap-4">
-                      <img src={product.image} className="w-16 h-16 rounded-xl object-cover" alt="" />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-slate-900 truncate">{product.name}</div>
-                        <div className="text-xs text-slate-500">₹{product.price} • {product.weight}kg</div>
-                        <div className="text-[10px] text-slate-400 uppercase font-bold mt-1">{product.category}</div>
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <button 
-                          onClick={() => {
-                            const newPrice = prompt('Enter new price for ' + product.name, product.price.toString());
-                            if (newPrice && !isNaN(Number(newPrice))) {
-                              setStoreProducts(prev => prev.map(p => p.id === product.id ? { ...p, price: Number(newPrice) } : p));
-                            }
-                          }}
-                          className="text-[10px] text-indigo-600 font-bold hover:underline"
-                        >
-                          Edit Price
-                        </button>
-                        <button 
-                          onClick={() => setStoreProducts(storeProducts.filter(p => p.id !== product.id))}
-                          className="text-[10px] text-red-500 font-bold hover:underline"
-                        >
-                          Remove
-                        </button>
-                      </div>
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm h-fit">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold">Manage Categories</h3>
+              </div>
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    className="flex-1 p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                    placeholder="New Category Name"
+                    value={categoryInput}
+                    onChange={e => setCategoryInput(e.target.value)}
+                  />
+                  <button 
+                    onClick={handleAddCategory}
+                    className="px-4 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {categories.map(cat => (
+                    <div key={cat} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <span className="text-sm font-bold text-slate-700">{cat}</span>
+                      <button 
+                        onClick={() => handleDeleteCategory(cat)}
+                        className="text-red-500 hover:text-red-700 transition-colors"
+                      >
+                        <X size={16} />
+                      </button>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
           </div>
-        )}
-      </div>
-    );
-  }, [orders, appointments, agents, newAgent, adminTab, setAgents, setAppointments]);
+
+          <div className="lg:col-span-2 space-y-4">
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+              <h3 className="text-xl font-bold mb-6">Store Inventory ({storeProducts.length})</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {storeProducts.map(product => (
+                  <div key={product.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-start gap-4">
+                    <div className="w-16 h-16 rounded-xl overflow-hidden border border-slate-200 shrink-0">
+                      <img src={product.image} className="w-full h-full object-cover" alt={product.name} referrerPolicy="no-referrer" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-900 truncate">{product.name}</div>
+                      <div className="text-xs text-slate-500">{product.category} • {product.weight}kg</div>
+                      <div className="mt-2 flex items-center justify-between">
+                        <div className="text-sm font-black text-slate-900">₹{product.price}</div>
+                        <div className="flex gap-2">
+                          <div className="flex items-center gap-1">
+                            {editingProductId === product.id ? (
+                              <div className="flex gap-1">
+                                <input 
+                                  type="number" 
+                                  className="w-20 p-1 text-xs border rounded outline-none focus:ring-1 focus:ring-indigo-500"
+                                  value={editPriceValue}
+                                  onChange={e => setEditPriceValue(e.target.value)}
+                                  autoFocus
+                                />
+                                <button 
+                                  onClick={() => {
+                                    setStoreProducts(storeProducts.map(p => p.id === product.id ? {...p, price: Number(editPriceValue)} : p));
+                                    setEditingProductId(null);
+                                  }}
+                                  className="text-[10px] text-emerald-600 font-bold hover:underline"
+                                >
+                                  Save
+                                </button>
+                                <button 
+                                  onClick={() => setEditingProductId(null)}
+                                  className="text-[10px] text-slate-400 font-bold hover:underline"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button 
+                                onClick={() => {
+                                  setEditingProductId(product.id);
+                                  setEditPriceValue(product.price.toString());
+                                }}
+                                className="text-[10px] text-indigo-600 font-bold hover:underline"
+                              >
+                                Edit Price
+                              </button>
+                            )}
+                          </div>
+                          <button 
+                            onClick={() => setStoreProducts(storeProducts.filter(p => p.id !== product.id))}
+                            className="text-[10px] text-red-500 font-bold hover:underline"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 
   const CustomerHistory = useMemo(() => {
     if (!currentUser) return null;
@@ -1257,7 +1497,7 @@ export default function App() {
         </AnimatePresence>
       </div>
     );
-  }, [orders, currentUser?.id, setActiveTab, selectedOrderForInvoice]);
+  }, [orders, currentUser, setActiveTab, selectedOrderForInvoice]);
 
 
   const WorkOrderSection = useMemo(() => {
@@ -1624,7 +1864,7 @@ export default function App() {
         </div>
       </div>
     );
-  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, setAppointments, woAddress, address]);
+  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, setAppointments, woAddress, address, currentUser]);
 
   const AgentSection = useMemo(() => {
     if (!currentUser) return null;
@@ -1700,9 +1940,8 @@ export default function App() {
         </div>
       </div>
     );
-  }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection]);
+  }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser]);
   const CartSection = useMemo(() => {
-    if (!currentUser) return null;
     // States are now in App to prevent focus loss
 
     const handleAdd = () => {
@@ -1719,240 +1958,243 @@ export default function App() {
     };
 
     const hasAllAgentPickup = appointments.some(a => a.pickupType === 'AllAgent');
+    const hasMixedPickup = appointments.some(a => a.pickupType === 'Mixed');
 
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1 space-y-6">
+        <div className="lg:col-span-2 space-y-6">
           {/* Add Items / Schedule Pickup Card */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              {cartMode === 'Warehouse' ? <Plus className="text-emerald-600" /> : <Calendar className="text-amber-600" />}
-              {editingPickupId ? 'Update Pickup Schedule' : (cartMode === 'Warehouse' ? 'Add Your Items' : 'Schedule Agent Pickup')}
-            </h3>
-            <div className="flex gap-2 mb-4">
-              <button 
-                onClick={() => setCartMode('Pickup')}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                  cartMode === 'Pickup' 
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 ring-2 ring-indigo-600 ring-offset-2' 
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                <Users size={16} /> Agent Pickup
-              </button>
-              <button 
-                onClick={() => setCartMode('Warehouse')}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                  cartMode === 'Warehouse' 
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 ring-2 ring-indigo-600 ring-offset-2' 
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                <Package size={16} /> Warehouse
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              {cartMode === 'Warehouse' ? (
-                <>
-                  <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100 space-y-2 relative group">
-                    <button 
-                      onClick={handleCopyAddress}
-                      className="absolute top-2 right-2 p-1.5 bg-white rounded-lg text-indigo-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-indigo-50"
-                      title="Copy Address"
-                    >
-                      <Copy size={14} />
-                    </button>
-                    <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Our Warehouse Address</div>
-                    <div className="text-xs font-bold text-indigo-900">{WAREHOUSE_ADDRESS.name}</div>
-                    <div className="text-[10px] text-indigo-700 leading-tight">
-                      {WAREHOUSE_ADDRESS.street}<br />
-                      {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state} {WAREHOUSE_ADDRESS.zip}<br />
-                      {WAREHOUSE_ADDRESS.country}<br />
-                      <span className="font-bold">Tel: {WAREHOUSE_ADDRESS.phone}</span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                    Send your items to the address above. Once shipped, enter details below to track them.
-                  </p>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Item Name</label>
-                    <input 
-                      type="text" 
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      placeholder="e.g. Laptop, Clothes..."
-                      value={cartItemName}
-                      onChange={(e) => setCartItemName(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Weight (kg)</label>
-                    <input 
-                      type="number" 
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={cartItemWeight}
-                      onChange={(e) => setCartItemWeight(Number(e.target.value))}
-                    />
-                  </div>
-                  <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center text-slate-400 hover:border-indigo-300 hover:text-indigo-400 cursor-pointer transition-all">
-                    <ImageIcon size={32} />
-                    <span className="text-xs mt-2">Upload Item Image</span>
-                  </div>
+          {(!appointments.length || editingPickupId || hasMixedPickup) && (
+            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                  {cartMode === 'Warehouse' ? <PlusCircle className="text-emerald-600" /> : <Calendar className="text-indigo-600" />}
+                  {editingPickupId ? 'Update Pickup Schedule' : (cartMode === 'Warehouse' ? 'Add Your Items' : 'Schedule Agent Pickup')}
+                </h3>
+                <div className="flex bg-slate-100 p-1 rounded-2xl">
                   <button 
-                    onClick={handleAdd}
-                    className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-colors"
+                    onClick={() => setCartMode('Pickup')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                      cartMode === 'Pickup' 
+                        ? 'bg-indigo-600 text-white shadow-lg ring-4 ring-indigo-100' 
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
                   >
-                    Add to Shipment
+                    <Users size={14} /> Agent Pickup
                   </button>
-                </>
-              ) : (
-                <>
-                  <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 space-y-3">
-                    <div className="flex items-start gap-2">
-                      <Info className="text-amber-600 shrink-0" size={18} />
-                      <div>
-                        <p className="text-xs text-amber-800 font-bold mb-1 uppercase tracking-wider">How it works:</p>
-                        <p className="text-[11px] text-amber-800 leading-relaxed">
-                          1. Select a convenient date and time.<br />
-                          2. Our agent visits your location to collect items.<br />
-                          3. Items are weighed and verified on-site.<br />
-                          4. Shipment is processed after collection.
+                  <button 
+                    onClick={() => setCartMode('Warehouse')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                      cartMode === 'Warehouse' 
+                        ? 'bg-emerald-600 text-white shadow-lg ring-4 ring-emerald-100' 
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <Package size={14} /> Warehouse
+                  </button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {cartMode === 'Warehouse' ? (
+                  <>
+                    <div className="space-y-4">
+                      <div className="p-5 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-3 relative group">
+                        <button 
+                          onClick={handleCopyAddress}
+                          className="absolute top-3 right-3 p-2 bg-white rounded-xl text-indigo-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-indigo-50"
+                          title="Copy Address"
+                        >
+                          <Copy size={16} />
+                        </button>
+                        <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Our Warehouse Address</div>
+                        <div className="text-sm font-bold text-indigo-900">{WAREHOUSE_ADDRESS.name}</div>
+                        <div className="text-xs text-indigo-700 leading-relaxed">
+                          {WAREHOUSE_ADDRESS.street}<br />
+                          {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state} {WAREHOUSE_ADDRESS.zip}<br />
+                          {WAREHOUSE_ADDRESS.country}
+                        </div>
+                        <div className="pt-2 border-t border-indigo-100 flex items-center gap-2 text-xs font-bold text-indigo-900">
+                          <Phone size={14} /> {WAREHOUSE_ADDRESS.phone}
+                        </div>
+                      </div>
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
+                        <Info size={18} className="text-slate-400 shrink-0 mt-0.5" />
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Send your items to our warehouse. Once shipped, enter the details here to track them in your shipment.
                         </p>
                       </div>
                     </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Select Date</label>
-                    <select 
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={selectedPickupDate}
-                      onChange={(e) => setSelectedPickupDate(e.target.value)}
-                    >
-                      {PICKUP_SLOTS.map(slot => <option key={slot.date} value={slot.date}>{slot.date}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Select Time Slot</label>
-                    <select 
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={selectedPickupTime}
-                      onChange={(e) => setSelectedPickupTime(e.target.value)}
-                    >
-                      {PICKUP_SLOTS.find(s => s.date === selectedPickupDate)?.times.map(time => (
-                        <option key={time} value={time}>{time}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Phone Number</label>
-                    <input 
-                      type="tel" 
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      placeholder="Your phone number"
-                      value={pickupPhone}
-                      onChange={(e) => setPickupPhone(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Agent Pickup Address</label>
-                    <textarea 
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
-                      placeholder="Full address for collection"
-                      rows={2}
-                      value={pickupAddress}
-                      onChange={(e) => setPickupAddress(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Language Preference</label>
-                    <select 
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={pickupLanguage}
-                      onChange={(e) => setPickupLanguage(e.target.value)}
-                    >
-                      {['English', 'Hindi', 'Telugu', 'Tamil', 'Kannada', 'Malayalam', 'Bengali', 'Gujarati', 'Marathi', 'Punjabi'].map(lang => (
-                        <option key={lang} value={lang}>{lang}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <button 
-                    onClick={editingPickupId ? saveEditedPickup : handleSchedulePickup}
-                    className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    {editingPickupId ? 'Update Schedule' : 'Schedule Agent Pickup'}
-                  </button>
-                  {editingPickupId && (
-                    <button 
-                      onClick={() => {
-                        setEditingPickupId(null);
-                        setPickupPhone('');
-                        setPickupAddress('');
-                      }}
-                      className="w-full mt-2 py-2 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm"
-                    >
-                      Cancel Editing
-                    </button>
-                  )}
-                  {appointments.length > 0 && (
-                    <div className="space-y-3 mt-4">
-                      <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Scheduled Pickups</div>
-                      {appointments.map((apt, idx) => (
-                        <div key={idx} className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center gap-3">
-                          <CheckCircle2 className="text-emerald-600" size={16} />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[10px] font-bold text-emerald-900">{apt.date} at {apt.time}</div>
-                            <div className="text-[9px] text-emerald-600 italic truncate">{apt.address}</div>
-                          </div>
-                          <button 
-                            onClick={() => setAppointments(appointments.filter((_, i) => i !== idx))}
-                            className="text-slate-300 hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Item Description</label>
+                        <input 
+                          type="text" 
+                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white"
+                          placeholder="e.g. Laptop, Wedding Clothes..."
+                          value={cartItemName}
+                          onChange={(e) => setCartItemName(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Approx Weight (kg)</label>
+                        <input 
+                          type="number" 
+                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white"
+                          value={cartItemWeight}
+                          onChange={(e) => setCartItemWeight(Number(e.target.value))}
+                        />
+                      </div>
+                      <button 
+                        onClick={handleAdd}
+                        className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-2"
+                      >
+                        <Plus size={20} /> Add to Shipment
+                      </button>
                     </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Quick Add from Store */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <ShoppingBag className="text-indigo-600" /> Quick Add from Store
-            </h3>
-            <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-              {STORE_PRODUCTS.map(product => (
-                <div key={product.id} className="flex items-center gap-3 p-2 rounded-xl border border-slate-50 hover:bg-slate-50 transition-all">
-                  <img src={product.image} className="w-10 h-10 rounded-lg object-cover" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-bold truncate">{product.name}</div>
-                    <div className="text-[10px] text-slate-500">₹{product.price} • {product.weight}kg</div>
+                  </>
+                ) : (appointments.length > 0 && !editingPickupId) ? (
+                  <div className="md:col-span-2 p-8 bg-amber-50 rounded-3xl border border-amber-100 flex items-center gap-6">
+                    <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 shrink-0">
+                      <Clock size={32} />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-black text-amber-900 mb-2">Pickup Scheduled</h4>
+                      <p className="text-amber-700 leading-relaxed">
+                        {appointments.some(a => a.pickupType === 'Mixed') 
+                          ? "Mixed Collection: Agent will collect items from you, but invoicing & shipping will be managed from our warehouse. You can still add items to your warehouse list or shop from J Store. Payment will be enabled once all items are received at our warehouse."
+                          : "Your agent pickup is confirmed. Payment will be enabled once the agent has collected your items and they are received at our warehouse. No further actions are required until the agent arrives."
+                        }
+                      </p>
+                    </div>
                   </div>
-                  <button 
-                    onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                    className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-all"
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
-              ))}
+                ) : (
+                  <>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Pickup Date</label>
+                          <select 
+                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                            value={selectedPickupDate}
+                            onChange={(e) => setSelectedPickupDate(e.target.value)}
+                          >
+                            {PICKUP_SLOTS.map(slot => <option key={slot.date} value={slot.date}>{slot.date}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Time Slot</label>
+                          <select 
+                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm font-medium"
+                            value={selectedPickupTime}
+                            onChange={(e) => setSelectedPickupTime(e.target.value)}
+                          >
+                            {PICKUP_SLOTS.find(s => s.date === selectedPickupDate)?.times.map(time => (
+                              <option key={time} value={time}>{time}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Your Name</label>
+                        <input 
+                          type="text" 
+                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all"
+                          placeholder="Full Name"
+                          value={pickupName}
+                          onChange={(e) => setPickupName(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Contact Number</label>
+                        <input 
+                          type="tel" 
+                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all"
+                          placeholder="Mobile number for agent"
+                          value={pickupPhone}
+                          onChange={(e) => setPickupPhone(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Language Preference</label>
+                        <select 
+                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
+                          value={pickupLanguage}
+                          onChange={(e) => setPickupLanguage(e.target.value)}
+                        >
+                          {['English', 'Hindi', 'Telugu', 'Tamil', 'Kannada', 'Malayalam', 'Bengali', 'Gujarati', 'Marathi', 'Punjabi'].map(lang => (
+                            <option key={lang} value={lang}>{lang}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Pickup Address</label>
+                        <div className="space-y-3">
+                          <input 
+                            type="text" 
+                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
+                            placeholder="House No, Street Name"
+                            value={pickupAddress.street}
+                            onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
+                          />
+                          <div className="grid grid-cols-2 gap-3">
+                            <input 
+                              type="text" 
+                              className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
+                              placeholder="City"
+                              value={pickupAddress.city}
+                              onChange={(e) => setPickupAddress({...pickupAddress, city: e.target.value})}
+                            />
+                            <input 
+                              type="text" 
+                              className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
+                              placeholder="ZIP Code"
+                              value={pickupAddress.zip}
+                              onChange={(e) => setPickupAddress({...pickupAddress, zip: e.target.value})}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={editingPickupId ? saveEditedPickup : handleSchedulePickup}
+                        className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2"
+                      >
+                        {editingPickupId ? <Check size={20} /> : <Truck size={20} />}
+                        {editingPickupId ? 'Update Schedule' : 'Schedule Agent Pickup'}
+                      </button>
+                      {editingPickupId && (
+                        <button 
+                          onClick={() => {
+                            setEditingPickupId(null);
+                            setPickupPhone('');
+                            setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
+                          }}
+                          className="w-full py-2 text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs"
+                        >
+                          Cancel Editing
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
+          )}
 
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 min-h-[400px]">
+          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 min-h-[400px]">
             {!hasAllAgentPickup && (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <h3 className="text-xl font-bold">Your Shipment Items</h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900">Your Shipment Items</h3>
+                  <p className="text-sm text-slate-500">Manage items collected or received at our warehouse.</p>
+                </div>
                 <div className="flex items-center gap-2">
-                  <div className="px-3 py-1.5 bg-indigo-50 rounded-xl text-xs font-bold text-indigo-600 border border-indigo-100">
+                  <div className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-bold text-indigo-600 border border-indigo-100">
                     {items.length} Items
                   </div>
-                  <div className="px-3 py-1.5 bg-emerald-50 rounded-xl text-xs font-bold text-emerald-600 border border-emerald-100">
+                  <div className="px-4 py-2 bg-emerald-50 rounded-2xl text-xs font-bold text-emerald-600 border border-emerald-100">
                     {totalWeight.toFixed(2)} kg Total
                   </div>
                 </div>
@@ -1960,204 +2202,280 @@ export default function App() {
             )}
             
             {items.length === 0 && appointments.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                <Package size={48} strokeWidth={1} />
-                <p className="mt-4">No items added yet.</p>
+              <div className="flex flex-col items-center justify-center h-80 text-slate-400">
+                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                  <Package size={40} strokeWidth={1} />
+                </div>
+                <p className="font-medium">Your shipment is empty.</p>
+                <p className="text-sm">Add items from the store or schedule a pickup to get started.</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-6">
                 {appointments.map((apt, idx) => (
                   <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
                     key={`apt-${idx}`}
-                    className="p-4 rounded-xl border border-amber-100 bg-amber-50/50 flex flex-col gap-4 mb-4"
+                    className="overflow-hidden rounded-3xl border border-indigo-100 bg-white shadow-xl shadow-indigo-500/5"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600">
-                        <Truck size={24} />
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-sm font-bold text-amber-900">
-                          {apt.pickupType === 'AllAgent' ? 'Full Agent Collection Service' : 'Scheduled Agent Pickup Collection'}
+                    <div className="bg-indigo-600 p-6 text-white flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
+                          <Truck size={24} />
                         </div>
-                        <p className="text-[10px] text-amber-700 leading-relaxed">
-                          {apt.pickupType === 'AllAgent' 
-                            ? 'Professional door-to-door collection service. Our agent will handle everything from weighing to documentation.' 
-                            : 'You have scheduled a pickup. Our agent will update the items list here once collected.'}
-                        </p>
+                        <div>
+                          <div className="text-[10px] font-bold uppercase tracking-widest opacity-80">Appointment ID</div>
+                          <div className="text-lg font-black">{apt.id}</div>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <div className="px-3 py-1 bg-amber-200 text-amber-800 rounded-full text-[10px] font-black uppercase tracking-widest">
+                      <div className="flex items-center gap-2">
+                        <div className="px-3 py-1 bg-white/20 backdrop-blur rounded-full text-[10px] font-black uppercase tracking-widest">
                           {apt.status}
                         </div>
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={() => startEditingPickup(apt)}
-                            className="p-1.5 bg-white rounded-lg text-indigo-600 shadow-sm hover:bg-indigo-50 transition-colors"
-                            title="Edit Schedule"
-                          >
-                            <Edit3 size={14} />
-                          </button>
-                          <button 
-                            onClick={() => cancelPickup(apt.id)}
-                            className="p-1.5 bg-white rounded-lg text-red-500 shadow-sm hover:bg-red-50 transition-colors"
-                            title="Cancel Pickup"
-                          >
-                            <XCircle size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {apt.pickupType === 'AllAgent' && (
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-white rounded-xl border border-amber-100 shadow-sm">
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-3 text-xs">
-                              <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400">
-                                <Clock size={16} />
-                              </div>
-                              <div>
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Window</div>
-                                <div className="font-bold text-slate-900">{apt.date} at {apt.time}</div>
-                              </div>
-                            </div>
-                            <div className="flex items-start gap-3 text-xs">
-                              <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400 shrink-0">
-                                <MapPin size={16} />
-                              </div>
-                              <div>
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Collection Address</div>
-                                <div className="font-bold text-slate-900 leading-tight">{apt.address}</div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="space-y-3 border-t md:border-t-0 md:border-l border-slate-100 pt-3 md:pt-0 md:pl-4">
-                            <div className="flex items-center gap-3 text-xs">
-                              <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-400">
-                                <UserIcon size={16} />
-                              </div>
-                              <div>
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Assigned Agent</div>
-                                <div className="font-bold text-indigo-600">{apt.assignedAgent?.name || 'Assigning...'}</div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 text-xs">
-                              <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-400">
-                                <Phone size={16} />
-                              </div>
-                              <div>
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Agent Contact</div>
-                                <div className="font-bold text-indigo-600">{apt.assignedAgent?.phone || '-'}</div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 text-xs">
-                              <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-400">
-                                <Users size={16} />
-                              </div>
-                              <div>
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Language Preference</div>
-                                <div className="font-bold text-slate-900">{apt.languagePreference || 'English'}</div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="p-4 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
-                          <div className="flex items-center gap-3 mb-2">
-                            <Info size={18} className="text-indigo-200" />
-                            <h5 className="font-bold text-sm">Professional Collection Protocol</h5>
-                          </div>
-                          <p className="text-[10px] text-indigo-100 leading-relaxed">
-                            Our agent will arrive with a certified digital scale and standard packaging materials. 
-                            Please ensure all items are ready for inspection. A digital receipt will be generated 
-                            immediately after collection.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {apt.items.length > 0 && (
-                      <div className="mt-2 space-y-2">
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Collected Items</div>
-                        {apt.items.map(item => (
-                          <div key={item.id} className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-100 text-xs">
-                            <span className="font-medium text-slate-700">{item.name}</span>
-                            <span className="font-bold text-slate-900">{item.weight} kg</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-                {items.map(item => (
-                  <motion.div 
-                    layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    key={item.id} 
-                    className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:shadow-md transition-all group"
-                  >
-                    <div className="w-16 h-16 bg-slate-200 rounded-lg flex items-center justify-center text-slate-400 overflow-hidden">
-                      {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <ImageIcon size={24} />}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between">
-                        <h4 className="font-bold text-slate-900">{item.name}</h4>
-                        <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                        <button 
+                          onClick={() => startEditingPickup(apt)}
+                          className="p-2 hover:bg-white/20 rounded-xl transition-colors"
+                          title="Modify Schedule"
+                        >
+                          <Edit3 size={18} />
+                        </button>
+                        <button 
+                          onClick={() => cancelPickup(apt.id)}
+                          className="p-2 hover:bg-white/20 rounded-xl transition-colors"
+                        >
                           <Trash2 size={18} />
                         </button>
                       </div>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-xs font-medium text-slate-500">{item.weight} kg</span>
-                        <span className="text-xs px-2 py-0.5 bg-slate-200 rounded text-slate-600 font-bold uppercase tracking-tighter">
-                          {item.source}
-                        </span>
-                        <div className="flex items-center gap-1 ml-auto">
-                          {item.status === 'Received at Warehouse' ? (
-                            <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                              <CheckCircle2 size={12} /> RECEIVED
-                            </span>
+                    </div>
+
+                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div className="space-y-6">
+                        <div>
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Pickup Details</h4>
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-3 text-sm">
+                              <UserIcon size={16} className="text-indigo-600" />
+                              <span className="font-bold text-slate-900">{apt.customerName || 'Customer'}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-sm">
+                              <Calendar size={16} className="text-indigo-600" />
+                              <span className="font-bold text-slate-700">{apt.date}</span>
+                              <span className="text-slate-300">|</span>
+                              <span className="text-slate-600">{apt.time}</span>
+                            </div>
+                            <div className="flex items-start gap-3 text-sm">
+                              <MapPin size={16} className="text-indigo-600 mt-1" />
+                              <span className="text-slate-600 leading-relaxed font-medium">{apt.address}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-sm">
+                              <Phone size={16} className="text-indigo-600" />
+                              <span className="font-bold text-slate-900">{apt.phone}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Assigned Agent</h4>
+                          {apt.assignedAgent ? (
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600">
+                                <UserIcon size={20} />
+                              </div>
+                              <div>
+                                <div className="text-sm font-bold text-slate-900">{apt.assignedAgent.name}</div>
+                                <div className="text-[10px] text-slate-500">{apt.assignedAgent.vehicleNumber}</div>
+                              </div>
+                            </div>
                           ) : (
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1">
-                                <Clock size={12} /> PENDING
-                              </span>
-                              <button 
-                                onClick={() => updateItemStatus(item.id, 'Received at Warehouse')}
-                                className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded hover:bg-indigo-100 transition-colors"
-                              >
-                                Mark Received (Demo)
-                              </button>
+                            <div className="flex items-center gap-2 text-amber-600 text-xs font-bold">
+                              <Clock size={14} /> Assigning Agent...
                             </div>
                           )}
                         </div>
                       </div>
+
+                      <div className="space-y-6">
+                        <div>
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Next Steps Workflow</h4>
+                          <div className="relative pl-6 space-y-6 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
+                            {[
+                              { title: "Agent Arrival", desc: "Agent will arrive at your door during the selected slot.", icon: Truck },
+                              { title: "On-site Weighing", desc: "Items are weighed using digital scales for accuracy.", icon: Calculator },
+                              { title: "Digital Receipt", desc: "Receive instant confirmation of collected items.", icon: CheckCircle2 }
+                            ].map((step, i) => (
+                              <div key={i} className="relative">
+                                <div className="absolute -left-[23px] top-1 w-4 h-4 rounded-full bg-white border-2 border-indigo-600 z-10" />
+                                <h5 className="text-xs font-bold text-slate-900">{step.title}</h5>
+                                <p className="text-[11px] text-slate-500 leading-relaxed">{step.desc}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Info size={16} className="text-indigo-600" />
+                            <span className="text-[10px] font-bold text-indigo-900 uppercase tracking-widest">Pro Tip</span>
+                          </div>
+                          <p className="text-[11px] text-indigo-700 leading-relaxed">
+                            Keep your items ready and sorted to speed up the collection process.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </motion.div>
                 ))}
+
+                {items.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Individual Items</div>
+                    {items.map(item => (
+                      <motion.div 
+                        layout
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        key={item.id} 
+                        className="flex items-center gap-4 p-4 rounded-2xl border border-slate-100 bg-white hover:shadow-xl hover:shadow-indigo-500/5 transition-all group"
+                      >
+                        <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 overflow-hidden border border-slate-100">
+                          {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <ImageIcon size={24} />}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex justify-between">
+                            <h4 className="font-bold text-slate-900">
+                              {item.name}
+                              {item.quantity && item.quantity > 1 && (
+                                <span className="ml-2 text-indigo-600 font-black">x{item.quantity}</span>
+                              )}
+                            </h4>
+                            <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-xs font-bold text-indigo-600">{item.weight} kg</span>
+                            <span className="text-[10px] px-2 py-0.5 bg-slate-100 rounded-lg text-slate-500 font-bold uppercase tracking-widest">
+                              {item.source}
+                            </span>
+                            <div className="flex items-center gap-1 ml-auto">
+                              {item.status === 'Received at Warehouse' ? (
+                                <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
+                                  <CheckCircle2 size={12} /> RECEIVED
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
+                                    <Clock size={12} /> PENDING
+                                  </span>
+                                  <button 
+                                    onClick={() => updateItemStatus(item.id, 'Received at Warehouse')}
+                                    className="text-[10px] bg-indigo-600 text-white px-3 py-1 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+                                  >
+                                    Mark Received
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             
             {/* Action Buttons */}
-            {!appointments.some(a => a.status === 'Scheduled') && (
-              <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row gap-4">
-                <button 
-                  onClick={() => setActiveTab('store')}
-                  className="flex-1 py-4 px-6 rounded-2xl border-2 border-slate-200 font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-                >
-                  Continue Shopping
-                </button>
-                <button 
-                  onClick={handleCheckout}
-                  disabled={items.length === 0}
-                  className="flex-1 py-4 px-6 rounded-2xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  Checkout <ChevronRight size={20} />
-                </button>
+            {(items.length > 0 || appointments.length > 0) && cartMode !== 'Pickup' && (
+              <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col gap-6">
+                {appointments.some(a => a.status === 'Scheduled') && (
+                  <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-3">
+                    <Info size={18} className="text-indigo-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-indigo-700 leading-relaxed font-medium">
+                      Payment will be enabled once your scheduled agent pickup is completed and all items are received at our warehouse. This ensures a single consolidated shipment for you.
+                    </p>
+                  </div>
+                )}
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <button 
+                    onClick={() => setActiveTab('store')}
+                    className="flex-1 py-5 px-8 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 hover:border-slate-200 transition-all flex items-center justify-center gap-2"
+                  >
+                    Continue Shopping
+                  </button>
+                  <button 
+                    onClick={handleCheckout}
+                    className={`flex-1 py-5 px-8 rounded-2xl font-bold transition-all shadow-2xl flex items-center justify-center gap-2 group ${
+                      appointments.some(a => a.status === 'Scheduled')
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/20'
+                    }`}
+                  >
+                    Proceed to Payment <ArrowRight size={20} className={appointments.some(a => a.status === 'Scheduled') ? '' : 'group-hover:translate-x-1 transition-transform'} />
+                  </button>
+                </div>
               </div>
             )}
+            
+          </div>
+        </div>
+
+        <div className="lg:col-span-1 space-y-6">
+          {/* Quick Add from Store - Redesigned and Repositioned */}
+          <div className="bg-white rounded-[2rem] shadow-2xl shadow-indigo-500/5 border border-slate-100 sticky top-8 overflow-hidden">
+            <div className="bg-slate-50 p-8 border-b border-slate-100">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight">J Store</h3>
+                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                  <ShoppingBag size={20} />
+                </div>
+              </div>
+              <p className="text-slate-500 text-xs font-medium">Curated premium Indian products</p>
+            </div>
+
+            <div className="p-6">
+              <div className={`space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar ${cartMode === 'Pickup' && appointments.length > 0 && !editingPickupId && !appointments.some(a => a.pickupType === 'Mixed') ? 'opacity-50 pointer-events-none' : ''}`}>
+                {STORE_PRODUCTS.map(product => {
+                  const isInCart = items.some(i => i.name === product.name && i.source === 'Store');
+                  return (
+                    <div key={product.id} className="group relative bg-white hover:bg-slate-50 rounded-2xl p-3 border border-slate-100 transition-all hover:shadow-md">
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-slate-100 bg-slate-50">
+                          <img src={product.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-bold text-slate-900 truncate">{product.name}</div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-sm font-black text-indigo-600">₹{product.price}</span>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{product.weight}kg</span>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                            isInCart 
+                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' 
+                              : 'bg-slate-100 text-slate-900 hover:bg-indigo-600 hover:text-white hover:shadow-lg hover:shadow-indigo-100'
+                          }`}
+                        >
+                          {isInCart ? <Check size={20} /> : <Plus size={20} />}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-8 pt-6 border-t border-slate-100">
+                <button 
+                  onClick={() => setActiveTab('store')}
+                  disabled={cartMode === 'Pickup' && appointments.length > 0 && !editingPickupId && !appointments.some(a => a.pickupType === 'Mixed')}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold text-sm hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-slate-200"
+                >
+                  Browse Full Catalog <ArrowRight size={18} />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2165,7 +2483,6 @@ export default function App() {
   }, [cartMode, selectedPickupDate, selectedPickupTime, pickupPhone, pickupAddress, pickupLanguage, appointments, cartItemName, cartItemWeight, items, totalWeight, totalCost, dbStatus.connected, currentUser?.id, addItem, updateItemStatus, handleCheckout, setActiveTab, setAppointments, setCartItemName, setCartItemWeight, setCartMode, setPickupAddress, setPickupPhone, setSelectedPickupDate, setSelectedPickupTime, handleSchedulePickup, cancelPickup, startEditingPickup, saveEditedPickup, editingPickupId]);
 
   const StoreSection = useMemo(() => {
-    if (!currentUser) return null;
     const filteredProducts = storeProducts.filter(p => {
       const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -2191,7 +2508,7 @@ export default function App() {
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              {['All', 'Pooja', 'Return Gifts', 'Decorative'].map(cat => (
+              {['All', ...categories].map(cat => (
                 <button 
                   key={cat} 
                   onClick={() => setSelectedCategory(cat)}
@@ -2306,7 +2623,7 @@ export default function App() {
         </div>
       </div>
     );
-  }, [selectedCategory, searchQuery, addItem, handleCheckout, items.length, storeProducts]);
+  }, [selectedCategory, searchQuery, addItem, handleCheckout, items.length, storeProducts, currentUser]);
 
   const FinalizeSection = useMemo(() => {
     if (!currentUser) return null;
@@ -2562,16 +2879,40 @@ export default function App() {
     );
   }
 
-  if (!currentUser) {
-    return <Login onSuccess={() => {}} />;
+  if (!currentUser && activeTab === 'finalize') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="max-w-md w-full text-center space-y-6 bg-white p-10 rounded-[2.5rem] shadow-xl border border-slate-100">
+          <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto">
+            <Lock size={40} />
+          </div>
+          <h2 className="text-3xl font-black text-slate-900">Secure Checkout</h2>
+          <p className="text-slate-500 leading-relaxed">Please sign in to your account to securely complete your payment and finalize your shipment.</p>
+          <button 
+            onClick={() => setShowLoginModal(true)}
+            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
+          >
+            <UserIcon size={20} /> Sign In to Pay
+          </button>
+          <button 
+            onClick={() => setActiveTab('cart')}
+            className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+          >
+            Back to Cart
+          </button>
+        </div>
+      </div>
+    );
   }
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    setIsGuestMode(false);
+    setGuestEmail('');
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 safe-top safe-bottom">
       {/* Supabase Status Banner */}
       {!dbStatus.connected && dbStatus.checked && (
         <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center justify-center gap-2 text-[10px] font-bold text-amber-700 uppercase tracking-widest">
@@ -2621,8 +2962,8 @@ export default function App() {
             <div 
               className="flex items-center gap-2 cursor-pointer" 
               onClick={() => {
-                if (currentUser.role === 'Admin') setActiveTab('admin');
-                else if (currentUser.role === 'Agent') setActiveTab('agent');
+                if (currentUser?.role === 'Admin') setActiveTab('admin');
+                else if (currentUser?.role === 'Agent') setActiveTab('agent');
                 else setActiveTab('home');
               }}
             >
@@ -2634,13 +2975,13 @@ export default function App() {
             
             <div className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
               {[
-                { id: 'home', icon: Calculator, label: 'Home', roles: ['Customer'] },
-                { id: 'store', icon: Store, label: 'J Store', roles: ['Customer'] },
-                { id: 'cart', icon: Package, label: 'My Cart', roles: ['Customer'] },
-                { id: 'history', icon: History, label: 'My Orders', roles: ['Customer'] },
-                { id: 'admin', icon: LayoutDashboard, label: 'Dashboard', roles: ['Admin'] },
-                { id: 'agent', icon: Users, label: 'Agent Portal', roles: ['Agent'] },
-              ].filter(tab => tab.roles.includes(currentUser.role)).map(tab => (
+                { id: 'home', icon: Calculator, label: 'Home', roles: ['Customer'], public: true },
+                { id: 'store', icon: Store, label: 'J Store', roles: ['Customer'], public: true },
+                { id: 'cart', icon: Package, label: 'My Cart', roles: ['Customer'], public: true },
+                { id: 'history', icon: History, label: 'My Orders', roles: ['Customer'], public: false },
+                { id: 'admin', icon: LayoutDashboard, label: 'Dashboard', roles: ['Admin'], public: false },
+                { id: 'agent', icon: Users, label: 'Agent Portal', roles: ['Agent'], public: false },
+              ].filter(tab => tab.public || (currentUser && tab.roles.includes(currentUser.role))).map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as Tab)}
@@ -2656,27 +2997,33 @@ export default function App() {
                       {items.length}
                     </span>
                   )}
-                  {tab.id === 'store' && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] px-1 rounded-full animate-pulse">
-                      HOT
-                    </span>
-                  )}
                 </button>
               ))}
             </div>
 
             <div className="flex items-center gap-4">
-              <div className="hidden sm:flex flex-col items-end">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{currentUser.role}</span>
-                <span className="text-sm font-black text-slate-900">{currentUser.name}</span>
-              </div>
-              <button 
-                onClick={handleLogout}
-                className="w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-all border border-slate-200"
-                title="Logout"
-              >
-                <LogOut size={20} />
-              </button>
+              {currentUser ? (
+                <>
+                  <div className="hidden sm:flex flex-col items-end">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{currentUser.role}</span>
+                    <span className="text-sm font-black text-slate-900">{currentUser.name}</span>
+                  </div>
+                  <button 
+                    onClick={handleLogout}
+                    className="w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-all border border-slate-200"
+                    title="Logout"
+                  >
+                    <LogOut size={20} />
+                  </button>
+                </>
+              ) : (
+                <button 
+                  onClick={() => setShowLoginModal(true)}
+                  className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center gap-2"
+                >
+                  <UserIcon size={18} /> Sign In
+                </button>
+              )}
             </div>
           </div>
         </nav>
@@ -2697,7 +3044,26 @@ export default function App() {
             {activeTab === 'store' && StoreSection}
             {activeTab === 'finalize' && FinalizeSection}
             {activeTab === 'history' && CustomerHistory}
-            {activeTab === 'admin' && AdminDashboard}
+            {activeTab === 'admin' && (
+              <AdminDashboard 
+                currentUser={currentUser}
+                orders={orders}
+                appointments={appointments}
+                setAppointments={setAppointments}
+                agents={agents}
+                setAgents={setAgents}
+                newAgent={newAgent}
+                setNewAgent={setNewAgent}
+                categories={categories}
+                setCategories={setCategories}
+                adminTab={adminTab}
+                setAdminTab={setAdminTab}
+                newProduct={newProduct}
+                setNewProduct={setNewProduct}
+                storeProducts={storeProducts}
+                setStoreProducts={setStoreProducts}
+              />
+            )}
             {activeTab === 'agent' && AgentSection}
           </motion.div>
         </AnimatePresence>
@@ -2756,7 +3122,7 @@ export default function App() {
                     <span className="font-black text-slate-900">Mixed Collection</span>
                     <div className="w-6 h-6 rounded-full border-2 border-slate-200 group-hover:border-indigo-200" />
                   </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">I will send some items to the warehouse myself, and the agent will collect the rest.</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">Agent will collect items from you, but invoicing & shipping will be managed from our warehouse. You can also send items to the warehouse yourself or shop from J Store.</p>
                 </button>
               </div>
 
@@ -2794,14 +3160,9 @@ export default function App() {
                 <button 
                   onClick={() => {
                     const { item, source } = showConflictModal;
-                    const newItem: ShippingItem = {
-                      ...item,
-                      id: Math.random().toString(36).substr(2, 9),
-                      status: source === 'Store' ? 'Received at Warehouse' : 'Pending',
-                      source,
-                    };
-                    setItems([...items, newItem]);
-                    setShowConflictModal({ show: false, item: null, source: null });
+                    if (item && source) {
+                      addItem(item, source, true);
+                    }
                   }}
                   className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
                 >
@@ -2850,6 +3211,48 @@ export default function App() {
                 >
                   No, Keep It
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Login Modal */}
+      <AnimatePresence>
+        {showLoginModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLoginModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <button 
+                onClick={() => setShowLoginModal(false)}
+                className="absolute top-6 right-6 w-10 h-10 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-200 transition-all z-10"
+              >
+                <X size={20} />
+              </button>
+              <div className="p-8">
+                <div className="text-center mb-8">
+                  <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-xl shadow-indigo-200">
+                    <Truck size={32} />
+                  </div>
+                  <h2 className="text-3xl font-black text-slate-900">Welcome Back</h2>
+                  <p className="text-slate-500 mt-2">Sign in to continue your shipment</p>
+                </div>
+                <Login onSuccess={(email) => {
+                  setGuestEmail(email);
+                  setIsGuestMode(true);
+                  setShowLoginModal(false);
+                }} />
               </div>
             </motion.div>
           </div>
