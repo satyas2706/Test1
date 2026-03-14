@@ -13,7 +13,9 @@ import {
   MapPin, 
   CreditCard, 
   AlertTriangle, 
+  Sparkles,
   Plus, 
+  Minus,
   PlusCircle,
   Trash2, 
   ChevronRight, 
@@ -135,6 +137,7 @@ export default function App() {
   // Store Section States
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showJiffySuggestion, setShowJiffySuggestion] = useState(false);
 
   // Cart Add States
   const [cartItemName, setCartItemName] = useState('');
@@ -176,10 +179,10 @@ export default function App() {
       alert('Please provide your name, phone number, street address, and city.');
       return;
     }
-    setShowPickupChoiceModal(true);
+    confirmPickup('AllAgent');
   };
 
-  const confirmPickup = (type: 'AllAgent' | 'Mixed') => {
+  const confirmPickup = (type: 'AllAgent' | 'Mixed' = 'AllAgent') => {
     const assignedAgent = type === 'AllAgent' ? agents[Math.floor(Math.random() * agents.length)] : undefined;
     const fullAddress = `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}, ${pickupAddress.city}, ${pickupAddress.state} ${pickupAddress.zip}`;
     
@@ -357,7 +360,29 @@ export default function App() {
   }, [activeTab, activeWorkOrder, isPaid]);
 
   // --- Helpers ---
-  const totalWeight = useMemo(() => items.reduce((sum, item) => sum + item.weight, 0), [items]);
+  useEffect(() => {
+    const hasActivePickup = appointments.some(a => a.status === 'Scheduled');
+    if (hasActivePickup) {
+      setItems(prev => {
+        const needsUpdate = prev.some(item => item.source === 'Warehouse');
+        if (!needsUpdate) return prev;
+        return prev.map(item => 
+          (item.source === 'Warehouse') ? { ...item, source: 'Pickup' as const } : item
+        );
+      });
+      if (cartMode !== 'Pickup') {
+        setCartMode('Pickup');
+      }
+    }
+  }, [appointments, cartMode]);
+  const totalWeight = useMemo(() => {
+    return items.reduce((sum, item) => sum + (item.weight * (item.quantity || 1)), 0);
+  }, [items]);
+
+  const hasAllAgentPickup = useMemo(() => {
+    return appointments.some(a => a.status === 'Scheduled' && a.pickupType === 'AllAgent');
+  }, [appointments]);
+
   const totalCost = useMemo(() => {
     const rate = SHIPPING_RATES[address.country] || 800;
     const shippingCost = totalWeight * rate;
@@ -368,15 +393,12 @@ export default function App() {
   const addItem = async (item: Omit<ShippingItem, 'id' | 'status' | 'source'>, source: 'Warehouse' | 'Pickup' | 'Store', force = false) => {
     const activePickup = appointments.find(a => a.status === 'Scheduled');
     const hasActivePickup = !!activePickup;
-    const isMixedPickup = activePickup?.pickupType === 'Mixed';
     
-    if (hasActivePickup && !isMixedPickup && !showConflictModal.show && !force) {
-      setShowConflictModal({ show: true, item, source });
-      return;
-    }
-
+    // If a pickup is scheduled, all new items (except Store items) are forced to Pickup source
+    const effectiveSource = (hasActivePickup && source !== 'Store') ? 'Pickup' : source;
+    
     // Check if item already exists in cart (same name and source)
-    const existingItemIndex = items.findIndex(i => i.name === item.name && i.source === source);
+    const existingItemIndex = items.findIndex(i => i.name === item.name && i.source === effectiveSource);
 
     if (existingItemIndex !== -1) {
       // Increment quantity
@@ -395,14 +417,18 @@ export default function App() {
     const newItem: ShippingItem = {
       ...item,
       id: Math.random().toString(36).substr(2, 9),
-      status: source === 'Store' ? 'Received at Warehouse' : 'Pending',
-      source,
+      status: effectiveSource === 'Store' ? 'Received at Warehouse' : 'Pending',
+      source: effectiveSource,
       quantity: 1,
     };
     
     // Optimistic update
     setItems([...items, newItem]);
     setShowConflictModal({ show: false, item: null, source: null });
+
+    if (effectiveSource === 'Store') {
+      setShowJiffySuggestion(true);
+    }
 
     // If Supabase is connected, try to sync
     if (dbStatus.connected && currentUser) {
@@ -549,262 +575,280 @@ export default function App() {
 
   // --- Components ---
 
-   const HomeSection = useMemo(() => {
-    return (
-      <div className="space-y-12">
-        {/* Hero Message */}
-        <div className="text-center max-w-4xl mx-auto space-y-8">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-full text-xs font-black uppercase tracking-widest border border-emerald-100 shadow-sm"
-          >
-            <MapPin size={14} className="animate-pulse" />
-            Operating only in Hyderabad, India
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-full text-xs font-black uppercase tracking-widest border border-indigo-100"
-          >
-            <span className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse" />
-            Your Global Logistics Partner
-          </motion.div>
-          <motion.h1 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-5xl md:text-7xl font-black text-slate-900 tracking-tight leading-[1.05]"
-          >
-            Ship Anything, <br />
-            <span className="text-indigo-600 relative">
-              Shop Everything.
-              <svg className="absolute -bottom-2 left-0 w-full h-3 text-indigo-200" viewBox="0 0 100 10" preserveAspectRatio="none">
-                <path d="M0 5 Q 25 0, 50 5 T 100 5" fill="none" stroke="currentColor" strokeWidth="4" />
-              </svg>
-            </span>
-          </motion.h1>
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-xl text-slate-600 leading-relaxed max-w-2xl mx-auto"
-          >
-            Consolidate your international shipments and shop premium Indian products from our curated <span className="text-indigo-600 font-bold">J Store</span>.
-          </motion.p>
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-wrap justify-center gap-4 pt-4"
-          >
-            <button 
-              onClick={() => setActiveTab('cart')}
-              className="px-10 py-5 bg-slate-900 text-white rounded-2xl font-bold text-lg hover:bg-black transition-all shadow-2xl active:scale-95 flex items-center gap-3 group"
-            >
-              <Package size={24} className="group-hover:rotate-12 transition-transform" /> Start Shipment
-            </button>
-            <button 
-              onClick={() => setActiveTab('store')}
-              className="px-10 py-5 bg-white text-indigo-600 border-2 border-indigo-600 rounded-2xl font-bold text-lg hover:bg-indigo-50 transition-all shadow-xl active:scale-95 flex items-center gap-3"
-            >
-              <Store size={24} /> Visit J Store
-            </button>
-          </motion.div>
-        </div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="relative overflow-hidden rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-700 p-12 text-white shadow-2xl"
-        >
-          <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl" />
-          
-          <div className="relative z-10 max-w-3xl mx-auto text-center space-y-6">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur rounded-full text-xs font-bold uppercase tracking-widest">
-              <Heart size={14} className="text-pink-300 fill-pink-300" /> Made for the Global Indian
+    const HomeSection = useMemo(() => {
+      return (
+        <div className="space-y-24 pb-24">
+          {/* JIFFEX Truck Hero Section */}
+          <div className="relative overflow-hidden rounded-[4rem] bg-slate-900 text-white p-12 md:p-20 shadow-2xl">
+            <div className="absolute top-0 right-0 w-full h-full opacity-20 pointer-events-none">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-500 rounded-full blur-[120px]" />
             </div>
-            <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
-              Stop waiting for a <span className="text-indigo-200 italic">friend's suitcase.</span>
-            </h2>
-            <p className="text-xl text-indigo-100 leading-relaxed font-medium">
-              Your connection to home shouldn't depend on someone else's travel plans. 
-              Whether it's your mother's handmade sweets, that specific wedding outfit, or the comfort of Indian spices—we bring India to your doorstep.
-            </p>
-            <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-6">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                  <Clock size={24} />
-                </div>
-                <div className="text-left">
-                  <div className="text-sm font-bold">No More Waiting</div>
-                  <div className="text-xs text-indigo-200">Ship whenever you want</div>
-                </div>
-              </div>
-              <div className="w-px h-8 bg-white/20 hidden sm:block" />
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                  <Users size={24} />
-                </div>
-                <div className="text-left">
-                  <div className="text-sm font-bold">No More Asking</div>
-                  <div className="text-xs text-indigo-200">Independence in shipping</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
-          {/* Quote Calculator */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white p-8 rounded-3xl shadow-xl shadow-indigo-500/5 border border-slate-100">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                <Calculator className="text-indigo-600" /> Quick Quote
-              </h2>
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Destination</label>
-                  <select 
-                    className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none"
-                    value={qCountry}
-                    onChange={(e) => setQCountry(e.target.value)}
-                  >
-                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Weight (kg)</label>
-                  <input 
-                    type="number" 
-                    min="0.1" 
-                    step="0.1"
-                    className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    value={qWeight}
-                    onChange={(e) => setQWeight(Number(e.target.value))}
-                  />
-                </div>
-                <div className="p-6 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-200">
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <span className="text-indigo-100 text-xs font-bold uppercase tracking-widest">Estimated Cost</span>
-                      <div className="text-4xl font-black">₹{(qWeight * SHIPPING_RATES[qCountry]).toFixed(2)}</div>
-                    </div>
-                    <Truck className="opacity-20" size={48} />
-                  </div>
-                </div>
-                <p className="text-[10px] text-slate-400 text-center uppercase font-bold tracking-tighter">
-                  * Final cost calculated upon warehouse arrival
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Business Flow Explanation */}
-          <div className="lg:col-span-3 space-y-8">
-            <h3 className="text-2xl font-black text-slate-900">How It Works</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {[
-                {
-                  icon: Package,
-                  title: "1. Shop & Send",
-                  desc: `Shop from any store and send items to our warehouse at ${WAREHOUSE_ADDRESS.street}, ${WAREHOUSE_ADDRESS.city}. We'll track every arrival for you.`,
-                  color: "bg-blue-500"
-                },
-                {
-                  icon: Users,
-                  title: "2. Agent Pickup",
-                  desc: "Schedule a pickup and our agent will visit your location to collect and weigh your items professionally.",
-                  color: "bg-amber-500"
-                },
-                {
-                  icon: Store,
-                  title: "3. Shop J Store",
-                  desc: "Add premium Pooja items, return gifts, and decorative pieces directly from our curated store to your shipment.",
-                  color: "bg-emerald-500"
-                },
-                {
-                  icon: CheckCircle2,
-                  title: "4. Consolidate & Ship",
-                  desc: "Once all items are received, select your preferred shipping date, provide the address, and we handle the rest.",
-                  color: "bg-indigo-500"
-                }
-              ].map((step, i) => (
-                <motion.div 
-                  key={step.title}
-                  initial={{ opacity: 0, x: 20 }}
+            
+            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+              <div className="space-y-8 text-center lg:text-left">
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="p-6 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow group"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/20 backdrop-blur border border-indigo-500/30 rounded-full text-indigo-300 text-xs font-black uppercase tracking-[0.2em]"
                 >
-                  <div className={`w-12 h-12 ${step.color} text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-${step.color.split('-')[1]}-100 group-hover:scale-110 transition-transform`}>
-                    <step.icon size={24} />
-                  </div>
-                  <h4 className="font-bold text-slate-900 mb-2">{step.title}</h4>
-                  <p className="text-sm text-slate-500 leading-relaxed">{step.desc}</p>
+                  <Sparkles size={14} /> Premium Global Logistics
                 </motion.div>
+                
+                <div className="space-y-4">
+                  <motion.h1 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-6xl md:text-8xl font-black tracking-tighter leading-none"
+                  >
+                    JIFF<span className="text-indigo-500 italic">EX</span>
+                  </motion.h1>
+                  <motion.p 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="text-xl md:text-2xl text-slate-400 font-medium max-w-xl mx-auto lg:mx-0"
+                  >
+                    Your trusted bridge to India. Ship anything from home, shop everything from our store.
+                  </motion.p>
+                </div>
+
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="flex flex-wrap justify-center lg:justify-start gap-4"
+                >
+                  <button 
+                    onClick={() => setActiveTab('cart')}
+                    className="px-8 py-4 bg-white text-slate-900 rounded-2xl font-bold text-lg hover:bg-indigo-50 transition-all shadow-xl active:scale-95 flex items-center gap-3 group"
+                  >
+                    <Package size={24} className="group-hover:rotate-12 transition-transform" /> Start Shipment
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('store')}
+                    className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-all shadow-xl active:scale-95 flex items-center gap-3"
+                  >
+                    <Store size={24} /> Shop Jiffy Store
+                  </button>
+                </motion.div>
+              </div>
+
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.8, x: 50 }}
+                animate={{ opacity: 1, scale: 1, x: 0 }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="relative"
+              >
+                <div className="relative z-10 bg-gradient-to-br from-indigo-500 to-violet-600 p-8 rounded-[3rem] shadow-2xl border border-white/10">
+                  <div className="flex flex-col items-center gap-6">
+                    <div className="relative">
+                      <Truck size={160} className="text-white drop-shadow-2xl animate-bounce-slow" />
+                      <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-32 h-4 bg-black/20 rounded-full blur-md" />
+                    </div>
+                    <div className="text-center">
+                      <div className="text-3xl font-black tracking-tighter">JIFFEX LOGISTICS</div>
+                      <div className="text-xs font-bold text-indigo-200 uppercase tracking-[0.3em] mt-1">Express Global Delivery</div>
+                    </div>
+                  </div>
+                </div>
+                {/* Decorative elements */}
+                <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl" />
+                <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl" />
+              </motion.div>
+            </div>
+          </div>
+
+          {/* How JiffEX Works - Value Prop */}
+          <div className="space-y-12">
+            <div className="text-center space-y-4">
+              <h3 className="text-4xl font-black text-slate-900 tracking-tight">How JiffEX Works</h3>
+              <p className="text-slate-500 max-w-2xl mx-auto">A seamless, unified shipping experience designed for your convenience.</p>
+            </div>
+
+            <div className="relative">
+              <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 -translate-y-1/2 hidden lg:block" />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
+                {[
+                  { icon: Calendar, title: "1. Schedule Pickup", desc: "Start by scheduling an agent pickup. This becomes the heart of your shipment process.", color: "bg-indigo-600", shadow: "shadow-indigo-200" },
+                  { icon: ShoppingBag, title: "2. Add Everything", desc: "Add items from your home, our Jiffy Store, or even items you've sent to our warehouse.", color: "bg-amber-500", shadow: "shadow-amber-200" },
+                  { icon: Truck, title: "3. Home Consolidation", desc: "Our agent brings your warehouse and store items to your home for a final unified collection.", color: "bg-emerald-500", shadow: "shadow-emerald-200" },
+                  { icon: CheckCircle2, title: "4. Global Shipping", desc: "Everything is weighed and packed at your home, then shipped globally in one go.", color: "bg-blue-500", shadow: "shadow-blue-200" }
+                ].map((step, i) => (
+                  <motion.div 
+                    key={step.title}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.1 }}
+                    className="relative group"
+                  >
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 flex flex-col items-center text-center h-full">
+                      <div className={`w-16 h-16 ${step.color} text-white rounded-3xl flex items-center justify-center mb-6 shadow-2xl ${step.shadow} group-hover:scale-110 transition-transform duration-500`}>
+                        <step.icon size={32} />
+                      </div>
+                      <div className="absolute -top-4 -right-4 w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center font-black text-sm border-4 border-white shadow-lg">
+                        0{i + 1}
+                      </div>
+                      <h4 className="text-xl font-black text-slate-900 mb-3">{step.title}</h4>
+                      <p className="text-sm text-slate-500 leading-relaxed">{step.desc}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Emotional Banner */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="relative overflow-hidden rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-700 p-12 text-white shadow-2xl"
+          >
+            <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
+            <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl" />
+            
+            <div className="relative z-10 max-w-3xl mx-auto text-center space-y-6">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur rounded-full text-xs font-bold uppercase tracking-widest">
+                <Heart size={14} className="text-pink-300 fill-pink-300" /> Made for the Global Indian
+              </div>
+              <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
+                Stop waiting for a <span className="text-indigo-200 italic">friend's suitcase.</span>
+              </h2>
+              <p className="text-xl text-indigo-100 leading-relaxed font-medium">
+                Your connection to home shouldn't depend on someone else's travel plans. 
+                Whether it's your mother's handmade sweets, that specific wedding outfit, or the comfort of Indian spices—we bring India to your doorstep.
+              </p>
+              <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                    <Clock size={24} />
+                  </div>
+                  <div className="text-left">
+                    <div className="text-sm font-bold">No More Waiting</div>
+                    <div className="text-xs text-indigo-200">Ship whenever you want</div>
+                  </div>
+                </div>
+                <div className="w-px h-8 bg-white/20 hidden sm:block" />
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                    <Users size={24} />
+                  </div>
+                  <div className="text-left">
+                    <div className="text-sm font-bold">No More Asking</div>
+                    <div className="text-xs text-indigo-200">Independence in shipping</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Quote Calculator & Protocol */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-white p-8 rounded-3xl shadow-xl shadow-indigo-500/5 border border-slate-100">
+                <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                  <Calculator className="text-indigo-600" /> Quick Quote
+                </h2>
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Destination</label>
+                    <select 
+                      className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none"
+                      value={qCountry}
+                      onChange={(e) => setQCountry(e.target.value)}
+                    >
+                      {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Weight (kg)</label>
+                    <input 
+                      type="number" 
+                      min="0.1" 
+                      step="0.1"
+                      className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      value={qWeight}
+                      onChange={(e) => setQWeight(Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="p-6 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-200">
+                    <div className="flex justify-between items-end">
+                      <div>
+                        <span className="text-indigo-100 text-xs font-bold uppercase tracking-widest">Estimated Cost</span>
+                        <div className="text-4xl font-black">₹{(qWeight * SHIPPING_RATES[qCountry]).toFixed(2)}</div>
+                      </div>
+                      <Truck className="opacity-20" size={48} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-3">
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-10 rounded-[3rem] text-white flex flex-col md:flex-row items-center gap-10 relative overflow-hidden h-full">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -mr-32 -mt-32" />
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -ml-32 -mb-32" />
+                
+                <div className="w-24 h-24 bg-white/10 backdrop-blur-xl rounded-[2rem] flex items-center justify-center shrink-0 border border-white/20 shadow-2xl">
+                  <Info size={48} className="text-indigo-400" />
+                </div>
+                <div className="space-y-3 relative z-10">
+                  <h4 className="text-2xl font-black">Unified Shipping Protocol</h4>
+                  <p className="text-slate-400 leading-relaxed">
+                    When you schedule an agent pickup, JiffEX activates the <span className="text-white font-bold">Home-First Protocol</span>. All your items—whether from Jiffy Store or our warehouse—are consolidated at your doorstep for a truly personalized shipping experience.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Featured Products from Jiffy Store - Moved to Last */}
+          <div className="space-y-8">
+            <div className="flex items-end justify-between">
+              <div>
+                <h3 className="text-3xl font-black text-slate-900">Featured from <span className="text-indigo-600">Jiffy Store</span></h3>
+                <p className="text-slate-500">Premium products curated for your special occasions.</p>
+              </div>
+              <button 
+                onClick={() => setActiveTab('store')}
+                className="text-indigo-600 font-bold flex items-center gap-1 hover:underline"
+              >
+                View All <ChevronRight size={18} />
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {storeProducts.slice(0, 4).map(product => (
+                <div key={product.id} className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
+                  <div className="aspect-square overflow-hidden relative">
+                    <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                    <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                      {product.category}
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <h4 className="font-bold text-slate-900 mb-1 truncate">{product.name}</h4>
+                    <div className="flex items-center justify-between">
+                      <span className="text-indigo-600 font-bold">₹{product.price}</span>
+                      <button 
+                        onClick={() => {
+                          addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store');
+                          setActiveTab('cart');
+                        }}
+                        className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1"
+                      >
+                        <Plus size={14} /> Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
-
-            <div className="p-6 bg-slate-900 rounded-3xl text-white flex items-center gap-6">
-              <div className="hidden sm:flex w-16 h-16 bg-white/10 rounded-2xl items-center justify-center shrink-0">
-                <Info size={32} className="text-indigo-400" />
-              </div>
-              <div>
-                <h4 className="font-bold mb-1">Ready to get started?</h4>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Join thousands of customers who trust JiffEX for their international logistics needs. Fast, secure, and transparent.
-                </p>
-              </div>
-            </div>
           </div>
         </div>
-
-        {/* Featured Products from J Store */}
-        <div className="space-y-8">
-          <div className="flex items-end justify-between">
-            <div>
-              <h3 className="text-3xl font-black text-slate-900">Featured from J Store</h3>
-              <p className="text-slate-500">Premium products curated for your special occasions.</p>
-            </div>
-            <button 
-              onClick={() => setActiveTab('store')}
-              className="text-indigo-600 font-bold flex items-center gap-1 hover:underline"
-            >
-              View All <ChevronRight size={18} />
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {storeProducts.slice(0, 4).map(product => (
-              <div key={product.id} className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
-                <div className="aspect-square overflow-hidden relative">
-                  <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                  <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-600">
-                    {product.category}
-                  </div>
-                </div>
-                <div className="p-4">
-                  <h4 className="font-bold text-slate-900 mb-1 truncate">{product.name}</h4>
-                  <div className="flex items-center justify-between">
-                    <span className="text-indigo-600 font-bold">₹{product.price}</span>
-                    <button 
-                      onClick={() => {
-                        addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store');
-                        setActiveTab('cart');
-                      }}
-                      className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1"
-                    >
-                      <Plus size={14} /> Add
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }, [qCountry, qWeight, setActiveTab, setQuote, addItem, storeProducts, currentUser]);
+      );
+    }, [qCountry, qWeight, setActiveTab, setQuote, addItem, storeProducts, currentUser, appointments]);
 
 const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, newProduct: any, setNewProduct: any) => {
   const file = e.target.files?.[0];
@@ -1957,42 +2001,68 @@ const AdminDashboard = ({
       alert('Warehouse address copied to clipboard!');
     };
 
-    const hasAllAgentPickup = appointments.some(a => a.pickupType === 'AllAgent');
-    const hasMixedPickup = appointments.some(a => a.pickupType === 'Mixed');
+    const hasActivePickup = appointments.some(a => a.status === 'Scheduled');
 
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
+          {hasActivePickup && !editingPickupId && (
+            <div className="p-8 bg-emerald-50 rounded-[2.5rem] border-2 border-emerald-100 flex flex-col md:flex-row items-center gap-6 shadow-xl shadow-emerald-500/5">
+              <div className="w-20 h-20 bg-emerald-600 text-white rounded-[2rem] flex items-center justify-center shadow-2xl shadow-emerald-200 shrink-0">
+                <Truck size={40} className="animate-bounce-slow" />
+              </div>
+              <div className="flex-1 text-center md:text-left space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest mb-1">
+                  <CheckCircle2 size={12} /> Pickup Scheduled
+                </div>
+                <h4 className="text-2xl font-black text-emerald-900 leading-tight">Agent Pickup Scheduled!</h4>
+                <p className="text-emerald-700 font-medium">
+                  Though Agent pickup is selected, you can still <span className="font-black underline decoration-emerald-300 underline-offset-4">shop from Jiffy store</span> and items will be shipped along with your items at home.
+                </p>
+                <div className="pt-2">
+                  <button 
+                    onClick={() => setActiveTab('store')}
+                    className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all flex items-center gap-2"
+                  >
+                    <Store size={14} /> Shop Jiffy Store Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Add Items / Schedule Pickup Card */}
-          {(!appointments.length || editingPickupId || hasMixedPickup) && (
+          {(!appointments.length || editingPickupId) && (
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
                   {cartMode === 'Warehouse' ? <PlusCircle className="text-emerald-600" /> : <Calendar className="text-indigo-600" />}
                   {editingPickupId ? 'Update Pickup Schedule' : (cartMode === 'Warehouse' ? 'Add Your Items' : 'Schedule Agent Pickup')}
                 </h3>
-                <div className="flex bg-slate-100 p-1 rounded-2xl">
-                  <button 
-                    onClick={() => setCartMode('Pickup')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                      cartMode === 'Pickup' 
-                        ? 'bg-indigo-600 text-white shadow-lg ring-4 ring-indigo-100' 
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    <Users size={14} /> Agent Pickup
-                  </button>
-                  <button 
-                    onClick={() => setCartMode('Warehouse')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                      cartMode === 'Warehouse' 
-                        ? 'bg-emerald-600 text-white shadow-lg ring-4 ring-emerald-100' 
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    <Package size={14} /> Warehouse
-                  </button>
-                </div>
+                {!hasActivePickup && (
+                  <div className="flex bg-slate-100 p-1 rounded-2xl">
+                    <button 
+                      onClick={() => setCartMode('Pickup')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                        cartMode === 'Pickup' 
+                          ? 'bg-indigo-600 text-white shadow-lg ring-4 ring-indigo-100' 
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <Users size={14} /> Agent Pickup
+                    </button>
+                    <button 
+                      onClick={() => setCartMode('Warehouse')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                        cartMode === 'Warehouse' 
+                          ? 'bg-emerald-600 text-white shadow-lg ring-4 ring-emerald-100' 
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <Package size={14} /> Warehouse
+                    </button>
+                  </div>
+                )}
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -2053,19 +2123,57 @@ const AdminDashboard = ({
                       </button>
                     </div>
                   </>
-                ) : (appointments.length > 0 && !editingPickupId) ? (
-                  <div className="md:col-span-2 p-8 bg-amber-50 rounded-3xl border border-amber-100 flex items-center gap-6">
-                    <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 shrink-0">
-                      <Clock size={32} />
+                ) : (hasActivePickup && !editingPickupId) ? (
+                  <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-4">
+                      <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                        <div className="flex items-center gap-3 text-indigo-600">
+                          <Package size={20} />
+                          <h4 className="font-bold">Add Items to Pickup</h4>
+                        </div>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Add any items you want the agent to collect from your home. You can also add items from Jiffy Store, and the agent will bring them to you.
+                        </p>
+                        <div className="space-y-3">
+                          <input 
+                            type="text" 
+                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
+                            placeholder="Item name..."
+                            value={cartItemName}
+                            onChange={(e) => setCartItemName(e.target.value)}
+                          />
+                          <input 
+                            type="number" 
+                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
+                            placeholder="Weight (kg)"
+                            value={cartItemWeight}
+                            onChange={(e) => setCartItemWeight(Number(e.target.value))}
+                          />
+                          <button 
+                            onClick={handleAdd}
+                            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2"
+                          >
+                            <Plus size={20} /> Add to Home Pickup
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-xl font-black text-amber-900 mb-2">Pickup Scheduled</h4>
-                      <p className="text-amber-700 leading-relaxed">
-                        {appointments.some(a => a.pickupType === 'Mixed') 
-                          ? "Mixed Collection: Agent will collect items from you, but invoicing & shipping will be managed from our warehouse. You can still add items to your warehouse list or shop from J Store. Payment will be enabled once all items are received at our warehouse."
-                          : "Your agent pickup is confirmed. Payment will be enabled once the agent has collected your items and they are received at our warehouse. No further actions are required until the agent arrives."
-                        }
-                      </p>
+                    <div className="space-y-4">
+                      <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100 space-y-4">
+                        <div className="flex items-center gap-3 text-emerald-600">
+                          <Store size={20} />
+                          <h4 className="font-bold text-emerald-900">Jiffy Store Integration</h4>
+                        </div>
+                        <p className="text-xs text-emerald-700 leading-relaxed">
+                          Shop from Jiffy Store and our agent will bring those items to your home during the pickup for a unified shipping experience.
+                        </p>
+                        <button 
+                          onClick={() => setActiveTab('store')}
+                          className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
+                        >
+                          Visit Jiffy Store <ArrowRight size={18} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -2299,6 +2407,7 @@ const AdminDashboard = ({
                           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Next Steps Workflow</h4>
                           <div className="relative pl-6 space-y-6 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
                             {[
+                              { title: "Shop Jiffy Store", desc: "Add store items anytime; agent will bring them during pickup.", icon: Store },
                               { title: "Agent Arrival", desc: "Agent will arrive at your door during the selected slot.", icon: Truck },
                               { title: "On-site Weighing", desc: "Items are weighed using digital scales for accuracy.", icon: Calculator },
                               { title: "Digital Receipt", desc: "Receive instant confirmation of collected items.", icon: CheckCircle2 }
@@ -2398,12 +2507,6 @@ const AdminDashboard = ({
                 )}
                 <div className="flex flex-col sm:flex-row gap-4">
                   <button 
-                    onClick={() => setActiveTab('store')}
-                    className="flex-1 py-5 px-8 rounded-2xl border-2 border-slate-100 font-bold text-slate-500 hover:bg-slate-50 hover:border-slate-200 transition-all flex items-center justify-center gap-2"
-                  >
-                    Continue Shopping
-                  </button>
-                  <button 
                     onClick={handleCheckout}
                     className={`flex-1 py-5 px-8 rounded-2xl font-bold transition-all shadow-2xl flex items-center justify-center gap-2 group ${
                       appointments.some(a => a.status === 'Scheduled')
@@ -2425,7 +2528,7 @@ const AdminDashboard = ({
           <div className="bg-white rounded-[2rem] shadow-2xl shadow-indigo-500/5 border border-slate-100 sticky top-8 overflow-hidden">
             <div className="bg-slate-50 p-8 border-b border-slate-100">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-2xl font-black text-slate-900 tracking-tight">J Store</h3>
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight"><span className="text-indigo-600">Jiffy Store</span></h3>
                 <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
                   <ShoppingBag size={20} />
                 </div>
@@ -2434,9 +2537,11 @@ const AdminDashboard = ({
             </div>
 
             <div className="p-6">
-              <div className={`space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar ${cartMode === 'Pickup' && appointments.length > 0 && !editingPickupId && !appointments.some(a => a.pickupType === 'Mixed') ? 'opacity-50 pointer-events-none' : ''}`}>
+              <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                 {STORE_PRODUCTS.map(product => {
-                  const isInCart = items.some(i => i.name === product.name && i.source === 'Store');
+                  const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
+                  const itemCount = cartItem ? (cartItem.quantity || 1) : 0;
+                  
                   return (
                     <div key={product.id} className="group relative bg-white hover:bg-slate-50 rounded-2xl p-3 border border-slate-100 transition-all hover:shadow-md">
                       <div className="flex items-center gap-4">
@@ -2450,16 +2555,31 @@ const AdminDashboard = ({
                             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{product.weight}kg</span>
                           </div>
                         </div>
-                        <button 
-                          onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                            isInCart 
-                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' 
-                              : 'bg-slate-100 text-slate-900 hover:bg-indigo-600 hover:text-white hover:shadow-lg hover:shadow-indigo-100'
-                          }`}
-                        >
-                          {isInCart ? <Check size={20} /> : <Plus size={20} />}
-                        </button>
+                        
+                        {itemCount > 0 ? (
+                          <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-2">
+                            <button 
+                              onClick={() => removeStoreItem(product.name)}
+                              className="w-8 h-8 bg-white text-slate-600 rounded-lg flex items-center justify-center hover:text-red-600 transition-colors shadow-sm"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <span className="text-xs font-black text-slate-900 min-w-[20px] text-center">{itemCount}</span>
+                            <button 
+                              onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
+                              className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-sm"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
+                            className="w-10 h-10 rounded-xl bg-slate-100 text-slate-900 flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all hover:shadow-lg hover:shadow-indigo-100"
+                          >
+                            <Plus size={20} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -2469,8 +2589,7 @@ const AdminDashboard = ({
               <div className="mt-8 pt-6 border-t border-slate-100">
                 <button 
                   onClick={() => setActiveTab('store')}
-                  disabled={cartMode === 'Pickup' && appointments.length > 0 && !editingPickupId && !appointments.some(a => a.pickupType === 'Mixed')}
-                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold text-sm hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-slate-200"
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold text-sm hover:bg-black transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-200"
                 >
                   Browse Full Catalog <ArrowRight size={18} />
                 </button>
@@ -2489,11 +2608,13 @@ const AdminDashboard = ({
       return matchesCategory && matchesSearch;
     });
 
+    const hasActivePickup = appointments.some(a => a.status === 'Scheduled');
+
     return (
       <div className="space-y-8">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
-            <h2 className="text-4xl font-black text-slate-900">J Store</h2>
+            <h2 className="text-4xl font-black text-slate-900"><span className="text-indigo-600">Jiffy Store</span></h2>
             <p className="text-slate-500">Premium Indian products delivered globally.</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-4 flex-1 max-w-2xl">
@@ -2606,24 +2727,123 @@ const AdminDashboard = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col sm:flex-row gap-4 justify-center">
-          <button 
-            onClick={() => setActiveTab('home')}
-            className="py-4 px-12 rounded-2xl border-2 border-slate-200 font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-          >
-            Continue Shopping
-          </button>
-          <button 
-            onClick={handleCheckout}
-            disabled={items.length === 0}
-            className="py-4 px-12 rounded-2xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            Checkout <ChevronRight size={20} />
-          </button>
+        <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col items-center gap-8">
+          <AnimatePresence>
+            {showJiffySuggestion && !hasActivePickup && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="w-full max-w-3xl"
+              >
+                <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 relative group hover:shadow-xl hover:shadow-indigo-500/5 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-200">
+                      <Package className="text-white" size={24} />
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-black text-slate-900 leading-tight">Ship more from home?</h4>
+                      <p className="text-slate-500 text-sm">Want to get some items from home or anywhere to ship along with your Jiffy Store items?</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setActiveTab('cart');
+                      setCartMode('Warehouse');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all flex items-center gap-2 shrink-0 shadow-lg shadow-indigo-200"
+                  >
+                    Click here to add warehouse items <ArrowRight size={16} />
+                  </button>
+                  <button 
+                    onClick={() => setShowJiffySuggestion(false)}
+                    className="absolute top-4 right-4 text-slate-300 hover:text-slate-500 transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {hasActivePickup ? (
+            <div className="w-full max-w-4xl space-y-6">
+              <div className="bg-emerald-50 p-8 rounded-[2.5rem] border-2 border-emerald-100 shadow-xl shadow-emerald-500/5">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-200">
+                    <Truck size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-emerald-900">Confirm Items for Pickup</h3>
+                    <p className="text-emerald-700 text-sm">The agent will bring these Jiffy Store items to your house during the scheduled pickup.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 mb-8">
+                  {items.filter(i => i.source === 'Store').length > 0 ? (
+                    items.filter(i => i.source === 'Store').map(item => (
+                      <div key={item.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-emerald-100">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-slate-50 rounded-lg overflow-hidden border border-slate-100">
+                            <img src={item.image} className="w-full h-full object-cover" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{item.weight}kg</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-2">
+                            <button 
+                              onClick={() => removeStoreItem(item.name)}
+                              className="w-8 h-8 bg-white text-slate-600 rounded-lg flex items-center justify-center hover:text-red-600 transition-colors shadow-sm"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <span className="text-xs font-black text-slate-900 min-w-[20px] text-center">{item.quantity || 1}</span>
+                            <button 
+                              onClick={() => addItem({ name: item.name, weight: item.weight, price: item.price, image: item.image }, 'Store')}
+                              className="w-8 h-8 bg-emerald-600 text-white rounded-lg flex items-center justify-center hover:bg-emerald-700 transition-colors shadow-sm"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-emerald-600 font-medium italic">
+                      No store items added yet.
+                    </div>
+                  )}
+                </div>
+
+                <button 
+                  onClick={() => {
+                    setActiveTab('cart');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  disabled={items.filter(i => i.source === 'Store').length === 0}
+                  className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-bold text-lg hover:bg-emerald-700 transition-all shadow-2xl shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                >
+                  Confirm & View in Cart <CheckCircle2 size={24} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button 
+              onClick={handleCheckout}
+              disabled={items.length === 0}
+              className="w-full max-w-md py-5 px-12 rounded-2xl bg-indigo-600 text-white font-bold text-lg hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 group"
+            >
+              Proceed to Checkout <ChevronRight size={24} className="group-hover:translate-x-1 transition-transform" />
+            </button>
+          )}
         </div>
       </div>
     );
-  }, [selectedCategory, searchQuery, addItem, handleCheckout, items.length, storeProducts, currentUser]);
+  }, [selectedCategory, searchQuery, addItem, removeStoreItem, handleCheckout, items, storeProducts, currentUser, showJiffySuggestion, setActiveTab, setCartMode, appointments]);
 
   const FinalizeSection = useMemo(() => {
     if (!currentUser) return null;
@@ -2976,7 +3196,7 @@ const AdminDashboard = ({
             <div className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
               {[
                 { id: 'home', icon: Calculator, label: 'Home', roles: ['Customer'], public: true },
-                { id: 'store', icon: Store, label: 'J Store', roles: ['Customer'], public: true },
+                { id: 'store', icon: Store, label: 'Jiffy Store', roles: ['Customer'], public: true },
                 { id: 'cart', icon: Package, label: 'My Cart', roles: ['Customer'], public: true },
                 { id: 'history', icon: History, label: 'My Orders', roles: ['Customer'], public: false },
                 { id: 'admin', icon: LayoutDashboard, label: 'Dashboard', roles: ['Admin'], public: false },
@@ -3084,58 +3304,7 @@ const AdminDashboard = ({
         </div>
       </div>
 
-      {/* Pickup Choice Modal */}
-      <AnimatePresence>
-        {showPickupChoiceModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100"
-            >
-              <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mb-6 mx-auto">
-                <Truck size={32} />
-              </div>
-              <h3 className="text-2xl font-black text-slate-900 text-center mb-2">Pickup Preference</h3>
-              <p className="text-slate-500 text-center mb-8">How would you like to handle your items for this shipment?</p>
-              
-              <div className="space-y-4">
-                <button 
-                  onClick={() => confirmPickup('AllAgent')}
-                  className="w-full p-6 rounded-2xl border-2 border-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-all text-left group"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-black text-indigo-900">All items by Agent</span>
-                    <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-white">
-                      <Check size={14} />
-                    </div>
-                  </div>
-                  <p className="text-xs text-indigo-700 leading-relaxed">Our agent will collect all items from your location. No need to send anything to the warehouse yourself.</p>
-                </button>
-
-                <button 
-                  onClick={() => confirmPickup('Mixed')}
-                  className="w-full p-6 rounded-2xl border-2 border-slate-100 hover:border-indigo-200 hover:bg-slate-50 transition-all text-left group"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-black text-slate-900">Mixed Collection</span>
-                    <div className="w-6 h-6 rounded-full border-2 border-slate-200 group-hover:border-indigo-200" />
-                  </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">Agent will collect items from you, but invoicing & shipping will be managed from our warehouse. You can also send items to the warehouse yourself or shop from J Store.</p>
-                </button>
-              </div>
-
-              <button 
-                onClick={() => setShowPickupChoiceModal(false)}
-                className="w-full mt-6 py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors"
-              >
-                Cancel
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Pickup Choice Modal - Removed for Unified Workflow */}
 
       {/* Conflict Modal */}
       <AnimatePresence>
