@@ -76,7 +76,7 @@ import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { Login } from './components/Login';
 import { Session } from '@supabase/supabase-js';
 
-type Tab = 'home' | 'cart' | 'store' | 'finalize' | 'history' | 'admin' | 'agent' | 'support';
+type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'finalize' | 'history' | 'admin' | 'agent' | 'support';
 
 
 export default function App() {
@@ -109,7 +109,6 @@ export default function App() {
   ]);
 
   // Cart Section States
-  const [cartMode, setCartMode] = useState<'Warehouse' | 'Pickup'>('Pickup');
   const [selectedPickupDate, setSelectedPickupDate] = useState(PICKUP_SLOTS[0].date);
   const [selectedPickupTime, setSelectedPickupTime] = useState(PICKUP_SLOTS[0].times[0]);
   const [pickupName, setPickupName] = useState('');
@@ -258,8 +257,7 @@ export default function App() {
     // Parse address back if possible, or just set street
     setPickupAddress({ street: apt.address, apartment: '', city: '', state: '', zip: '' });
     setPickupLanguage(apt.languagePreference || 'English');
-    setCartMode('Pickup');
-    setActiveTab('cart');
+    setActiveTab('pickup');
   };
 
   const saveEditedPickup = () => {
@@ -398,11 +396,8 @@ export default function App() {
           (item.source === 'Warehouse') ? { ...item, source: 'Pickup' as const } : item
         );
       });
-      if (cartMode !== 'Pickup') {
-        setCartMode('Pickup');
-      }
     }
-  }, [appointments, cartMode]);
+  }, [appointments]);
   const totalWeight = useMemo(() => {
     return items.reduce((sum, item) => sum + (item.weight * (item.quantity || 1)), 0);
   }, [items]);
@@ -683,7 +678,7 @@ export default function App() {
                   className="flex flex-wrap justify-center lg:justify-start gap-4"
                 >
                   <button 
-                    onClick={() => setActiveTab('cart')}
+                    onClick={() => setActiveTab('pickup')}
                     className="px-8 py-4 bg-white text-slate-900 rounded-2xl font-bold text-lg hover:bg-indigo-50 transition-all shadow-xl active:scale-95 flex items-center gap-3 group"
                   >
                     <Package size={24} className="group-hover:rotate-12 transition-transform" /> Start Shipment
@@ -939,7 +934,7 @@ export default function App() {
                 const itemCount = cartItem?.quantity || 0;
                 
                 return (
-                  <div key={product.id} className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative">
+                  <div key={product.id} className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative flex flex-col">
                     <AnimatePresence>
                       {itemCount > 0 && (
                         <motion.div 
@@ -958,9 +953,9 @@ export default function App() {
                         {product.category}
                       </div>
                     </div>
-                    <div className="p-4">
+                    <div className="p-4 flex-1 flex flex-col">
                       <h4 className="font-bold text-slate-900 mb-1 truncate">{product.name}</h4>
-                      <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-3 mt-auto">
                         <div className="flex items-center justify-between">
                           <span className="text-indigo-600 font-bold">₹{product.price}</span>
                           <span className="text-[10px] text-slate-400 font-medium">{product.weight}kg</span>
@@ -2215,12 +2210,12 @@ const AdminDashboard = ({
       </div>
     );
   }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser]);
-  const CartSection = useMemo(() => {
+  const CartSection = ({ mode }: { mode: 'Pickup' | 'Warehouse' }) => {
     // States are now in App to prevent focus loss
 
     const handleAdd = () => {
       if (!cartItemName) return;
-      addItem({ name: cartItemName, weight: cartItemWeight }, cartMode);
+      addItem({ name: cartItemName, weight: cartItemWeight }, mode);
       setCartItemName('');
       setCartItemWeight(1);
     };
@@ -2266,37 +2261,13 @@ const AdminDashboard = ({
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                  {cartMode === 'Warehouse' ? <PlusCircle className="text-emerald-600" /> : <Calendar className="text-indigo-600" />}
-                  {editingPickupId ? 'Update Pickup Schedule' : (cartMode === 'Warehouse' ? 'Add Your Items' : 'Schedule Agent Pickup')}
+                  {mode === 'Warehouse' ? <PlusCircle className="text-emerald-600" /> : <Calendar className="text-indigo-600" />}
+                  {editingPickupId ? 'Update Pickup Schedule' : (mode === 'Warehouse' ? 'Add Your Items' : 'Schedule Agent Pickup')}
                 </h3>
-                {!hasActivePickup && (
-                  <div className="flex bg-slate-100 p-1 rounded-2xl">
-                    <button 
-                      onClick={() => setCartMode('Pickup')}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                        cartMode === 'Pickup' 
-                          ? 'bg-indigo-600 text-white shadow-lg ring-4 ring-indigo-100' 
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      <Users size={14} /> Agent Pickup
-                    </button>
-                    <button 
-                      onClick={() => setCartMode('Warehouse')}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                        cartMode === 'Warehouse' 
-                          ? 'bg-emerald-600 text-white shadow-lg ring-4 ring-emerald-100' 
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      <Package size={14} /> Warehouse
-                    </button>
-                  </div>
-                )}
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {cartMode === 'Warehouse' ? (
+                {mode === 'Warehouse' ? (
                   <>
                     <div className="space-y-4">
                       <div className="p-5 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-3 relative group">
@@ -2725,7 +2696,7 @@ const AdminDashboard = ({
             )}
             
             {/* Action Buttons */}
-            {(items.length > 0 || appointments.length > 0) && cartMode !== 'Pickup' && (
+            {(items.length > 0 || appointments.length > 0) && mode !== 'Pickup' && (
               <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col gap-6">
                 {appointments.some(a => a.status === 'Scheduled') && (
                   <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-3">
@@ -2829,7 +2800,7 @@ const AdminDashboard = ({
         </div>
       </div>
     );
-  }, [cartMode, selectedPickupDate, selectedPickupTime, pickupPhone, pickupAddress, pickupLanguage, appointments, cartItemName, cartItemWeight, items, totalWeight, totalCost, dbStatus.connected, currentUser?.id, addItem, updateItemStatus, handleCheckout, setActiveTab, setAppointments, setCartItemName, setCartItemWeight, setCartMode, setPickupAddress, setPickupPhone, setSelectedPickupDate, setSelectedPickupTime, handleSchedulePickup, cancelPickup, startEditingPickup, saveEditedPickup, editingPickupId]);
+  };
 
   const StoreSection = useMemo(() => {
     const filteredProducts = storeProducts.filter(p => {
@@ -2885,7 +2856,7 @@ const AdminDashboard = ({
               <motion.div 
                 layout
                 key={product.id} 
-                className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative"
+                className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative flex flex-col"
               >
                 <AnimatePresence>
                   {itemCount > 0 && (
@@ -2905,38 +2876,40 @@ const AdminDashboard = ({
                     {product.category}
                   </div>
                 </div>
-                <div className="p-5">
+                <div className="p-5 flex-1 flex flex-col">
                   <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-slate-900 leading-tight">{product.name}</h3>
-                    <span className="text-indigo-600 font-bold">₹{product.price}</span>
+                    <h3 className="font-bold text-slate-900 leading-tight truncate flex-1 mr-2">{product.name}</h3>
+                    <span className="text-indigo-600 font-bold shrink-0">₹{product.price}</span>
                   </div>
                   <p className="text-xs text-slate-500 mb-4">Weight: {product.weight} kg</p>
-                  {itemCount > 0 ? (
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => removeStoreItem(product.name)}
-                        className="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center hover:bg-slate-200 transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                      <div className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-200">
-                        <ShoppingBag size={16} /> Added ({itemCount})
+                  <div className="mt-auto">
+                    {itemCount > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => removeStoreItem(product.name)}
+                          className="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center hover:bg-slate-200 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        <div className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-200">
+                          <ShoppingBag size={16} /> Added ({itemCount})
+                        </div>
+                        <button 
+                          onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
+                          className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
+                        >
+                          <Plus size={16} />
+                        </button>
                       </div>
+                    ) : (
                       <button 
                         onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                        className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
+                        className="w-full py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"
                       >
-                        <Plus size={16} />
+                        <ShoppingBag size={16} /> Add to Shipment
                       </button>
-                    </div>
-                  ) : (
-                    <button 
-                      onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                      className="w-full py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"
-                    >
-                      <ShoppingBag size={16} /> Add to Shipment
-                    </button>
-                  )}
+                    )}
+                  </div>
                 </div>
               </motion.div>
             );
@@ -2979,8 +2952,7 @@ const AdminDashboard = ({
                   </div>
                   <button 
                     onClick={() => {
-                      setActiveTab('cart');
-                      setCartMode('Warehouse');
+                      setActiveTab('warehouse');
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
                     className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all flex items-center gap-2 shrink-0 shadow-lg shadow-indigo-200"
@@ -3074,7 +3046,7 @@ const AdminDashboard = ({
         </div>
       </div>
     );
-  }, [selectedCategory, searchQuery, addItem, removeStoreItem, handleCheckout, items, storeProducts, currentUser, showJiffySuggestion, setActiveTab, setCartMode, appointments]);
+  }, [selectedCategory, searchQuery, addItem, removeStoreItem, handleCheckout, items, storeProducts, currentUser, showJiffySuggestion, setActiveTab, appointments]);
 
   const FinalizeSection = useMemo(() => {
     if (!currentUser) return null;
@@ -3428,7 +3400,8 @@ const AdminDashboard = ({
               {[
                 { id: 'home', icon: Calculator, label: 'Home', roles: ['Customer'], public: true },
                 { id: 'store', icon: Store, label: 'Jiffy Store', roles: ['Customer'], public: true },
-                { id: 'cart', icon: Package, label: 'My Cart', roles: ['Customer'], public: true },
+                { id: 'pickup', icon: Truck, label: 'Agent Pickup', roles: ['Customer'], public: true },
+                { id: 'warehouse', icon: Package, label: 'Warehouse', roles: ['Customer'], public: true },
                 { id: 'support', icon: HelpCircle, label: 'Support', roles: ['Customer'], public: true },
                 { id: 'history', icon: History, label: 'My Orders', roles: ['Customer'], public: false },
                 { id: 'admin', icon: LayoutDashboard, label: 'Dashboard', roles: ['Admin'], public: false },
@@ -3444,7 +3417,7 @@ const AdminDashboard = ({
                   }`}
                 >
                   <tab.icon size={16} /> {tab.label}
-                  {tab.id === 'cart' && items.length > 0 && (
+                  {(tab.id === 'pickup' || tab.id === 'warehouse') && items.length > 0 && (
                     <span className="bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] flex items-center justify-center">
                       {items.length}
                     </span>
@@ -3492,7 +3465,8 @@ const AdminDashboard = ({
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'home' && HomeSection}
-            {activeTab === 'cart' && CartSection}
+            {activeTab === 'pickup' && <CartSection mode="Pickup" />}
+            {activeTab === 'warehouse' && <CartSection mode="Warehouse" />}
             {activeTab === 'support' && SupportSection}
             {activeTab === 'store' && StoreSection}
             {activeTab === 'finalize' && FinalizeSection}
