@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Package, 
   Truck, 
@@ -46,6 +46,9 @@ import {
   Bell,
   Heart,
   Lock,
+  MessageSquare,
+  Mail,
+  HelpCircle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -73,7 +76,7 @@ import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { Login } from './components/Login';
 import { Session } from '@supabase/supabase-js';
 
-type Tab = 'home' | 'cart' | 'store' | 'finalize' | 'history' | 'admin' | 'agent';
+type Tab = 'home' | 'cart' | 'store' | 'finalize' | 'history' | 'admin' | 'agent' | 'support';
 
 
 export default function App() {
@@ -128,6 +131,31 @@ export default function App() {
   // Home Section States
   const [qCountry, setQCountry] = useState(COUNTRIES[0]);
   const [qWeight, setQWeight] = useState(1);
+  const [qMethod, setQMethod] = useState<'Standard' | 'Express'>('Express');
+  const [trackingId, setTrackingId] = useState('');
+  const quoteRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollToQuote = () => {
+    quoteRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleTrackShipment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trackingId.trim()) return;
+    
+    // Find order or appointment with this ID
+    const order = orders.find(o => o.id === trackingId);
+    const appointment = appointments.find(a => a.id === trackingId);
+    
+    if (order) {
+      setSelectedOrderForInvoice(order);
+      setActiveTab('history');
+    } else if (appointment) {
+      alert(`Tracking Appointment ${trackingId}: Status is ${appointment.status}`);
+    } else {
+      alert('Tracking ID not found. Please check and try again.');
+    }
+  };
 
   // Admin Section States
   const [adminTab, setAdminTab] = useState<'Overview' | 'Agents' | 'Inventory'>('Overview');
@@ -390,7 +418,7 @@ export default function App() {
     return shippingCost + itemsCost;
   }, [items, totalWeight, address.country]);
 
-  const addItem = async (item: Omit<ShippingItem, 'id' | 'status' | 'source'>, source: 'Warehouse' | 'Pickup' | 'Store', force = false) => {
+  const addItem = useCallback(async (item: Omit<ShippingItem, 'id' | 'status' | 'source'>, source: 'Warehouse' | 'Pickup' | 'Store', force = false) => {
     const activePickup = appointments.find(a => a.status === 'Scheduled');
     const hasActivePickup = !!activePickup;
     
@@ -442,29 +470,30 @@ export default function App() {
         // Optional: show a toast or alert
       }
     }
-  };
+  }, [items, appointments, dbStatus.connected, currentUser]);
 
   const removeItem = (id: string) => {
     setItems(items.filter(i => i.id !== id));
   };
 
-  const removeStoreItem = (name: string) => {
+  const removeStoreItem = useCallback((name: string) => {
     const index = items.findIndex(i => i.name === name && i.source === 'Store');
     if (index !== -1) {
       const updatedItems = [...items];
       const item = updatedItems[index];
       if (item.quantity && item.quantity > 1) {
+        const unitWeight = item.weight / item.quantity;
         updatedItems[index] = {
           ...item,
           quantity: item.quantity - 1,
-          weight: item.weight - (item.weight / item.quantity) // This is tricky if weights are different, but for store items they are same
+          weight: item.weight - unitWeight
         };
       } else {
         updatedItems.splice(index, 1);
       }
       setItems(updatedItems);
     }
-  };
+  }, [items]);
 
   const updateItemStatus = (id: string, status: ShippingStatus) => {
     setItems(items.map(i => i.id === id ? { ...i, status } : i));
@@ -583,6 +612,41 @@ export default function App() {
             <div className="absolute top-0 right-0 w-full h-full opacity-20 pointer-events-none">
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-500 rounded-full blur-[120px]" />
             </div>
+
+            {/* Tracking Box at Top Center */}
+            <div className="relative z-20 flex justify-center mb-12 lg:mb-16">
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="w-full max-w-md"
+              >
+                <form 
+                  onSubmit={handleTrackShipment}
+                  className="relative group"
+                >
+                  <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-violet-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" />
+                  <div className="relative flex items-center bg-slate-800/80 backdrop-blur-xl rounded-2xl border border-white/10 p-1">
+                    <div className="pl-4 text-slate-400">
+                      <MapPin size={20} />
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="Enter Tracking ID (e.g. JX-1234)"
+                      value={trackingId}
+                      onChange={(e) => setTrackingId(e.target.value)}
+                      className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder-slate-500 px-4 py-3 text-sm font-medium"
+                    />
+                    <button 
+                      type="submit"
+                      className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-indigo-500 transition-all shadow-lg"
+                    >
+                      Track
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
             
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
               <div className="space-y-8 text-center lg:text-left">
@@ -629,6 +693,22 @@ export default function App() {
                     className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-all shadow-xl active:scale-95 flex items-center gap-3"
                   >
                     <Store size={24} /> Shop Jiffy Store
+                  </button>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="flex justify-center lg:justify-start"
+                >
+                  <button 
+                    onClick={scrollToQuote}
+                    className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 font-bold transition-colors group"
+                  >
+                    <Calculator size={20} className="group-hover:scale-110 transition-transform" />
+                    Quick Quote Calculator
+                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
                   </button>
                 </motion.div>
               </div>
@@ -744,7 +824,7 @@ export default function App() {
           </motion.div>
 
           {/* Quote Calculator & Protocol */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
+          <div ref={quoteRef} className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-white p-8 rounded-3xl shadow-xl shadow-indigo-500/5 border border-slate-100">
                 <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
@@ -772,11 +852,46 @@ export default function App() {
                       onChange={(e) => setQWeight(Number(e.target.value))}
                     />
                   </div>
+                  
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping Method</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { id: 'Standard', label: 'Standard', days: '10-14 Days', multiplier: 0.7 },
+                        { id: 'Express', label: 'Express', days: '5-7 Days', multiplier: 1.0 }
+                      ].map((method) => (
+                        <button
+                          key={method.id}
+                          onClick={() => setQMethod(method.id as any)}
+                          className={`p-4 rounded-2xl border-2 transition-all text-left ${
+                            qMethod === method.id 
+                              ? 'border-indigo-600 bg-indigo-50 ring-4 ring-indigo-600/5' 
+                              : 'border-slate-100 bg-white hover:border-slate-200'
+                          }`}
+                        >
+                          <div className={`text-sm font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
+                            {method.label}
+                          </div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                            {method.days}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="p-6 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-200">
                     <div className="flex justify-between items-end">
                       <div>
-                        <span className="text-indigo-100 text-xs font-bold uppercase tracking-widest">Estimated Cost</span>
-                        <div className="text-4xl font-black">₹{(qWeight * SHIPPING_RATES[qCountry]).toFixed(2)}</div>
+                        <span className="text-indigo-100 text-xs font-bold uppercase tracking-widest">
+                          Estimated Cost ({qMethod})
+                        </span>
+                        <div className="text-4xl font-black">
+                          ₹{(qWeight * SHIPPING_RATES[qCountry] * (qMethod === 'Standard' ? 0.7 : 1.0)).toFixed(2)}
+                        </div>
+                        <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-2 flex items-center gap-1">
+                          <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
+                        </div>
                       </div>
                       <Truck className="opacity-20" size={48} />
                     </div>
@@ -819,36 +934,151 @@ export default function App() {
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {storeProducts.slice(0, 4).map(product => (
-                <div key={product.id} className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
-                  <div className="aspect-square overflow-hidden relative">
-                    <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
-                    <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-600">
-                      {product.category}
+              {storeProducts.slice(0, 4).map(product => {
+                const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
+                const itemCount = cartItem?.quantity || 0;
+                
+                return (
+                  <div key={product.id} className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative">
+                    <AnimatePresence>
+                      {itemCount > 0 && (
+                        <motion.div 
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          className="absolute top-3 right-3 z-10 w-7 h-7 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg border-2 border-white"
+                        >
+                          {itemCount}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    <div className="aspect-square overflow-hidden relative">
+                      <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                      <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                        {product.category}
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <h4 className="font-bold text-slate-900 mb-1 truncate">{product.name}</h4>
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-indigo-600 font-bold">₹{product.price}</span>
+                          <span className="text-[10px] text-slate-400 font-medium">{product.weight}kg</span>
+                        </div>
+                        
+                        {itemCount > 0 ? (
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => removeStoreItem(product.name)}
+                              className="w-8 h-8 bg-slate-100 text-slate-600 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                            <div className="flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 shadow-md shadow-indigo-100">
+                              <ShoppingBag size={12} /> Added ({itemCount})
+                            </div>
+                            <button 
+                              onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
+                              className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
+                            className="w-full py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Plus size={14} /> Add to Shipment
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <div className="p-4">
-                    <h4 className="font-bold text-slate-900 mb-1 truncate">{product.name}</h4>
-                    <div className="flex items-center justify-between">
-                      <span className="text-indigo-600 font-bold">₹{product.price}</span>
-                      <button 
-                        onClick={() => {
-                          addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store');
-                          setActiveTab('cart');
-                        }}
-                        className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1"
-                      >
-                        <Plus size={14} /> Add
-                      </button>
-                    </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      );
+    }, [qCountry, qWeight, setActiveTab, setQuote, addItem, removeStoreItem, items, storeProducts, currentUser, appointments, trackingId, setTrackingId, handleTrackShipment]);
+
+    const SupportSection = useMemo(() => {
+      return (
+        <div className="space-y-12 pb-24">
+          <div className="text-center space-y-4">
+            <h3 className="text-4xl font-black text-slate-900 tracking-tight">Need Help?</h3>
+            <p className="text-slate-500 max-w-2xl mx-auto">Our support team is here to ensure your shipping experience is flawless.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {[
+              { 
+                icon: MessageSquare, 
+                title: "Live Chat", 
+                desc: "Chat with our logistics experts for immediate assistance with your shipment.",
+                action: "Start Chat",
+                color: "text-indigo-600",
+                bg: "bg-indigo-50"
+              },
+              { 
+                icon: Mail, 
+                title: "Email Support", 
+                desc: "Send us your queries and we'll get back to you within 24 hours.",
+                action: "support@jiffex.com",
+                color: "text-emerald-600",
+                bg: "bg-emerald-50"
+              },
+              { 
+                icon: HelpCircle, 
+                title: "Help Center", 
+                desc: "Browse our extensive library of FAQs and shipping guides.",
+                action: "Visit FAQ",
+                color: "text-amber-600",
+                bg: "bg-amber-50"
+              }
+            ].map((item, i) => (
+              <motion.div
+                key={item.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+                className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group"
+              >
+                <div className={`w-14 h-14 ${item.bg} ${item.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
+                  <item.icon size={28} />
+                </div>
+                <h4 className="text-xl font-black text-slate-900 mb-2">{item.title}</h4>
+                <p className="text-sm text-slate-500 mb-6 leading-relaxed">{item.desc}</p>
+                <button className={`text-sm font-bold ${item.color} flex items-center gap-2 hover:underline`}>
+                  {item.action} <ArrowRight size={16} />
+                </button>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Simple FAQ Accordion */}
+          <div className="max-w-3xl mx-auto bg-slate-50 rounded-[3rem] p-8 md:p-12">
+            <h4 className="text-2xl font-black text-slate-900 mb-8 text-center">Frequently Asked Questions</h4>
+            <div className="space-y-4">
+              {[
+                { q: "How long does shipping to India take?", a: "Typically, express shipments take 5-7 business days, while standard shipments may take 10-14 business days depending on the destination city." },
+                { q: "What items are prohibited?", a: "We cannot ship hazardous materials, perishables, currency, or restricted electronics. Please check our full prohibited items list for details." },
+                { q: "How is the shipping cost calculated?", a: "Costs are based on the actual weight or volumetric weight (whichever is higher) and the destination country's specific rate." }
+              ].map((faq, i) => (
+                <div key={i} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                  <div className="font-bold text-slate-900 mb-2 flex items-center gap-3">
+                    <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs">?</div>
+                    {faq.q}
                   </div>
+                  <p className="text-sm text-slate-500 ml-9">{faq.a}</p>
                 </div>
               ))}
             </div>
           </div>
         </div>
       );
-    }, [qCountry, qWeight, setActiveTab, setQuote, addItem, storeProducts, currentUser, appointments]);
+    }, []);
 
 const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, newProduct: any, setNewProduct: any) => {
   const file = e.target.files?.[0];
@@ -2648,7 +2878,8 @@ const AdminDashboard = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.length > 0 ? filteredProducts.map(product => {
-            const itemCount = items.filter(i => i.name === product.name && i.source === 'Store').length;
+            const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
+            const itemCount = cartItem?.quantity || 0;
             
             return (
               <motion.div 
@@ -3198,6 +3429,7 @@ const AdminDashboard = ({
                 { id: 'home', icon: Calculator, label: 'Home', roles: ['Customer'], public: true },
                 { id: 'store', icon: Store, label: 'Jiffy Store', roles: ['Customer'], public: true },
                 { id: 'cart', icon: Package, label: 'My Cart', roles: ['Customer'], public: true },
+                { id: 'support', icon: HelpCircle, label: 'Support', roles: ['Customer'], public: true },
                 { id: 'history', icon: History, label: 'My Orders', roles: ['Customer'], public: false },
                 { id: 'admin', icon: LayoutDashboard, label: 'Dashboard', roles: ['Admin'], public: false },
                 { id: 'agent', icon: Users, label: 'Agent Portal', roles: ['Agent'], public: false },
@@ -3261,6 +3493,7 @@ const AdminDashboard = ({
           >
             {activeTab === 'home' && HomeSection}
             {activeTab === 'cart' && CartSection}
+            {activeTab === 'support' && SupportSection}
             {activeTab === 'store' && StoreSection}
             {activeTab === 'finalize' && FinalizeSection}
             {activeTab === 'history' && CustomerHistory}

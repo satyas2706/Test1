@@ -8,7 +8,7 @@ export interface User {
   role: UserRole;
 }
 
-export type ShippingStatus = 'Pending' | 'Received at Warehouse' | 'In Transit' | 'Delivered' | 'Cancelled';
+export type ShippingStatus = 'Pending' | 'Ready for Collection' | 'Processing' | 'In Transit' | 'Delivered' | 'Cancelled' | 'Received at Warehouse';
 
 export interface ShippingItem {
   id: string;
@@ -16,7 +16,7 @@ export interface ShippingItem {
   weight: number;
   image?: string;
   status: ShippingStatus;
-  source: 'Warehouse' | 'Pickup' | 'Store';
+  source: 'Pickup' | 'Store' | 'Warehouse';
   price?: number;
   quantity?: number;
 }

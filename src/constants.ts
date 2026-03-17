@@ -144,11 +144,14 @@ export const PICKUP_SLOTS = [
 ];
 
 export const WAREHOUSE_ADDRESS = {
-  name: 'JiffEX Warehouse',
-  street: '123 Logistics Way, Suite 400',
-  city: 'Edison',
-  state: 'NJ',
-  zip: '08817',
-  country: 'USA',
-  phone: '+1 (732) 555-0123'
+  name: 'JiffEX Main Warehouse',
+  fullName: 'JiffEX Main Warehouse',
+  street: 'Plot No. 45, Sector 18',
+  addressLine1: 'Plot No. 45, Sector 18',
+  city: 'Gurgaon',
+  state: 'Haryana',
+  zip: '122015',
+  zipCode: '122015',
+  country: 'India',
+  phone: '+91 124 4567890'
 };
