@@ -50,6 +50,16 @@ export const api = {
     }));
   },
 
+  async updateItemStatus(itemId: string, status: string, userId: string, name: string): Promise<ShippingItem> {
+    const res = await fetch(`${API_BASE}/items/${itemId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, user_id: userId, name }),
+    });
+    if (!res.ok) throw new Error('Failed to update item status');
+    return res.json();
+  },
+
   async checkHealth(): Promise<{ status: string; supabaseConnected: boolean }> {
     const res = await fetch(`${API_BASE}/health`);
     if (!res.ok) throw new Error('Health check failed');

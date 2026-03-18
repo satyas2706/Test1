@@ -4,6 +4,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import fs from "fs";
+import twilio from "twilio";
+import nodemailer from "nodemailer";
 
 dotenv.config();
 
@@ -18,6 +20,75 @@ let supabase: any = null;
 
 if (supabaseUrl && supabaseServiceKey) {
   supabase = createClient(supabaseUrl, supabaseServiceKey);
+}
+
+// Notification Clients
+const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN 
+  ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) 
+  : null;
+
+const mailTransporter = process.env.SMTP_HOST 
+  ? nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: Number(process.env.SMTP_PORT) === 465,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    }) 
+  : null;
+
+// Notification Helper
+async function sendNotification(userId: string, event: string, message: string, channels: string[]) {
+  console.log(`[Notification] User: ${userId}, Event: ${event}, Message: ${message}, Channels: ${channels.join(', ')}`);
+  
+  // Store in database for history
+  if (supabase) {
+    await supabase.from('notifications').insert([{
+      user_id: userId,
+      event_type: event,
+      message,
+      channels,
+      status: 'sent',
+      created_at: new Date().toISOString()
+    }]);
+  }
+
+  const promises = [];
+
+  if (channels.includes('SMS') && twilioClient && process.env.TWILIO_PHONE_NUMBER) {
+    promises.push(
+      twilioClient.messages.create({
+        body: message,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: '+919999999999' // Mock phone number, in real app fetch from user profile
+      }).catch(err => console.error('SMS Error:', err.message))
+    );
+  }
+
+  if (channels.includes('whatsapp') && twilioClient && process.env.TWILIO_WHATSAPP_NUMBER) {
+    promises.push(
+      twilioClient.messages.create({
+        body: message,
+        from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`,
+        to: 'whatsapp:+919999999999' // Mock whatsapp number
+      }).catch(err => console.error('WhatsApp Error:', err.message))
+    );
+  }
+
+  if (channels.includes('Email') && mailTransporter && process.env.SMTP_FROM) {
+    promises.push(
+      mailTransporter.sendMail({
+        from: process.env.SMTP_FROM,
+        to: 'user@example.com', // Mock email
+        subject: `JiffEX Notification: ${event}`,
+        text: message
+      }).catch(err => console.error('Email Error:', err.message))
+    );
+  }
+
+  await Promise.all(promises);
 }
 
 app.use(cors());
@@ -80,8 +151,57 @@ app.post("/api/orders", async (req, res) => {
     console.error("Supabase Insert Error (orders):", error.message, error.details, error.hint);
     return res.status(400).json({ error: error.message });
   }
+
+  // Trigger Notification: Shipment dispatched (if status is 'Dispatched') or Pickup confirmed (if it's an appointment)
+  if (status === 'Scheduled') {
+    await sendNotification(customer_id, 'Pickup confirmed', `Your agent pickup for ${destination} has been confirmed.`, ['SMS', 'Email', 'whatsapp']);
+  } else if (status === 'Dispatched') {
+    await sendNotification(customer_id, 'Shipment dispatched', `Your shipment BB-${id.slice(0,8)} has been dispatched to ${destination}.`, ['SMS', 'Email', 'whatsapp']);
+  }
+
   console.log("Order created successfully:", data[0].id);
   res.json(data[0]);
+});
+
+// API: Update item status (trigger notification)
+app.patch("/api/items/:itemId", async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+  
+  const { status, user_id, name } = req.body;
+  const { data, error } = await supabase
+    .from("items")
+    .update({ status })
+    .eq("id", req.params.itemId)
+    .select();
+
+  if (error) return res.status(400).json({ error: error.message });
+
+  if (status === 'Received at Warehouse') {
+    await sendNotification(user_id, 'Package received at warehouse', `Your item "${name}" has been safely received at our warehouse.`, ['SMS', 'Email', 'whatsapp']);
+  }
+
+  res.json(data[0]);
+});
+
+// API: Simulate Delivery Notifications
+app.post("/api/notifications/simulate", async (req, res) => {
+  const { userId, event, message } = req.body;
+  await sendNotification(userId, event, message, ['SMS', 'Email', 'whatsapp']);
+  res.json({ success: true });
+});
+
+// API: Get notification history
+app.get("/api/notifications/:userId", async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+  
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", req.params.userId)
+    .order('created_at', { ascending: false });
+    
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
 });
 
 // Example API: Get all orders for a user

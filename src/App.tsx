@@ -48,7 +48,12 @@ import {
   Lock,
   MessageSquare,
   Mail,
+  SlidersHorizontal,
+  ChevronDown,
+  ArrowUpDown,
   HelpCircle,
+  ShoppingCart,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -76,14 +81,54 @@ import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { Login } from './components/Login';
 import { Session } from '@supabase/supabase-js';
 
-type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'finalize' | 'history' | 'admin' | 'agent' | 'support';
+type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'history' | 'admin' | 'agent' | 'support' | 'notifications';
 
+
+const API_URL = window.location.origin;
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('home');
+  const [tabHistory, setTabHistory] = useState<Tab[]>(['home']);
+
+  const navigateTo = (tab: Tab) => {
+    if (tab !== activeTab) {
+      setTabHistory(prev => [...prev, tab]);
+      setActiveTab(tab);
+      window.scrollTo(0, 0);
+    }
+  };
+
+  const goBack = () => {
+    if (tabHistory.length > 1) {
+      const newHistory = [...tabHistory];
+      newHistory.pop(); // remove current
+      const prevTab = newHistory[newHistory.length - 1];
+      setTabHistory(newHistory);
+      setActiveTab(prevTab);
+      window.scrollTo(0, 0);
+    } else {
+      setActiveTab('home');
+      setTabHistory(['home']);
+      window.scrollTo(0, 0);
+    }
+  };
+
+  const BackButton = () => (
+    <motion.button
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      onClick={goBack}
+      className="mb-3 flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors group"
+    >
+      <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center group-hover:border-indigo-200 group-hover:bg-indigo-50 transition-all">
+        <ArrowRight size={16} className="rotate-180" />
+      </div>
+      <span>Go Back</span>
+    </motion.button>
+  );
   const [isPaid, setIsPaid] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [items, setItems] = useState<ShippingItem[]>([]);
@@ -148,7 +193,7 @@ export default function App() {
     
     if (order) {
       setSelectedOrderForInvoice(order);
-      setActiveTab('history');
+      navigateTo('history');
     } else if (appointment) {
       alert(`Tracking Appointment ${trackingId}: Status is ${appointment.status}`);
     } else {
@@ -164,11 +209,16 @@ export default function App() {
   // Store Section States
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('featured');
+  const [minPrice, setMinPrice] = useState<number | ''>('');
+  const [maxPrice, setMaxPrice] = useState<number | ''>('');
+  const [showFilters, setShowFilters] = useState(false);
   const [showJiffySuggestion, setShowJiffySuggestion] = useState(false);
 
   // Cart Add States
   const [cartItemName, setCartItemName] = useState('');
   const [cartItemWeight, setCartItemWeight] = useState(1);
+  const [cartItemSource, setCartItemSource] = useState<'Pickup' | 'Warehouse'>('Pickup');
 
   // Finalize Section States
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'phonepe'>('card');
@@ -196,6 +246,44 @@ export default function App() {
   const [showConflictModal, setShowConflictModal] = useState<{ show: boolean; item: any; source: any }>({ show: false, item: null, source: null });
   const [cancellingPickupId, setCancellingPickupId] = useState<string | null>(null);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+
+  const fetchNotifications = async () => {
+    if (!currentUser) return;
+    setLoadingNotifications(true);
+    try {
+      const response = await fetch(`${API_URL}/notifications/${currentUser.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setNotifications(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'history' || activeTab === 'notifications') {
+      fetchNotifications();
+    }
+  }, [activeTab, currentUser]);
+
+  const simulateNotification = async (event: string, message: string) => {
+    if (!currentUser) return;
+    try {
+      await fetch(`${API_URL}/notifications/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id, event, message })
+      });
+      fetchNotifications();
+    } catch (err) {
+      console.error('Simulation error:', err);
+    }
+  };
 
   const handleSchedulePickup = () => {
     if (!currentUser) {
@@ -209,7 +297,7 @@ export default function App() {
     confirmPickup('AllAgent');
   };
 
-  const confirmPickup = (type: 'AllAgent' | 'Mixed' = 'AllAgent') => {
+  const confirmPickup = async (type: 'AllAgent' | 'Mixed' = 'AllAgent') => {
     const assignedAgent = type === 'AllAgent' ? agents[Math.floor(Math.random() * agents.length)] : undefined;
     const fullAddress = `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}, ${pickupAddress.city}, ${pickupAddress.state} ${pickupAddress.zip}`;
     
@@ -230,6 +318,24 @@ export default function App() {
       languagePreference: pickupLanguage
     };
     setAppointments([...appointments, newAppointment]);
+    
+    // Sync to DB and trigger notification
+    if (dbStatus.connected && currentUser) {
+      try {
+        await api.createOrder({
+          ...newAppointment,
+          customer_id: currentUser.id,
+          total_weight: 0,
+          total_cost: 0,
+          destination: { addressLine1: fullAddress, city: pickupAddress.city, country: 'India' },
+          payment_status: 'Pending',
+          shipping_date: selectedPickupDate
+        } as any);
+      } catch (err) {
+        console.error('Failed to sync pickup to DB:', err);
+      }
+    }
+
     setPickupName('');
     setPickupPhone('');
     setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
@@ -257,7 +363,7 @@ export default function App() {
     // Parse address back if possible, or just set street
     setPickupAddress({ street: apt.address, apartment: '', city: '', state: '', zip: '' });
     setPickupLanguage(apt.languagePreference || 'English');
-    setActiveTab('pickup');
+    navigateTo('pickup');
   };
 
   const saveEditedPickup = () => {
@@ -490,8 +596,36 @@ export default function App() {
     }
   }, [items]);
 
-  const updateItemStatus = (id: string, status: ShippingStatus) => {
+  const updateItemStatus = async (id: string, status: ShippingStatus) => {
+    const item = items.find(i => i.id === id);
     setItems(items.map(i => i.id === id ? { ...i, status } : i));
+    
+    if (dbStatus.connected && currentUser && item) {
+      try {
+        await api.updateItemStatus(id, status, currentUser.id, item.name);
+      } catch (err) {
+        console.error('Failed to update item status in DB:', err);
+      }
+    }
+  };
+
+  const updateItemQuantity = (id: string, delta: number) => {
+    setItems(items.map(i => {
+      if (i.id === id) {
+        const newQuantity = Math.max(1, (i.quantity || 1) + delta);
+        const unitWeight = i.weight / (i.quantity || 1);
+        return {
+          ...i,
+          quantity: newQuantity,
+          weight: unitWeight * newQuantity
+        };
+      }
+      return i;
+    }));
+  };
+
+  const cancelAppointment = (id: string) => {
+    setAppointments(prev => prev.filter(a => a.id !== id));
   };
 
   const handleFinalPayment = async () => {
@@ -594,7 +728,7 @@ export default function App() {
     }
     const newOrderId = 'BB-' + Math.random().toString(36).substr(2, 9).toUpperCase();
     setOrderId(newOrderId);
-    setActiveTab('finalize');
+    navigateTo('finalize');
   };
 
   // --- Components ---
@@ -678,14 +812,20 @@ export default function App() {
                   className="flex flex-wrap justify-center lg:justify-start gap-4"
                 >
                   <button 
-                    onClick={() => setActiveTab('pickup')}
-                    className="px-8 py-4 bg-white text-slate-900 rounded-2xl font-bold text-lg hover:bg-indigo-50 transition-all shadow-xl active:scale-95 flex items-center gap-3 group"
+                    onClick={() => navigateTo('pickup')}
+                    className="px-6 py-4 bg-white text-slate-900 rounded-2xl font-bold text-lg hover:bg-indigo-50 transition-all shadow-xl active:scale-95 flex items-center gap-3 group"
                   >
-                    <Package size={24} className="group-hover:rotate-12 transition-transform" /> Start Shipment
+                    <Truck size={24} className="group-hover:translate-x-1 transition-transform text-indigo-600" /> Agent Pickup
                   </button>
                   <button 
-                    onClick={() => setActiveTab('store')}
-                    className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-all shadow-xl active:scale-95 flex items-center gap-3"
+                    onClick={() => navigateTo('warehouse')}
+                    className="px-6 py-4 bg-white text-slate-900 rounded-2xl font-bold text-lg hover:bg-indigo-50 transition-all shadow-xl active:scale-95 flex items-center gap-3 group"
+                  >
+                    <Package size={24} className="group-hover:rotate-12 transition-transform text-indigo-600" /> Send to Warehouse
+                  </button>
+                  <button 
+                    onClick={() => navigateTo('store')}
+                    className="px-6 py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-all shadow-xl active:scale-95 flex items-center gap-3"
                   >
                     <Store size={24} /> Shop Jiffy Store
                   </button>
@@ -921,7 +1061,7 @@ export default function App() {
                 <p className="text-slate-500">Premium products curated for your special occasions.</p>
               </div>
               <button 
-                onClick={() => setActiveTab('store')}
+                onClick={() => navigateTo('store')}
                 className="text-indigo-600 font-bold flex items-center gap-1 hover:underline"
               >
                 View All <ChevronRight size={18} />
@@ -993,13 +1133,109 @@ export default function App() {
                 );
               })}
             </div>
+
           </div>
         </div>
       );
     }, [qCountry, qWeight, setActiveTab, setQuote, addItem, removeStoreItem, items, storeProducts, currentUser, appointments, trackingId, setTrackingId, handleTrackShipment]);
 
-    const SupportSection = useMemo(() => {
-      return (
+    const NotificationCenter = useMemo(() => {
+    return (
+      <div className="space-y-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-black text-slate-900">Notification Center</h2>
+            <p className="text-slate-500">Track your shipment alerts across SMS, Email, and WhatsApp.</p>
+          </div>
+          <button 
+            onClick={fetchNotifications}
+            className="p-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+          >
+            <RefreshCw size={20} className={loadingNotifications ? 'animate-spin' : ''} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            { id: 'sms', label: 'SMS Alerts', icon: MessageSquare, color: 'text-blue-600', bg: 'bg-blue-50' },
+            { id: 'email', label: 'Email Updates', icon: Mail, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+            { id: 'whatsapp', label: 'WhatsApp', icon: Phone, color: 'text-emerald-600', bg: 'bg-emerald-50' }
+          ].map(channel => (
+            <div key={channel.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+              <div className={`w-12 h-12 ${channel.bg} ${channel.color} rounded-2xl flex items-center justify-center`}>
+                <channel.icon size={24} />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-slate-900">{channel.label}</div>
+                <div className="text-xs text-emerald-600 font-bold">Active</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <h3 className="font-bold text-slate-900 flex items-center gap-2">
+              <Bell size={18} className="text-indigo-600" /> Recent Notifications
+            </h3>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => simulateNotification('Out for delivery', 'Your shipment BB-X7291 is out for delivery today!')}
+                className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                Simulate Out for Delivery
+              </button>
+              <button 
+                onClick={() => simulateNotification('Delivered', 'Success! Your shipment BB-X7291 has been delivered.')}
+                className="px-3 py-1.5 bg-emerald-600 text-white text-[10px] font-bold rounded-lg hover:bg-emerald-700 transition-colors"
+              >
+                Simulate Delivered
+              </button>
+            </div>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {notifications.length === 0 ? (
+              <div className="p-12 text-center text-slate-400">
+                <Bell size={48} className="mx-auto mb-4 opacity-20" />
+                <p>No notifications yet. They will appear here as your shipment progresses.</p>
+              </div>
+            ) : (
+              notifications.map((notif: any) => (
+                <div key={notif.id} className="p-6 hover:bg-slate-50 transition-colors group">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-white transition-colors">
+                      {notif.event_type === 'Delivered' ? <CheckCircle2 className="text-emerald-600" size={20} /> : 
+                       notif.event_type === 'Out for delivery' ? <Truck className="text-indigo-600" size={20} /> :
+                       <Bell className="text-slate-400" size={20} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-bold text-slate-900">{notif.event_type}</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          {new Date(notif.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-500 leading-relaxed">{notif.message}</p>
+                      <div className="flex gap-2 mt-3">
+                        {notif.channels.map((ch: string) => (
+                          <span key={ch} className="px-2 py-0.5 bg-slate-100 text-[9px] font-bold text-slate-500 rounded uppercase tracking-tighter">
+                            {ch}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }, [notifications, loadingNotifications]);
+
+  const SupportSection = useMemo(() => {
+    return (
         <div className="space-y-12 pb-24">
           <div className="text-center space-y-4">
             <h3 className="text-4xl font-black text-slate-900 tracking-tight">Need Help?</h3>
@@ -1615,7 +1851,7 @@ const AdminDashboard = ({
               <div className="col-span-full text-center py-12 text-slate-400">
                 <Package size={48} className="mx-auto mb-4 opacity-20" />
                 <p>You have no active shipments.</p>
-                <button onClick={() => setActiveTab('home')} className="mt-4 text-indigo-600 font-bold hover:underline">Start a shipment</button>
+                <button onClick={() => navigateTo('home')} className="mt-4 text-indigo-600 font-bold hover:underline">Start a shipment</button>
               </div>
             ) : (
               customerOrders.map(order => (
@@ -1651,12 +1887,22 @@ const AdminDashboard = ({
                       <Clock size={12} className="text-indigo-600" />
                       <span className="text-[10px] text-slate-600">{new Date(order.createdAt).toLocaleDateString()}</span>
                     </div>
-                    <button 
-                      onClick={() => setSelectedOrderForInvoice(order)}
-                      className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1"
-                    >
-                      View Invoice <ChevronRight size={14} />
-                    </button>
+                    <div className="flex gap-2">
+                      {order.status === 'Received at Warehouse' && (
+                        <button 
+                          onClick={() => simulateNotification('Shipment dispatched', `Your shipment ${order.id} has been dispatched to ${order.destination.country}.`)}
+                          className="px-2 py-1 bg-indigo-600 text-white text-[9px] font-bold rounded hover:bg-indigo-700 transition-colors"
+                        >
+                          Dispatch
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => setSelectedOrderForInvoice(order)}
+                        className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1"
+                      >
+                        View Invoice <ChevronRight size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
@@ -1865,7 +2111,7 @@ const AdminDashboard = ({
 
             <div className="flex gap-4 pt-4">
               <button 
-                onClick={() => { setActiveWorkOrder(null); setActiveTab('agent'); }}
+                onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
                 className="flex-1 py-4 bg-slate-100 text-slate-900 rounded-2xl font-bold hover:bg-slate-200 transition-all"
               >
                 Back to Portal
@@ -2210,12 +2456,12 @@ const AdminDashboard = ({
       </div>
     );
   }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser]);
-  const CartSection = ({ mode }: { mode: 'Pickup' | 'Warehouse' }) => {
+  const UnifiedCartSection = ({ mode }: { mode?: 'Pickup' | 'Warehouse' }) => {
     // States are now in App to prevent focus loss
 
     const handleAdd = () => {
       if (!cartItemName) return;
-      addItem({ name: cartItemName, weight: cartItemWeight }, mode);
+      addItem({ name: cartItemName, weight: cartItemWeight }, mode || cartItemSource);
       setCartItemName('');
       setCartItemWeight(1);
     };
@@ -2230,34 +2476,63 @@ const AdminDashboard = ({
 
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          {hasActivePickup && !editingPickupId && (
-            <div className="p-8 bg-emerald-50 rounded-[2.5rem] border-2 border-emerald-100 flex flex-col md:flex-row items-center gap-6 shadow-xl shadow-emerald-500/5">
-              <div className="w-20 h-20 bg-emerald-600 text-white rounded-[2rem] flex items-center justify-center shadow-2xl shadow-emerald-200 shrink-0">
-                <Truck size={40} className="animate-bounce-slow" />
+        <div className={`${mode ? 'lg:col-span-3' : 'lg:col-span-2'} space-y-6`}>
+          {/* Progress Bar - Moved to top */}
+          {!mode && (
+            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Shipment Progress</h4>
+                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                  {items.every(i => i.status === 'Received at Warehouse') && items.length > 0 ? 'Ready to Ship' : 'In Progress'}
+                </span>
               </div>
-              <div className="flex-1 text-center md:text-left space-y-2">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest mb-1">
-                  <CheckCircle2 size={12} /> Pickup Scheduled
-                </div>
-                <h4 className="text-2xl font-black text-emerald-900 leading-tight">Agent Pickup Scheduled!</h4>
-                <p className="text-emerald-700 font-medium">
-                  Though Agent pickup is selected, you can still <span className="font-black underline decoration-emerald-300 underline-offset-4">shop from Jiffy store</span> and items will be shipped along with your items at home.
-                </p>
-                <div className="pt-2">
-                  <button 
-                    onClick={() => setActiveTab('store')}
-                    className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all flex items-center gap-2"
-                  >
-                    <Store size={14} /> Shop Jiffy Store Now
-                  </button>
+              <div className="relative">
+                <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 -translate-y-1/2 rounded-full" />
+                <div 
+                  className="absolute top-1/2 left-0 h-1 bg-indigo-600 -translate-y-1/2 rounded-full transition-all duration-1000" 
+                  style={{ 
+                    width: `${
+                      items.every(i => i.status === 'Received at Warehouse') && items.length > 0 ? '100%' :
+                      items.some(i => i.status === 'Received at Warehouse') ? '75%' :
+                      appointments.length > 0 ? '50%' : '25%'
+                    }` 
+                  }} 
+                />
+                <div className="relative flex justify-between">
+                  {[
+                    { label: 'Items Added', icon: Package, active: items.length > 0 },
+                    { label: 'Pickup Scheduled', icon: Truck, active: appointments.length > 0 },
+                    { label: 'Received', icon: CheckCircle2, active: items.some(i => i.status === 'Received at Warehouse') },
+                    { label: 'Ready to Ship', icon: ArrowRight, active: items.every(i => i.status === 'Received at Warehouse') && items.length > 0 }
+                  ].map((step, i) => (
+                    <div key={i} className="flex flex-col items-center gap-3 relative z-10">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ${step.active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-white border-2 border-slate-100 text-slate-300'}`}>
+                        <step.icon size={18} />
+                      </div>
+                      <span className={`text-[10px] font-bold uppercase tracking-tight ${step.active ? 'text-indigo-600' : 'text-slate-400'}`}>{step.label}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
           )}
 
-          {/* Add Items / Schedule Pickup Card */}
-          {(!appointments.length || editingPickupId) && (
+          {/* Unified Cart Header */}
+          {!mode && (
+            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-3xl font-black text-slate-900">My Shipping Cart</h2>
+                <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-200">
+                  <ShoppingCart size={24} />
+                </div>
+              </div>
+              <p className="text-slate-500">Review and manage all your items before checkout.</p>
+            </div>
+          )}
+
+
+          {/* Add Items / Schedule Pickup Card - Only show in specific modes, not in My Cart */}
+          {mode && (!appointments.length || editingPickupId) && (
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
@@ -2333,7 +2608,7 @@ const AdminDashboard = ({
                           <h4 className="font-bold">Add Items to Pickup</h4>
                         </div>
                         <p className="text-xs text-slate-500 leading-relaxed">
-                          Add any items you want the agent to collect from your home. You can also add items from Jiffy Store, and the agent will bring them to you.
+                          Add any items you want the agent to collect from your home.
                         </p>
                         <div className="space-y-3">
                           <input 
@@ -2357,23 +2632,6 @@ const AdminDashboard = ({
                             <Plus size={20} /> Add to Home Pickup
                           </button>
                         </div>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100 space-y-4">
-                        <div className="flex items-center gap-3 text-emerald-600">
-                          <Store size={20} />
-                          <h4 className="font-bold text-emerald-900">Jiffy Store Integration</h4>
-                        </div>
-                        <p className="text-xs text-emerald-700 leading-relaxed">
-                          Shop from Jiffy Store and our agent will bring those items to your home during the pickup for a unified shipping experience.
-                        </p>
-                        <button 
-                          onClick={() => setActiveTab('store')}
-                          className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
-                        >
-                          Visit Jiffy Store <ArrowRight size={18} />
-                        </button>
                       </div>
                     </div>
                   </div>
@@ -2492,8 +2750,9 @@ const AdminDashboard = ({
             </div>
           )}
 
+          {/* Item List Card - Visible in all tabs, but specific parts are conditional */}
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 min-h-[400px]">
-            {!hasAllAgentPickup && (
+            {!mode && !hasAllAgentPickup && (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                 <div>
                   <h3 className="text-2xl font-black text-slate-900">Your Shipment Items</h3>
@@ -2509,304 +2768,334 @@ const AdminDashboard = ({
                 </div>
               </div>
             )}
-            
-            {items.length === 0 && appointments.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-80 text-slate-400">
-                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                  <Package size={40} strokeWidth={1} />
+              
+              {items.length === 0 && appointments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-80 text-slate-400">
+                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                    <Package size={40} strokeWidth={1} />
+                  </div>
+                  <p className="font-medium">Your cart is empty.</p>
+                  {!mode && (
+                    <>
+                      <p className="text-sm mb-6">Add items from the store or schedule a pickup to get started.</p>
+                      <button 
+                        onClick={() => navigateTo('store')}
+                        className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center gap-2"
+                      >
+                        <Store size={18} /> Shop Jiffy Store
+                      </button>
+                    </>
+                  )}
+                  {mode === 'Pickup' && (
+                    <p className="text-sm">Schedule a pickup to add items to your shipment.</p>
+                  )}
+                  {mode === 'Warehouse' && (
+                    <p className="text-sm">Add your items details above to track them.</p>
+                  )}
                 </div>
-                <p className="font-medium">Your shipment is empty.</p>
-                <p className="text-sm">Add items from the store or schedule a pickup to get started.</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {appointments.map((apt, idx) => (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    key={`apt-${idx}`}
-                    className="overflow-hidden rounded-3xl border border-indigo-100 bg-white shadow-xl shadow-indigo-500/5"
-                  >
-                    <div className="bg-indigo-600 p-6 text-white flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
-                          <Truck size={24} />
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold uppercase tracking-widest opacity-80">Appointment ID</div>
-                          <div className="text-lg font-black">{apt.id}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="px-3 py-1 bg-white/20 backdrop-blur rounded-full text-[10px] font-black uppercase tracking-widest">
-                          {apt.status}
-                        </div>
-                        <button 
-                          onClick={() => startEditingPickup(apt)}
-                          className="p-2 hover:bg-white/20 rounded-xl transition-colors"
-                          title="Modify Schedule"
+              ) : (
+                <div className="space-y-10">
+                  {/* Scheduled Pickups */}
+                  {(mode === 'Pickup' || !mode) && appointments.length > 0 && (
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                        <Truck size={18} className="text-indigo-600" /> Scheduled Pickups
+                      </h4>
+                      {appointments.map((apt, idx) => (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          key={`apt-${idx}`}
+                          className="overflow-hidden rounded-3xl border border-indigo-100 bg-white shadow-xl shadow-indigo-500/5"
                         >
-                          <Edit3 size={18} />
-                        </button>
-                        <button 
-                          onClick={() => cancelPickup(apt.id)}
-                          className="p-2 hover:bg-white/20 rounded-xl transition-colors"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <div className="space-y-6">
-                        <div>
-                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Pickup Details</h4>
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-3 text-sm">
-                              <UserIcon size={16} className="text-indigo-600" />
-                              <span className="font-bold text-slate-900">{apt.customerName || 'Customer'}</span>
-                            </div>
-                            <div className="flex items-center gap-3 text-sm">
-                              <Calendar size={16} className="text-indigo-600" />
-                              <span className="font-bold text-slate-700">{apt.date}</span>
-                              <span className="text-slate-300">|</span>
-                              <span className="text-slate-600">{apt.time}</span>
-                            </div>
-                            <div className="flex items-start gap-3 text-sm">
-                              <MapPin size={16} className="text-indigo-600 mt-1" />
-                              <span className="text-slate-600 leading-relaxed font-medium">{apt.address}</span>
-                            </div>
-                            <div className="flex items-center gap-3 text-sm">
-                              <Phone size={16} className="text-indigo-600" />
-                              <span className="font-bold text-slate-900">{apt.phone}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Assigned Agent</h4>
-                          {apt.assignedAgent ? (
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600">
-                                <UserIcon size={20} />
+                          <div className="bg-indigo-600 p-6 text-white flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
+                                <Truck size={24} />
                               </div>
                               <div>
-                                <div className="text-sm font-bold text-slate-900">{apt.assignedAgent.name}</div>
-                                <div className="text-[10px] text-slate-500">{apt.assignedAgent.vehicleNumber}</div>
+                                <div className="text-[10px] font-bold uppercase tracking-widest opacity-80">Appointment ID</div>
+                                <div className="text-lg font-black">{apt.id}</div>
                               </div>
                             </div>
-                          ) : (
-                            <div className="flex items-center gap-2 text-amber-600 text-xs font-bold">
-                              <Clock size={14} /> Assigning Agent...
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-6">
-                        <div>
-                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Next Steps Workflow</h4>
-                          <div className="relative pl-6 space-y-6 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
-                            {[
-                              { title: "Shop Jiffy Store", desc: "Add store items anytime; agent will bring them during pickup.", icon: Store },
-                              { title: "Agent Arrival", desc: "Agent will arrive at your door during the selected slot.", icon: Truck },
-                              { title: "On-site Weighing", desc: "Items are weighed using digital scales for accuracy.", icon: Calculator },
-                              { title: "Digital Receipt", desc: "Receive instant confirmation of collected items.", icon: CheckCircle2 }
-                            ].map((step, i) => (
-                              <div key={i} className="relative">
-                                <div className="absolute -left-[23px] top-1 w-4 h-4 rounded-full bg-white border-2 border-indigo-600 z-10" />
-                                <h5 className="text-xs font-bold text-slate-900">{step.title}</h5>
-                                <p className="text-[11px] text-slate-500 leading-relaxed">{step.desc}</p>
+                            <div className="flex items-center gap-2">
+                              <div className="px-3 py-1 bg-white/20 backdrop-blur rounded-full text-[10px] font-black uppercase tracking-widest">
+                                {apt.status}
                               </div>
-                            ))}
+                              <button 
+                                onClick={() => startEditingPickup(apt)}
+                                className="p-2 hover:bg-white/20 rounded-xl transition-colors"
+                                title="Modify Schedule"
+                              >
+                                <Edit3 size={18} />
+                              </button>
+                              <button 
+                                onClick={() => cancelPickup(apt.id)}
+                                className="p-2 hover:bg-white/20 rounded-xl transition-colors"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
                           </div>
-                        </div>
 
-                        <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Info size={16} className="text-indigo-600" />
-                            <span className="text-[10px] font-bold text-indigo-900 uppercase tracking-widest">Pro Tip</span>
-                          </div>
-                          <p className="text-[11px] text-indigo-700 leading-relaxed">
-                            Keep your items ready and sorted to speed up the collection process.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-
-                {items.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Individual Items</div>
-                    {items.map(item => (
-                      <motion.div 
-                        layout
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        key={item.id} 
-                        className="flex items-center gap-4 p-4 rounded-2xl border border-slate-100 bg-white hover:shadow-xl hover:shadow-indigo-500/5 transition-all group"
-                      >
-                        <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 overflow-hidden border border-slate-100">
-                          {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <ImageIcon size={24} />}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex justify-between">
-                            <h4 className="font-bold text-slate-900">
-                              {item.name}
-                              {item.quantity && item.quantity > 1 && (
-                                <span className="ml-2 text-indigo-600 font-black">x{item.quantity}</span>
-                              )}
-                            </h4>
-                            <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
-                              <Trash2 size={18} />
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-xs font-bold text-indigo-600">{item.weight} kg</span>
-                            <span className="text-[10px] px-2 py-0.5 bg-slate-100 rounded-lg text-slate-500 font-bold uppercase tracking-widest">
-                              {item.source}
-                            </span>
-                            <div className="flex items-center gap-1 ml-auto">
-                              {item.status === 'Received at Warehouse' ? (
-                                <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
-                                  <CheckCircle2 size={12} /> RECEIVED
-                                </span>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
-                                    <Clock size={12} /> PENDING
-                                  </span>
-                                  <button 
-                                    onClick={() => updateItemStatus(item.id, 'Received at Warehouse')}
-                                    className="text-[10px] bg-indigo-600 text-white px-3 py-1 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-sm"
-                                  >
-                                    Mark Received
-                                  </button>
+                          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="space-y-6">
+                              <div>
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Pickup Details</h4>
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-3 text-sm">
+                                    <UserIcon size={16} className="text-indigo-600" />
+                                    <span className="font-bold text-slate-900">{apt.customerName || 'Customer'}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-sm">
+                                    <Calendar size={16} className="text-indigo-600" />
+                                    <span className="font-bold text-slate-700">{apt.date}</span>
+                                    <span className="text-slate-300">|</span>
+                                    <span className="text-slate-600">{apt.time}</span>
+                                  </div>
+                                  <div className="flex items-start gap-3 text-sm">
+                                    <MapPin size={16} className="text-indigo-600 mt-1" />
+                                    <span className="text-slate-600 leading-relaxed font-medium">{apt.address}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-sm">
+                                    <Phone size={16} className="text-indigo-600" />
+                                    <span className="font-bold text-slate-900">{apt.phone}</span>
+                                  </div>
                                 </div>
-                              )}
+                              </div>
+
+                              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Assigned Agent</h4>
+                                {apt.assignedAgent ? (
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600">
+                                      <UserIcon size={20} />
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-bold text-slate-900">{apt.assignedAgent.name}</div>
+                                      <div className="text-[10px] text-slate-500">{apt.assignedAgent.vehicleNumber}</div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2 text-amber-600 text-xs font-bold">
+                                    <Clock size={14} /> Assigning Agent...
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="space-y-6">
+                              <div>
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Next Steps Workflow</h4>
+                                <div className="relative pl-6 space-y-6 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
+                                  {[
+                                    { title: "Agent Arrival", desc: "Agent will arrive at your door during the selected slot.", icon: Truck },
+                                    { title: "On-site Weighing", desc: "Items are weighed using digital scales for accuracy.", icon: Calculator },
+                                    { title: "Digital Receipt", desc: "Receive instant confirmation of collected items.", icon: CheckCircle2 }
+                                  ].map((step, i) => (
+                                    <div key={i} className="relative">
+                                      <div className="absolute -left-[23px] top-1 w-4 h-4 rounded-full bg-white border-2 border-indigo-600 z-10" />
+                                      <h5 className="text-xs font-bold text-slate-900">{step.title}</h5>
+                                      <p className="text-[11px] text-slate-500 leading-relaxed">{step.desc}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
                             </div>
                           </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Grouped Items by Source */}
+                  {['Store', 'Pickup', 'Warehouse'].map(source => {
+                    const sourceItems = items.filter(i => i.source === source);
+                    if (sourceItems.length === 0) return null;
+                    
+                    // Hide Store items if we are in Pickup or Warehouse mode
+                    if (mode && source === 'Store') return null;
+                    
+                    // Only show items matching the current mode (Pickup or Warehouse)
+                    if (mode && mode !== source) return null; 
+
+                    const sourceIcon = source === 'Store' ? Store : source === 'Pickup' ? Package : Database;
+                    const sourceColor = source === 'Store' ? 'text-emerald-600' : source === 'Pickup' ? 'text-indigo-600' : 'text-slate-600';
+                    const sourceLabel = source === 'Store' ? 'Jiffy Store Items' : source === 'Pickup' ? 'Agent Pickup Items' : 'Warehouse Items';
+
+                    return (
+                      <div key={source} className="space-y-4">
+                        <h4 className={`text-sm font-black ${sourceColor} uppercase tracking-widest flex items-center gap-2`}>
+                          <sourceIcon size={18} /> {sourceLabel}
+                        </h4>
+                        <div className="space-y-3">
+                          {sourceItems.map(item => (
+                            <motion.div 
+                              layout
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              key={item.id} 
+                              className="flex items-center gap-4 p-4 rounded-2xl border border-slate-100 bg-white hover:shadow-xl hover:shadow-indigo-500/5 transition-all group"
+                            >
+                              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 overflow-hidden border border-slate-100">
+                                {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <ImageIcon size={24} />}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <h4 className="font-bold text-slate-900">{item.name}</h4>
+                                    <div className="flex items-center gap-3 mt-1">
+                                      <span className="text-xs font-bold text-indigo-600">{item.weight.toFixed(2)} kg</span>
+                                      {item.price && <span className="text-xs font-black text-emerald-600">₹{item.price * (item.quantity || 1)}</span>}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-4">
+                                    <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-2">
+                                      <button 
+                                        onClick={() => updateItemQuantity(item.id, -1)}
+                                        className="w-8 h-8 bg-white text-slate-600 rounded-lg flex items-center justify-center hover:text-red-600 transition-colors shadow-sm"
+                                      >
+                                        <Minus size={14} />
+                                      </button>
+                                      <span className="text-xs font-black text-slate-900 min-w-[20px] text-center">{item.quantity || 1}</span>
+                                      <button 
+                                        onClick={() => updateItemQuantity(item.id, 1)}
+                                        className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-sm"
+                                      >
+                                        <Plus size={14} />
+                                      </button>
+                                    </div>
+                                    <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1">
+                                      <Trash2 size={18} />
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 mt-3">
+                                  <div className="flex items-center gap-1">
+                                    {item.status === 'Received at Warehouse' ? (
+                                      <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
+                                        <CheckCircle2 size={12} /> RECEIVED
+                                      </span>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
+                                          <Clock size={12} /> PENDING
+                                        </span>
+                                        <button 
+                                          onClick={() => updateItemStatus(item.id, 'Received at Warehouse')}
+                                          className="text-[10px] bg-indigo-600 text-white px-3 py-1 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-sm"
+                                        >
+                                          Mark Received
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </motion.div>
+                          ))}
                         </div>
-                      </motion.div>
-                    ))}
+                      </div>
+                    );
+                  })}
+
+                  {/* Add More Items section removed as per user request */}
+                </div>
+              )}
+              
+              {/* Action Buttons - Only show in My Cart tab (!mode) */}
+              {!mode && (items.length > 0 || appointments.length > 0) && (
+                <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col gap-6">
+                  {appointments.some(a => a.status === 'Scheduled') && (
+                    <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-3">
+                      <Info size={18} className="text-indigo-600 shrink-0 mt-0.5" />
+                      <p className="text-xs text-indigo-700 leading-relaxed font-medium">
+                        Payment will be enabled once your scheduled agent pickup is completed and all items are received at our warehouse. This ensures a single consolidated shipment for you.
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <button 
+                      onClick={handleCheckout}
+                      className={`flex-1 py-5 px-8 rounded-2xl font-bold transition-all shadow-2xl flex items-center justify-center gap-2 group ${
+                        appointments.some(a => a.status === 'Scheduled')
+                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                          : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/20'
+                      }`}
+                    >
+                      {currentUser ? 'Checkout' : 'Sign in to Checkout'} <ArrowRight size={20} className={appointments.some(a => a.status === 'Scheduled') ? '' : 'group-hover:translate-x-1 transition-transform'} />
+                    </button>
                   </div>
-                )}
+                </div>
+              )}
+            </div>
+          </div>
+
+        {!mode && (
+          <div className="lg:col-span-1 space-y-6">
+            {/* Order Summary Card */}
+            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm sticky top-8">
+              <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
+                <Package size={20} className="text-indigo-600" /> Order Summary
+              </h3>
+              <div className="space-y-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500 font-medium">Total Items</span>
+                  <span className="font-bold text-slate-900">{items.length}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500 font-medium">Total Weight</span>
+                  <span className="font-bold text-slate-900">{totalWeight.toFixed(2)} kg</span>
+                </div>
+                <div className="pt-4 border-t border-slate-100">
+                  <div className="flex justify-between items-center">
+                    <span className="text-base font-bold text-slate-900">Estimated Total</span>
+                    <span className="text-xl font-black text-indigo-600">₹{items.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 1), 0)}</span>
+                  </div>
+                </div>
               </div>
-            )}
-            
-            {/* Action Buttons */}
-            {(items.length > 0 || appointments.length > 0) && mode !== 'Pickup' && (
-              <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col gap-6">
-                {appointments.some(a => a.status === 'Scheduled') && (
-                  <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-3">
-                    <Info size={18} className="text-indigo-600 shrink-0 mt-0.5" />
-                    <p className="text-xs text-indigo-700 leading-relaxed font-medium">
-                      Payment will be enabled once your scheduled agent pickup is completed and all items are received at our warehouse. This ensures a single consolidated shipment for you.
-                    </p>
-                  </div>
-                )}
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <button 
-                    onClick={handleCheckout}
-                    className={`flex-1 py-5 px-8 rounded-2xl font-bold transition-all shadow-2xl flex items-center justify-center gap-2 group ${
-                      appointments.some(a => a.status === 'Scheduled')
-                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                        : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/20'
-                    }`}
-                  >
-                    Proceed to Payment <ArrowRight size={20} className={appointments.some(a => a.status === 'Scheduled') ? '' : 'group-hover:translate-x-1 transition-transform'} />
+
+              {/* Apply Coupons Box */}
+              <div className="mt-8 pt-8 border-t border-slate-100">
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Apply Coupons</h4>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="Enter code" 
+                    className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold"
+                  />
+                  <button className="px-4 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-black transition-all">
+                    Apply
                   </button>
                 </div>
               </div>
-            )}
-            
-          </div>
-        </div>
-
-        <div className="lg:col-span-1 space-y-6">
-          {/* Quick Add from Store - Redesigned and Repositioned */}
-          <div className="bg-white rounded-[2rem] shadow-2xl shadow-indigo-500/5 border border-slate-100 sticky top-8 overflow-hidden">
-            <div className="bg-slate-50 p-8 border-b border-slate-100">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-2xl font-black text-slate-900 tracking-tight"><span className="text-indigo-600">Jiffy Store</span></h3>
-                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-                  <ShoppingBag size={20} />
-                </div>
-              </div>
-              <p className="text-slate-500 text-xs font-medium">Curated premium Indian products</p>
-            </div>
-
-            <div className="p-6">
-              <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                {STORE_PRODUCTS.map(product => {
-                  const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
-                  const itemCount = cartItem ? (cartItem.quantity || 1) : 0;
-                  
-                  return (
-                    <div key={product.id} className="group relative bg-white hover:bg-slate-50 rounded-2xl p-3 border border-slate-100 transition-all hover:shadow-md">
-                      <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-slate-100 bg-slate-50">
-                          <img src={product.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-bold text-slate-900 truncate">{product.name}</div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-sm font-black text-indigo-600">₹{product.price}</span>
-                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{product.weight}kg</span>
-                          </div>
-                        </div>
-                        
-                        {itemCount > 0 ? (
-                          <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-2">
-                            <button 
-                              onClick={() => removeStoreItem(product.name)}
-                              className="w-8 h-8 bg-white text-slate-600 rounded-lg flex items-center justify-center hover:text-red-600 transition-colors shadow-sm"
-                            >
-                              <Minus size={14} />
-                            </button>
-                            <span className="text-xs font-black text-slate-900 min-w-[20px] text-center">{itemCount}</span>
-                            <button 
-                              onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                              className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-sm"
-                            >
-                              <Plus size={14} />
-                            </button>
-                          </div>
-                        ) : (
-                          <button 
-                            onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                            className="w-10 h-10 rounded-xl bg-slate-100 text-slate-900 flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all hover:shadow-lg hover:shadow-indigo-100"
-                          >
-                            <Plus size={20} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-8 pt-6 border-t border-slate-100">
-                <button 
-                  onClick={() => setActiveTab('store')}
-                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold text-sm hover:bg-black transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-200"
-                >
-                  Browse Full Catalog <ArrowRight size={18} />
-                </button>
-              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     );
   };
 
   const StoreSection = useMemo(() => {
-    const filteredProducts = storeProducts.filter(p => {
+    let filteredProducts = storeProducts.filter(p => {
       const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
+      const matchesMinPrice = minPrice === '' || p.price >= minPrice;
+      const matchesMaxPrice = maxPrice === '' || p.price <= maxPrice;
+      return matchesCategory && matchesSearch && matchesMinPrice && matchesMaxPrice;
+    });
+
+    // Sorting logic
+    filteredProducts = [...filteredProducts].sort((a, b) => {
+      switch (sortBy) {
+        case 'price-low': return a.price - b.price;
+        case 'price-high': return b.price - a.price;
+        case 'name-asc': return a.name.localeCompare(b.name);
+        case 'name-desc': return b.name.localeCompare(a.name);
+        case 'weight-low': return a.weight - b.weight;
+        case 'weight-high': return b.weight - a.weight;
+        default: return 0;
+      }
     });
 
     const hasActivePickup = appointments.some(a => a.status === 'Scheduled');
@@ -2829,22 +3118,99 @@ const AdminDashboard = ({
                 className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
               />
             </div>
-            <div className="flex flex-wrap gap-2">
-              {['All', ...categories].map(cat => (
-                <button 
-                  key={cat} 
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-4 py-2 rounded-xl border transition-all text-xs font-bold uppercase tracking-widest ${
-                    selectedCategory === cat 
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200' 
-                      : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                  }`}
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setShowFilters(!showFilters)}
+                className={`px-4 py-3 rounded-2xl border transition-all flex items-center gap-2 font-bold text-sm ${
+                  showFilters || minPrice !== '' || maxPrice !== ''
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-600' 
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <SlidersHorizontal size={18} />
+                <span>Filters</span>
+                {(minPrice !== '' || maxPrice !== '') && (
+                  <span className="w-2 h-2 bg-indigo-600 rounded-full"></span>
+                )}
+              </button>
+              <div className="relative group">
+                <select 
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="appearance-none pl-4 pr-10 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-sm text-slate-600 cursor-pointer"
                 >
-                  {cat}
-                </button>
-              ))}
+                  <option value="featured">Featured</option>
+                  <option value="price-low">Price: Low to High</option>
+                  <option value="price-high">Price: High to Low</option>
+                  <option value="name-asc">Name: A-Z</option>
+                  <option value="name-desc">Name: Z-A</option>
+                  <option value="weight-low">Weight: Low to High</option>
+                  <option value="weight-high">Weight: High to Low</option>
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+              </div>
             </div>
           </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {['All', ...categories].map(cat => (
+              <button 
+                key={cat} 
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-2 rounded-xl border transition-all text-xs font-bold uppercase tracking-widest ${
+                  selectedCategory === cat 
+                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200' 
+                    : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Price Range (₹)</label>
+                    <div className="flex items-center gap-3">
+                      <input 
+                        type="number" 
+                        placeholder="Min"
+                        value={minPrice}
+                        onChange={(e) => setMinPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <span className="text-slate-400">-</span>
+                      <input 
+                        type="number" 
+                        placeholder="Max"
+                        value={maxPrice}
+                        onChange={(e) => setMaxPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-end">
+                    <button 
+                      onClick={() => { setMinPrice(''); setMaxPrice(''); setSortBy('featured'); setSelectedCategory('All'); setSearchQuery(''); }}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-4"
+                    >
+                      Reset all filters
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -2946,19 +3312,30 @@ const AdminDashboard = ({
                       <Package className="text-white" size={24} />
                     </div>
                     <div>
-                      <h4 className="text-lg font-black text-slate-900 leading-tight">Ship more from home?</h4>
-                      <p className="text-slate-500 text-sm">Want to get some items from home or anywhere to ship along with your Jiffy Store items?</p>
+                      <h4 className="text-lg font-black text-slate-900 leading-tight">Ship more from home or Agent Pickup?</h4>
+                      <p className="text-slate-500 text-sm">Want to get some items from home or anywhere to ship along with your Jiffy Store items? Add warehouse items or schedule an agent pickup.</p>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => {
-                      setActiveTab('warehouse');
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all flex items-center gap-2 shrink-0 shadow-lg shadow-indigo-200"
-                  >
-                    Click here to add warehouse items <ArrowRight size={16} />
-                  </button>
+                  <div className="flex flex-col gap-2 shrink-0">
+                    <button 
+                      onClick={() => {
+                        navigateTo('warehouse');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-200"
+                    >
+                      <Package size={16} /> Add warehouse items <ArrowRight size={16} />
+                    </button>
+                    <button 
+                      onClick={() => {
+                        navigateTo('pickup');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-200"
+                    >
+                      <Truck size={16} /> Schedule Agent Pickup <ArrowRight size={16} />
+                    </button>
+                  </div>
                   <button 
                     onClick={() => setShowJiffySuggestion(false)}
                     className="absolute top-4 right-4 text-slate-300 hover:text-slate-500 transition-colors"
@@ -2969,84 +3346,10 @@ const AdminDashboard = ({
               </motion.div>
             )}
           </AnimatePresence>
-
-          {hasActivePickup ? (
-            <div className="w-full max-w-4xl space-y-6">
-              <div className="bg-emerald-50 p-8 rounded-[2.5rem] border-2 border-emerald-100 shadow-xl shadow-emerald-500/5">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-12 h-12 bg-emerald-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-200">
-                    <Truck size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black text-emerald-900">Confirm Items for Pickup</h3>
-                    <p className="text-emerald-700 text-sm">The agent will bring these Jiffy Store items to your house during the scheduled pickup.</p>
-                  </div>
-                </div>
-
-                <div className="space-y-3 mb-8">
-                  {items.filter(i => i.source === 'Store').length > 0 ? (
-                    items.filter(i => i.source === 'Store').map(item => (
-                      <div key={item.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-emerald-100">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-slate-50 rounded-lg overflow-hidden border border-slate-100">
-                            <img src={item.image} className="w-full h-full object-cover" />
-                          </div>
-                          <div>
-                            <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{item.weight}kg</div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-2">
-                            <button 
-                              onClick={() => removeStoreItem(item.name)}
-                              className="w-8 h-8 bg-white text-slate-600 rounded-lg flex items-center justify-center hover:text-red-600 transition-colors shadow-sm"
-                            >
-                              <Minus size={14} />
-                            </button>
-                            <span className="text-xs font-black text-slate-900 min-w-[20px] text-center">{item.quantity || 1}</span>
-                            <button 
-                              onClick={() => addItem({ name: item.name, weight: item.weight, price: item.price, image: item.image }, 'Store')}
-                              className="w-8 h-8 bg-emerald-600 text-white rounded-lg flex items-center justify-center hover:bg-emerald-700 transition-colors shadow-sm"
-                            >
-                              <Plus size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8 text-emerald-600 font-medium italic">
-                      No store items added yet.
-                    </div>
-                  )}
-                </div>
-
-                <button 
-                  onClick={() => {
-                    setActiveTab('cart');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  disabled={items.filter(i => i.source === 'Store').length === 0}
-                  className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-bold text-lg hover:bg-emerald-700 transition-all shadow-2xl shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-                >
-                  Confirm & View in Cart <CheckCircle2 size={24} />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button 
-              onClick={handleCheckout}
-              disabled={items.length === 0}
-              className="w-full max-w-md py-5 px-12 rounded-2xl bg-indigo-600 text-white font-bold text-lg hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 group"
-            >
-              Proceed to Checkout <ChevronRight size={24} className="group-hover:translate-x-1 transition-transform" />
-            </button>
-          )}
         </div>
       </div>
     );
-  }, [selectedCategory, searchQuery, addItem, removeStoreItem, handleCheckout, items, storeProducts, currentUser, showJiffySuggestion, setActiveTab, appointments]);
+  }, [selectedCategory, searchQuery, sortBy, minPrice, maxPrice, showFilters, addItem, removeStoreItem, handleCheckout, items, storeProducts, currentUser, showJiffySuggestion, setActiveTab, appointments]);
 
   const FinalizeSection = useMemo(() => {
     if (!currentUser) return null;
@@ -3076,13 +3379,13 @@ const AdminDashboard = ({
           </div>
           <div className="flex gap-4">
             <button 
-              onClick={() => { setActiveTab('history'); setIsPaid(false); setOrderId(null); }}
+              onClick={() => { navigateTo('history'); setIsPaid(false); setOrderId(null); }}
               className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition-all"
             >
               View Order History
             </button>
             <button 
-              onClick={() => { setActiveTab('home'); setIsPaid(false); setOrderId(null); }}
+              onClick={() => { navigateTo('home'); setIsPaid(false); setOrderId(null); }}
               className="flex-1 py-4 bg-slate-100 text-slate-900 rounded-2xl font-bold hover:bg-slate-200 transition-all"
             >
               Back to Home
@@ -3318,7 +3621,7 @@ const AdminDashboard = ({
             <UserIcon size={20} /> Sign In to Pay
           </button>
           <button 
-            onClick={() => setActiveTab('cart')}
+            onClick={() => navigateTo('cart')}
             className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
           >
             Back to Cart
@@ -3364,12 +3667,12 @@ const AdminDashboard = ({
                     <h4 className="font-black text-[10px] uppercase tracking-widest">Active Pickup Scheduled</h4>
                     <p className="text-[10px] text-indigo-100">
                       Agent collection on <span className="font-bold text-white">{appointments.find(a => a.status === 'Scheduled')?.date}</span>. 
-                      Check <button onClick={() => { setActiveTab('history'); window.scrollTo(0,0); }} className="underline font-bold hover:text-white">My Orders</button> after pickup.
+                      Check <button onClick={() => { navigateTo('history'); window.scrollTo(0,0); }} className="underline font-bold hover:text-white">My Orders</button> after pickup.
                     </p>
                   </div>
                 </div>
                 <button 
-                  onClick={() => { setActiveTab('cart'); window.scrollTo(0,0); }}
+                  onClick={() => { navigateTo('cart'); window.scrollTo(0,0); }}
                   className="px-4 py-1.5 bg-white text-indigo-600 rounded-lg font-bold text-[10px] hover:bg-indigo-50 transition-all shadow-lg"
                 >
                   View Details
@@ -3385,9 +3688,9 @@ const AdminDashboard = ({
             <div 
               className="flex items-center gap-2 cursor-pointer" 
               onClick={() => {
-                if (currentUser?.role === 'Admin') setActiveTab('admin');
-                else if (currentUser?.role === 'Agent') setActiveTab('agent');
-                else setActiveTab('home');
+                if (currentUser?.role === 'Admin') navigateTo('admin');
+                else if (currentUser?.role === 'Agent') navigateTo('agent');
+                else navigateTo('home');
               }}
             >
               <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
@@ -3402,6 +3705,8 @@ const AdminDashboard = ({
                 { id: 'store', icon: Store, label: 'Jiffy Store', roles: ['Customer'], public: true },
                 { id: 'pickup', icon: Truck, label: 'Agent Pickup', roles: ['Customer'], public: true },
                 { id: 'warehouse', icon: Package, label: 'Warehouse', roles: ['Customer'], public: true },
+                { id: 'cart', icon: ShoppingCart, label: 'My Cart', roles: ['Customer'], public: true },
+                { id: 'notifications', icon: Bell, label: 'Alerts', roles: ['Customer'], public: false },
                 { id: 'support', icon: HelpCircle, label: 'Support', roles: ['Customer'], public: true },
                 { id: 'history', icon: History, label: 'My Orders', roles: ['Customer'], public: false },
                 { id: 'admin', icon: LayoutDashboard, label: 'Dashboard', roles: ['Admin'], public: false },
@@ -3409,7 +3714,7 @@ const AdminDashboard = ({
               ].filter(tab => tab.public || (currentUser && tab.roles.includes(currentUser.role))).map(tab => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as Tab)}
+                  onClick={() => navigateTo(tab.id as Tab)}
                   className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
                     activeTab === tab.id 
                       ? 'bg-white text-indigo-600 shadow-sm' 
@@ -3417,9 +3722,9 @@ const AdminDashboard = ({
                   }`}
                 >
                   <tab.icon size={16} /> {tab.label}
-                  {(tab.id === 'pickup' || tab.id === 'warehouse') && items.length > 0 && (
+                  {(tab.id === 'cart') && (items.length > 0 || appointments.length > 0) && (
                     <span className="bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] flex items-center justify-center">
-                      {items.length}
+                      {items.length + appointments.length}
                     </span>
                   )}
                 </button>
@@ -3455,7 +3760,7 @@ const AdminDashboard = ({
       </div>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 pt-28 pb-20">
+      <main className="max-w-7xl mx-auto px-4 pt-6 pb-20">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -3465,8 +3770,11 @@ const AdminDashboard = ({
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'home' && HomeSection}
-            {activeTab === 'pickup' && <CartSection mode="Pickup" />}
-            {activeTab === 'warehouse' && <CartSection mode="Warehouse" />}
+            {activeTab !== 'home' && <BackButton />}
+            {activeTab === 'pickup' && <UnifiedCartSection mode="Pickup" />}
+            {activeTab === 'warehouse' && <UnifiedCartSection mode="Warehouse" />}
+            {activeTab === 'cart' && <UnifiedCartSection />}
+            {activeTab === 'notifications' && NotificationCenter}
             {activeTab === 'support' && SupportSection}
             {activeTab === 'store' && StoreSection}
             {activeTab === 'finalize' && FinalizeSection}
