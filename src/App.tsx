@@ -77,7 +77,7 @@ import {
   WAREHOUSE_ADDRESS
 } from './constants';
 import { api } from './services/api';
-import { supabase, isSupabaseConfigured } from './lib/supabase';
+import { supabase } from './lib/supabase';
 import { Login } from './components/Login';
 import { Session } from '@supabase/supabase-js';
 
@@ -116,19 +116,68 @@ export default function App() {
     }
   };
 
-  const BackButton = () => (
-    <motion.button
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      onClick={goBack}
-      className="mb-3 flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors group"
-    >
-      <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center group-hover:border-indigo-200 group-hover:bg-indigo-50 transition-all">
-        <ArrowRight size={16} className="rotate-180" />
+const BackButton = ({ onClick }: { onClick: () => void }) => (
+  <motion.button
+    initial={{ opacity: 0, x: -10 }}
+    animate={{ opacity: 1, x: 0 }}
+    onClick={onClick}
+    className="mb-3 flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors group"
+  >
+    <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center group-hover:border-indigo-200 group-hover:bg-indigo-50 transition-all">
+      <ArrowRight size={16} className="rotate-180" />
+    </div>
+    <span>Go Back</span>
+  </motion.button>
+);
+
+const StaticShipmentTracker = () => {
+  const steps = [
+    { label: 'Order Placed', status: 'completed', date: 'Oct 24', icon: CheckCircle2 },
+    { label: 'In Transit', status: 'current', date: 'Oct 26', icon: Truck },
+    { label: 'Out for Delivery', status: 'upcoming', date: 'Oct 28', icon: Package },
+    { label: 'Delivered', status: 'upcoming', date: 'Oct 30', icon: CheckCircle2 },
+  ];
+
+  return (
+    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h3 className="text-xl font-black text-slate-900">Track Shipment</h3>
+          <p className="text-sm text-slate-500">Real-time updates for your package</p>
+        </div>
+        <div className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-bold text-indigo-600 border border-indigo-100">
+          ID: JFX-99283-IN
+        </div>
       </div>
-      <span>Go Back</span>
-    </motion.button>
+
+      <div className="relative">
+        <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 -translate-y-1/2 rounded-full" />
+        <div className="absolute top-1/2 left-0 w-1/3 h-1 bg-indigo-600 -translate-y-1/2 rounded-full" />
+        
+        <div className="relative flex justify-between">
+          {steps.map((step, i) => (
+            <div key={i} className="flex flex-col items-center gap-3 relative z-10">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${
+                step.status === 'completed' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' :
+                step.status === 'current' ? 'bg-white border-2 border-indigo-600 text-indigo-600 shadow-lg shadow-indigo-100' :
+                'bg-white border-2 border-slate-100 text-slate-300'
+              }`}>
+                <step.icon size={20} />
+              </div>
+              <div className="text-center">
+                <div className={`text-[10px] font-black uppercase tracking-widest ${step.status !== 'upcoming' ? 'text-slate-900' : 'text-slate-400'}`}>
+                  {step.label}
+                </div>
+                <div className="text-[9px] font-bold text-slate-400 mt-0.5">{step.date}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
+};
+
   const [isPaid, setIsPaid] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [items, setItems] = useState<ShippingItem[]>([]);
@@ -385,7 +434,7 @@ export default function App() {
     alert('Pickup schedule updated successfully!');
   };
 
-  const ShipmentTracker = () => {
+  const CheckoutProgressTracker = () => {
     const steps = [
       { id: 'home', label: 'Home', icon: Calculator },
       { id: 'cart', label: 'Collection', icon: Package },
@@ -1821,7 +1870,7 @@ const AdminDashboard = ({
 
     return (
       <div className="space-y-8">
-        <ShipmentTracker />
+        <StaticShipmentTracker />
         <h2 className="text-3xl font-black text-slate-900">My Orders & History</h2>
         
         <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
@@ -2438,7 +2487,7 @@ const AdminDashboard = ({
       </div>
     );
   }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser]);
-  const UnifiedCartSection = ({ mode }: { mode?: 'Pickup' | 'Warehouse' }) => {
+  const renderUnifiedCartSection = (mode?: 'Pickup' | 'Warehouse') => {
     // States are now in App to prevent focus loss
 
     const handleAdd = () => {
@@ -2772,7 +2821,7 @@ const AdminDashboard = ({
           )}
 
           {/* Item List Card - Visible in all tabs, but specific parts are conditional */}
-          {!(mode === 'Pickup' && isCartEmpty) && (
+          {!((mode === 'Pickup' || mode === 'Warehouse') && isCartEmpty) && (
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 min-h-[400px]">
               {!mode && !hasAllAgentPickup && (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
@@ -3053,8 +3102,8 @@ const AdminDashboard = ({
             </div>
           )}
 
-          {/* Jiffy Store Items for Pickup Page */}
-          {mode === 'Pickup' && (
+          {/* Jiffy Store Items for Pickup and Warehouse Pages */}
+          {(mode === 'Pickup' || mode === 'Warehouse') && (
             <div className="mt-12">
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-3">
@@ -3064,41 +3113,79 @@ const AdminDashboard = ({
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">Jiffy Store Items</h3>
                     <p className="text-xs text-slate-500 font-medium tracking-tight">
-                      Add essentials to your pickup
+                      Add essentials to your {mode === 'Pickup' ? 'pickup' : 'shipment'}
                     </p>
                   </div>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {storeProducts.map((product) => (
-                  <motion.div
-                    key={product.id}
-                    whileHover={{ y: -5 }}
-                    className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm hover:shadow-xl transition-all group"
-                  >
-                    <div className="relative aspect-square rounded-2xl overflow-hidden mb-4 bg-slate-50">
-                      <img 
-                        src={product.image} 
-                        alt={product.name}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute top-3 right-3">
-                        <div className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-full shadow-sm border border-white/20">
-                          <span className="text-xs font-bold text-slate-900">₹{product.price}</span>
+                {storeProducts.map((product) => {
+                  const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
+                  const itemCount = cartItem?.quantity || 0;
+                  
+                  return (
+                    <motion.div
+                      key={product.id}
+                      whileHover={{ y: -5 }}
+                      className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative"
+                    >
+                      <AnimatePresence>
+                        {itemCount > 0 && (
+                          <motion.div 
+                            initial={{ scale: 0, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0, opacity: 0 }}
+                            className="absolute top-3 right-3 z-10 w-7 h-7 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg border-2 border-white"
+                          >
+                            {itemCount}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                      <div className="relative aspect-square rounded-2xl overflow-hidden mb-4 bg-slate-50">
+                        <img 
+                          src={product.image} 
+                          alt={product.name}
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute top-3 left-3">
+                          <div className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-full shadow-sm border border-white/20">
+                            <span className="text-xs font-bold text-slate-900">₹{product.price}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <h4 className="font-bold text-slate-900 mb-1">{product.name}</h4>
-                    <p className="text-[10px] text-slate-500 mb-4 line-clamp-2 leading-relaxed">Premium quality {product.category.toLowerCase()} item for your home.</p>
-                    <button
-                      onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image, quantity: 1 }, 'Store')}
-                      className="w-full py-3 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Plus size={14} /> Add to Pickup
-                    </button>
-                  </motion.div>
-                ))}
+                      <h4 className="font-bold text-slate-900 mb-1">{product.name}</h4>
+                      <p className="text-[10px] text-slate-500 mb-4 line-clamp-2 leading-relaxed">Premium quality {product.category.toLowerCase()} item for your home.</p>
+                      
+                      {itemCount > 0 ? (
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => removeStoreItem(product.name)}
+                            className="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center hover:bg-slate-200 transition-colors"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                          <div className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-200">
+                            <ShoppingBag size={14} /> Added ({itemCount})
+                          </div>
+                          <button 
+                            onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
+                            className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
+                          >
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image, quantity: 1 }, 'Store')}
+                          className="w-full py-3 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Plus size={14} /> Add to {mode === 'Pickup' ? 'Pickup' : 'Shipment'}
+                        </button>
+                      )}
+                    </motion.div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -3429,7 +3516,7 @@ const AdminDashboard = ({
     if (isPaid) {
       return (
         <div className="max-w-2xl mx-auto text-center space-y-8 py-12">
-          <ShipmentTracker />
+          <CheckoutProgressTracker />
           <motion.div 
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
@@ -3471,7 +3558,7 @@ const AdminDashboard = ({
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          <ShipmentTracker />
+          <CheckoutProgressTracker />
           {/* Order ID Header */}
           {orderId && (
             <div className="bg-indigo-600 p-6 rounded-2xl text-white shadow-lg shadow-indigo-200 flex items-center justify-between">
@@ -3843,10 +3930,10 @@ const AdminDashboard = ({
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'home' && HomeSection}
-            {activeTab !== 'home' && <BackButton />}
-            {activeTab === 'pickup' && <UnifiedCartSection mode="Pickup" />}
-            {activeTab === 'warehouse' && <UnifiedCartSection mode="Warehouse" />}
-            {activeTab === 'cart' && <UnifiedCartSection />}
+            {activeTab !== 'home' && <BackButton onClick={goBack} />}
+            {activeTab === 'pickup' && renderUnifiedCartSection('Pickup')}
+            {activeTab === 'warehouse' && renderUnifiedCartSection('Warehouse')}
+            {activeTab === 'cart' && renderUnifiedCartSection()}
             {activeTab === 'notifications' && NotificationCenter}
             {activeTab === 'support' && SupportSection}
             {activeTab === 'store' && StoreSection}
