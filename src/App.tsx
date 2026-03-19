@@ -2772,8 +2772,9 @@ const AdminDashboard = ({
           )}
 
           {/* Item List Card - Visible in all tabs, but specific parts are conditional */}
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 min-h-[400px]">
-            {!mode && !hasAllAgentPickup && (
+          {!(mode === 'Pickup' && isCartEmpty) && (
+            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 min-h-[400px]">
+              {!mode && !hasAllAgentPickup && (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                 <div>
                   <h3 className="text-2xl font-black text-slate-900">Your Shipment Items</h3>
@@ -3050,7 +3051,58 @@ const AdminDashboard = ({
                 </div>
               )}
             </div>
-          </div>
+          )}
+
+          {/* Jiffy Store Items for Pickup Page */}
+          {mode === 'Pickup' && (
+            <div className="mt-12">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center shadow-lg shadow-amber-200">
+                    <ShoppingBag className="text-white" size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">Jiffy Store Items</h3>
+                    <p className="text-xs text-slate-500 font-medium tracking-tight">
+                      Add essentials to your pickup
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {storeProducts.map((product) => (
+                  <motion.div
+                    key={product.id}
+                    whileHover={{ y: -5 }}
+                    className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm hover:shadow-xl transition-all group"
+                  >
+                    <div className="relative aspect-square rounded-2xl overflow-hidden mb-4 bg-slate-50">
+                      <img 
+                        src={product.image} 
+                        alt={product.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute top-3 right-3">
+                        <div className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-full shadow-sm border border-white/20">
+                          <span className="text-xs font-bold text-slate-900">₹{product.price}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <h4 className="font-bold text-slate-900 mb-1">{product.name}</h4>
+                    <p className="text-[10px] text-slate-500 mb-4 line-clamp-2 leading-relaxed">Premium quality {product.category.toLowerCase()} item for your home.</p>
+                    <button
+                      onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image, quantity: 1 }, 'Store')}
+                      className="w-full py-3 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Plus size={14} /> Add to Pickup
+                    </button>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {!mode && (
           <div className="lg:col-span-1 space-y-6">
