@@ -492,18 +492,6 @@ export default function App() {
   }, [activeTab, activeWorkOrder, isPaid]);
 
   // --- Helpers ---
-  useEffect(() => {
-    const hasActivePickup = appointments.some(a => a.status === 'Scheduled');
-    if (hasActivePickup) {
-      setItems(prev => {
-        const needsUpdate = prev.some(item => item.source === 'Warehouse');
-        if (!needsUpdate) return prev;
-        return prev.map(item => 
-          (item.source === 'Warehouse') ? { ...item, source: 'Pickup' as const } : item
-        );
-      });
-    }
-  }, [appointments]);
   const totalWeight = useMemo(() => {
     return items.reduce((sum, item) => sum + (item.weight * (item.quantity || 1)), 0);
   }, [items]);
@@ -520,14 +508,8 @@ export default function App() {
   }, [items, totalWeight, address.country]);
 
   const addItem = useCallback(async (item: Omit<ShippingItem, 'id' | 'status' | 'source'>, source: 'Warehouse' | 'Pickup' | 'Store', force = false) => {
-    const activePickup = appointments.find(a => a.status === 'Scheduled');
-    const hasActivePickup = !!activePickup;
-    
-    // If a pickup is scheduled, all new items (except Store items) are forced to Pickup source
-    const effectiveSource = (hasActivePickup && source !== 'Store') ? 'Pickup' : source;
-    
     // Check if item already exists in cart (same name and source)
-    const existingItemIndex = items.findIndex(i => i.name === item.name && i.source === effectiveSource);
+    const existingItemIndex = items.findIndex(i => i.name === item.name && i.source === source);
 
     if (existingItemIndex !== -1) {
       // Increment quantity
@@ -546,8 +528,8 @@ export default function App() {
     const newItem: ShippingItem = {
       ...item,
       id: Math.random().toString(36).substr(2, 9),
-      status: effectiveSource === 'Store' ? 'Received at Warehouse' : 'Pending',
-      source: effectiveSource,
+      status: source === 'Store' ? 'Received at Warehouse' : 'Pending',
+      source: source,
       quantity: 1,
     };
     
@@ -555,7 +537,7 @@ export default function App() {
     setItems([...items, newItem]);
     setShowConflictModal({ show: false, item: null, source: null });
 
-    if (effectiveSource === 'Store') {
+    if (source === 'Store') {
       setShowJiffySuggestion(true);
     }
 
@@ -571,7 +553,7 @@ export default function App() {
         // Optional: show a toast or alert
       }
     }
-  }, [items, appointments, dbStatus.connected, currentUser]);
+  }, [items, dbStatus.connected, currentUser]);
 
   const removeItem = (id: string) => {
     setItems(items.filter(i => i.id !== id));
@@ -2474,6 +2456,18 @@ const AdminDashboard = ({
 
     const hasActivePickup = appointments.some(a => a.status === 'Scheduled');
 
+    const isCartEmpty = mode === 'Warehouse' 
+      ? items.filter(i => i.source === 'Warehouse').length === 0
+      : mode === 'Pickup'
+        ? items.filter(i => i.source === 'Pickup').length === 0 && appointments.length === 0
+        : items.length === 0 && appointments.length === 0;
+
+    const displayItems = mode 
+      ? items.filter(i => i.source === mode)
+      : items;
+
+    const displayWeight = displayItems.reduce((sum, item) => sum + (item.weight * (item.quantity || 1)), 0);
+
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className={`${mode ? 'lg:col-span-3' : 'lg:col-span-2'} space-y-6`}>
@@ -2530,14 +2524,41 @@ const AdminDashboard = ({
             </div>
           )}
 
+          {/* Heart-touching Warehouse Message */}
+          {mode === 'Warehouse' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-10 rounded-[2.5rem] text-white shadow-2xl shadow-emerald-200/50 relative overflow-hidden"
+            >
+              <div className="absolute -top-10 -right-10 opacity-10 rotate-12">
+                <Heart size={240} fill="currentColor" />
+              </div>
+              <div className="relative z-10 max-w-2xl">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
+                    <Heart size={20} className="fill-white" />
+                  </div>
+                  <span className="text-xs font-black uppercase tracking-[0.2em] text-emerald-100">Connecting Hearts Across Borders</span>
+                </div>
+                <h2 className="text-3xl font-black mb-4 leading-tight">Distance shouldn't keep you from the things you love.</h2>
+                <p className="text-lg text-emerald-50/90 leading-relaxed font-medium">
+                  Whether it's a mother's handmade sweets, a piece of home, or something special from India, 
+                  you don't need to worry about how to get it to the US. We are here, ready to gather, 
+                  consolidate, and safely deliver your world to you.
+                </p>
+              </div>
+            </motion.div>
+          )}
+
 
           {/* Add Items / Schedule Pickup Card - Only show in specific modes, not in My Cart */}
-          {mode && (!appointments.length || editingPickupId) && (
+          {mode && (mode === 'Warehouse' || !appointments.length || editingPickupId) && (
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
                   {mode === 'Warehouse' ? <PlusCircle className="text-emerald-600" /> : <Calendar className="text-indigo-600" />}
-                  {editingPickupId ? 'Update Pickup Schedule' : (mode === 'Warehouse' ? 'Add Your Items' : 'Schedule Agent Pickup')}
+                  {editingPickupId ? 'Update Pickup Schedule' : (mode === 'Warehouse' ? 'Add Your Items' : (currentUser ? 'Schedule Agent Pickup' : 'Sign in to Schedule Agent'))}
                 </h3>
               </div>
               
@@ -2729,7 +2750,7 @@ const AdminDashboard = ({
                         className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2"
                       >
                         {editingPickupId ? <Check size={20} /> : <Truck size={20} />}
-                        {editingPickupId ? 'Update Schedule' : 'Schedule Agent Pickup'}
+                        {editingPickupId ? 'Update Schedule' : (currentUser ? 'Schedule Agent Pickup' : 'Sign in to Schedule Agent')}
                       </button>
                       {editingPickupId && (
                         <button 
@@ -2760,16 +2781,16 @@ const AdminDashboard = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-bold text-indigo-600 border border-indigo-100">
-                    {items.length} Items
+                    {displayItems.length} Items
                   </div>
                   <div className="px-4 py-2 bg-emerald-50 rounded-2xl text-xs font-bold text-emerald-600 border border-emerald-100">
-                    {totalWeight.toFixed(2)} kg Total
+                    {displayWeight.toFixed(2)} kg Total
                   </div>
                 </div>
               </div>
             )}
               
-              {items.length === 0 && appointments.length === 0 ? (
+              {isCartEmpty ? (
                 <div className="flex flex-col items-center justify-center h-80 text-slate-400">
                   <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
                     <Package size={40} strokeWidth={1} />
@@ -2921,7 +2942,7 @@ const AdminDashboard = ({
 
                     const sourceIcon = source === 'Store' ? Store : source === 'Pickup' ? Package : Database;
                     const sourceColor = source === 'Store' ? 'text-emerald-600' : source === 'Pickup' ? 'text-indigo-600' : 'text-slate-600';
-                    const sourceLabel = source === 'Store' ? 'Jiffy Store Items' : source === 'Pickup' ? 'Agent Pickup Items' : 'Warehouse Items';
+                    const sourceLabel = source === 'Store' ? 'Jiffy Store Items' : source === 'Pickup' ? 'Items for Agent Pickup' : 'Items sent to warehouse';
 
                     return (
                       <div key={source} className="space-y-4">
