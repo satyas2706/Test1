@@ -47,6 +47,7 @@ import {
   Heart,
   Lock,
   MessageSquare,
+  FileText,
   Mail,
   SlidersHorizontal,
   ChevronDown,
@@ -266,8 +267,22 @@ const StaticShipmentTracker = () => {
 
   // Cart Add States
   const [cartItemName, setCartItemName] = useState('');
-  const [cartItemWeight, setCartItemWeight] = useState(1);
+  const [cartItemWeight, setCartItemWeight] = useState<number | ''>('');
+  const [cartItemQuantity, setCartItemQuantity] = useState(1);
+  const [cartItemFragile, setCartItemFragile] = useState(false);
+  const [cartItemInvoiceNumber, setCartItemInvoiceNumber] = useState('');
+  const [cartItemRemarks, setCartItemRemarks] = useState('');
   const [cartItemSource, setCartItemSource] = useState<'Pickup' | 'Warehouse'>('Pickup');
+
+  // Unique Customer ID for Warehouse
+  const customerWarehouseId = useMemo(() => {
+    if (currentUser) return `JFX-${currentUser.id.slice(0, 5).toUpperCase()}`;
+    const savedId = localStorage.getItem('jiffex_customer_id');
+    if (savedId) return savedId;
+    const newId = `JFX-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+    localStorage.setItem('jiffex_customer_id', newId);
+    return newId;
+  }, [currentUser]);
 
   // Finalize Section States
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'phonepe'>('card');
@@ -541,9 +556,13 @@ const StaticShipmentTracker = () => {
   }, [activeTab, activeWorkOrder, isPaid]);
 
   // --- Helpers ---
-  const totalWeight = useMemo(() => {
-    return items.reduce((sum, item) => sum + (item.weight * (item.quantity || 1)), 0);
+  const cartItems = useMemo(() => {
+    return items.filter(i => i.source !== 'Warehouse' || i.submitted);
   }, [items]);
+
+  const totalWeight = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + (item.weight * (item.quantity || 1)), 0);
+  }, [cartItems]);
 
   const hasAllAgentPickup = useMemo(() => {
     return appointments.some(a => a.status === 'Scheduled' && a.pickupType === 'AllAgent');
@@ -552,13 +571,54 @@ const StaticShipmentTracker = () => {
   const totalCost = useMemo(() => {
     const rate = SHIPPING_RATES[address.country] || 800;
     const shippingCost = totalWeight * rate;
-    const itemsCost = items.reduce((sum, item) => sum + (item.price || 0), 0);
+    const itemsCost = cartItems.reduce((sum, item) => sum + (item.price || 0), 0);
     return shippingCost + itemsCost;
-  }, [items, totalWeight, address.country]);
+  }, [cartItems, totalWeight, address.country]);
+
+  const minPickupDate = useMemo(() => {
+    const storeItems = items.filter(i => i.source === 'Store' && i.estimatedDelivery);
+    if (storeItems.length === 0) return null;
+    
+    let latestDate = new Date(0);
+    storeItems.forEach(item => {
+      const itemDate = new Date(item.estimatedDelivery!);
+      if (itemDate > latestDate) {
+        latestDate = itemDate;
+      }
+    });
+    return latestDate;
+  }, [items]);
+
+  const filteredPickupSlots = useMemo(() => {
+    if (!minPickupDate) return PICKUP_SLOTS;
+    
+    return PICKUP_SLOTS.filter(slot => {
+      const slotDate = new Date(slot.date);
+      return slotDate >= minPickupDate;
+    });
+  }, [minPickupDate]);
+
+  // Update selectedPickupDate if it becomes invalid due to store items
+  useEffect(() => {
+    if (!minPickupDate) return;
+
+    const currentSelectedDate = new Date(selectedPickupDate);
+    if (currentSelectedDate < minPickupDate) {
+      const validSlot = PICKUP_SLOTS.find(slot => new Date(slot.date) >= minPickupDate);
+      if (validSlot) {
+        setSelectedPickupDate(validSlot.date);
+      }
+    }
+  }, [minPickupDate, selectedPickupDate]);
 
   const addItem = useCallback(async (item: Omit<ShippingItem, 'id' | 'status' | 'source'>, source: 'Warehouse' | 'Pickup' | 'Store', force = false) => {
-    // Check if item already exists in cart (same name and source)
-    const existingItemIndex = items.findIndex(i => i.name === item.name && i.source === source);
+    // Check if item already exists in cart (same name, source, and submission status)
+    const isSubmitted = source !== 'Warehouse';
+    const existingItemIndex = items.findIndex(i => 
+      i.name === item.name && 
+      i.source === source && 
+      (source !== 'Warehouse' || i.submitted === false)
+    );
 
     if (existingItemIndex !== -1) {
       // Increment quantity
@@ -579,7 +639,8 @@ const StaticShipmentTracker = () => {
       id: Math.random().toString(36).substr(2, 9),
       status: source === 'Store' ? 'Received at Warehouse' : 'Pending',
       source: source,
-      quantity: 1,
+      quantity: item.quantity || 1,
+      submitted: source !== 'Warehouse'
     };
     
     // Optimistic update
@@ -661,10 +722,11 @@ const StaticShipmentTracker = () => {
 
   const handleFinalPayment = async () => {
     if (!currentUser) return;
+    const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
     const newOrder: Order = {
       id: orderId!,
       customerId: currentUser.id,
-      items: [...items],
+      items: [...cartItems],
       totalWeight,
       totalCost,
       status: 'Received at Warehouse',
@@ -677,7 +739,8 @@ const StaticShipmentTracker = () => {
     // Optimistic update
     setOrders([...orders, newOrder]);
     setIsPaid(true);
-    setItems([]);
+    // Only remove items that were in the cart (submitted)
+    setItems(items.filter(i => i.source === 'Warehouse' && !i.submitted));
 
     // Sync to DB
     if (dbStatus.connected) {
@@ -1393,6 +1456,7 @@ const AdminDashboard = ({
   const [categoryInput, setCategoryInput] = useState('');
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editPriceValue, setEditPriceValue] = useState<string>('');
+  const [editDeliveryValue, setEditDeliveryValue] = useState<string>('');
 
   if (!currentUser) return null;
   const stats = [
@@ -1669,27 +1733,36 @@ const AdminDashboard = ({
                     onChange={e => setNewProduct({...newProduct, name: e.target.value})}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Price (₹)</label>
-                    <input 
-                      type="number" 
-                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                      value={newProduct.price || ''}
-                      onChange={e => setNewProduct({...newProduct, price: Number(e.target.value)})}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Weight (kg)</label>
-                    <input 
-                      type="number" 
-                      step="0.1"
-                      className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                      value={newProduct.weight || ''}
-                      onChange={e => setNewProduct({...newProduct, weight: Number(e.target.value)})}
-                    />
-                  </div>
-                </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Price (₹)</label>
+                        <input 
+                          type="number" 
+                          className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                          value={newProduct.price || ''}
+                          onChange={e => setNewProduct({...newProduct, price: Number(e.target.value)})}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Weight (kg)</label>
+                        <input 
+                          type="number" 
+                          step="0.1"
+                          className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                          value={newProduct.weight || ''}
+                          onChange={e => setNewProduct({...newProduct, weight: Number(e.target.value)})}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Estimated Delivery</label>
+                      <input 
+                        type="date" 
+                        className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                        value={newProduct.estimatedDelivery || ''}
+                        onChange={e => setNewProduct({...newProduct, estimatedDelivery: e.target.value})}
+                      />
+                    </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Category</label>
                   <select 
@@ -1740,10 +1813,11 @@ const AdminDashboard = ({
                       price: newProduct.price,
                       category: newProduct.category as any,
                       image: newProduct.image || 'https://picsum.photos/seed/product/400/400',
-                      weight: newProduct.weight || 0.5
+                      weight: newProduct.weight || 0.5,
+                      estimatedDelivery: newProduct.estimatedDelivery
                     };
                     setStoreProducts([...storeProducts, prod]);
-                    setNewProduct({ name: '', price: 0, category: categories[0], image: '', weight: 0 });
+                    setNewProduct({ name: '', price: 0, category: categories[0], image: '', weight: 0, estimatedDelivery: '' });
                   }}
                   className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
                 >
@@ -1801,46 +1875,70 @@ const AdminDashboard = ({
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-slate-900 truncate">{product.name}</div>
                       <div className="text-xs text-slate-500">{product.category} • {product.weight}kg</div>
+                      {product.estimatedDelivery && (
+                        <div className="text-[10px] font-bold text-emerald-600 mt-1 flex items-center gap-1">
+                          <Calendar size={10} /> Delivery: {product.estimatedDelivery}
+                        </div>
+                      )}
                       <div className="mt-2 flex items-center justify-between">
                         <div className="text-sm font-black text-slate-900">₹{product.price}</div>
-                        <div className="flex gap-2">
-                          <div className="flex items-center gap-1">
-                            {editingProductId === product.id ? (
-                              <div className="flex gap-1">
-                                <input 
-                                  type="number" 
-                                  className="w-20 p-1 text-xs border rounded outline-none focus:ring-1 focus:ring-indigo-500"
-                                  value={editPriceValue}
-                                  onChange={e => setEditPriceValue(e.target.value)}
-                                  autoFocus
-                                />
+                          <div className="flex gap-2">
+                            <div className="flex flex-col gap-1">
+                              {editingProductId === product.id ? (
+                                <div className="flex flex-col gap-2 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                                  <div className="flex items-center gap-2">
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase w-12">Price</label>
+                                    <input 
+                                      type="number" 
+                                      className="flex-1 p-1 text-xs border rounded outline-none focus:ring-1 focus:ring-indigo-500"
+                                      value={editPriceValue}
+                                      onChange={e => setEditPriceValue(e.target.value)}
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase w-12">Delivery</label>
+                                    <input 
+                                      type="date" 
+                                      className="flex-1 p-1 text-xs border rounded outline-none focus:ring-1 focus:ring-indigo-500"
+                                      value={editDeliveryValue}
+                                      onChange={e => setEditDeliveryValue(e.target.value)}
+                                    />
+                                  </div>
+                                  <div className="flex gap-2 justify-end">
+                                    <button 
+                                      onClick={() => {
+                                        setStoreProducts(storeProducts.map(p => p.id === product.id ? {
+                                          ...p, 
+                                          price: Number(editPriceValue),
+                                          estimatedDelivery: editDeliveryValue
+                                        } : p));
+                                        setEditingProductId(null);
+                                      }}
+                                      className="text-[10px] text-emerald-600 font-bold hover:underline"
+                                    >
+                                      Save
+                                    </button>
+                                    <button 
+                                      onClick={() => setEditingProductId(null)}
+                                      className="text-[10px] text-slate-400 font-bold hover:underline"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
                                 <button 
                                   onClick={() => {
-                                    setStoreProducts(storeProducts.map(p => p.id === product.id ? {...p, price: Number(editPriceValue)} : p));
-                                    setEditingProductId(null);
+                                    setEditingProductId(product.id);
+                                    setEditPriceValue(product.price.toString());
+                                    setEditDeliveryValue(product.estimatedDelivery || '');
                                   }}
-                                  className="text-[10px] text-emerald-600 font-bold hover:underline"
+                                  className="text-[10px] text-indigo-600 font-bold hover:underline"
                                 >
-                                  Save
+                                  Edit Product
                                 </button>
-                                <button 
-                                  onClick={() => setEditingProductId(null)}
-                                  className="text-[10px] text-slate-400 font-bold hover:underline"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <button 
-                                onClick={() => {
-                                  setEditingProductId(product.id);
-                                  setEditPriceValue(product.price.toString());
-                                }}
-                                className="text-[10px] text-indigo-600 font-bold hover:underline"
-                              >
-                                Edit Price
-                              </button>
-                            )}
+                              )}
+                            </div>
                           </div>
                           <button 
                             onClick={() => setStoreProducts(storeProducts.filter(p => p.id !== product.id))}
@@ -1851,7 +1949,6 @@ const AdminDashboard = ({
                         </div>
                       </div>
                     </div>
-                  </div>
                 ))}
               </div>
             </div>
@@ -2492,13 +2589,25 @@ const AdminDashboard = ({
 
     const handleAdd = () => {
       if (!cartItemName) return;
-      addItem({ name: cartItemName, weight: cartItemWeight }, mode || cartItemSource);
+      const unitWeight = typeof cartItemWeight === 'number' ? cartItemWeight : 0;
+      addItem({ 
+        name: cartItemName, 
+        weight: unitWeight * cartItemQuantity,
+        quantity: cartItemQuantity,
+        fragile: cartItemFragile,
+        invoiceNumber: cartItemInvoiceNumber,
+        remarks: cartItemRemarks
+      }, mode || cartItemSource);
       setCartItemName('');
-      setCartItemWeight(1);
+      setCartItemWeight('');
+      setCartItemQuantity(1);
+      setCartItemFragile(false);
+      setCartItemInvoiceNumber('');
+      setCartItemRemarks('');
     };
 
     const handleCopyAddress = () => {
-      const addressText = `${WAREHOUSE_ADDRESS.name}\n${WAREHOUSE_ADDRESS.street}\n${WAREHOUSE_ADDRESS.city}, ${WAREHOUSE_ADDRESS.state} ${WAREHOUSE_ADDRESS.zip}\n${WAREHOUSE_ADDRESS.country}\nTel: ${WAREHOUSE_ADDRESS.phone}`;
+      const addressText = `${WAREHOUSE_ADDRESS.name}\nAttn: ${customerWarehouseId}\n${WAREHOUSE_ADDRESS.street}\n${WAREHOUSE_ADDRESS.city}, ${WAREHOUSE_ADDRESS.state} ${WAREHOUSE_ADDRESS.zip}\n${WAREHOUSE_ADDRESS.country}\nTel: ${WAREHOUSE_ADDRESS.phone}`;
       navigator.clipboard.writeText(addressText);
       alert('Warehouse address copied to clipboard!');
     };
@@ -2506,16 +2615,19 @@ const AdminDashboard = ({
     const hasActivePickup = appointments.some(a => a.status === 'Scheduled');
 
     const isCartEmpty = mode === 'Warehouse' 
-      ? items.filter(i => i.source === 'Warehouse').length === 0
+      ? items.filter(i => i.source === 'Warehouse' && !i.submitted).length === 0
       : mode === 'Pickup'
         ? items.filter(i => i.source === 'Pickup').length === 0 && appointments.length === 0
-        : items.length === 0 && appointments.length === 0;
+        : items.filter(i => i.source !== 'Warehouse' || i.submitted).length === 0 && appointments.length === 0;
 
     const displayItems = mode 
-      ? items.filter(i => i.source === mode)
-      : items;
+      ? (mode === 'Warehouse' 
+          ? items.filter(i => i.source === 'Warehouse' && !i.submitted)
+          : items.filter(i => i.source === mode))
+      : items.filter(i => i.source !== 'Warehouse' || i.submitted);
 
     const displayWeight = displayItems.reduce((sum, item) => sum + (item.weight * (item.quantity || 1)), 0);
+    const hasTBDWeight = displayItems.some(i => i.weight === 0);
 
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -2526,7 +2638,7 @@ const AdminDashboard = ({
               <div className="flex items-center justify-between mb-6">
                 <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Shipment Progress</h4>
                 <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
-                  {items.every(i => i.status === 'Received at Warehouse') && items.length > 0 ? 'Ready to Ship' : 'In Progress'}
+                  {displayItems.every(i => i.status === 'Received at Warehouse') && displayItems.length > 0 ? 'Ready to Ship' : 'In Progress'}
                 </span>
               </div>
               <div className="relative">
@@ -2535,18 +2647,18 @@ const AdminDashboard = ({
                   className="absolute top-1/2 left-0 h-1 bg-indigo-600 -translate-y-1/2 rounded-full transition-all duration-1000" 
                   style={{ 
                     width: `${
-                      items.every(i => i.status === 'Received at Warehouse') && items.length > 0 ? '100%' :
-                      items.some(i => i.status === 'Received at Warehouse') ? '75%' :
+                      displayItems.every(i => i.status === 'Received at Warehouse') && displayItems.length > 0 ? '100%' :
+                      displayItems.some(i => i.status === 'Received at Warehouse') ? '75%' :
                       appointments.length > 0 ? '50%' : '25%'
                     }` 
                   }} 
                 />
                 <div className="relative flex justify-between">
                   {[
-                    { label: 'Items Added', icon: Package, active: items.length > 0 },
+                    { label: 'Items Added', icon: Package, active: displayItems.length > 0 },
                     { label: 'Pickup Scheduled', icon: Truck, active: appointments.length > 0 },
-                    { label: 'Received', icon: CheckCircle2, active: items.some(i => i.status === 'Received at Warehouse') },
-                    { label: 'Ready to Ship', icon: ArrowRight, active: items.every(i => i.status === 'Received at Warehouse') && items.length > 0 }
+                    { label: 'Received', icon: CheckCircle2, active: displayItems.some(i => i.status === 'Received at Warehouse') },
+                    { label: 'Ready to Ship', icon: ArrowRight, active: displayItems.every(i => i.status === 'Received at Warehouse') && displayItems.length > 0 }
                   ].map((step, i) => (
                     <div key={i} className="flex flex-col items-center gap-3 relative z-10">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ${step.active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-white border-2 border-slate-100 text-slate-300'}`}>
@@ -2575,29 +2687,64 @@ const AdminDashboard = ({
 
           {/* Heart-touching Warehouse Message */}
           {mode === 'Warehouse' && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-10 rounded-[2.5rem] text-white shadow-2xl shadow-emerald-200/50 relative overflow-hidden"
-            >
-              <div className="absolute -top-10 -right-10 opacity-10 rotate-12">
-                <Heart size={240} fill="currentColor" />
-              </div>
-              <div className="relative z-10 max-w-2xl">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
-                    <Heart size={20} className="fill-white" />
-                  </div>
-                  <span className="text-xs font-black uppercase tracking-[0.2em] text-emerald-100">Connecting Hearts Across Borders</span>
+            <div className="space-y-8">
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-10 rounded-[2.5rem] text-white shadow-2xl shadow-emerald-200/50 relative overflow-hidden"
+              >
+                <div className="absolute -top-10 -right-10 opacity-10 rotate-12">
+                  <Heart size={240} fill="currentColor" />
                 </div>
-                <h2 className="text-3xl font-black mb-4 leading-tight">Distance shouldn't keep you from the things you love.</h2>
-                <p className="text-lg text-emerald-50/90 leading-relaxed font-medium">
-                  Whether it's a mother's handmade sweets, a piece of home, or something special from India, 
-                  you don't need to worry about how to get it to the US. We are here, ready to gather, 
-                  consolidate, and safely deliver your world to you.
-                </p>
+                <div className="relative z-10 max-w-2xl">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
+                      <Heart size={20} className="fill-white" />
+                    </div>
+                    <span className="text-xs font-black uppercase tracking-[0.2em] text-emerald-100">Connecting Hearts Across Borders</span>
+                  </div>
+                  <h2 className="text-3xl font-black mb-4 leading-tight">Distance shouldn't keep you from the things you love.</h2>
+                  <p className="text-lg text-emerald-50/90 leading-relaxed font-medium">
+                    Whether it's a mother's handmade sweets, a piece of home, or something special from India, 
+                    you don't need to worry about how to get it to the US. We are here, ready to gather, 
+                    consolidate, and safely deliver your world to you.
+                  </p>
+                </div>
+              </motion.div>
+
+              {/* How it Works Section */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <motion.div 
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group"
+                >
+                  <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                    <Package size={28} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mb-3">1. Send Your Own Items</h3>
+                  <p className="text-slate-500 text-sm leading-relaxed">
+                    Have items at home? Pack them up and send them directly to our warehouse. We'll receive them, check the contents, and add them to your global shipment.
+                  </p>
+                </motion.div>
+
+                <motion.div 
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group"
+                >
+                  <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                    <ShoppingBag size={28} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mb-3">2. Shop Online & Send to Us</h3>
+                  <p className="text-slate-500 text-sm leading-relaxed">
+                    Buying from Amazon, Flipkart, or any online store? Simply use our warehouse address as your delivery address at checkout. We'll handle the rest!
+                  </p>
+                </motion.div>
               </div>
-            </motion.div>
+            </div>
           )}
 
 
@@ -2615,58 +2762,118 @@ const AdminDashboard = ({
                 {mode === 'Warehouse' ? (
                   <>
                     <div className="space-y-4">
-                      <div className="p-5 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-3 relative group">
+                      <div className="p-6 bg-indigo-50 rounded-[2rem] border border-indigo-100 space-y-4 relative group">
                         <button 
                           onClick={handleCopyAddress}
-                          className="absolute top-3 right-3 p-2 bg-white rounded-xl text-indigo-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-indigo-50"
+                          className="absolute top-4 right-4 p-2.5 bg-white rounded-xl text-indigo-600 shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:bg-indigo-50 hover:scale-110"
                           title="Copy Address"
                         >
-                          <Copy size={16} />
+                          <Copy size={18} />
                         </button>
-                        <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Our Warehouse Address</div>
+                        <div className="flex items-center gap-2">
+                          <div className="px-2 py-1 bg-indigo-600 text-[10px] font-black text-white uppercase tracking-widest rounded-md">Destination Address</div>
+                          <div className="px-2 py-1 bg-white text-[10px] font-black text-indigo-600 uppercase tracking-widest rounded-md border border-indigo-100">ID: {customerWarehouseId}</div>
+                        </div>
                         <div className="text-sm font-bold text-indigo-900">{WAREHOUSE_ADDRESS.name}</div>
-                        <div className="text-xs text-indigo-700 leading-relaxed">
+                        <div className="text-xs text-indigo-700 leading-relaxed font-medium">
+                          Attn: <span className="text-indigo-900 font-black">{customerWarehouseId}</span><br />
                           {WAREHOUSE_ADDRESS.street}<br />
                           {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state} {WAREHOUSE_ADDRESS.zip}<br />
                           {WAREHOUSE_ADDRESS.country}
                         </div>
-                        <div className="pt-2 border-t border-indigo-100 flex items-center gap-2 text-xs font-bold text-indigo-900">
+                        <div className="pt-3 border-t border-indigo-100 flex items-center gap-2 text-xs font-bold text-indigo-900">
                           <Phone size={14} /> {WAREHOUSE_ADDRESS.phone}
                         </div>
                       </div>
-                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
-                        <Info size={18} className="text-slate-400 shrink-0 mt-0.5" />
+                      <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
+                        <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm shrink-0">
+                          <Info size={16} className="text-indigo-600" />
+                        </div>
                         <p className="text-xs text-slate-500 leading-relaxed">
-                          Send your items to our warehouse. Once shipped, enter the details here to track them in your shipment.
+                          <span className="font-bold text-slate-700 block mb-1">Important:</span>
+                          Use the address above as your shipping destination. Once your package is on its way, add the item details here so we can identify it when it arrives.
                         </p>
                       </div>
                     </div>
                     <div className="space-y-4">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Item Description</label>
-                        <input 
-                          type="text" 
-                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white"
-                          placeholder="e.g. Laptop, Wedding Clothes..."
-                          value={cartItemName}
-                          onChange={(e) => setCartItemName(e.target.value)}
-                        />
+                      <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-4">
+                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Register Your Package</h4>
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">What's inside?</label>
+                            <input 
+                              type="text" 
+                              className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
+                              placeholder="e.g. Amazon Order #123, Clothes from Home..."
+                              value={cartItemName}
+                              onChange={(e) => setCartItemName(e.target.value)}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Quantity</label>
+                              <input 
+                                type="number" 
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
+                                value={cartItemQuantity}
+                                min={1}
+                                onChange={(e) => setCartItemQuantity(Number(e.target.value))}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Est. Weight (kg)</label>
+                              <input 
+                                type="number" 
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
+                                placeholder="Optional"
+                                value={cartItemWeight}
+                                step="0.1"
+                                onChange={(e) => setCartItemWeight(e.target.value === '' ? '' : Number(e.target.value))}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-4">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Invoice Number (Optional)</label>
+                              <input 
+                                type="text" 
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
+                                placeholder="e.g. INV-2024-001"
+                                value={cartItemInvoiceNumber}
+                                onChange={(e) => setCartItemInvoiceNumber(e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Remarks / Special Instructions</label>
+                              <textarea 
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white resize-none"
+                                placeholder="Any special handling instructions..."
+                                rows={2}
+                                value={cartItemRemarks}
+                                onChange={(e) => setCartItemRemarks(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-slate-200 hover:border-indigo-200 transition-colors cursor-pointer group" onClick={() => setCartItemFragile(!cartItemFragile)}>
+                            <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${cartItemFragile ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-200 group-hover:border-indigo-300'}`}>
+                              {cartItemFragile && <Check size={14} />}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <AlertTriangle size={16} className={cartItemFragile ? 'text-amber-500' : 'text-slate-400'} />
+                              <span className={`text-sm font-bold ${cartItemFragile ? 'text-slate-900' : 'text-slate-500'}`}>Fragile Item</span>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={handleAdd}
+                            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2 group"
+                          >
+                            <Plus size={20} className="group-hover:rotate-90 transition-transform" /> 
+                            Add to My Shipment
+                          </button>
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Approx Weight (kg)</label>
-                        <input 
-                          type="number" 
-                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white"
-                          value={cartItemWeight}
-                          onChange={(e) => setCartItemWeight(Number(e.target.value))}
-                        />
-                      </div>
-                      <button 
-                        onClick={handleAdd}
-                        className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-2"
-                      >
-                        <Plus size={20} /> Add to Shipment
-                      </button>
                     </div>
                   </>
                 ) : (hasActivePickup && !editingPickupId) ? (
@@ -2716,8 +2923,13 @@ const AdminDashboard = ({
                             value={selectedPickupDate}
                             onChange={(e) => setSelectedPickupDate(e.target.value)}
                           >
-                            {PICKUP_SLOTS.map(slot => <option key={slot.date} value={slot.date}>{slot.date}</option>)}
+                            {filteredPickupSlots.map(slot => <option key={slot.date} value={slot.date}>{slot.date}</option>)}
                           </select>
+                          {minPickupDate && (
+                            <p className="mt-1 text-[10px] text-emerald-600 font-bold flex items-center gap-1 ml-1">
+                              <Info size={10} /> Dates adjusted for store items
+                            </p>
+                          )}
                         </div>
                         <div>
                           <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Time Slot</label>
@@ -2834,7 +3046,7 @@ const AdminDashboard = ({
                     {displayItems.length} Items
                   </div>
                   <div className="px-4 py-2 bg-emerald-50 rounded-2xl text-xs font-bold text-emerald-600 border border-emerald-100">
-                    {displayWeight.toFixed(2)} kg Total
+                    {hasTBDWeight ? 'Est. ' : ''}{displayWeight.toFixed(2)} kg Total
                   </div>
                 </div>
               </div>
@@ -3006,63 +3218,92 @@ const AdminDashboard = ({
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               key={item.id} 
-                              className="flex items-center gap-4 p-4 rounded-2xl border border-slate-100 bg-white hover:shadow-xl hover:shadow-indigo-500/5 transition-all group"
+                              className="grid grid-cols-1 md:grid-cols-12 gap-4 p-5 rounded-2xl border border-slate-100 bg-white hover:shadow-xl hover:shadow-indigo-500/5 transition-all group items-center"
                             >
-                              <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 overflow-hidden border border-slate-100">
-                                {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <ImageIcon size={24} />}
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex justify-between items-start">
-                                  <div>
-                                    <h4 className="font-bold text-slate-900">{item.name}</h4>
-                                    <div className="flex items-center gap-3 mt-1">
-                                      <span className="text-xs font-bold text-indigo-600">{item.weight.toFixed(2)} kg</span>
-                                      {item.price && <span className="text-xs font-black text-emerald-600">₹{item.price * (item.quantity || 1)}</span>}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-4">
-                                    <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-2">
-                                      <button 
-                                        onClick={() => updateItemQuantity(item.id, -1)}
-                                        className="w-8 h-8 bg-white text-slate-600 rounded-lg flex items-center justify-center hover:text-red-600 transition-colors shadow-sm"
-                                      >
-                                        <Minus size={14} />
-                                      </button>
-                                      <span className="text-xs font-black text-slate-900 min-w-[20px] text-center">{item.quantity || 1}</span>
-                                      <button 
-                                        onClick={() => updateItemQuantity(item.id, 1)}
-                                        className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-sm"
-                                      >
-                                        <Plus size={14} />
-                                      </button>
-                                    </div>
-                                    <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors p-1">
-                                      <Trash2 size={18} />
-                                    </button>
-                                  </div>
+                              <div className="md:col-span-1">
+                                <div className="w-14 h-14 bg-slate-50 rounded-xl flex items-center justify-center text-slate-300 overflow-hidden border border-slate-100">
+                                  {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <ImageIcon size={20} />}
                                 </div>
-                                <div className="flex items-center gap-1 mt-3">
-                                  <div className="flex items-center gap-1">
-                                    {item.status === 'Received at Warehouse' ? (
-                                      <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
-                                        <CheckCircle2 size={12} /> RECEIVED
-                                      </span>
-                                    ) : (
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
-                                          <Clock size={12} /> PENDING
+                              </div>
+                              
+                              <div className="md:col-span-4">
+                                <h4 className="font-bold text-slate-900 truncate">{item.name}</h4>
+                                <div className="flex flex-wrap gap-2 mt-1">
+                                  {item.fragile && (
+                                    <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-600 text-[9px] font-black uppercase tracking-widest rounded-md border border-amber-100">
+                                      <AlertTriangle size={8} /> Fragile
+                                    </span>
+                                  )}
+                                  {item.invoiceNumber && (
+                                    <span className="flex items-center gap-1 px-2 py-0.5 bg-slate-50 text-slate-500 text-[9px] font-black uppercase tracking-widest rounded-md border border-slate-100">
+                                      <FileText size={8} /> {item.invoiceNumber}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="md:col-span-2">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Weight</div>
+                                <div className="text-xs font-bold text-indigo-600">
+                                  {item.weight > 0 ? (
+                                    <div className="flex flex-col">
+                                      <span>{(item.weight / (item.quantity || 1)).toFixed(2)} kg</span>
+                                      {(item.quantity || 1) > 1 && (
+                                        <span className="text-[9px] text-slate-400 font-medium">
+                                          Total: {item.weight.toFixed(2)} kg
                                         </span>
-                                        <button 
-                                          onClick={() => updateItemStatus(item.id, 'Received at Warehouse')}
-                                          className="text-[10px] bg-indigo-600 text-white px-3 py-1 rounded-lg font-bold hover:bg-indigo-700 transition-colors shadow-sm"
-                                        >
-                                          Mark Received
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
+                                      )}
+                                    </div>
+                                  ) : 'TBD'}
                                 </div>
                               </div>
+
+                              <div className="md:col-span-2">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Quantity</div>
+                                <div className="flex items-center gap-2">
+                                  <button 
+                                    onClick={() => updateItemQuantity(item.id, -1)}
+                                    className="w-6 h-6 bg-slate-100 text-slate-600 rounded-lg flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-colors"
+                                  >
+                                    <Minus size={12} />
+                                  </button>
+                                  <span className="text-xs font-black text-slate-900 min-w-[20px] text-center">{item.quantity || 1}</span>
+                                  <button 
+                                    onClick={() => updateItemQuantity(item.id, 1)}
+                                    className="w-6 h-6 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-colors"
+                                  >
+                                    <Plus size={12} />
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="md:col-span-2">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</div>
+                                {item.status === 'Received at Warehouse' ? (
+                                  <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 inline-block">
+                                    RECEIVED
+                                  </span>
+                                ) : (
+                                  <button 
+                                    onClick={() => updateItemStatus(item.id, 'Received at Warehouse')}
+                                    className="text-[9px] bg-indigo-600 text-white px-2 py-1 rounded-lg font-black hover:bg-indigo-700 transition-colors shadow-sm"
+                                  >
+                                    MARK RECEIVED
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="md:col-span-1 flex justify-end">
+                                <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors p-2">
+                                  <Trash2 size={18} />
+                                </button>
+                              </div>
+                              
+                              {item.remarks && (
+                                <div className="md:col-span-12 mt-2 pt-2 border-t border-slate-50 text-[10px] text-slate-400 italic flex items-start gap-1">
+                                  <MessageSquare size={10} className="mt-0.5 shrink-0" /> {item.remarks}
+                                </div>
+                              )}
                             </motion.div>
                           ))}
                         </div>
@@ -3070,12 +3311,38 @@ const AdminDashboard = ({
                     );
                   })}
 
+                  {/* Save and Submit Buttons for Warehouse Mode */}
+                  {mode === 'Warehouse' && !isCartEmpty && (
+                    <div className="flex flex-col sm:flex-row gap-4 pt-8 border-t border-slate-100 mt-8">
+                      <button 
+                        onClick={() => alert('Shipment items saved successfully!')}
+                        className="flex-1 py-2.5 bg-white border-2 border-slate-200 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                      >
+                        <RefreshCw size={16} /> Save Progress
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setItems(prev => prev.map(i => 
+                            i.source === 'Warehouse' && !i.submitted 
+                              ? { ...i, submitted: true } 
+                              : i
+                          ));
+                          setActiveTab('cart');
+                          alert('Shipment submitted successfully! You can now see your items in the cart.');
+                        }}
+                        className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle2 size={16} /> Submit Order
+                      </button>
+                    </div>
+                  )}
+
                   {/* Add More Items section removed as per user request */}
                 </div>
               )}
               
               {/* Action Buttons - Only show in My Cart tab (!mode) */}
-              {!mode && (items.length > 0 || appointments.length > 0) && (
+              {!mode && (displayItems.length > 0 || appointments.length > 0) && (
                 <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col gap-6">
                   {appointments.some(a => a.status === 'Scheduled') && (
                     <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-3">
@@ -3201,16 +3468,19 @@ const AdminDashboard = ({
               <div className="space-y-4">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500 font-medium">Total Items</span>
-                  <span className="font-bold text-slate-900">{items.length}</span>
+                  <span className="font-bold text-slate-900">{displayItems.length}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500 font-medium">Total Weight</span>
-                  <span className="font-bold text-slate-900">{totalWeight.toFixed(2)} kg</span>
+                  <span className="font-bold text-slate-900">
+                    {hasTBDWeight ? 'Est. ' : ''}
+                    {displayWeight.toFixed(2)} kg
+                  </span>
                 </div>
                 <div className="pt-4 border-t border-slate-100">
                   <div className="flex justify-between items-center">
                     <span className="text-base font-bold text-slate-900">Estimated Total</span>
-                    <span className="text-xl font-black text-indigo-600">₹{items.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 1), 0)}</span>
+                    <span className="text-xl font-black text-indigo-600">₹{displayItems.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 1), 0)}</span>
                   </div>
                 </div>
               </div>
@@ -3403,11 +3673,18 @@ const AdminDashboard = ({
                   </div>
                 </div>
                 <div className="p-5 flex-1 flex flex-col">
-                  <div className="flex justify-between items-start mb-2">
+                  <div className="flex justify-between items-start mb-1">
                     <h3 className="font-bold text-slate-900 leading-tight truncate flex-1 mr-2">{product.name}</h3>
                     <span className="text-indigo-600 font-bold shrink-0">₹{product.price}</span>
                   </div>
-                  <p className="text-xs text-slate-500 mb-4">Weight: {product.weight} kg</p>
+                  <div className="flex flex-col gap-1 mb-4">
+                    <p className="text-[10px] text-slate-500">Weight: {product.weight} kg</p>
+                    {product.estimatedDelivery && (
+                      <div className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                        <Calendar size={10} /> Ready by: {product.estimatedDelivery}
+                      </div>
+                    )}
+                  </div>
                   <div className="mt-auto">
                     {itemCount > 0 ? (
                       <div className="flex items-center gap-2">
@@ -3421,7 +3698,13 @@ const AdminDashboard = ({
                           <ShoppingBag size={16} /> Added ({itemCount})
                         </div>
                         <button 
-                          onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
+                          onClick={() => addItem({ 
+                            name: product.name, 
+                            weight: product.weight, 
+                            price: product.price, 
+                            image: product.image,
+                            estimatedDelivery: product.estimatedDelivery 
+                          }, 'Store')}
                           className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
                         >
                           <Plus size={16} />
@@ -3429,7 +3712,13 @@ const AdminDashboard = ({
                       </div>
                     ) : (
                       <button 
-                        onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
+                        onClick={() => addItem({ 
+                          name: product.name, 
+                          weight: product.weight, 
+                          price: product.price, 
+                          image: product.image,
+                          estimatedDelivery: product.estimatedDelivery 
+                        }, 'Store')}
                         className="w-full py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"
                       >
                         <ShoppingBag size={16} /> Add to Shipment
@@ -3513,6 +3802,7 @@ const AdminDashboard = ({
 
   const FinalizeSection = useMemo(() => {
     if (!currentUser) return null;
+    const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
     if (isPaid) {
       return (
         <div className="max-w-2xl mx-auto text-center space-y-8 py-12">
@@ -3716,7 +4006,7 @@ const AdminDashboard = ({
               </div>
               <div className="flex justify-between text-slate-400 text-sm">
                 <span>Items Cost</span>
-                <span className="text-white font-medium">₹{items.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
+                <span className="text-white font-medium">₹{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
               </div>
               <div className="h-px bg-slate-800 my-4" />
               <div className="flex justify-between items-center">
@@ -3733,7 +4023,7 @@ const AdminDashboard = ({
             </div>
 
             <button 
-              disabled={items.length === 0}
+              disabled={cartItems.length === 0}
               onClick={handleFinalPayment}
               className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-200"
             >
@@ -3864,7 +4154,7 @@ const AdminDashboard = ({
                 { id: 'home', icon: Calculator, label: 'Home', roles: ['Customer'], public: true },
                 { id: 'store', icon: Store, label: 'Jiffy Store', roles: ['Customer'], public: true },
                 { id: 'pickup', icon: Truck, label: 'Agent Pickup', roles: ['Customer'], public: true },
-                { id: 'warehouse', icon: Package, label: 'Warehouse', roles: ['Customer'], public: true },
+                { id: 'warehouse', icon: Package, label: 'Send to Warehouse', roles: ['Customer'], public: true },
                 { id: 'cart', icon: ShoppingCart, label: 'My Cart', roles: ['Customer'], public: true },
                 { id: 'notifications', icon: Bell, label: 'Alerts', roles: ['Customer'], public: false },
                 { id: 'support', icon: HelpCircle, label: 'Support', roles: ['Customer'], public: true },
@@ -3882,9 +4172,9 @@ const AdminDashboard = ({
                   }`}
                 >
                   <tab.icon size={16} /> {tab.label}
-                  {(tab.id === 'cart') && (items.length > 0 || appointments.length > 0) && (
+                  {(tab.id === 'cart') && (cartItems.length > 0 || appointments.length > 0) && (
                     <span className="bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] flex items-center justify-center">
-                      {items.length + appointments.length}
+                      {cartItems.length + appointments.length}
                     </span>
                   )}
                 </button>
@@ -3963,6 +4253,63 @@ const AdminDashboard = ({
           </motion.div>
         </AnimatePresence>
       </main>
+
+      {/* Footer */}
+      <footer className="bg-slate-50 border-t border-slate-200 pt-16 pb-24 px-4 relative z-40">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
+          <div className="col-span-1">
+            <div className="flex items-center gap-2 mb-6">
+              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                <Truck size={24} />
+              </div>
+              <span className="text-xl font-black text-slate-900 tracking-tight">Global Logistics Pro</span>
+            </div>
+            <p className="text-slate-500 max-w-sm leading-relaxed text-sm">
+              Your trusted partner for seamless global shipping and warehouse solutions. We simplify logistics so you can focus on growing your business.
+            </p>
+          </div>
+          
+          <div>
+            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Company</h4>
+            <ul className="space-y-4">
+              <li><button onClick={() => navigateTo('home')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">About Us</button></li>
+              <li><button onClick={() => navigateTo('support')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Contact</button></li>
+              <li><button onClick={() => alert('Shipping Policy coming soon!')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Shipping Policy</button></li>
+              <li><button onClick={() => alert('Privacy Policy coming soon!')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Privacy Policy</button></li>
+            </ul>
+          </div>
+          
+          <div>
+            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Account</h4>
+            <ul className="space-y-4">
+              <li><button onClick={() => setShowLoginModal(true)} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Sign In</button></li>
+              <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">My Shipments</button></li>
+              <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Order History</button></li>
+              <li><button onClick={() => navigateTo('notifications')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Notifications</button></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Services</h4>
+            <ul className="space-y-4">
+              <li><button onClick={() => navigateTo('pickup')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Agent Pickup</button></li>
+              <li><button onClick={() => navigateTo('warehouse')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Warehouse Delivery</button></li>
+              <li><button onClick={() => navigateTo('store')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Jiffy Store</button></li>
+              <li><button onClick={() => navigateTo('home')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Rate Calculator</button></li>
+            </ul>
+          </div>
+        </div>
+        
+        <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+          <p className="text-slate-400 text-sm">
+            © 2026 Global Logistics Pro Inc. All rights reserved.
+          </p>
+          <div className="flex items-center gap-6">
+            <button className="text-slate-400 hover:text-slate-600 transition-colors"><Share size={20} /></button>
+            <button className="text-slate-400 hover:text-slate-600 transition-colors"><MessageSquare size={20} /></button>
+          </div>
+        </div>
+      </footer>
 
       {/* Disclaimer Banner */}
       <div className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white py-3 px-4 z-50">

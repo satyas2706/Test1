@@ -1,6 +1,12 @@
 
 import { StoreProduct } from './types';
 
+const getFutureDate = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0];
+};
+
 export const SHIPPING_RATES: Record<string, number> = {
   'USA': 960,
   'UK': 800,
@@ -22,6 +28,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Pooja',
     image: 'https://picsum.photos/seed/diya/400/400',
     weight: 0.5,
+    estimatedDelivery: getFutureDate(2),
   },
   {
     id: 'p2',
@@ -30,6 +37,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Pooja',
     image: 'https://picsum.photos/seed/incense/400/400',
     weight: 0.2,
+    estimatedDelivery: getFutureDate(1),
   },
   {
     id: 'p3',
@@ -38,6 +46,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Return Gifts',
     image: 'https://picsum.photos/seed/pouch/400/400',
     weight: 0.1,
+    estimatedDelivery: getFutureDate(3),
   },
   {
     id: 'p4',
@@ -46,6 +55,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Decorative',
     image: 'https://picsum.photos/seed/elephant/400/400',
     weight: 1.2,
+    estimatedDelivery: getFutureDate(5),
   },
   {
     id: 'p5',
@@ -54,6 +64,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Pooja',
     image: 'https://picsum.photos/seed/kalash/400/400',
     weight: 0.8,
+    estimatedDelivery: getFutureDate(2),
   },
   {
     id: 'p6',
@@ -62,6 +73,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Decorative',
     image: 'https://picsum.photos/seed/lantern/400/400',
     weight: 0.6,
+    estimatedDelivery: getFutureDate(4),
   },
   {
     id: 'p7',
@@ -70,6 +82,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Pooja',
     image: 'https://picsum.photos/seed/thali/400/400',
     weight: 1.5,
+    estimatedDelivery: getFutureDate(3),
   },
   {
     id: 'p8',
@@ -78,6 +91,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Pooja',
     image: 'https://picsum.photos/seed/ganesh/400/400',
     weight: 0.4,
+    estimatedDelivery: getFutureDate(2),
   },
   {
     id: 'p9',
@@ -86,6 +100,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Pooja',
     image: 'https://picsum.photos/seed/diyas/400/400',
     weight: 0.3,
+    estimatedDelivery: getFutureDate(1),
   },
   {
     id: 'p10',
@@ -94,6 +109,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Decorative',
     image: 'https://picsum.photos/seed/toran/400/400',
     weight: 0.2,
+    estimatedDelivery: getFutureDate(2),
   },
   {
     id: 'p11',
@@ -102,6 +118,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Decorative',
     image: 'https://picsum.photos/seed/rangoli/400/400',
     weight: 0.1,
+    estimatedDelivery: getFutureDate(1),
   },
   {
     id: 'p12',
@@ -110,6 +127,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Return Gifts',
     image: 'https://picsum.photos/seed/mehendi/400/400',
     weight: 0.2,
+    estimatedDelivery: getFutureDate(1),
   },
 ];
 
@@ -122,12 +140,6 @@ export const PROHIBITED_ITEMS = [
   'Pressurized Containers',
   'Lithium Batteries (standalone)',
 ];
-
-const getFutureDate = (days: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
-};
 
 export const SHIPPING_DATES = [
   getFutureDate(5),

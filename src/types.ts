@@ -19,6 +19,11 @@ export interface ShippingItem {
   source: 'Pickup' | 'Store' | 'Warehouse';
   price?: number;
   quantity?: number;
+  fragile?: boolean;
+  submitted?: boolean;
+  invoiceNumber?: string;
+  remarks?: string;
+  estimatedDelivery?: string;
 }
 
 export interface ShippingQuote {
@@ -74,6 +79,7 @@ export interface StoreProduct {
   category: 'Pooja' | 'Return Gifts' | 'Decorative';
   image: string;
   weight: number;
+  estimatedDelivery?: string;
 }
 
 export interface DestinationAddress {
