@@ -3462,7 +3462,7 @@ const AdminDashboard = ({
 
                   {/* Grouped Items by Source */}
                   {['Store', 'Pickup', 'Warehouse'].map(source => {
-                    const sourceItems = items.filter(i => i.source === source);
+                    const sourceItems = displayItems.filter(i => i.source === source);
                     
                     // Special case: If Agent Pickup is scheduled, show message instead of item list for Pickup source
                     if (!mode && source === 'Pickup' && hasActivePickup) {
