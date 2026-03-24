@@ -1,5 +1,5 @@
 # Business Requirements Document (BRD)
-## Project: Bharat Bridge - Global Logistics Platform
+## Project: Jiffex - Global Logistics Platform
 **Version:** 1.0  
 **Date:** March 5, 2026  
 **Status:** Final
@@ -7,7 +7,7 @@
 ---
 
 ### 1. Project Overview
-Bharat Bridge is a specialized international logistics platform designed to bridge the gap between Indian products and global destinations. The platform allows users to consolidate items from various sources—online shopping, local purchases, or home collections—into a single international shipment, significantly reducing costs and complexity.
+Jiffex is a specialized international logistics platform designed to bridge the gap between Indian products and global destinations. The platform allows users to consolidate items from various sources—online shopping, local purchases, or home collections—into a single international shipment, significantly reducing costs and complexity.
 
 ### 2. Objectives
 - To provide a seamless interface for customers to manage international shipments.
@@ -53,7 +53,7 @@ Bharat Bridge is a specialized international logistics platform designed to brid
 
 #### 4.2 Shipment Collection (The "Cart")
 - **Warehouse Mode:** 
-    - Provision for customers to send items directly to the Bharat Bridge warehouse.
+    - Provision for customers to send items directly to the Jiffex warehouse.
     - **Copy Address Feature:** One-click copy of the warehouse address for use on e-commerce sites.
 - **Agent Pickup Mode:**
     - Scheduling interface for home collection.

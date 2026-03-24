@@ -190,6 +190,40 @@ app.post("/api/notifications/simulate", async (req, res) => {
   res.json({ success: true });
 });
 
+// API: Share Invoice via Email
+app.post("/api/invoice/share", async (req, res) => {
+  const { email, orderId, invoiceDetails } = req.body;
+  
+  if (!mailTransporter || !process.env.SMTP_FROM) {
+    return res.status(503).json({ error: "Email service not configured" });
+  }
+
+  try {
+    await mailTransporter.sendMail({
+      from: process.env.SMTP_FROM,
+      to: email,
+      subject: `JiffEX Invoice: ${orderId}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h2 style="color: #4f46e5;">JiffEX Shipping & Logistics</h2>
+          <h3>Tax Invoice</h3>
+          <p><strong>Order ID:</strong> ${orderId}</p>
+          <hr />
+          <h4>Shipment Summary</h4>
+          <pre style="background: #f8fafc; padding: 15px; border-radius: 8px; white-space: pre-wrap;">${invoiceDetails}</pre>
+          <p style="color: #64748b; font-size: 12px; margin-top: 20px;">
+            Thank you for choosing JiffEX. For any queries, please contact our support.
+          </p>
+        </div>
+      `
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Email Share Error:', err.message);
+    res.status(500).json({ error: "Failed to send email" });
+  }
+});
+
 // API: Get notification history
 app.get("/api/notifications/:userId", async (req, res) => {
   if (!supabase) return res.status(500).json({ error: "Supabase not configured" });

@@ -1,28 +1,28 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { auth, googleProvider, signInWithPopup } from '../firebase';
 import { motion } from 'motion/react';
-import { Mail, Lock, LogIn, UserPlus, Loader2, AlertCircle } from 'lucide-react';
+import { LogIn, Loader2, AlertCircle } from 'lucide-react';
 
 interface LoginProps {
-  onSuccess: (email: string) => void;
+  onSuccess: () => void;
 }
 
 export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGoogleLogin = async () => {
     setLoading(true);
     setError(null);
-
-    // For testing purpose, accept any password
-    setTimeout(() => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+      onSuccess();
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err.message || 'Failed to sign in with Google');
+    } finally {
       setLoading(false);
-      onSuccess(email);
-    }, 1000);
+    }
   };
 
   return (
@@ -37,10 +37,10 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
             <LogIn size={32} />
           </div>
           <h1 className="text-2xl font-black text-slate-900">
-            Sign In (Test Mode)
+            Sign In
           </h1>
           <p className="text-slate-500 mt-2">
-            Enter any email and password to proceed
+            Connect with your Google account to continue
           </p>
         </div>
 
@@ -51,45 +51,22 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Email Address</label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input 
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                placeholder="you@example.com"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input 
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                placeholder="••••••••"
-              />
-            </div>
-          </div>
-
+        <div className="space-y-4">
           <button 
-            type="submit"
+            onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-70"
+            className="w-full py-4 bg-white border border-slate-200 text-slate-700 rounded-2xl font-bold hover:bg-slate-50 transition-all shadow-sm flex items-center justify-center gap-3 disabled:opacity-70"
           >
-            {loading ? <Loader2 className="animate-spin" size={20} /> : 'Sign In'}
+            {loading ? (
+              <Loader2 className="animate-spin" size={20} />
+            ) : (
+              <>
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+                Sign in with Google
+              </>
+            )}
           </button>
-        </form>
+        </div>
       </motion.div>
     </div>
   );

@@ -1,0 +1,145 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application, can be a Customer, Agent, or Admin.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["Admin", "Customer", "Agent"] }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "ShippingItem": {
+      "title": "ShippingItem",
+      "description": "An individual item being shipped.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "weight": { "type": "number" },
+        "image": { "type": "string" },
+        "status": { "type": "string" },
+        "source": { "type": "string", "enum": ["Pickup", "Store", "Warehouse"] },
+        "price": { "type": "number" },
+        "quantity": { "type": "number" },
+        "fragile": { "type": "boolean" },
+        "submitted": { "type": "boolean" },
+        "invoiceNumber": { "type": "string" },
+        "remarks": { "type": "string" },
+        "estimatedDelivery": { "type": "string" },
+        "customerId": { "type": "string" }
+      },
+      "required": ["id", "name", "weight", "status", "source", "customerId"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "A scheduled pickup appointment.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "customerName": { "type": "string" },
+        "status": { "type": "string", "enum": ["Scheduled", "Completed", "Cancelled"] },
+        "items": { "type": "array", "items": { "$ref": "ShippingItem" } },
+        "paymentStatus": { "type": "string", "enum": ["Pending", "Paid"] },
+        "orderId": { "type": "string" },
+        "assignedAgentId": { "type": "string" },
+        "customerId": { "type": "string" },
+        "pickupType": { "type": "string" },
+        "languagePreference": { "type": "string" }
+      },
+      "required": ["id", "date", "time", "address", "phone", "status", "customerId"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A completed shipping order.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "items": { "type": "array", "items": { "$ref": "ShippingItem" } },
+        "totalWeight": { "type": "number" },
+        "totalCost": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "shippingDate": { "type": "string" },
+        "destination": { "type": "object" },
+        "paymentStatus": { "type": "string", "enum": ["Pending", "Paid"] }
+      },
+      "required": ["id", "customerId", "items", "totalWeight", "totalCost", "status", "createdAt", "paymentStatus"]
+    },
+    "StoreProduct": {
+      "title": "StoreProduct",
+      "description": "A product available in the store.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "image": { "type": "string" },
+        "weight": { "type": "number" },
+        "estimatedDelivery": { "type": "string" }
+      },
+      "required": ["id", "name", "price", "category", "image", "weight"]
+    },
+    "AgentProfile": {
+      "title": "AgentProfile",
+      "description": "A profile for a shipping agent.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "vehicleNumber": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "email", "status"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global application settings.",
+      "type": "object",
+      "properties": {
+        "categories": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles."
+    },
+    "/items/{itemId}": {
+      "schema": "ShippingItem",
+      "description": "Individual shipping items, including those at warehouse."
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Pickup appointments."
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Consolidated shipping orders."
+    },
+    "/store_products/{productId}": {
+      "schema": "StoreProduct",
+      "description": "Products available for purchase in the store."
+    },
+    "/agents/{agentId}": {
+      "schema": "AgentProfile",
+      "description": "Shipping agent profiles."
+    },
+    "/settings/{settingId}": {
+      "schema": "Settings",
+      "description": "Global app settings like categories."
+    }
+  }
+}

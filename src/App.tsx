@@ -81,6 +81,7 @@ import {
 import { api } from './services/api';
 import { supabase } from './lib/supabase';
 import { Login } from './components/Login';
+import { BusinessIntro } from './components/BusinessIntro';
 import { Session } from '@supabase/supabase-js';
 
 type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'history' | 'admin' | 'warehouse-mgmt' | 'agent' | 'support' | 'notifications';
@@ -221,6 +222,7 @@ const StaticShipmentTracker = () => {
   const [isGuestMode, setIsGuestMode] = useState(false);
   const [guestEmail, setGuestEmail] = useState('');
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showIntroModal, setShowIntroModal] = useState(true);
   const [categories, setCategories] = useState(['Pooja', 'Return Gifts', 'Decorative']);
 
   // Home Section States
@@ -968,8 +970,13 @@ const StaticShipmentTracker = () => {
                       <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-32 h-4 bg-black/20 rounded-full blur-md" />
                     </div>
                     <div className="text-center">
-                      <div className="text-3xl font-black tracking-tighter">JIFFEX LOGISTICS</div>
-                      <div className="text-xs font-bold text-indigo-200 uppercase tracking-[0.3em] mt-1">Express Global Delivery</div>
+                      <div className="flex items-center justify-center gap-2 mb-1">
+                        <div className="text-3xl font-black tracking-tighter uppercase">JIFFEX</div>
+                        <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                      </div>
+                      <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-[0.3em]">
+                        Global Logistics Partner
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -4705,6 +4712,13 @@ const AdminDashboard = ({
         )}
       </AnimatePresence>
 
+      {/* Business Intro Modal */}
+      <AnimatePresence>
+        {showIntroModal && (
+          <BusinessIntro onClose={() => setShowIntroModal(false)} />
+        )}
+      </AnimatePresence>
+
       {/* Login Modal */}
       <AnimatePresence>
         {showLoginModal && (
@@ -4740,6 +4754,7 @@ const AdminDashboard = ({
                   setGuestEmail(email);
                   setIsGuestMode(true);
                   setShowLoginModal(false);
+                  setShowIntroModal(true);
                 }} />
               </div>
             </motion.div>

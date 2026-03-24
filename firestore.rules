@@ -1,0 +1,156 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required)
+    //   - email: string (required)
+    //   - role: string (required, Admin|Customer|Agent)
+    //
+    // Collection: items
+    // Document ID: itemId
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required)
+    //   - weight: number (required)
+    //   - status: string (required)
+    //   - source: string (required)
+    //   - customerId: string (required)
+    //   ... other optional fields
+    //
+    // Collection: appointments
+    // Document ID: appointmentId
+    // Fields:
+    //   - id: string (required)
+    //   - customerId: string (required)
+    //   - assignedAgentId: string (optional)
+    //   - status: string (required)
+    //   ... other fields
+    //
+    // Collection: orders
+    // Document ID: orderId
+    // Fields:
+    //   - id: string (required)
+    //   - customerId: string (required)
+    //   - status: string (required)
+    //   ... other fields
+    //
+    // Collection: store_products
+    // Document ID: productId
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required)
+    //   - price: number (required)
+    //   ... other fields
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        ((request.auth.token.email == "sanjeevaraosb@gmail.com" && request.auth.token.email_verified == true) ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin'));
+    }
+
+    function isAgent() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Agent';
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.id is string && data.id.size() > 0 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.role in ['Admin', 'Customer', 'Agent'];
+    }
+
+    function isValidShippingItem(data) {
+      return data.id is string && data.name is string && data.name.size() < 200 &&
+             data.weight is number && data.status is string &&
+             data.source in ['Pickup', 'Store', 'Warehouse'] &&
+             data.customerId is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (isOwner(userId) || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (isOwner(userId) || isAdmin()) && 
+                    (isAdmin() || request.resource.data.role == resource.data.role);
+    }
+
+    match /items/{itemId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.customerId || isAdmin() || isAgent());
+      allow create: if isAuthenticated() && isValidShippingItem(request.resource.data) && (request.auth.uid == request.resource.data.customerId || isAdmin());
+      allow update: if isAuthenticated() && isValidShippingItem(request.resource.data) && 
+                    (request.auth.uid == resource.data.customerId || isAdmin() || isAgent());
+      allow delete: if isAdmin();
+    }
+
+    match /appointments/{appointmentId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.customerId || request.auth.uid == resource.data.assignedAgentId || isAdmin());
+      allow create: if isAuthenticated() && (request.auth.uid == request.resource.data.customerId || isAdmin());
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.customerId || request.auth.uid == resource.data.assignedAgentId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.customerId || isAdmin());
+      allow create: if isAuthenticated() && (request.auth.uid == request.resource.data.customerId || isAdmin());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /store_products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /agents/{agentId} {
+      allow read: if isAuthenticated() && (isAdmin() || isAgent());
+      allow write: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
