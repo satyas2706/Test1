@@ -9,9 +9,10 @@ import {
   Truck,
   ShoppingBag,
   ShieldCheck,
-  Heart,
   Leaf,
-  Sparkles
+  Sparkles,
+  MapPin,
+  Clock
 } from 'lucide-react';
 
 interface BusinessIntroProps {
@@ -57,8 +58,26 @@ export const BusinessIntro: React.FC<BusinessIntroProps> = ({ onClose }) => {
               </div>
             </div>
 
-            <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 mb-8">
-              <Heart size={24} fill="currentColor" />
+            <div className="flex items-center gap-6 mb-10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <Clock size={20} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-black text-slate-900 uppercase tracking-tight leading-none">Live Tracking</span>
+                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">Full Visibility</span>
+                </div>
+              </div>
+              <div className="w-px h-8 bg-slate-100" />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <ShieldCheck size={20} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-black text-slate-900 uppercase tracking-tight leading-none">Secure Packing</span>
+                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">100% Safe Delivery</span>
+                </div>
+              </div>
             </div>
             <h1 className="text-5xl lg:text-6xl font-serif text-slate-900 leading-tight mb-6">
               From India, <br />
