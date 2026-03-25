@@ -81,7 +81,6 @@ import {
 import { api } from './services/api';
 import { supabase } from './lib/supabase';
 import { Login } from './components/Login';
-import { BusinessIntro } from './components/BusinessIntro';
 import { Session } from '@supabase/supabase-js';
 
 type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'history' | 'admin' | 'warehouse-mgmt' | 'agent' | 'support' | 'notifications';
@@ -222,7 +221,6 @@ const StaticShipmentTracker = () => {
   const [isGuestMode, setIsGuestMode] = useState(false);
   const [guestEmail, setGuestEmail] = useState('');
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showIntroModal, setShowIntroModal] = useState(true);
   const [categories, setCategories] = useState(['Pooja', 'Return Gifts', 'Decorative']);
 
   // Home Section States
@@ -4387,6 +4385,38 @@ const AdminDashboard = ({
     await supabase.auth.signOut();
     setIsGuestMode(false);
     setGuestEmail('');
+    setItems([]);
+    setAppointments([]);
+    setOrders([]);
+    setAddress({
+      fullName: '',
+      email: '',
+      phone: '',
+      addressLine1: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: COUNTRIES[0],
+    });
+    setPickupAddress({
+      street: '',
+      apartment: '',
+      city: '',
+      state: '',
+      zip: ''
+    });
+    setPickupName('');
+    setPickupPhone('');
+    setCartItemName('');
+    setCartItemWeight('');
+    setCartItemQuantity(1);
+    setCartItemFragile(false);
+    setCartItemInvoiceNumber('');
+    setCartItemRemarks('');
+    setIsPaid(false);
+    setOrderId(null);
+    setActiveTab('home');
+    setTabHistory(['home']);
   };
 
   return (
@@ -4712,13 +4742,6 @@ const AdminDashboard = ({
         )}
       </AnimatePresence>
 
-      {/* Business Intro Modal */}
-      <AnimatePresence>
-        {showIntroModal && (
-          <BusinessIntro onClose={() => setShowIntroModal(false)} />
-        )}
-      </AnimatePresence>
-
       {/* Login Modal */}
       <AnimatePresence>
         {showLoginModal && (
@@ -4754,7 +4777,6 @@ const AdminDashboard = ({
                   setGuestEmail(email);
                   setIsGuestMode(true);
                   setShowLoginModal(false);
-                  setShowIntroModal(true);
                 }} />
               </div>
             </motion.div>
