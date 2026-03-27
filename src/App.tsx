@@ -58,6 +58,7 @@ import {
   Warehouse,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Toaster, toast } from 'sonner';
 import { 
   ShippingItem, 
   ShippingStatus, 
@@ -246,9 +247,9 @@ const StaticShipmentTracker = () => {
       setSelectedOrderForInvoice(order);
       navigateTo('history');
     } else if (appointment) {
-      alert(`Tracking Appointment ${trackingId}: Status is ${appointment.status}`);
+      toast.info(`Tracking Appointment ${trackingId}: Status is ${appointment.status}`);
     } else {
-      alert('Tracking ID not found. Please check and try again.');
+      toast.error('Tracking ID not found. Please check and try again.');
     }
   };
 
@@ -355,10 +356,24 @@ const StaticShipmentTracker = () => {
       setShowLoginModal(true);
       return;
     }
-    if (!pickupName || !pickupPhone || !pickupAddress.street || !pickupAddress.city) {
-      alert('Please provide your name, phone number, street address, and city.');
+    
+    const missingFields = [];
+    if (!pickupName) missingFields.push('Your Name');
+    if (!pickupPhone) missingFields.push('Contact Number');
+    if (!pickupAddress.street) missingFields.push('Street Address');
+    if (!pickupAddress.city) missingFields.push('City');
+    if (!pickupAddress.zip) missingFields.push('ZIP Code');
+
+    if (missingFields.length > 0) {
+      toast.error(`${missingFields.join(', ')} is not entered. Enter to schedule.`);
       return;
     }
+
+    if (pickupPhone.length !== 10 || !/^\d+$/.test(pickupPhone)) {
+      toast.error('Contact Number must be exactly 10 digits.');
+      return;
+    }
+
     confirmPickup('AllAgent');
   };
 
@@ -432,6 +447,23 @@ const StaticShipmentTracker = () => {
   };
 
   const saveEditedPickup = () => {
+    const missingFields = [];
+    if (!pickupName) missingFields.push('Your Name');
+    if (!pickupPhone) missingFields.push('Contact Number');
+    if (!pickupAddress.street) missingFields.push('Street Address');
+    if (!pickupAddress.city) missingFields.push('City');
+    if (!pickupAddress.zip) missingFields.push('ZIP Code');
+
+    if (missingFields.length > 0) {
+      toast.error(`${missingFields.join(', ')} is not entered. Enter to schedule.`);
+      return;
+    }
+
+    if (pickupPhone.length !== 10 || !/^\d+$/.test(pickupPhone)) {
+      toast.error('Contact Number must be exactly 10 digits.');
+      return;
+    }
+
     const fullAddress = `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}, ${pickupAddress.city}, ${pickupAddress.state} ${pickupAddress.zip}`;
     setAppointments(prev => prev.map(a => a.id === editingPickupId ? {
       ...a,
@@ -447,7 +479,7 @@ const StaticShipmentTracker = () => {
     setPickupPhone('');
     setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
     setPickupLanguage('English');
-    alert('Pickup schedule updated successfully!');
+    toast.success('Pickup schedule updated successfully!');
   };
 
   const CheckoutProgressTracker = () => {
@@ -572,7 +604,7 @@ const StaticShipmentTracker = () => {
   }, [appointments]);
 
   const totalCost = useMemo(() => {
-    const rate = SHIPPING_RATES[address.country] || 800;
+    const rate = SHIPPING_RATES[address.country] || 10;
     const shippingCost = totalWeight * rate;
     const itemsCost = cartItems.reduce((sum, item) => sum + (item.price || 0), 0);
     return shippingCost + itemsCost;
@@ -824,13 +856,13 @@ const StaticShipmentTracker = () => {
 
     const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled');
     if (hasScheduledPickup) {
-      alert("You have an active agent pickup scheduled. To ensure all your items are shipped together, payment is only available once the agent has collected your items and they are received at our warehouse.");
+      toast.warning("You have an active agent pickup scheduled. To ensure all your items are shipped together, payment is only available once the agent has collected your items and they are received at our warehouse.");
       return;
     }
 
     const pendingItems = items.filter(i => i.status === 'Pending');
     if (pendingItems.length > 0) {
-      alert(`You have ${pendingItems.length} item(s) with PENDING status. All items must be 'Received at Warehouse' before you can proceed to checkout.`);
+      toast.warning(`You have ${pendingItems.length} item(s) with PENDING status. All items must be 'Received at Warehouse' before you can proceed to checkout.`);
       return;
     }
     const newOrderId = 'BB-' + Math.random().toString(36).substr(2, 9).toUpperCase();
@@ -1134,7 +1166,7 @@ const StaticShipmentTracker = () => {
                           Estimated Cost ({qMethod})
                         </span>
                         <div className="text-4xl font-black">
-                          ₹{(qWeight * SHIPPING_RATES[qCountry] * (qMethod === 'Standard' ? 0.7 : 1.0)).toFixed(2)}
+                          ${(qWeight * SHIPPING_RATES[qCountry] * (qMethod === 'Standard' ? 0.7 : 1.0)).toFixed(2)}
                         </div>
                         <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-2 flex items-center gap-1">
                           <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
@@ -1209,7 +1241,7 @@ const StaticShipmentTracker = () => {
                       <h4 className="font-bold text-slate-900 mb-1 truncate">{product.name}</h4>
                       <div className="flex flex-col gap-3 mt-auto">
                         <div className="flex items-center justify-between">
-                          <span className="text-indigo-600 font-bold">₹{product.price}</span>
+                          <span className="text-indigo-600 font-bold">${product.price}</span>
                           <span className="text-[10px] text-slate-400 font-medium">{product.weight}kg</span>
                         </div>
                         
@@ -1400,39 +1432,69 @@ const StaticShipmentTracker = () => {
             ))}
           </div>
 
-          {/* Simple FAQ Accordion */}
-          <div className="max-w-3xl mx-auto bg-slate-50 rounded-[3rem] p-8 md:p-12">
-            <h4 className="text-2xl font-black text-slate-900 mb-8 text-center">Frequently Asked Questions</h4>
-            <div className="space-y-4">
-              {[
-                { q: "How long does shipping to India take?", a: "Typically, express shipments take 5-7 business days, while standard shipments may take 10-14 business days depending on the destination city." },
-                { q: "What items are prohibited?", a: "We cannot ship hazardous materials, perishables, currency, or restricted electronics. Please check our full prohibited items list for details." },
-                { q: "How is the shipping cost calculated?", a: "Costs are based on the actual weight or volumetric weight (whichever is higher) and the destination country's specific rate." }
-              ].map((faq, i) => (
-                <div key={i} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
-                  <div className="font-bold text-slate-900 mb-2 flex items-center gap-3">
-                    <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs">?</div>
-                    {faq.q}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            {/* Comprehensive FAQ Section */}
+            <div className="bg-slate-50 rounded-[3rem] p-8 md:p-12">
+              <h4 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
+                <HelpCircle className="text-indigo-600" />
+                Frequently Asked Questions
+              </h4>
+              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-4 custom-scrollbar">
+                {[
+                  { q: "How long does shipping to the US take?", a: "Express shipments typically take 5-7 business days. Standard shipping takes 10-14 business days. These times depend on customs clearance and the final destination city." },
+                  { q: "What is the 'Send to Warehouse' service?", a: "This service allows you to send items from online stores (Amazon, Flipkart, etc.) or your home to our warehouse. We consolidate all your packages into one shipment to save you money on international shipping." },
+                  { q: "How do I calculate shipping costs?", a: "Shipping is calculated based on the higher of actual weight or volumetric weight. You can use our calculator on the home page for an instant estimate." },
+                  { q: "Can I track my shipment in real-time?", a: "Yes! Once your shipment is dispatched, you'll receive a tracking ID. You can enter this ID in the 'Track Shipment' box on our home page." },
+                  { q: "What happens if my items are fragile?", a: "We offer professional repacking services. If you mark an item as fragile, our warehouse team will add extra protective layers (bubble wrap, corrugated sheets) to ensure safe transit." },
+                  { q: "Are there any hidden charges?", a: "Our quotes include door-to-door delivery. However, customs duties or taxes (if applicable in the destination country) are determined by local authorities and are the recipient's responsibility." },
+                  { q: "What is the 'Agent Pickup' service?", a: "If you're in a supported city in India, our agent will come to your doorstep to collect your items. They can even help with basic packing!" },
+                  { q: "How do I pay for my shipment?", a: "We accept all major credit cards, debit cards, and digital payment methods like PhonePe. Payment is required once all your items are received and weighed at our warehouse." },
+                  { q: "Can I ship homemade food items?", a: "Yes, you can ship dry, non-perishable homemade food (like sweets or snacks). However, they must be properly packed and have a reasonable shelf life. Perishables are strictly prohibited." },
+                  { q: "What if my package is lost or damaged?", a: "We take extreme care, but in rare cases of loss or damage, we offer limited liability coverage. For high-value items, we strongly recommend purchasing additional shipping insurance." }
+                ].map((faq, i) => (
+                  <div key={i} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:border-indigo-200 transition-colors">
+                    <div className="font-bold text-slate-900 mb-2 flex items-start gap-3">
+                      <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5">?</div>
+                      {faq.q}
+                    </div>
+                    <p className="text-sm text-slate-500 ml-9 leading-relaxed">{faq.a}</p>
                   </div>
-                  <p className="text-sm text-slate-500 ml-9">{faq.a}</p>
+                ))}
+              </div>
+            </div>
+
+            {/* Prohibited Items Section */}
+            <div className="bg-white rounded-[3rem] p-8 md:p-12 border border-slate-100 shadow-sm">
+              <h4 className="text-2xl font-black text-slate-900 mb-2 flex items-center gap-3">
+                <AlertTriangle className="text-amber-500" />
+                Prohibited Items (US Shipping)
+              </h4>
+              <p className="text-sm text-slate-500 mb-8">
+                To comply with international regulations and US Customs, the following items cannot be shipped. Attempting to ship these may result in delays, fines, or seizure.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                {PROHIBITED_ITEMS.map((item, i) => (
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 group hover:bg-red-50 hover:border-red-100 transition-all">
+                    <div className="w-2 h-2 rounded-full bg-red-400 group-hover:scale-125 transition-transform" />
+                    <span className="text-xs font-medium text-slate-700 group-hover:text-red-700">{item}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-4">
+                <Info className="text-amber-600 shrink-0 mt-1" size={20} />
+                <div className="space-y-2">
+                  <h5 className="text-sm font-black text-amber-900 uppercase tracking-widest">Important Note</h5>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    This list is not exhaustive. If you are unsure about an item, please contact our support team before sending it to the warehouse. Certain items like medicines or seeds require specific documentation and prior approval.
+                  </p>
                 </div>
-              ))}
+              </div>
             </div>
           </div>
         </div>
       );
     }, []);
 
-const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, newProduct: any, setNewProduct: any) => {
-  const file = e.target.files?.[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setNewProduct({ ...newProduct, image: reader.result as string });
-    };
-    reader.readAsDataURL(file);
-  }
-};
 
 interface AdminDashboardProps {
   currentUser: User | null;
@@ -1481,7 +1543,7 @@ const AdminDashboard = ({
     { label: 'Total Shipments', value: orders.length + appointments.length, icon: Package, color: 'bg-blue-500' },
     { label: 'Pending Pickups', value: appointments.filter(a => a.status === 'Scheduled').length, icon: Clock, color: 'bg-amber-500' },
     { label: 'Active Shipments', value: orders.filter(o => o.status !== 'Delivered').length, icon: Truck, color: 'bg-indigo-500' },
-    { label: 'Total Revenue', value: `₹${orders.reduce((sum, o) => sum + o.totalCost, 0).toLocaleString()}`, icon: BarChart3, color: 'bg-emerald-500' },
+    { label: 'Total Revenue', value: `$${orders.reduce((sum, o) => sum + o.totalCost, 0).toLocaleString()}`, icon: BarChart3, color: 'bg-emerald-500' },
   ];
 
   const handleAddAgent = () => {
@@ -1640,7 +1702,7 @@ const AdminDashboard = ({
                         <div className="text-xs text-slate-500">{order.destination.country} • {order.totalWeight}kg</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm font-black text-slate-900">₹{order.totalCost}</div>
+                        <div className="text-sm font-black text-slate-900">${order.totalCost}</div>
                         <div className="text-[10px] text-indigo-600 uppercase font-bold">{order.status}</div>
                       </div>
                     </div>
@@ -1753,7 +1815,7 @@ const AdminDashboard = ({
                 </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Price (₹)</label>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Price ($)</label>
                         <input 
                           type="number" 
                           className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
@@ -1804,10 +1866,6 @@ const AdminDashboard = ({
                         value={newProduct.image}
                         onChange={e => setNewProduct({...newProduct, image: e.target.value})}
                       />
-                      <label className="cursor-pointer px-4 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center hover:bg-slate-200 transition-all border border-slate-200">
-                        <Upload size={18} />
-                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, newProduct, setNewProduct)} />
-                      </label>
                     </div>
                     {newProduct.image && (
                       <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200">
@@ -1899,7 +1957,7 @@ const AdminDashboard = ({
                         </div>
                       )}
                       <div className="mt-2 flex items-center justify-between">
-                        <div className="text-sm font-black text-slate-900">₹{product.price}</div>
+                        <div className="text-sm font-black text-slate-900">${product.price}</div>
                           <div className="flex gap-2">
                             <div className="flex flex-col gap-1">
                               {editingProductId === product.id ? (
@@ -2025,7 +2083,7 @@ const AdminDashboard = ({
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-slate-400 uppercase">Total Paid</div>
-                      <div className="text-sm font-bold">₹{order.totalCost}</div>
+                      <div className="text-sm font-bold">${order.totalCost}</div>
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
@@ -2121,7 +2179,7 @@ const AdminDashboard = ({
                           </div>
                         </div>
                         <div className="text-sm font-bold text-slate-900">
-                          {item.price ? `₹${item.price}` : '-'}
+                          {item.price ? `$${item.price}` : '-'}
                         </div>
                       </div>
                     ))}
@@ -2136,7 +2194,7 @@ const AdminDashboard = ({
                   <div className="flex justify-between items-center">
                     <div>
                       <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Grand Total</span>
-                      <div className="text-3xl font-black">₹{selectedOrderForInvoice.totalCost}</div>
+                      <div className="text-3xl font-black">${selectedOrderForInvoice.totalCost}</div>
                     </div>
                     <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
                       {selectedOrderForInvoice.paymentStatus}
@@ -2249,7 +2307,7 @@ const AdminDashboard = ({
                 <div className="p-4 bg-slate-900 text-white rounded-2xl">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-bold">Total Amount Paid</span>
-                    <span className="text-2xl font-black text-indigo-400">₹{(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 800)).toFixed(2)}</span>
+                    <span className="text-2xl font-black text-indigo-400">${(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 10)).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -2264,14 +2322,14 @@ const AdminDashboard = ({
               </button>
               <button 
                 onClick={() => {
-                  const summary = `JiffEX Invoice\nOrder ID: ${woOrderId}\nDestination: ${woAddress.fullName}, ${woAddress.country}\nTotal: ₹${(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 800)).toFixed(2)}`;
+                  const summary = `JiffEX Invoice\nOrder ID: ${woOrderId}\nDestination: ${woAddress.fullName}, ${woAddress.country}\nTotal: $${(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 10)).toFixed(2)}`;
                   if (navigator.share) {
                     navigator.share({
                       title: 'JiffEX Invoice',
                       text: summary,
                     }).catch(console.error);
                   } else {
-                    alert('Invoice Summary copied to clipboard!\n\n' + summary);
+                    toast.success('Invoice Summary copied to clipboard!');
                   }
                 }}
                 className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
@@ -2505,12 +2563,12 @@ const AdminDashboard = ({
               </div>
               <div className="flex justify-between items-center text-xs text-slate-400">
                 <span>Shipping Rate</span>
-                <span className="text-white font-bold">₹{SHIPPING_RATES[woAddress.country] || 800}/kg</span>
+                <span className="text-white font-bold">${SHIPPING_RATES[woAddress.country] || 10}/kg</span>
               </div>
               <div className="h-px bg-slate-800 my-2" />
               <div className="flex justify-between items-center">
                 <span className="text-sm font-bold">Total Amount</span>
-                <span className="text-xl font-black text-indigo-400">₹{(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 800)).toFixed(2)}</span>
+                <span className="text-xl font-black text-indigo-400">${(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 10)).toFixed(2)}</span>
               </div>
             </div>
 
@@ -2867,7 +2925,7 @@ const AdminDashboard = ({
     const handleCopyAddress = () => {
       const addressText = `${WAREHOUSE_ADDRESS.name}\nAttn: ${customerWarehouseId}\n${WAREHOUSE_ADDRESS.street}\n${WAREHOUSE_ADDRESS.city}, ${WAREHOUSE_ADDRESS.state} ${WAREHOUSE_ADDRESS.zip}\n${WAREHOUSE_ADDRESS.country}\nTel: ${WAREHOUSE_ADDRESS.phone}`;
       navigator.clipboard.writeText(addressText);
-      alert('Warehouse address copied to clipboard!');
+      toast.success('Warehouse address copied to clipboard!');
     };
 
     const hasActivePickup = appointments.some(a => a.status === 'Scheduled');
@@ -3204,7 +3262,7 @@ const AdminDashboard = ({
                         </div>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Your Name</label>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Your Name <span className="text-red-500">*</span></label>
                         <input 
                           type="text" 
                           className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all"
@@ -3214,13 +3272,17 @@ const AdminDashboard = ({
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Contact Number</label>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Contact Number <span className="text-red-500">*</span></label>
                         <input 
                           type="tel" 
                           className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all"
                           placeholder="Mobile number for agent"
                           value={pickupPhone}
-                          onChange={(e) => setPickupPhone(e.target.value)}
+                          maxLength={10}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            if (val.length <= 10) setPickupPhone(val);
+                          }}
                         />
                       </div>
                       <div>
@@ -3238,32 +3300,34 @@ const AdminDashboard = ({
                     </div>
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Pickup Address</label>
-                        <div className="space-y-3">
-                          <input 
-                            type="text" 
-                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
-                            placeholder="House No, Street Name"
-                            value={pickupAddress.street}
-                            onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
-                          />
-                          <div className="grid grid-cols-2 gap-3">
-                            <input 
-                              type="text" 
-                              className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
-                              placeholder="City"
-                              value={pickupAddress.city}
-                              onChange={(e) => setPickupAddress({...pickupAddress, city: e.target.value})}
-                            />
-                            <input 
-                              type="text" 
-                              className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
-                              placeholder="ZIP Code"
-                              value={pickupAddress.zip}
-                              onChange={(e) => setPickupAddress({...pickupAddress, zip: e.target.value})}
-                            />
-                          </div>
-                        </div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Street Address <span className="text-red-500">*</span></label>
+                        <input 
+                          type="text" 
+                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
+                          placeholder="House No, Street Name"
+                          value={pickupAddress.street}
+                          onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">City <span className="text-red-500">*</span></label>
+                        <input 
+                          type="text" 
+                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
+                          placeholder="City"
+                          value={pickupAddress.city}
+                          onChange={(e) => setPickupAddress({...pickupAddress, city: e.target.value})}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">ZIP Code <span className="text-red-500">*</span></label>
+                        <input 
+                          type="text" 
+                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
+                          placeholder="ZIP Code"
+                          value={pickupAddress.zip}
+                          onChange={(e) => setPickupAddress({...pickupAddress, zip: e.target.value})}
+                        />
                       </div>
                       <button 
                         onClick={editingPickupId ? saveEditedPickup : handleSchedulePickup}
@@ -3615,7 +3679,7 @@ const AdminDashboard = ({
                   {mode === 'Warehouse' && !isCartEmpty && (
                     <div className="flex flex-col sm:flex-row gap-4 pt-8 border-t border-slate-100 mt-8">
                       <button 
-                        onClick={() => alert('Shipment items saved successfully!')}
+                        onClick={() => toast.success('Shipment items saved successfully!')}
                         className="flex-1 py-2.5 bg-white border-2 border-slate-200 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                       >
                         <RefreshCw size={16} /> Save Progress
@@ -3628,7 +3692,7 @@ const AdminDashboard = ({
                               : i
                           ));
                           setActiveTab('cart');
-                          alert('Shipment submitted successfully! You can now see your items in the cart.');
+                          toast.success('Shipment submitted successfully! You can now see your items in the cart.');
                         }}
                         className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2"
                       >
@@ -3717,7 +3781,7 @@ const AdminDashboard = ({
                         />
                         <div className="absolute top-3 left-3">
                           <div className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-full shadow-sm border border-white/20">
-                            <span className="text-xs font-bold text-slate-900">₹{product.price}</span>
+                            <span className="text-xs font-bold text-slate-900">${product.price}</span>
                           </div>
                         </div>
                       </div>
@@ -3780,7 +3844,7 @@ const AdminDashboard = ({
                 <div className="pt-4 border-t border-slate-100">
                   <div className="flex justify-between items-center">
                     <span className="text-base font-bold text-slate-900">Estimated Total</span>
-                    <span className="text-xl font-black text-indigo-600">₹{displayItems.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 1), 0)}</span>
+                    <span className="text-xl font-black text-indigo-600">${displayItems.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 1), 0)}</span>
                   </div>
                 </div>
               </div>
@@ -3910,7 +3974,7 @@ const AdminDashboard = ({
               >
                 <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Price Range (₹)</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Price Range ($)</label>
                     <div className="flex items-center gap-3">
                       <input 
                         type="number" 
@@ -3975,7 +4039,7 @@ const AdminDashboard = ({
                 <div className="p-5 flex-1 flex flex-col">
                   <div className="flex justify-between items-start mb-1">
                     <h3 className="font-bold text-slate-900 leading-tight truncate flex-1 mr-2">{product.name}</h3>
-                    <span className="text-indigo-600 font-bold shrink-0">₹{product.price}</span>
+                    <span className="text-indigo-600 font-bold shrink-0">${product.price}</span>
                   </div>
                   <div className="flex flex-col gap-1 mb-4">
                     <p className="text-[10px] text-slate-500">Weight: {product.weight} kg</p>
@@ -4302,16 +4366,16 @@ const AdminDashboard = ({
               </div>
               <div className="flex justify-between text-slate-400 text-sm">
                 <span>Shipping ({address.country})</span>
-                <span className="text-white font-medium">₹{(totalWeight * (SHIPPING_RATES[address.country] || 800)).toFixed(2)}</span>
+                <span className="text-white font-medium">${(totalWeight * (SHIPPING_RATES[address.country] || 10)).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-slate-400 text-sm">
                 <span>Items Cost</span>
-                <span className="text-white font-medium">₹{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
+                <span className="text-white font-medium">${cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
               </div>
               <div className="h-px bg-slate-800 my-4" />
               <div className="flex justify-between items-center">
                 <span className="text-lg font-bold">Total Amount</span>
-                <span className="text-2xl font-black text-indigo-400">₹{totalCost.toFixed(2)}</span>
+                <span className="text-2xl font-black text-indigo-400">${totalCost.toFixed(2)}</span>
               </div>
             </div>
 
@@ -4783,6 +4847,7 @@ const AdminDashboard = ({
           </div>
         )}
       </AnimatePresence>
+      <Toaster position="top-center" richColors />
     </div>
   );
 }

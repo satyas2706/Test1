@@ -8,14 +8,14 @@ const getFutureDate = (days: number) => {
 };
 
 export const SHIPPING_RATES: Record<string, number> = {
-  'USA': 960,
-  'UK': 800,
-  'Canada': 880,
-  'Australia': 1040,
-  'UAE': 640,
-  'Germany': 720,
-  'Singapore': 560,
-  'India': 400,
+  'USA': 12,
+  'UK': 10,
+  'Canada': 11,
+  'Australia': 13,
+  'UAE': 8,
+  'Germany': 9,
+  'Singapore': 7,
+  'India': 5,
 };
 
 export const COUNTRIES = Object.keys(SHIPPING_RATES);
@@ -24,7 +24,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
   {
     id: 'p1',
     name: 'Brass Diya Set',
-    price: 2000,
+    price: 25,
     category: 'Pooja',
     image: 'https://picsum.photos/seed/diya/400/400',
     weight: 0.5,
@@ -33,7 +33,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
   {
     id: 'p2',
     name: 'Sandalwood Incense Sticks',
-    price: 800,
+    price: 10,
     category: 'Pooja',
     image: 'https://picsum.photos/seed/incense/400/400',
     weight: 0.2,
@@ -42,7 +42,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
   {
     id: 'p3',
     name: 'Decorative Silk Pouch',
-    price: 400,
+    price: 5,
     category: 'Return Gifts',
     image: 'https://picsum.photos/seed/pouch/400/400',
     weight: 0.1,
@@ -51,7 +51,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
   {
     id: 'p4',
     name: 'Handcrafted Elephant Statue',
-    price: 3600,
+    price: 45,
     category: 'Decorative',
     image: 'https://picsum.photos/seed/elephant/400/400',
     weight: 1.2,
@@ -60,7 +60,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
   {
     id: 'p5',
     name: 'Copper Kalash',
-    price: 2400,
+    price: 30,
     category: 'Pooja',
     image: 'https://picsum.photos/seed/kalash/400/400',
     weight: 0.8,
@@ -69,7 +69,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
   {
     id: 'p6',
     name: 'Wall Hanging Lantern',
-    price: 1600,
+    price: 20,
     category: 'Decorative',
     image: 'https://picsum.photos/seed/lantern/400/400',
     weight: 0.6,
@@ -78,7 +78,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
   {
     id: 'p7',
     name: 'Silver Plated Pooja Thali',
-    price: 4500,
+    price: 55,
     category: 'Pooja',
     image: 'https://picsum.photos/seed/thali/400/400',
     weight: 1.5,
@@ -87,7 +87,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
   {
     id: 'p8',
     name: 'Ganesh Idol (Eco-friendly)',
-    price: 1200,
+    price: 15,
     category: 'Pooja',
     image: 'https://picsum.photos/seed/ganesh/400/400',
     weight: 0.4,
@@ -96,7 +96,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
   {
     id: 'p9',
     name: 'Hand-painted Diya Set (12pcs)',
-    price: 600,
+    price: 7.5,
     category: 'Pooja',
     image: 'https://picsum.photos/seed/diyas/400/400',
     weight: 0.3,
@@ -105,7 +105,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
   {
     id: 'p10',
     name: 'Traditional Toran (Door Hanging)',
-    price: 850,
+    price: 10.5,
     category: 'Decorative',
     image: 'https://picsum.photos/seed/toran/400/400',
     weight: 0.2,
@@ -114,7 +114,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
   {
     id: 'p11',
     name: 'Rangoli Stencil Kit',
-    price: 450,
+    price: 5.5,
     category: 'Decorative',
     image: 'https://picsum.photos/seed/rangoli/400/400',
     weight: 0.1,
@@ -123,7 +123,7 @@ export const STORE_PRODUCTS: StoreProduct[] = [
   {
     id: 'p12',
     name: 'Mehendi Cone Set (Pack of 6)',
-    price: 300,
+    price: 3.75,
     category: 'Return Gifts',
     image: 'https://picsum.photos/seed/mehendi/400/400',
     weight: 0.2,
@@ -132,13 +132,25 @@ export const STORE_PRODUCTS: StoreProduct[] = [
 ];
 
 export const PROHIBITED_ITEMS = [
-  'Knives & Sharp Objects',
-  'Flammable Chemicals',
-  'Explosives',
-  'Illegal Substances',
-  'Perishable Foods (without special permit)',
-  'Pressurized Containers',
-  'Lithium Batteries (standalone)',
+  'Aerosols, perfumes, and pressurized containers',
+  'Alcoholic beverages and tobacco products',
+  'Ammunition, firearms, and explosives',
+  'Batteries (standalone lithium-ion or lead-acid)',
+  'Cash, currency, and negotiable instruments',
+  'Corrosive substances (acids, batteries, etc.)',
+  'Drugs, narcotics, and illegal substances',
+  'Flammable liquids (paints, fuels, nail polish)',
+  'Fresh fruits, vegetables, and meat products',
+  'Hazardous waste and toxic chemicals',
+  'Human remains or ashes',
+  'Infectious substances and biological materials',
+  'Knives, swords, and other sharp weapons',
+  'Live animals and protected wildlife products',
+  'Magnetized materials',
+  'Oxidizing agents and organic peroxides',
+  'Pornographic or offensive materials',
+  'Radioactive materials',
+  'Seeds, plants, and soil (without USDA permit)',
 ];
 
 export const SHIPPING_DATES = [
@@ -153,6 +165,17 @@ export const PICKUP_SLOTS = [
   { date: getFutureDate(1), times: ['09:00 AM', '11:00 AM', '02:00 PM', '04:00 PM'] },
   { date: getFutureDate(2), times: ['10:00 AM', '12:00 PM', '03:00 PM', '05:00 PM'] },
   { date: getFutureDate(3), times: ['09:00 AM', '11:00 AM', '01:00 PM', '03:00 PM'] },
+  { date: getFutureDate(4), times: ['10:00 AM', '12:00 PM', '02:00 PM', '04:00 PM'] },
+  { date: getFutureDate(5), times: ['09:00 AM', '11:00 AM', '03:00 PM', '05:00 PM'] },
+  { date: getFutureDate(6), times: ['10:00 AM', '12:00 PM', '01:00 PM', '03:00 PM'] },
+  { date: getFutureDate(7), times: ['09:00 AM', '11:00 AM', '02:00 PM', '04:00 PM'] },
+  { date: getFutureDate(8), times: ['10:00 AM', '12:00 PM', '03:00 PM', '05:00 PM'] },
+  { date: getFutureDate(9), times: ['09:00 AM', '11:00 AM', '01:00 PM', '03:00 PM'] },
+  { date: getFutureDate(10), times: ['10:00 AM', '12:00 PM', '02:00 PM', '04:00 PM'] },
+  { date: getFutureDate(11), times: ['09:00 AM', '11:00 AM', '03:00 PM', '05:00 PM'] },
+  { date: getFutureDate(12), times: ['10:00 AM', '12:00 PM', '01:00 PM', '03:00 PM'] },
+  { date: getFutureDate(13), times: ['09:00 AM', '11:00 AM', '02:00 PM', '04:00 PM'] },
+  { date: getFutureDate(14), times: ['10:00 AM', '12:00 PM', '03:00 PM', '05:00 PM'] },
 ];
 
 export const WAREHOUSE_ADDRESS = {
