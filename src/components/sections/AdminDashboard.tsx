@@ -10,7 +10,10 @@ import {
   AlertTriangle, 
   Calendar, 
   Upload, 
-  X 
+  X,
+  Mail,
+  MessageCircle,
+  Settings
 } from 'lucide-react';
 import { 
   User, 
@@ -31,8 +34,8 @@ interface AdminDashboardProps {
   setNewAgent: React.Dispatch<React.SetStateAction<any>>;
   categories: string[];
   setCategories: React.Dispatch<React.SetStateAction<string[]>>;
-  adminTab: 'Overview' | 'Agents' | 'Inventory';
-  setAdminTab: React.Dispatch<React.SetStateAction<'Overview' | 'Agents' | 'Inventory'>>;
+  adminTab: 'Overview' | 'Agents' | 'Inventory' | 'Settings';
+  setAdminTab: React.Dispatch<React.SetStateAction<'Overview' | 'Agents' | 'Inventory' | 'Settings'>>;
   newProduct: Partial<StoreProduct>;
   setNewProduct: React.Dispatch<React.SetStateAction<Partial<StoreProduct>>>;
   storeProducts: StoreProduct[];
@@ -135,6 +138,12 @@ const AdminDashboard = ({
           >
             Inventory
           </button>
+          <button 
+            onClick={() => setAdminTab('Settings')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${adminTab === 'Settings' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+          >
+            Settings
+          </button>
         </div>
       </div>
 
@@ -231,16 +240,40 @@ const AdminDashboard = ({
                   <p className="text-center text-slate-400 py-8">No shipments found</p>
                 ) : (
                   orders.map(order => (
-                    <div key={order.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <div>
-                        <div className="font-bold text-slate-900">{order.id}</div>
-                        <div className="text-xs text-slate-500">{order.destination.country} • {order.totalWeight}kg</div>
+                      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div>
+                          <div className="font-bold text-slate-900">{order.id}</div>
+                          <div className="text-xs text-slate-500">{order.destination.country} • {order.totalWeight}kg</div>
+                          <div className="flex gap-2 mt-2">
+                            <button 
+                              onClick={() => {
+                                const subject = `Invoice for Order ${order.id}`;
+                                const body = `Hello ${order.destination.fullName},\n\nYour order ${order.id} has been processed.\nTotal Amount: $${order.totalCost}\nStatus: ${order.status}\n\nThank you for choosing Jiffex!`;
+                                window.location.href = `mailto:${order.destination.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                              }}
+                              className="p-1.5 bg-white text-indigo-600 rounded-lg border border-indigo-100 hover:bg-indigo-50 transition-colors"
+                              title="Email Invoice"
+                            >
+                              <Mail size={14} />
+                            </button>
+                            <button 
+                              onClick={() => {
+                                const cleanPhone = order.destination.phone.replace(/\D/g, '');
+                                const message = `Hello ${order.destination.fullName}, your Jiffex order ${order.id} is ${order.status}. Total: $${order.totalCost}. Track here: ${window.location.origin}`;
+                                window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                              }}
+                              className="p-1.5 bg-white text-emerald-600 rounded-lg border border-emerald-100 hover:bg-emerald-50 transition-colors"
+                              title="WhatsApp Invoice"
+                            >
+                              <MessageCircle size={14} />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-black text-slate-900">${order.totalCost}</div>
+                          <div className="text-[10px] text-indigo-600 uppercase font-bold">{order.status}</div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-sm font-black text-slate-900">${order.totalCost}</div>
-                        <div className="text-[10px] text-indigo-600 uppercase font-bold">{order.status}</div>
-                      </div>
-                    </div>
                   ))
                 )}
               </div>
@@ -328,6 +361,75 @@ const AdminDashboard = ({
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : adminTab === 'Settings' ? (
+        <div className="max-w-4xl mx-auto space-y-8">
+          <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+            <div className="flex items-center gap-4 mb-8">
+              <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100">
+                <Settings size={24} />
+              </div>
+              <div>
+                <h3 className="text-2xl font-black text-slate-900">Integration Settings</h3>
+                <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Configure Twilio and SMTP</p>
+              </div>
+            </div>
+
+            <div className="space-y-8">
+              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                <h4 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                  <MessageCircle className="text-emerald-500" size={20} /> Twilio (WhatsApp & SMS)
+                </h4>
+                <p className="text-sm text-slate-600 mb-4">To enable WhatsApp and SMS notifications, set these environment variables in the project settings:</p>
+                <div className="space-y-2">
+                  {[
+                    'TWILIO_ACCOUNT_SID',
+                    'TWILIO_AUTH_TOKEN',
+                    'TWILIO_PHONE_NUMBER',
+                    'TWILIO_WHATSAPP_NUMBER'
+                  ].map(key => (
+                    <div key={key} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200">
+                      <code className="text-xs font-bold text-indigo-600">{key}</code>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Required</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                <h4 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                  <Mail className="text-blue-500" size={20} /> SMTP (Email)
+                </h4>
+                <p className="text-sm text-slate-600 mb-4">To enable email notifications, set these environment variables in the project settings:</p>
+                <div className="space-y-2">
+                  {[
+                    'SMTP_HOST',
+                    'SMTP_PORT',
+                    'SMTP_USER',
+                    'SMTP_PASS',
+                    'SMTP_FROM'
+                  ].map(key => (
+                    <div key={key} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200">
+                      <code className="text-xs font-bold text-indigo-600">{key}</code>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Required</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="text-amber-500 shrink-0" size={20} />
+                  <div>
+                    <h4 className="text-sm font-bold text-amber-900 mb-1">Security Note</h4>
+                    <p className="text-xs text-amber-700 leading-relaxed">
+                      Never share your API keys or passwords in the code. Always use the environment variables provided in the platform's settings menu.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -22,6 +22,7 @@ import {
   CheckCircle2, 
   Clock,
   Share,
+  ShieldCheck,
   Printer,
   Copy,
   Image as ImageIcon,
@@ -82,6 +83,7 @@ import {
 import { api } from './services/api';
 import { supabase } from './lib/supabase';
 import { Login } from './components/Login';
+import { IntroSplash } from './components/IntroSplash';
 import { Session } from '@supabase/supabase-js';
 
 type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'history' | 'admin' | 'warehouse-mgmt' | 'agent' | 'support' | 'notifications';
@@ -95,6 +97,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [tabHistory, setTabHistory] = useState<Tab[]>(['home']);
+  const [showIntro, setShowIntro] = useState(true);
 
   const navigateTo = (tab: Tab) => {
     if (tab !== activeTab) {
@@ -182,6 +185,7 @@ const StaticShipmentTracker = () => {
 };
 
   const [isPaid, setIsPaid] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [items, setItems] = useState<ShippingItem[]>([]);
   const [quote, setQuote] = useState<{ country: string; weight: number } | null>(null);
@@ -332,6 +336,25 @@ const StaticShipmentTracker = () => {
   };
 
   useEffect(() => {
+    // Check health of backend
+    const checkHealth = async () => {
+      try {
+        const data = await api.checkHealth();
+        if (data.status !== 'ok') {
+          console.error('Backend health check failed:', data);
+          if (data.error && data.error.includes('ENOTFOUND')) {
+            setDbError('Database connection failed. Please check your Supabase URL in environment variables.');
+          }
+        }
+      } catch (error: any) {
+        console.error('Health check error:', error);
+        if (error.message && error.message.includes('ENOTFOUND')) {
+          setDbError('Database connection failed. Please check your Supabase URL in environment variables.');
+        }
+      }
+    };
+    checkHealth();
+
     if (activeTab === 'history' || activeTab === 'notifications') {
       fetchNotifications();
     }
@@ -4487,9 +4510,14 @@ const AdminDashboard = ({
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 safe-top safe-bottom">
       {/* Supabase Status Banner */}
       {!dbStatus.connected && dbStatus.checked && (
-        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex items-center justify-center gap-2 text-[10px] font-bold text-amber-700 uppercase tracking-widest">
-          <Database size={12} />
-          Database Not Connected. Using Local Storage Mode.
+        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex flex-col items-center justify-center gap-1 text-[10px] font-bold text-amber-700 uppercase tracking-widest">
+          <div className="flex items-center gap-2">
+            <Database size={12} />
+            Database Not Connected. Using Local Storage Mode.
+          </div>
+          <p className="text-[8px] opacity-70 normal-case font-medium">
+            Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Settings {'>'} Environment Variables.
+          </p>
         </div>
       )}
       
@@ -4528,7 +4556,23 @@ const AdminDashboard = ({
           )}
         </AnimatePresence>
 
-        {/* Navigation */}
+        {/* Error Banner */}
+      {dbError && (
+        <div className="bg-red-500 text-white p-4 text-center font-bold sticky top-0 z-[100] shadow-lg">
+          <div className="max-w-7xl mx-auto flex items-center justify-center gap-3">
+            <ShieldCheck size={20} />
+            <span>{dbError}</span>
+            <button 
+              onClick={() => setDbError(null)}
+              className="ml-4 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg text-xs transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation */}
         <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200">
           <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
             <div 
@@ -4848,6 +4892,18 @@ const AdminDashboard = ({
         )}
       </AnimatePresence>
       <Toaster position="top-center" richColors />
+      
+      <AnimatePresence>
+        {showIntro && (
+          <IntroSplash 
+            onClose={() => setShowIntro(false)} 
+            onProceed={() => {
+              setShowIntro(false);
+              navigateTo('pickup');
+            }} 
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -6,7 +6,9 @@ import {
   Calendar, 
   CreditCard, 
   Info, 
-  AlertTriangle 
+  AlertTriangle,
+  Mail,
+  MessageCircle
 } from 'lucide-react';
 import { ShippingItem, User, DestinationAddress } from '../../types';
 import { COUNTRIES, SHIPPING_DATES, SHIPPING_RATES, PROHIBITED_ITEMS } from '../../constants';
@@ -76,6 +78,28 @@ const FinalizeSection = ({
           <p className="text-sm text-slate-500 leading-relaxed">
             We have received your payment. Our team will consolidate your items and ship them on <span className="font-bold">{selectedDate}</span>. You can track your shipment in your history.
           </p>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <button 
+            onClick={() => {
+              const subject = `Invoice for Order ${orderId}`;
+              const body = `Hi ${address.fullName},\n\nYour payment for order ${orderId} was successful.\nTotal Amount: $${totalCost.toFixed(2)}\nDestination: ${address.country}\n\nThank you for choosing JiffEX!`;
+              window.location.href = `mailto:${address.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            }}
+            className="flex-1 py-4 bg-slate-100 text-slate-900 rounded-2xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
+          >
+            <Mail size={18} /> Email Invoice
+          </button>
+          <button 
+            onClick={() => {
+              const message = `*JiffEX Invoice*\n\nOrder ID: ${orderId}\nCustomer: ${address.fullName}\nTotal Amount: $${totalCost.toFixed(2)}\nDestination: ${address.country}\nStatus: Paid\n\nThank you for choosing JiffEX!`;
+              const cleanPhone = address.phone.replace(/\D/g, '');
+              window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+            }}
+            className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+          >
+            <MessageCircle size={18} /> WhatsApp Invoice
+          </button>
         </div>
         <div className="flex gap-4">
           <button 

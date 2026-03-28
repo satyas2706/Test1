@@ -18,8 +18,15 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 
 let supabase: any = null;
 
-if (supabaseUrl && supabaseServiceKey) {
-  supabase = createClient(supabaseUrl, supabaseServiceKey);
+if (supabaseUrl && supabaseUrl.startsWith('https://') && supabaseServiceKey) {
+  try {
+    supabase = createClient(supabaseUrl, supabaseServiceKey);
+    console.log("Supabase client initialized successfully.");
+  } catch (err: any) {
+    console.error("Failed to initialize Supabase client:", err.message);
+  }
+} else {
+  console.warn("⚠️ Supabase URL or Key is missing or invalid. Database features will be disabled.");
 }
 
 // Notification Clients
@@ -40,48 +47,55 @@ const mailTransporter = process.env.SMTP_HOST
   : null;
 
 // Notification Helper
-async function sendNotification(userId: string, event: string, message: string, channels: string[]) {
+async function sendNotification(userId: string, event: string, message: string, channels: string[], recipientInfo?: { email?: string, phone?: string }) {
   console.log(`[Notification] User: ${userId}, Event: ${event}, Message: ${message}, Channels: ${channels.join(', ')}`);
   
   // Store in database for history
   if (supabase) {
-    await supabase.from('notifications').insert([{
-      user_id: userId,
-      event_type: event,
-      message,
-      channels,
-      status: 'sent',
-      created_at: new Date().toISOString()
-    }]);
+    try {
+      await supabase.from('notifications').insert([{
+        user_id: userId,
+        event_type: event,
+        message,
+        channels,
+        status: 'sent',
+        created_at: new Date().toISOString()
+      }]);
+    } catch (err: any) {
+      console.error('Failed to save notification to DB:', err.message);
+    }
   }
 
   const promises = [];
 
   if (channels.includes('SMS') && twilioClient && process.env.TWILIO_PHONE_NUMBER) {
+    const to = recipientInfo?.phone || '+919999999999';
     promises.push(
       twilioClient.messages.create({
         body: message,
         from: process.env.TWILIO_PHONE_NUMBER,
-        to: '+919999999999' // Mock phone number, in real app fetch from user profile
+        to
       }).catch(err => console.error('SMS Error:', err.message))
     );
   }
 
   if (channels.includes('whatsapp') && twilioClient && process.env.TWILIO_WHATSAPP_NUMBER) {
+    const to = recipientInfo?.phone ? `whatsapp:${recipientInfo.phone}` : 'whatsapp:+919999999999';
     promises.push(
       twilioClient.messages.create({
         body: message,
         from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`,
-        to: 'whatsapp:+919999999999' // Mock whatsapp number
+        to
       }).catch(err => console.error('WhatsApp Error:', err.message))
     );
   }
 
   if (channels.includes('Email') && mailTransporter && process.env.SMTP_FROM) {
+    const to = recipientInfo?.email || 'user@example.com';
     promises.push(
       mailTransporter.sendMail({
         from: process.env.SMTP_FROM,
-        to: 'user@example.com', // Mock email
+        to,
         subject: `JiffEX Notification: ${event}`,
         text: message
       }).catch(err => console.error('Email Error:', err.message))
@@ -95,8 +109,20 @@ app.use(cors());
 app.use(express.json());
 
 // API Routes
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", supabaseConnected: !!supabase });
+app.get("/api/health", async (req, res) => {
+  if (!supabase) {
+    return res.status(500).json({ status: "error", error: "Supabase not configured" });
+  }
+  
+  try {
+    // Try a simple query to verify connection
+    const { error } = await supabase.from('notifications').select('count', { count: 'exact', head: true });
+    if (error) throw error;
+    res.json({ status: "ok", supabaseConnected: true });
+  } catch (error: any) {
+    console.error('Supabase Health Check Error:', error.message);
+    res.status(500).json({ status: "error", error: error.message });
+  }
 });
 
 // Example API: Get all items for a user
@@ -154,9 +180,9 @@ app.post("/api/orders", async (req, res) => {
 
   // Trigger Notification: Shipment dispatched (if status is 'Dispatched') or Pickup confirmed (if it's an appointment)
   if (status === 'Scheduled') {
-    await sendNotification(customer_id, 'Pickup confirmed', `Your agent pickup for ${destination} has been confirmed.`, ['SMS', 'Email', 'whatsapp']);
+    await sendNotification(customer_id, 'Pickup confirmed', `Your agent pickup for ${destination.city}, ${destination.country} has been confirmed.`, ['SMS', 'Email', 'whatsapp'], { email: destination.email, phone: destination.phone });
   } else if (status === 'Dispatched') {
-    await sendNotification(customer_id, 'Shipment dispatched', `Your shipment BB-${id.slice(0,8)} has been dispatched to ${destination}.`, ['SMS', 'Email', 'whatsapp']);
+    await sendNotification(customer_id, 'Shipment dispatched', `Your shipment BB-${id.slice(0,8)} has been dispatched to ${destination.city}, ${destination.country}.`, ['SMS', 'Email', 'whatsapp'], { email: destination.email, phone: destination.phone });
   }
 
   console.log("Order created successfully:", data[0].id);
@@ -167,7 +193,7 @@ app.post("/api/orders", async (req, res) => {
 app.patch("/api/items/:itemId", async (req, res) => {
   if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
   
-  const { status, user_id, name } = req.body;
+  const { status, user_id, name, email, phone } = req.body;
   const { data, error } = await supabase
     .from("items")
     .update({ status })
@@ -177,7 +203,7 @@ app.patch("/api/items/:itemId", async (req, res) => {
   if (error) return res.status(400).json({ error: error.message });
 
   if (status === 'Received at Warehouse') {
-    await sendNotification(user_id, 'Package received at warehouse', `Your item "${name}" has been safely received at our warehouse.`, ['SMS', 'Email', 'whatsapp']);
+    await sendNotification(user_id, 'Package received at warehouse', `Your item "${name}" has been safely received at our warehouse.`, ['SMS', 'Email', 'whatsapp'], { email, phone });
   }
 
   res.json(data[0]);
@@ -185,8 +211,8 @@ app.patch("/api/items/:itemId", async (req, res) => {
 
 // API: Simulate Delivery Notifications
 app.post("/api/notifications/simulate", async (req, res) => {
-  const { userId, event, message } = req.body;
-  await sendNotification(userId, event, message, ['SMS', 'Email', 'whatsapp']);
+  const { userId, event, message, email, phone } = req.body;
+  await sendNotification(userId, event, message, ['SMS', 'Email', 'whatsapp'], { email, phone });
   res.json({ success: true });
 });
 

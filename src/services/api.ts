@@ -60,9 +60,25 @@ export const api = {
     return res.json();
   },
 
-  async checkHealth(): Promise<{ status: string; supabaseConnected: boolean }> {
-    const res = await fetch(`${API_BASE}/health`);
-    if (!res.ok) throw new Error('Health check failed');
+  async shareInvoice(email: string, orderId: string, invoiceDetails: string): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/invoice/share`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, orderId, invoiceDetails }),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to share invoice');
+    }
     return res.json();
+  },
+
+  async checkHealth(): Promise<{ status: string; supabaseConnected: boolean; error?: string }> {
+    try {
+      const res = await fetch(`${API_BASE}/health`);
+      return res.json();
+    } catch (err: any) {
+      return { status: 'error', supabaseConnected: false, error: err.message };
+    }
   }
 };
