@@ -4899,7 +4899,7 @@ const AdminDashboard = ({
             onClose={() => setShowIntro(false)} 
             onProceed={() => {
               setShowIntro(false);
-              navigateTo('pickup');
+              navigateTo('home');
             }} 
           />
         )}

@@ -83,8 +83,8 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ onClose, onProceed }) 
           {[
             { 
               title: "The Jiffex Store", 
-              subtitle: "Curated Indian Heritage",
-              desc: "It is a store where we curate authentic, high-quality products loved by Indians abroad. Find everything from exquisite fashion jewellery and traditional return gifts to delicious sweets, savories, and even sports items.",
+              subtitle: "Curated authenticity for Indians worldwide.",
+              desc: "Discover a refined selection of high-quality gifts, sweets, sports goods, and more—crafted to bring tradition, elegance, and trust to your doorstep.",
               image: "https://picsum.photos/seed/jiffex-store-curated/800/600",
               icon: ShoppingBag,
               color: "text-amber-500",
@@ -92,8 +92,8 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ onClose, onProceed }) 
             },
             { 
               title: "Agent Pickup", 
-              subtitle: "Personalized Home Collection",
-              desc: "Schedule an agent to pick items from your home or anywhere in India and ship. Our professional agents handle the collection and secure packaging for you.",
+              subtitle: "Seamless pickup, expertly handled.",
+              desc: "Schedule a collection from your home—our professional agents ensure secure handling and reliable delivery to your doorstep.",
               image: "https://picsum.photos/seed/jiffex-agent-pickup/800/600",
               icon: Truck,
               color: "text-indigo-600",
