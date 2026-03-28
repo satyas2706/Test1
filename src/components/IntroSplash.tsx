@@ -85,7 +85,7 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ onClose, onProceed }) 
               title: "The Jiffex Store", 
               subtitle: "Curated authenticity for Indians worldwide.",
               desc: "Discover a refined selection of high-quality gifts, sweets, sports goods, and more—crafted to bring tradition, elegance, and trust to your doorstep.",
-              image: "https://picsum.photos/seed/jiffex-store-curated/800/600",
+              image: "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&q=80&w=800",
               icon: ShoppingBag,
               color: "text-amber-500",
               bgColor: "bg-amber-50"
@@ -94,7 +94,7 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ onClose, onProceed }) 
               title: "Agent Pickup", 
               subtitle: "Seamless pickup, expertly handled.",
               desc: "Schedule a collection from your home—our professional agents ensure secure handling and reliable delivery to your doorstep.",
-              image: "https://picsum.photos/seed/jiffex-agent-pickup/800/600",
+              image: "https://images.unsplash.com/photo-1531353826977-0941b4779a1c?auto=format&fit=crop&q=80&w=800",
               icon: Truck,
               color: "text-indigo-600",
               bgColor: "bg-indigo-50"
@@ -103,7 +103,7 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ onClose, onProceed }) 
               title: "Warehouse Hub", 
               subtitle: "Secure Consolidation & Shipping",
               desc: "Send items to our warehouse and we are going to ship. Consolidate your purchases from multiple vendors into one secure shipment to save on global delivery costs.",
-              image: "https://picsum.photos/seed/jiffex-warehouse-hub/800/600",
+              image: "https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&q=80&w=800",
               icon: Warehouse,
               color: "text-emerald-600",
               bgColor: "bg-emerald-50"
