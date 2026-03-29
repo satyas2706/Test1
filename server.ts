@@ -46,6 +46,12 @@ const mailTransporter = process.env.SMTP_HOST
     }) 
   : null;
 
+if (mailTransporter) {
+  console.log("Email service (SMTP) initialized successfully.");
+} else {
+  console.warn("⚠️ Email service (SMTP) is not configured. Invoices will not be sent.");
+}
+
 // Notification Helper
 async function sendNotification(userId: string, event: string, message: string, channels: string[], recipientInfo?: { email?: string, phone?: string }) {
   console.log(`[Notification] User: ${userId}, Event: ${event}, Message: ${message}, Channels: ${channels.join(', ')}`);
@@ -205,6 +211,29 @@ app.patch("/api/items/:itemId", async (req, res) => {
   if (status === 'Received at Warehouse') {
     await sendNotification(user_id, 'Package received at warehouse', `Your item "${name}" has been safely received at our warehouse.`, ['SMS', 'Email', 'whatsapp'], { email, phone });
   }
+
+  res.json(data[0]);
+});
+
+// API: Update order status (trigger notification)
+app.patch("/api/orders/:orderId", async (req, res) => {
+  if (!supabase) return res.status(500).json({ error: "Supabase not configured" });
+  
+  const { status, customer_id, destination } = req.body;
+  const { data, error } = await supabase
+    .from("orders")
+    .update({ status })
+    .eq("id", req.params.orderId)
+    .select();
+
+  if (error) return res.status(400).json({ error: error.message });
+
+  // Send WhatsApp notification for status update
+  const message = `Your JiffEX order ${req.params.orderId} status has been updated to: ${status}.`;
+  await sendNotification(customer_id, 'Order Status Updated', message, ['whatsapp'], { 
+    email: destination?.email, 
+    phone: destination?.phone 
+  });
 
   res.json(data[0]);
 });

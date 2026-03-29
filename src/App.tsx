@@ -811,8 +811,25 @@ const StaticShipmentTracker = () => {
           payment_status: 'Paid',
           shipping_date: selectedDate
         } as any);
+
+        // Automatically send invoice email
+        const invoiceDetails = `
+Items: ${cartItems.map(i => `${i.name} (${i.weight}kg)`).join(', ')}
+Total Weight: ${totalWeight}kg
+Total Cost: ₹${totalCost.toLocaleString()}
+Destination: ${address.city}, ${address.country}
+Date: ${new Date().toLocaleDateString()}
+        `.trim();
+
+        await api.shareInvoice(currentUser.email, orderId!, invoiceDetails);
+        toast.success('Payment successful! Invoice sent to your email.');
       } catch (err: any) {
-        console.error('Failed to sync order to DB:', err.message);
+        console.error('Failed to sync order or send invoice:', err.message);
+        if (err.message.includes('Email service not configured')) {
+          toast.error('Payment successful, but email service is not configured. Please check your settings.');
+        } else {
+          toast.error('Payment successful, but failed to send invoice email.');
+        }
       }
     }
   };
@@ -869,6 +886,28 @@ const StaticShipmentTracker = () => {
         ? { ...apt, status: 'Completed', orderId: newOrderId, paymentStatus: 'Paid' } 
         : apt
     ));
+
+    // Automatically send invoice email for Work Order
+    if (currentUser && dbStatus.connected) {
+      const invoiceDetails = `
+Items: ${woItems.map(i => `${i.name} (${i.weight}kg)`).join(', ')}
+Total Weight: ${totalW}kg
+Total Cost: ₹${totalC.toLocaleString()}
+Destination: ${woAddress.city}, ${woAddress.country}
+Date: ${new Date().toLocaleDateString()}
+      `.trim();
+
+      api.shareInvoice(currentUser.email, newOrderId, invoiceDetails)
+        .then(() => toast.success('Payment successful! Invoice sent to your email.'))
+        .catch(err => {
+          console.error('Failed to send invoice:', err.message);
+          if (err.message.includes('Email service not configured')) {
+            toast.error('Payment successful, but email service is not configured. Please check your settings.');
+          } else {
+            toast.error('Payment successful, but failed to send invoice email.');
+          }
+        });
+    }
   };
 
   const handleCheckout = async () => {
@@ -1536,6 +1575,7 @@ interface AdminDashboardProps {
   setNewProduct: React.Dispatch<React.SetStateAction<Partial<StoreProduct>>>;
   storeProducts: StoreProduct[];
   setStoreProducts: React.Dispatch<React.SetStateAction<StoreProduct[]>>;
+  setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
 }
 
 const AdminDashboard = ({
@@ -1554,7 +1594,8 @@ const AdminDashboard = ({
   newProduct,
   setNewProduct,
   storeProducts,
-  setStoreProducts
+  setStoreProducts,
+  setOrders
 }: AdminDashboardProps) => {
   const [categoryInput, setCategoryInput] = useState('');
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -1598,6 +1639,20 @@ const AdminDashboard = ({
 
   const handleDeleteCategory = (cat: string) => {
     setCategories(categories.filter(c => c !== cat));
+  };
+
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: ShippingStatus) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    try {
+      await api.updateOrderStatus(orderId, newStatus, order.customerId, order.destination);
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      toast.success(`Order ${orderId} status updated to ${newStatus}. WhatsApp notification sent.`);
+    } catch (err: any) {
+      console.error('Failed to update order status:', err.message);
+      toast.error('Failed to update order status.');
+    }
   };
 
   return (
@@ -1719,14 +1774,34 @@ const AdminDashboard = ({
                   <p className="text-center text-slate-400 py-8">No shipments found</p>
                 ) : (
                   orders.map(order => (
-                    <div key={order.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <div>
-                        <div className="font-bold text-slate-900">{order.id}</div>
-                        <div className="text-xs text-slate-500">{order.destination.country} • {order.totalWeight}kg</div>
+                    <div key={order.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-bold text-slate-900">{order.id}</div>
+                          <div className="text-xs text-slate-500">{order.destination.country} • {order.totalWeight}kg</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-black text-slate-900">${order.totalCost.toLocaleString()}</div>
+                          <div className="text-[10px] text-indigo-600 uppercase font-bold">{order.status}</div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-sm font-black text-slate-900">${order.totalCost}</div>
-                        <div className="text-[10px] text-indigo-600 uppercase font-bold">{order.status}</div>
+                      
+                      <div className="flex items-center gap-2">
+                        <select 
+                          className="flex-1 p-2 rounded-lg bg-white border border-slate-200 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                          value={order.status}
+                          onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value as ShippingStatus)}
+                        >
+                          <option value="Received at Warehouse">Received at Warehouse</option>
+                          <option value="Processing">Processing</option>
+                          <option value="In Transit">In Transit</option>
+                          <option value="Out for Delivery">Out for Delivery</option>
+                          <option value="Delivered">Delivered</option>
+                          <option value="Cancelled">Cancelled</option>
+                        </select>
+                        <div className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-md text-[8px] font-bold uppercase flex items-center gap-1">
+                          <MessageSquare size={10} /> WhatsApp
+                        </div>
                       </div>
                     </div>
                   ))
@@ -4689,6 +4764,7 @@ const AdminDashboard = ({
                 setNewProduct={setNewProduct}
                 storeProducts={storeProducts}
                 setStoreProducts={setStoreProducts}
+                setOrders={setOrders}
               />
             )}
             {activeTab === 'agent' && AgentSection}

@@ -60,6 +60,16 @@ export const api = {
     return res.json();
   },
 
+  async updateOrderStatus(orderId: string, status: string, customerId: string, destination: any): Promise<Order> {
+    const res = await fetch(`${API_BASE}/orders/${orderId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, customer_id: customerId, destination }),
+    });
+    if (!res.ok) throw new Error('Failed to update order status');
+    return res.json();
+  },
+
   async shareInvoice(email: string, orderId: string, invoiceDetails: string): Promise<{ success: boolean }> {
     const res = await fetch(`${API_BASE}/invoice/share`, {
       method: 'POST',

@@ -85,7 +85,7 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ onClose, onProceed }) 
               title: "The Jiffex Store", 
               subtitle: "Curated authenticity for Indians worldwide.",
               desc: "Discover a refined selection of high-quality gifts, sweets, sports goods, and more—crafted to bring tradition, elegance, and trust to your doorstep.",
-              image: "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&q=80&w=800",
+              image: "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=800",
               icon: ShoppingBag,
               color: "text-amber-500",
               bgColor: "bg-amber-50"
@@ -94,7 +94,7 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ onClose, onProceed }) 
               title: "Agent Pickup", 
               subtitle: "Seamless pickup, expertly handled.",
               desc: "Schedule a collection from your home—our professional agents ensure secure handling and reliable delivery to your doorstep.",
-              image: "https://images.unsplash.com/photo-1531353826977-0941b4779a1c?auto=format&fit=crop&q=80&w=800",
+              image: "https://images.unsplash.com/photo-1580674684081-7617fbf3d745?w=800&auto=format&fit=crop",
               icon: Truck,
               color: "text-indigo-600",
               bgColor: "bg-indigo-50"
@@ -103,7 +103,7 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ onClose, onProceed }) 
               title: "Warehouse Hub", 
               subtitle: "Secure Consolidation & Shipping",
               desc: "Send items to our warehouse and we are going to ship. Consolidate your purchases from multiple vendors into one secure shipment to save on global delivery costs.",
-              image: "https://images.unsplash.com/photo-1553413077-190dd305871c?auto=format&fit=crop&q=80&w=800",
+              image: "https://images.unsplash.com/photo-1553413077-190dd305871c?w=800",
               icon: Warehouse,
               color: "text-emerald-600",
               bgColor: "bg-emerald-50"
@@ -121,6 +121,11 @@ export const IntroSplash: React.FC<IntroSplashProps> = ({ onClose, onProceed }) 
                   src={service.image} 
                   alt={service.title}
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.onerror = null; // prevent infinite loop
+                    target.src = `https://picsum.photos/seed/${service.title.replace(/\s+/g, '-')}/800/600`;
+                  }}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
