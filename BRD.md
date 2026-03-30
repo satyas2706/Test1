@@ -24,7 +24,7 @@ Jiffex is a specialized international logistics platform designed to bridge the 
 - **Capabilities:**
     - View shipping schedules and announcements.
     - Calculate estimated shipping rates.
-    - Add items via Warehouse Delivery, Agent Pickup, or BB Store.
+    - Add items via Send to us, Pickup from home, or BB Store.
     - Manage shipment cart and track item statuses.
     - Complete checkout and make payments.
     - Track orders and view history.
@@ -55,7 +55,7 @@ Jiffex is a specialized international logistics platform designed to bridge the 
 - **Warehouse Mode:** 
     - Provision for customers to send items directly to the Jiffex warehouse.
     - **Copy Address Feature:** One-click copy of the warehouse address for use on e-commerce sites.
-- **Agent Pickup Mode:**
+- **Pickup from home Mode:**
     - Scheduling interface for home collection.
     - Selection of Date and Time slots.
     - Collection of pickup address and contact details.

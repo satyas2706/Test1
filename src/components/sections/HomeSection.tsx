@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Logo } from '../Logo';
 import { 
   Calculator, 
   MapPin, 
@@ -68,37 +69,43 @@ const HomeSection = ({
     <div className="space-y-24 pb-24">
       {/* JIFFEX Truck Hero Section */}
       <div className="relative overflow-hidden rounded-[4rem] bg-slate-900 text-white p-12 md:p-20 shadow-2xl">
-        <div className="absolute top-0 right-0 w-full h-full opacity-20 pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-500 rounded-full blur-[120px]" />
-        </div>
+        <div 
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: `radial-gradient(circle at 30% 20%, #1e2a78 0%, #0b1220 60%, #05070f 100%)`,
+          }}
+        />
 
-        {/* Tracking Box at Top Center */}
-        <div className="relative z-20 flex justify-center mb-12 lg:mb-16">
+        {/* Tracking Box - Top Right */}
+        <div className="absolute top-8 right-8 z-20 hidden lg:block">
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="w-full max-w-md"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+            className="w-72"
           >
+            <div className="text-right mb-2">
+              <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Track Shipment</span>
+            </div>
             <form 
               onSubmit={handleTrackShipment}
               className="relative group"
             >
-              <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-violet-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" />
-              <div className="relative flex items-center bg-slate-800/80 backdrop-blur-xl rounded-2xl border border-white/10 p-1">
-                <div className="pl-4 text-slate-400">
-                  <MapPin size={20} />
+              <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-violet-600 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000" />
+              <div className="relative flex items-center bg-slate-800/80 backdrop-blur-xl rounded-xl border border-white/10 p-1.5">
+                <div className="pl-3 text-slate-400">
+                  <MapPin size={16} />
                 </div>
                 <input 
                   type="text" 
-                  placeholder="Enter Tracking ID (e.g. JX-1234)"
+                  placeholder="Tracking ID"
                   value={trackingId}
                   onChange={(e) => setTrackingId(e.target.value)}
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder-slate-500 px-4 py-3 text-sm font-medium"
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder-slate-500 px-2 py-2 text-sm font-medium"
                 />
                 <button 
                   type="submit"
-                  className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-indigo-500 transition-all shadow-lg"
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-xs hover:bg-indigo-500 transition-all active:scale-95"
                 >
                   Track
                 </button>
@@ -106,105 +113,126 @@ const HomeSection = ({
             </form>
           </motion.div>
         </div>
-        
-        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          <div className="space-y-8 text-center lg:text-left">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/20 backdrop-blur border border-indigo-500/30 rounded-full text-indigo-300 text-xs font-black uppercase tracking-[0.2em]"
-            >
-              <Sparkles size={14} /> Premium Global Logistics
-            </motion.div>
+
+        <div className="relative z-10 flex flex-col items-center text-center space-y-12">
+          <div className="space-y-8 max-w-4xl">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/20 backdrop-blur border border-indigo-500/30 rounded-full">
+              <Logo variant="light" showIcon={false} textSize="text-xs" height="h-16" />
+            </div>
             
-            <div className="space-y-4">
+            <div className="space-y-6">
               <motion.h1 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-6xl md:text-8xl font-black tracking-tighter leading-none"
+                className="text-5xl md:text-8xl font-black tracking-tighter leading-tight text-white"
               >
-                JIFF<span className="text-indigo-500 italic">EX</span>
+                Send Anything from India to Abroad—Hassle-Free
               </motion.h1>
               <motion.p 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="text-xl md:text-2xl text-slate-400 font-medium max-w-xl mx-auto lg:mx-0"
+                className="text-xl md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto"
               >
-                Your trusted bridge to India. Ship anything from home, shop everything from our store.
+                Shop online, schedule pickup, or send your own items. We handle packing & delivery.
               </motion.p>
             </div>
+          </div>
+
+          <div className="space-y-8 w-full">
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="text-sm font-bold text-indigo-400 uppercase tracking-widest"
+            >
+              Choose how you want to send:
+            </motion.p>
 
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="flex flex-wrap justify-center lg:justify-start gap-4"
+              transition={{ delay: 0.4 }}
+              className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-5xl mx-auto"
             >
-              <button 
-                onClick={() => navigateTo('pickup')}
-                className="px-6 py-4 bg-white text-slate-900 rounded-2xl font-bold text-lg hover:bg-indigo-50 transition-all shadow-xl active:scale-95 flex items-center gap-3 group"
-              >
-                <Truck size={24} className="group-hover:translate-x-1 transition-transform text-indigo-600" /> Agent Pickup
-              </button>
-              <button 
-                onClick={() => navigateTo('warehouse')}
-                className="px-6 py-4 bg-white text-slate-900 rounded-2xl font-bold text-lg hover:bg-indigo-50 transition-all shadow-xl active:scale-95 flex items-center gap-3 group"
-              >
-                <Package size={24} className="group-hover:rotate-12 transition-transform text-indigo-600" /> Send to Warehouse
-              </button>
-              <button 
-                onClick={() => navigateTo('store')}
-                className="px-6 py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-all shadow-xl active:scale-95 flex items-center gap-3"
-              >
-                <Store size={24} /> Shop Jiffy Store
-              </button>
+              {/* Card 1: Pickup from Home */}
+              <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+                <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <Truck size={40} className="text-indigo-600" />
+                </div>
+                <div className="space-y-3 flex-grow">
+                  <h3 className="font-black text-2xl text-slate-900">Pickup from Home</h3>
+                  <p className="text-slate-500 leading-relaxed">
+                    We collect items from your doorstep, pack & ship internationally
+                  </p>
+                </div>
+                <button 
+                  onClick={() => navigateTo('pickup')}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-colors active:scale-95 shadow-lg shadow-indigo-100"
+                >
+                  Schedule Pickup
+                </button>
+              </div>
+
+              {/* Card 2: Send to Our Warehouse */}
+              <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+                <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <Package size={40} className="text-indigo-600" />
+                </div>
+                <div className="space-y-3 flex-grow">
+                  <h3 className="font-black text-2xl text-slate-900">Send to Our Warehouse</h3>
+                  <p className="text-slate-500 leading-relaxed">
+                    Ship your items to our warehouse—we pack & deliver abroad
+                  </p>
+                </div>
+                <button 
+                  onClick={() => navigateTo('warehouse')}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-colors active:scale-95 shadow-lg shadow-indigo-100"
+                >
+                  Send to Our Warehouse
+                </button>
+              </div>
+
+              {/* Card 3: Shop & Send */}
+              <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+                <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <ShoppingBag size={40} className="text-indigo-600" />
+                </div>
+                <div className="space-y-3 flex-grow">
+                  <h3 className="font-black text-2xl text-slate-900">Shop & Send</h3>
+                  <p className="text-slate-500 leading-relaxed">
+                    Buy authentic Indian products—we deliver anywhere abroad
+                  </p>
+                </div>
+                <button 
+                  onClick={() => navigateTo('store')}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-colors active:scale-95 shadow-lg shadow-indigo-100"
+                >
+                  Shop Now
+                </button>
+              </div>
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="flex justify-center lg:justify-start"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="flex flex-col sm:flex-row items-center justify-center gap-8 pt-4"
             >
               <button 
-                onClick={scrollToQuote}
-                className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 font-bold transition-colors group"
+                onClick={() => navigateTo('support')}
+                className="px-6 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-full font-bold flex items-center gap-2 transition-all group text-lg"
               >
-                <Calculator size={20} className="group-hover:scale-110 transition-transform" />
-                Quick Quote Calculator
-                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                Not sure? <span className="underline underline-offset-4 transition-colors">See how it works</span>
               </button>
+              
+              <div className="h-6 w-px bg-slate-800 hidden sm:block" />
+              
+              <div className="flex items-center gap-3 text-slate-400 font-medium text-lg">
+                <span className="text-amber-400 text-2xl">⭐</span> Trusted by 1000+ customers • Delivered worldwide
+              </div>
             </motion.div>
           </div>
-
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.8, x: 50 }}
-            animate={{ opacity: 1, scale: 1, x: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-            className="relative"
-          >
-            <div className="relative z-10 bg-gradient-to-br from-indigo-500 to-violet-600 p-8 rounded-[3rem] shadow-2xl border border-white/10">
-              <div className="flex flex-col items-center gap-6">
-                <div className="relative">
-                  <Truck size={160} className="text-white drop-shadow-2xl animate-bounce-slow" />
-                  <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-32 h-4 bg-black/20 rounded-full blur-md" />
-                </div>
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <div className="text-3xl font-black tracking-tighter uppercase">JIFFEX</div>
-                    <div className="w-1.5 h-1.5 bg-white rounded-full" />
-                  </div>
-                  <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-[0.3em]">
-                    Global Logistics Partner
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* Decorative elements */}
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl" />
-            <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl" />
-          </motion.div>
         </div>
       </div>
 

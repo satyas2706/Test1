@@ -270,7 +270,7 @@ const CartSection = ({
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 {mode === 'Warehouse' ? <PlusCircle className="text-emerald-600" /> : <Calendar className="text-indigo-600" />}
-                {editingPickupId ? 'Update Pickup Schedule' : (mode === 'Warehouse' ? 'Add Your Items' : (currentUser ? 'Schedule Agent Pickup' : 'Sign in to Schedule Agent'))}
+                {editingPickupId ? 'Update Pickup Schedule' : (mode === 'Warehouse' ? 'Add Your Items' : (currentUser ? 'Schedule Pickup from home' : 'Sign in to Schedule Pickup'))}
               </h3>
             </div>
             

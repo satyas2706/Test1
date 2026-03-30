@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { Logo } from './components/Logo';
 import { 
   Package, 
   Truck, 
@@ -83,7 +84,6 @@ import {
 import { api } from './services/api';
 import { supabase } from './lib/supabase';
 import { Login } from './components/Login';
-import { IntroSplash } from './components/IntroSplash';
 import { Session } from '@supabase/supabase-js';
 
 type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'history' | 'admin' | 'warehouse-mgmt' | 'agent' | 'support' | 'notifications';
@@ -97,7 +97,6 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [tabHistory, setTabHistory] = useState<Tab[]>(['home']);
-  const [showIntro, setShowIntro] = useState(true);
 
   const navigateTo = (tab: Tab) => {
     if (tab !== activeTab) {
@@ -430,7 +429,13 @@ const StaticShipmentTracker = () => {
           customer_id: currentUser.id,
           total_weight: 0,
           total_cost: 0,
-          destination: { addressLine1: fullAddress, city: pickupAddress.city, country: 'India' },
+          destination: { 
+            addressLine1: fullAddress, 
+            city: pickupAddress.city, 
+            country: 'India',
+            email: currentUser.email,
+            phone: pickupPhone
+          },
           payment_status: 'Pending',
           shipping_date: selectedPickupDate
         } as any);
@@ -752,7 +757,7 @@ const StaticShipmentTracker = () => {
     
     if (dbStatus.connected && currentUser && item) {
       try {
-        await api.updateItemStatus(id, status, currentUser.id, item.name);
+        await api.updateItemStatus(id, status, currentUser.id, item.name, currentUser.email, currentUser.phone);
       } catch (err) {
         console.error('Failed to update item status in DB:', err);
       }
@@ -821,8 +826,9 @@ Destination: ${address.city}, ${address.country}
 Date: ${new Date().toLocaleDateString()}
         `.trim();
 
-        await api.shareInvoice(currentUser.email, orderId!, invoiceDetails);
-        toast.success('Payment successful! Invoice sent to your email.');
+        const recipientEmail = address.email || currentUser.email;
+        await api.shareInvoice(recipientEmail, orderId!, invoiceDetails);
+        toast.success(`Payment successful! Invoice sent to ${recipientEmail}`);
       } catch (err: any) {
         console.error('Failed to sync order or send invoice:', err.message);
         if (err.message.includes('Email service not configured')) {
@@ -897,8 +903,9 @@ Destination: ${woAddress.city}, ${woAddress.country}
 Date: ${new Date().toLocaleDateString()}
       `.trim();
 
-      api.shareInvoice(currentUser.email, newOrderId, invoiceDetails)
-        .then(() => toast.success('Payment successful! Invoice sent to your email.'))
+      const recipientEmail = woAddress.email || currentUser.email;
+      api.shareInvoice(recipientEmail, newOrderId, invoiceDetails)
+        .then(() => toast.success(`Payment successful! Invoice sent to ${recipientEmail}`))
         .catch(err => {
           console.error('Failed to send invoice:', err.message);
           if (err.message.includes('Email service not configured')) {
@@ -939,148 +946,142 @@ Date: ${new Date().toLocaleDateString()}
         <div className="space-y-24 pb-24">
           {/* JIFFEX Truck Hero Section */}
           <div className="relative overflow-hidden rounded-[4rem] bg-slate-900 text-white p-12 md:p-20 shadow-2xl">
-            <div className="absolute top-0 right-0 w-full h-full opacity-20 pointer-events-none">
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-500 rounded-full blur-[120px]" />
-            </div>
+            <div 
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: `radial-gradient(circle at 30% 20%, #1e2a78 0%, #0b1220 60%, #05070f 100%)`,
+              }}
+            />
 
-            {/* Tracking Box at Top Center */}
-            <div className="relative z-20 flex justify-center mb-12 lg:mb-16">
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="w-full max-w-md"
-              >
-                <form 
-                  onSubmit={handleTrackShipment}
-                  className="relative group"
-                >
-                  <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-violet-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200" />
-                  <div className="relative flex items-center bg-slate-800/80 backdrop-blur-xl rounded-2xl border border-white/10 p-1">
-                    <div className="pl-4 text-slate-400">
-                      <MapPin size={20} />
-                    </div>
-                    <input 
-                      type="text" 
-                      placeholder="Enter Tracking ID (e.g. JX-1234)"
-                      value={trackingId}
-                      onChange={(e) => setTrackingId(e.target.value)}
-                      className="flex-1 bg-transparent border-none focus:ring-0 text-white placeholder-slate-500 px-4 py-3 text-sm font-medium"
-                    />
-                    <button 
-                      type="submit"
-                      className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-indigo-500 transition-all shadow-lg"
-                    >
-                      Track
-                    </button>
-                  </div>
-                </form>
-              </motion.div>
-            </div>
-            
-            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-              <div className="space-y-8 text-center lg:text-left">
-                <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/20 backdrop-blur border border-indigo-500/30 rounded-full text-indigo-300 text-xs font-black uppercase tracking-[0.2em]"
-                >
-                  <Sparkles size={14} /> Premium Global Logistics
-                </motion.div>
+            <div className="relative z-10 flex flex-col items-center text-center space-y-12">
+              <div className="space-y-8 max-w-4xl">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/20 backdrop-blur border border-indigo-500/30 rounded-full">
+                  <Logo variant="light" showIcon={false} textSize="text-xs" height="h-16" />
+                </div>
                 
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <motion.h1 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-6xl md:text-8xl font-black tracking-tighter leading-none"
+                    className="text-5xl md:text-8xl font-black tracking-tighter leading-tight text-white"
                   >
-                    JIFF<span className="text-indigo-500 italic">EX</span>
+                    Send Anything from India to Abroad—Hassle-Free
                   </motion.h1>
                   <motion.p 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="text-xl md:text-2xl text-slate-400 font-medium max-w-xl mx-auto lg:mx-0"
+                    className="text-xl md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto"
                   >
-                    Your trusted bridge to India. Ship anything from home, shop everything from our store.
+                    Shop online, schedule pickup, or send your own items. We handle packing & delivery.
                   </motion.p>
                 </div>
+              </div>
+
+              <div className="space-y-8 w-full">
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-sm font-bold text-indigo-400 uppercase tracking-widest"
+                >
+                  Choose how you want to send:
+                </motion.p>
 
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="flex flex-wrap justify-center lg:justify-start gap-4"
+                  transition={{ delay: 0.4 }}
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-5xl mx-auto"
                 >
-                  <button 
-                    onClick={() => navigateTo('pickup')}
-                    className="px-6 py-4 bg-white text-slate-900 rounded-2xl font-bold text-lg hover:bg-indigo-50 transition-all shadow-xl active:scale-95 flex items-center gap-3 group"
-                  >
-                    <Truck size={24} className="group-hover:translate-x-1 transition-transform text-indigo-600" /> Agent Pickup
-                  </button>
-                  <button 
-                    onClick={() => navigateTo('warehouse')}
-                    className="px-6 py-4 bg-white text-slate-900 rounded-2xl font-bold text-lg hover:bg-indigo-50 transition-all shadow-xl active:scale-95 flex items-center gap-3 group"
-                  >
-                    <Package size={24} className="group-hover:rotate-12 transition-transform text-indigo-600" /> Send to Warehouse
-                  </button>
-                  <button 
-                    onClick={() => navigateTo('store')}
-                    className="px-6 py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-all shadow-xl active:scale-95 flex items-center gap-3"
-                  >
-                    <Store size={24} /> Shop Jiffy Store
-                  </button>
+                  {/* Card 1: Pickup from Home */}
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+                    <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <Truck size={40} className="text-indigo-600" />
+                    </div>
+                    <div className="space-y-3 flex-grow">
+                      <h3 className="font-black text-2xl text-slate-900">Pickup from Home</h3>
+                      <p className="text-slate-500 leading-relaxed">
+                        We collect items from your doorstep, pack & ship internationally
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => navigateTo('pickup')}
+                      className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-colors active:scale-95 shadow-lg shadow-indigo-100"
+                    >
+                      Schedule Pickup
+                    </button>
+                  </div>
+
+                  {/* Card 2: Send to Our Warehouse */}
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+                    <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <Package size={40} className="text-indigo-600" />
+                    </div>
+                    <div className="space-y-3 flex-grow">
+                      <h3 className="font-black text-2xl text-slate-900">Send to Our Warehouse</h3>
+                      <p className="text-slate-500 leading-relaxed">
+                        Ship your items to our warehouse—we pack & deliver abroad
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => navigateTo('warehouse')}
+                      className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-colors active:scale-95 shadow-lg shadow-indigo-100"
+                    >
+                      Send to Our Warehouse
+                    </button>
+                  </div>
+
+                  {/* Card 3: Shop & Send */}
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+                    <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <ShoppingBag size={40} className="text-indigo-600" />
+                    </div>
+                    <div className="space-y-3 flex-grow">
+                      <h3 className="font-black text-2xl text-slate-900">Shop & Send</h3>
+                      <p className="text-slate-500 leading-relaxed">
+                        Buy authentic Indian products—we deliver anywhere abroad
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => navigateTo('store')}
+                      className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-colors active:scale-95 shadow-lg shadow-indigo-100"
+                    >
+                      Shop Now
+                    </button>
+                  </div>
                 </motion.div>
 
                 <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="flex justify-center lg:justify-start"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5 }}
+                  className="flex flex-col sm:flex-row items-center justify-center gap-8 pt-4"
                 >
                   <button 
-                    onClick={scrollToQuote}
-                    className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 font-bold transition-colors group"
+                    onClick={() => {
+                      const element = document.getElementById('how-it-works');
+                      if (element) {
+                        element.scrollIntoView({ behavior: 'smooth' });
+                      }
+                    }}
+                    className="px-6 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-full font-bold flex items-center gap-2 transition-all group text-lg"
                   >
-                    <Calculator size={20} className="group-hover:scale-110 transition-transform" />
-                    Quick Quote Calculator
-                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                    Not sure? <span className="underline underline-offset-4 transition-colors">See how it works</span>
                   </button>
+                  
+                  <div className="h-6 w-px bg-slate-800 hidden sm:block" />
+                  
+                  <div className="flex items-center gap-3 text-slate-400 font-medium text-lg">
+                    <span className="text-amber-400 text-2xl">⭐</span> Trusted by 1000+ customers • Delivered worldwide
+                  </div>
                 </motion.div>
               </div>
-
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.8, x: 50 }}
-                animate={{ opacity: 1, scale: 1, x: 0 }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
-                className="relative"
-              >
-                <div className="relative z-10 bg-gradient-to-br from-indigo-500 to-violet-600 p-8 rounded-[3rem] shadow-2xl border border-white/10">
-                  <div className="flex flex-col items-center gap-6">
-                    <div className="relative">
-                      <Truck size={160} className="text-white drop-shadow-2xl animate-bounce-slow" />
-                      <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-32 h-4 bg-black/20 rounded-full blur-md" />
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center gap-2 mb-1">
-                        <div className="text-3xl font-black tracking-tighter uppercase">JIFFEX</div>
-                        <div className="w-1.5 h-1.5 bg-white rounded-full" />
-                      </div>
-                      <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-[0.3em]">
-                        Global Logistics Partner
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                {/* Decorative elements */}
-                <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl" />
-                <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl" />
-              </motion.div>
             </div>
           </div>
 
           {/* How JiffEX Works - Value Prop */}
-          <div className="space-y-12">
+          <div id="how-it-works" className="space-y-12 scroll-mt-24">
             <div className="text-center space-y-4">
               <h3 className="text-4xl font-black text-slate-900 tracking-tight">How JiffEX Works</h3>
               <p className="text-slate-500 max-w-2xl mx-auto">A seamless, unified shipping experience designed for your convenience.</p>
@@ -1504,12 +1505,12 @@ Date: ${new Date().toLocaleDateString()}
               <div className="space-y-4 max-h-[600px] overflow-y-auto pr-4 custom-scrollbar">
                 {[
                   { q: "How long does shipping to the US take?", a: "Express shipments typically take 5-7 business days. Standard shipping takes 10-14 business days. These times depend on customs clearance and the final destination city." },
-                  { q: "What is the 'Send to Warehouse' service?", a: "This service allows you to send items from online stores (Amazon, Flipkart, etc.) or your home to our warehouse. We consolidate all your packages into one shipment to save you money on international shipping." },
+                  { q: "What is the 'Send to Our Warehouse' service?", a: "This service allows you to send items from online stores (Amazon, Flipkart, etc.) or your home to our warehouse. We consolidate all your packages into one shipment to save you money on international shipping." },
                   { q: "How do I calculate shipping costs?", a: "Shipping is calculated based on the higher of actual weight or volumetric weight. You can use our calculator on the home page for an instant estimate." },
                   { q: "Can I track my shipment in real-time?", a: "Yes! Once your shipment is dispatched, you'll receive a tracking ID. You can enter this ID in the 'Track Shipment' box on our home page." },
                   { q: "What happens if my items are fragile?", a: "We offer professional repacking services. If you mark an item as fragile, our warehouse team will add extra protective layers (bubble wrap, corrugated sheets) to ensure safe transit." },
                   { q: "Are there any hidden charges?", a: "Our quotes include door-to-door delivery. However, customs duties or taxes (if applicable in the destination country) are determined by local authorities and are the recipient's responsibility." },
-                  { q: "What is the 'Agent Pickup' service?", a: "If you're in a supported city in India, our agent will come to your doorstep to collect your items. They can even help with basic packing!" },
+                  { q: "What is the 'Pickup from home' service?", a: "If you're in a supported city in India, our agent will come to your doorstep to collect your items. They can even help with basic packing!" },
                   { q: "How do I pay for my shipment?", a: "We accept all major credit cards, debit cards, and digital payment methods like PhonePe. Payment is required once all your items are received and weighed at our warehouse." },
                   { q: "Can I ship homemade food items?", a: "Yes, you can ship dry, non-perishable homemade food (like sweets or snacks). However, they must be properly packed and have a reasonable shelf life. Perishables are strictly prohibited." },
                   { q: "What if my package is lost or damaged?", a: "We take extreme care, but in rare cases of loss or damage, we offer limited liability coverage. For high-value items, we strongly recommend purchasing additional shipping insurance." }
@@ -2225,10 +2226,7 @@ const AdminDashboard = ({
                 <div className="flex justify-between items-start mb-8">
                   <div>
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
-                        <Truck size={18} />
-                      </div>
-                      <span className="text-xl font-black tracking-tighter text-slate-900">JIFF<span className="text-indigo-600">EX</span></span>
+                      <Logo iconSize={18} />
                     </div>
                     <h2 className="text-2xl font-black text-slate-900">Tax Invoice</h2>
                     <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {selectedOrderForInvoice.id}</p>
@@ -2453,7 +2451,7 @@ const AdminDashboard = ({
               </button>
               <div className="text-right">
                 <h2 className="text-2xl font-black text-slate-900">Work Order: {activeWorkOrder.id}</h2>
-                <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">Agent Pickup Processing</p>
+                <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">Pickup from home Processing</p>
               </div>
             </div>
 
@@ -3153,7 +3151,7 @@ const AdminDashboard = ({
                   <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                     <ShoppingBag size={28} />
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 mb-3">2. Shop Online & Send to Us</h3>
+                  <h3 className="text-xl font-black text-slate-900 mb-3">2. Shop Online & Send to Our Warehouse</h3>
                   <p className="text-slate-500 text-sm leading-relaxed">
                     Buying from Amazon, Flipkart, or any online store? Simply use our warehouse address as your delivery address at checkout. We'll handle the rest!
                   </p>
@@ -3169,7 +3167,7 @@ const AdminDashboard = ({
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
                   {mode === 'Warehouse' ? <PlusCircle className="text-emerald-600" /> : <Calendar className="text-indigo-600" />}
-                  {editingPickupId ? 'Update Pickup Schedule' : (mode === 'Warehouse' ? 'Add Your Items' : (currentUser ? 'Schedule Agent Pickup' : 'Sign in to Schedule Agent'))}
+                  {editingPickupId ? 'Update Pickup Schedule' : (mode === 'Warehouse' ? 'Add Your Items' : (currentUser ? 'Schedule Pickup from home' : 'Sign in to Schedule Pickup'))}
                 </h3>
               </div>
               
@@ -3432,7 +3430,7 @@ const AdminDashboard = ({
                         className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2"
                       >
                         {editingPickupId ? <Check size={20} /> : <Truck size={20} />}
-                        {editingPickupId ? 'Update Schedule' : (currentUser ? 'Schedule Agent Pickup' : 'Sign in to Schedule Agent')}
+                        {editingPickupId ? 'Update Schedule' : (currentUser ? 'Schedule Pickup from home' : 'Sign in to Schedule Pickup')}
                       </button>
                       {editingPickupId && (
                         <button 
@@ -3631,7 +3629,7 @@ const AdminDashboard = ({
                   {['Store', 'Pickup', 'Warehouse'].map(source => {
                     const sourceItems = displayItems.filter(i => i.source === source);
                     
-                    // Special case: If Agent Pickup is scheduled, show message instead of item list for Pickup source
+                    // Special case: If Pickup from home is scheduled, show message instead of item list for Pickup source
                     if (!mode && source === 'Pickup' && hasActivePickup) {
                       return (
                         <div key={source} className="p-8 bg-indigo-50 rounded-[2rem] border border-indigo-100 text-center space-y-4">
@@ -3639,7 +3637,7 @@ const AdminDashboard = ({
                             <Truck size={32} />
                           </div>
                           <div className="max-w-md mx-auto">
-                            <h4 className="text-lg font-black text-slate-900">Agent Pickup Scheduled</h4>
+                            <h4 className="text-lg font-black text-slate-900">Pickup from home Scheduled</h4>
                             <p className="text-sm text-slate-600 mt-2">
                               Your agent pickup is currently scheduled. The items list here will be updated automatically once our agent completes the pickup and weighs your items on-site.
                             </p>
@@ -3658,7 +3656,7 @@ const AdminDashboard = ({
 
                     const SourceIcon = source === 'Store' ? Store : source === 'Pickup' ? Package : Database;
                     const sourceColor = source === 'Store' ? 'text-emerald-600' : source === 'Pickup' ? 'text-indigo-600' : 'text-slate-600';
-                    const sourceLabel = source === 'Store' ? 'Jiffy Store Items' : source === 'Pickup' ? 'Items for Agent Pickup' : 'Items sent to warehouse';
+                    const sourceLabel = source === 'Store' ? 'Jiffy Store Items' : source === 'Pickup' ? 'Items for Pickup from home' : 'Items sent to warehouse';
 
                     return (
                       <div key={source} className="space-y-4">
@@ -4223,7 +4221,7 @@ const AdminDashboard = ({
                       <Package className="text-white" size={24} />
                     </div>
                     <div>
-                      <h4 className="text-lg font-black text-slate-900 leading-tight">Ship more from home or Agent Pickup?</h4>
+                      <h4 className="text-lg font-black text-slate-900 leading-tight">Ship more from home or Pickup from home?</h4>
                       <p className="text-slate-500 text-sm">Want to get some items from home or anywhere to ship along with your Jiffy Store items? Add warehouse items or schedule an agent pickup.</p>
                     </div>
                   </div>
@@ -4244,7 +4242,7 @@ const AdminDashboard = ({
                       }}
                       className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-200"
                     >
-                      <Truck size={16} /> Schedule Agent Pickup <ArrowRight size={16} />
+                      <Truck size={16} /> Schedule Pickup from home <ArrowRight size={16} />
                     </button>
                   </div>
                   <button 
@@ -4658,18 +4656,15 @@ const AdminDashboard = ({
                 else navigateTo('home');
               }}
             >
-              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-                <Truck size={24} />
-              </div>
-              <span className="text-xl font-black tracking-tighter text-slate-900">JIFF<span className="text-indigo-600">EX</span></span>
+              <Logo height="h-14" />
             </div>
             
             <div className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
               {[
                 { id: 'home', icon: Calculator, label: 'Home', roles: ['Customer'], public: true },
                 { id: 'store', icon: Store, label: 'Jiffy Store', roles: ['Customer'], public: true },
-                { id: 'pickup', icon: Truck, label: 'Agent Pickup', roles: ['Customer'], public: true },
-                { id: 'warehouse', icon: Package, label: 'Send to Warehouse', roles: ['Customer'], public: true },
+                { id: 'pickup', icon: Truck, label: 'Pickup from home', roles: ['Customer'], public: true },
+                { id: 'warehouse', icon: Package, label: 'Send to Our Warehouse', roles: ['Customer'], public: true },
                 { id: 'cart', icon: ShoppingCart, label: 'My Cart', roles: ['Customer'], public: true },
                 { id: 'notifications', icon: Bell, label: 'Alerts', roles: ['Customer'], public: false },
                 { id: 'support', icon: HelpCircle, label: 'Support', roles: ['Customer'], public: true },
@@ -4698,6 +4693,31 @@ const AdminDashboard = ({
             </div>
 
             <div className="flex items-center gap-4">
+              {/* Compact Tracking Box in Header */}
+              <div className="hidden md:block">
+                <form 
+                  onSubmit={handleTrackShipment}
+                  className="relative flex items-center bg-slate-100 rounded-xl border border-slate-200 p-1 group focus-within:border-indigo-300 transition-all"
+                >
+                  <div className="pl-3 text-slate-400">
+                    <MapPin size={16} />
+                  </div>
+                  <input 
+                    type="text" 
+                    placeholder="Track ID"
+                    value={trackingId}
+                    onChange={(e) => setTrackingId(e.target.value)}
+                    className="bg-transparent border-none focus:ring-0 text-slate-900 placeholder-slate-400 px-2 py-1 text-sm font-bold w-32"
+                  />
+                  <button 
+                    type="submit"
+                    className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-bold text-xs hover:bg-indigo-700 transition-all active:scale-95"
+                  >
+                    Track
+                  </button>
+                </form>
+              </div>
+
               {currentUser ? (
                 <>
                   <div className="hidden sm:flex flex-col items-end">
@@ -4777,10 +4797,7 @@ const AdminDashboard = ({
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
           <div className="col-span-1">
             <div className="flex items-center gap-2 mb-6">
-              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-                <Truck size={24} />
-              </div>
-              <span className="text-xl font-black text-slate-900 tracking-tight">Global Logistics Pro</span>
+              <Logo height="h-12" />
             </div>
             <p className="text-slate-500 max-w-sm leading-relaxed text-sm">
               Your trusted partner for seamless global shipping and warehouse solutions. We simplify logistics so you can focus on growing your business.
@@ -4790,7 +4807,6 @@ const AdminDashboard = ({
           <div>
             <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Company</h4>
             <ul className="space-y-4">
-              <li><button onClick={() => navigateTo('home')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">About Us</button></li>
               <li><button onClick={() => navigateTo('support')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Contact</button></li>
               <li><button onClick={() => alert('Shipping Policy coming soon!')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Shipping Policy</button></li>
               <li><button onClick={() => alert('Privacy Policy coming soon!')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Privacy Policy</button></li>
@@ -4810,8 +4826,8 @@ const AdminDashboard = ({
           <div>
             <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Services</h4>
             <ul className="space-y-4">
-              <li><button onClick={() => navigateTo('pickup')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Agent Pickup</button></li>
-              <li><button onClick={() => navigateTo('warehouse')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Warehouse Delivery</button></li>
+              <li><button onClick={() => navigateTo('pickup')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Pickup from home</button></li>
+              <li><button onClick={() => navigateTo('warehouse')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Send to Our Warehouse</button></li>
               <li><button onClick={() => navigateTo('store')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Jiffy Store</button></li>
               <li><button onClick={() => navigateTo('home')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Rate Calculator</button></li>
             </ul>
@@ -4951,8 +4967,8 @@ const AdminDashboard = ({
               </button>
               <div className="p-8">
                 <div className="text-center mb-8">
-                  <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-xl shadow-indigo-200">
-                    <Truck size={32} />
+                  <div className="flex items-center justify-center mx-auto mb-4">
+                    <Logo height="h-16" />
                   </div>
                   <h2 className="text-3xl font-black text-slate-900">Welcome Back</h2>
                   <p className="text-slate-500 mt-2">Sign in to continue your shipment</p>
@@ -4968,18 +4984,6 @@ const AdminDashboard = ({
         )}
       </AnimatePresence>
       <Toaster position="top-center" richColors />
-      
-      <AnimatePresence>
-        {showIntro && (
-          <IntroSplash 
-            onClose={() => setShowIntro(false)} 
-            onProceed={() => {
-              setShowIntro(false);
-              navigateTo('home');
-            }} 
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }

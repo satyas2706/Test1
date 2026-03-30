@@ -50,11 +50,11 @@ export const api = {
     }));
   },
 
-  async updateItemStatus(itemId: string, status: string, userId: string, name: string): Promise<ShippingItem> {
+  async updateItemStatus(itemId: string, status: string, userId: string, name: string, email?: string, phone?: string): Promise<ShippingItem> {
     const res = await fetch(`${API_BASE}/items/${itemId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, user_id: userId, name }),
+      body: JSON.stringify({ status, user_id: userId, name, email, phone }),
     });
     if (!res.ok) throw new Error('Failed to update item status');
     return res.json();

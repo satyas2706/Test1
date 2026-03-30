@@ -303,7 +303,7 @@ const StoreSection = ({
                     <Package className="text-white" size={24} />
                   </div>
                   <div>
-                    <h4 className="text-lg font-black text-slate-900 leading-tight">Ship more from home or Agent Pickup?</h4>
+                    <h4 className="text-lg font-black text-slate-900 leading-tight">Ship more from home or Pickup from home?</h4>
                     <p className="text-slate-500 text-sm">Want to get some items from home or anywhere to ship along with your Jiffy Store items? Add warehouse items or schedule an agent pickup.</p>
                   </div>
                 </div>
@@ -324,7 +324,7 @@ const StoreSection = ({
                     }}
                     className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-200"
                   >
-                    <Truck size={16} /> Schedule Agent Pickup <ArrowRight size={16} />
+                    <Truck size={16} /> Schedule Pickup from home <ArrowRight size={16} />
                   </button>
                 </div>
                 <button 

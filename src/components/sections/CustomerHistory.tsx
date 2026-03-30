@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Logo } from '../Logo';
 import { Truck, Package, Clock, ChevronRight, XCircle, Printer, Share, Mail, MessageCircle } from 'lucide-react';
 import { User, Order } from '../../types';
 import { WAREHOUSE_ADDRESS } from '../../constants';
@@ -136,10 +137,7 @@ const CustomerHistory = ({
               <div className="flex justify-between items-start mb-8">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
-                      <Truck size={18} />
-                    </div>
-                    <span className="text-xl font-black tracking-tighter text-slate-900 font-sans">JIFF<span className="text-indigo-600">EX</span></span>
+                    <Logo iconSize={18} />
                   </div>
                   <h2 className="text-2xl font-black text-slate-900">Tax Invoice</h2>
                   <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {selectedOrderForInvoice.id}</p>

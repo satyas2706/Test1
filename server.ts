@@ -47,7 +47,14 @@ const mailTransporter = process.env.SMTP_HOST
   : null;
 
 if (mailTransporter) {
-  console.log("Email service (SMTP) initialized successfully.");
+  console.log("Email service (SMTP) initialized. Verifying connection...");
+  mailTransporter.verify((error: any, success: any) => {
+    if (error) {
+      console.error("[SMTP] Connection Error:", error.message);
+    } else {
+      console.log("[SMTP] Server is ready to take our messages");
+    }
+  });
 } else {
   console.warn("⚠️ Email service (SMTP) is not configured. Invoices will not be sent.");
 }
@@ -97,15 +104,24 @@ async function sendNotification(userId: string, event: string, message: string, 
   }
 
   if (channels.includes('Email') && mailTransporter && process.env.SMTP_FROM) {
-    const to = recipientInfo?.email || 'user@example.com';
-    promises.push(
-      mailTransporter.sendMail({
-        from: process.env.SMTP_FROM,
-        to,
-        subject: `JiffEX Notification: ${event}`,
-        text: message
-      }).catch(err => console.error('Email Error:', err.message))
-    );
+    const to = recipientInfo?.email;
+    console.log(`[Notification] Attempting to send email to: ${to} for event: ${event}`);
+    if (to && to !== 'user@example.com' && to.includes('@')) {
+      promises.push(
+        mailTransporter.sendMail({
+          from: process.env.SMTP_FROM,
+          to,
+          subject: `JiffEX Notification: ${event}`,
+          text: message
+        }).then(() => {
+          console.log(`[Notification] Email successfully sent to ${to}`);
+        }).catch(err => {
+          console.error(`[Notification] Email Error for ${to}:`, err.message);
+        })
+      );
+    } else {
+      console.warn(`[Notification] Skipping email for user ${userId} - invalid or default recipient email: ${to}`);
+    }
   }
 
   await Promise.all(promises);
@@ -228,9 +244,9 @@ app.patch("/api/orders/:orderId", async (req, res) => {
 
   if (error) return res.status(400).json({ error: error.message });
 
-  // Send WhatsApp notification for status update
+  // Send WhatsApp and Email notification for status update
   const message = `Your JiffEX order ${req.params.orderId} status has been updated to: ${status}.`;
-  await sendNotification(customer_id, 'Order Status Updated', message, ['whatsapp'], { 
+  await sendNotification(customer_id, 'Order Status Updated', message, ['whatsapp', 'Email'], { 
     email: destination?.email, 
     phone: destination?.phone 
   });
@@ -248,9 +264,16 @@ app.post("/api/notifications/simulate", async (req, res) => {
 // API: Share Invoice via Email
 app.post("/api/invoice/share", async (req, res) => {
   const { email, orderId, invoiceDetails } = req.body;
+  console.log(`[Invoice Share] Request received for order ${orderId} to email: ${email}`);
   
   if (!mailTransporter || !process.env.SMTP_FROM) {
+    console.error('[Invoice Share] Email service not configured (mailTransporter or SMTP_FROM missing)');
     return res.status(503).json({ error: "Email service not configured" });
+  }
+
+  if (!email || !email.includes('@') || email === 'user@example.com') {
+    console.warn(`[Invoice Share] Invalid email provided: ${email}`);
+    return res.status(400).json({ error: "Invalid email address" });
   }
 
   try {
@@ -272,9 +295,10 @@ app.post("/api/invoice/share", async (req, res) => {
         </div>
       `
     });
+    console.log(`[Invoice Share] Invoice ${orderId} successfully sent to ${email}`);
     res.json({ success: true });
   } catch (err: any) {
-    console.error('Email Share Error:', err.message);
+    console.error(`[Invoice Share] Error sending to ${email}:`, err.message);
     res.status(500).json({ error: "Failed to send email" });
   }
 });
