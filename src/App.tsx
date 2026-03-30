@@ -955,17 +955,13 @@ Date: ${new Date().toLocaleDateString()}
 
             <div className="relative z-10 flex flex-col items-center text-center space-y-12">
               <div className="space-y-8 max-w-4xl">
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/20 backdrop-blur border border-indigo-500/30 rounded-full">
-                  <Logo variant="light" showIcon={false} textSize="text-xs" height="h-16" />
-                </div>
-                
                 <div className="space-y-6">
                   <motion.h1 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="text-5xl md:text-8xl font-black tracking-tighter leading-tight text-white"
                   >
-                    Send Anything from India to Abroad—Hassle-Free
+                    Send Anything from India to Abroad—<span className="relative inline-block">Hassle-Free<div className="absolute -bottom-2 left-0 w-full h-1.5 bg-amber-500 rounded-full" /></span>
                   </motion.h1>
                   <motion.p 
                     initial={{ opacity: 0, y: 20 }}
@@ -4649,14 +4645,14 @@ const AdminDashboard = ({
         <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200">
           <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
             <div 
-              className="flex items-center gap-2 cursor-pointer" 
+              className="flex items-center gap-2 cursor-pointer shrink-0" 
               onClick={() => {
                 if (currentUser?.role === 'Admin') navigateTo('admin');
                 else if (currentUser?.role === 'Agent') navigateTo('agent');
                 else navigateTo('home');
               }}
             >
-              <Logo height="h-14" />
+              <Logo height="h-12" />
             </div>
             
             <div className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
@@ -4719,10 +4715,10 @@ const AdminDashboard = ({
               </div>
 
               {currentUser ? (
-                <>
-                  <div className="hidden sm:flex flex-col items-end">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{currentUser.role}</span>
-                    <span className="text-sm font-black text-slate-900">{currentUser.name}</span>
+                <div className="flex items-center gap-4">
+                  <div className="hidden sm:flex flex-col items-end justify-center">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{currentUser.role}</span>
+                    <span className="text-sm font-black text-slate-900 leading-none">{currentUser.name}</span>
                   </div>
                   <button 
                     onClick={handleLogout}
@@ -4731,13 +4727,13 @@ const AdminDashboard = ({
                   >
                     <LogOut size={20} />
                   </button>
-                </>
+                </div>
               ) : (
                 <button 
                   onClick={() => setShowLoginModal(true)}
-                  className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center gap-2"
+                  className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 h-11 self-center"
                 >
-                  <UserIcon size={18} /> Sign In
+                  <UserIcon size={18} /> <span>Sign In</span>
                 </button>
               )}
             </div>
