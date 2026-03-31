@@ -4780,14 +4780,14 @@ const AdminDashboard = ({
                 </AnimatePresence>
               </div>
 
-              <div className="hidden xl:flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2">
+              <div className="hidden xl:flex items-center gap-2 bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-none">
                 <input 
                   type="text" 
                   placeholder="Enter Tracking ID" 
                   value={navbarTrackingId}
                   onChange={(e) => setNavbarTrackingId(e.target.value)}
                   autoComplete="new-password"
-                  className="bg-transparent border-none focus:ring-0 text-sm w-40 placeholder:text-slate-400 font-medium"
+                  className="bg-transparent border-none focus:ring-0 text-sm w-32 placeholder:text-slate-400 font-medium"
                 />
                 <button 
                   onClick={() => {
@@ -4797,7 +4797,7 @@ const AdminDashboard = ({
                       setNavbarTrackingId('');
                     }
                   }}
-                  className="btn-cta"
+                  className="btn-cta shadow-none"
                 >
                   Track
                 </button>
@@ -4853,7 +4853,7 @@ const AdminDashboard = ({
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 pt-24 pb-20">
+      <main className="max-w-7xl mx-auto px-4 pt-[84px] pb-20">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
