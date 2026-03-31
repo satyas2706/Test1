@@ -4853,7 +4853,7 @@ const AdminDashboard = ({
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 pt-[84px] pb-20">
+      <main className={`max-w-7xl mx-auto px-4 pb-20 ${activeTab === 'pickup' || activeTab === 'warehouse' || activeTab === 'store' ? 'pt-12' : 'pt-20'}`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -4863,7 +4863,7 @@ const AdminDashboard = ({
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'home' && HomeSection}
-            {activeTab !== 'home' && <BackButton onClick={goBack} />}
+            {activeTab !== 'home' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && <BackButton onClick={goBack} />}
             {activeTab === 'send-options' && SendSelectionPage}
             {activeTab === 'track' && TrackSection}
             {activeTab === 'pickup' && renderUnifiedCartSection('Pickup')}
