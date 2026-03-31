@@ -76,7 +76,7 @@ const StoreSection = ({
     <div className="space-y-8">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
-          <h2 className="text-4xl font-black text-slate-900"><span className="text-indigo-600">Jiffy Store</span></h2>
+          <h2 className="text-4xl font-black text-slate-900"><span className="text-indigo-600">Shop</span></h2>
           <p className="text-slate-500">Premium Indian products delivered globally.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-4 flex-1 max-w-2xl">
@@ -304,7 +304,7 @@ const StoreSection = ({
                   </div>
                   <div>
                     <h4 className="text-lg font-black text-slate-900 leading-tight">Ship more from home or Pickup from home?</h4>
-                    <p className="text-slate-500 text-sm">Want to get some items from home or anywhere to ship along with your Jiffy Store items? Add warehouse items or schedule an agent pickup.</p>
+                    <p className="text-slate-500 text-sm">Want to get some items from home or anywhere to ship along with your Shop items? Add warehouse items or schedule an agent pickup.</p>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 shrink-0">

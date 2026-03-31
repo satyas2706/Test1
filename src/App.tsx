@@ -86,7 +86,7 @@ import { supabase } from './lib/supabase';
 import { Login } from './components/Login';
 import { Session } from '@supabase/supabase-js';
 
-type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'history' | 'admin' | 'warehouse-mgmt' | 'agent' | 'support' | 'notifications';
+type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'history' | 'admin' | 'warehouse-mgmt' | 'agent' | 'support' | 'notifications' | 'send-options' | 'track';
 
 
 const API_URL = window.location.origin;
@@ -97,6 +97,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [tabHistory, setTabHistory] = useState<Tab[]>(['home']);
+  const [showSendDropdown, setShowSendDropdown] = useState(false);
+  const [navbarTrackingId, setNavbarTrackingId] = useState('');
 
   const navigateTo = (tab: Tab) => {
     if (tab !== activeTab) {
@@ -941,6 +943,67 @@ Date: ${new Date().toLocaleDateString()}
 
   // --- Components ---
 
+    const SendSelectionPage = useMemo(() => {
+      return (
+        <div className="max-w-4xl mx-auto py-12 px-4 space-y-12">
+          <div className="text-center space-y-4">
+            <h1 className="text-4xl md:text-6xl font-black text-slate-900 tracking-tight">How would you like to send?</h1>
+            <p className="text-xl text-slate-500 max-w-2xl mx-auto">Choose the most convenient way to get your items to our global warehouse.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <button 
+              onClick={() => navigateTo('pickup')}
+              className="group relative bg-white p-10 rounded-[3rem] shadow-xl border-2 border-transparent hover:border-indigo-500 transition-all duration-500 text-left flex flex-col gap-8 overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-[5rem] -mr-8 -mt-8 transition-all duration-500 group-hover:bg-indigo-100" />
+              <div className="w-20 h-20 bg-indigo-600 text-white rounded-3xl flex items-center justify-center shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform duration-500 relative z-10">
+                <Truck size={40} />
+              </div>
+              <div className="space-y-4 relative z-10">
+                <h3 className="text-3xl font-black text-slate-900">Pickup from Home</h3>
+                <p className="text-slate-500 text-lg leading-relaxed">Our agent will come to your doorstep, pack your items professionally, and bring them to our warehouse.</p>
+              </div>
+              <div className="flex items-center gap-3 text-indigo-600 font-black text-lg mt-auto relative z-10">
+                Get Started <ArrowRight size={24} className="group-hover:translate-x-2 transition-transform" />
+              </div>
+            </button>
+
+            <button 
+              onClick={() => navigateTo('warehouse')}
+              className="group relative bg-white p-10 rounded-[3rem] shadow-xl border-2 border-transparent hover:border-indigo-500 transition-all duration-500 text-left flex flex-col gap-8 overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-bl-[5rem] -mr-8 -mt-8 transition-all duration-500 group-hover:bg-slate-100" />
+              <div className="w-20 h-20 bg-slate-900 text-white rounded-3xl flex items-center justify-center shadow-lg shadow-slate-200 group-hover:scale-110 transition-transform duration-500 relative z-10">
+                <Package size={40} />
+              </div>
+              <div className="space-y-4 relative z-10">
+                <h3 className="text-3xl font-black text-slate-900">Send to Warehouse</h3>
+                <p className="text-slate-500 text-lg leading-relaxed">Ship your items directly to our warehouse using any local courier. We'll receive and process them for global shipping.</p>
+              </div>
+              <div className="flex items-center gap-3 text-slate-900 font-black text-lg mt-auto relative z-10">
+                Get Started <ArrowRight size={24} className="group-hover:translate-x-2 transition-transform" />
+              </div>
+            </button>
+          </div>
+        </div>
+      );
+    }, [navigateTo]);
+
+    const TrackSection = useMemo(() => {
+      return (
+        <div className="max-w-4xl mx-auto py-12 px-4 space-y-12">
+          <div className="text-center space-y-4">
+            <h1 className="text-4xl md:text-6xl font-black text-slate-900 tracking-tight">Track Your Shipment</h1>
+            <p className="text-xl text-slate-500 max-w-2xl mx-auto">Enter your tracking ID to see the real-time status of your global delivery.</p>
+          </div>
+          <div className="bg-white p-8 md:p-12 rounded-[3rem] shadow-2xl border border-slate-100">
+            <StaticShipmentTracker />
+          </div>
+        </div>
+      );
+    }, []);
+
     const HomeSection = useMemo(() => {
       return (
         <div className="space-y-24 pb-24">
@@ -961,7 +1024,7 @@ Date: ${new Date().toLocaleDateString()}
                     animate={{ opacity: 1, y: 0 }}
                     className="text-5xl md:text-8xl font-black tracking-tighter leading-tight text-white"
                   >
-                    Send Anything from India to Abroad—<span className="relative inline-block">Hassle-Free<div className="absolute -bottom-2 left-0 w-full h-1.5 bg-amber-500 rounded-full" /></span>
+                    Send Anything from India to Abroad—<span className="relative inline-block">Hassle-Free<div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-2/3 h-1.5 bg-amber-500 rounded-full" /></span>
                   </motion.h1>
                   <motion.p 
                     initial={{ opacity: 0, y: 20 }}
@@ -1003,7 +1066,7 @@ Date: ${new Date().toLocaleDateString()}
                     </div>
                     <button 
                       onClick={() => navigateTo('pickup')}
-                      className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-colors active:scale-95 shadow-lg shadow-indigo-100"
+                      className="w-full btn-cta"
                     >
                       Schedule Pickup
                     </button>
@@ -1022,7 +1085,7 @@ Date: ${new Date().toLocaleDateString()}
                     </div>
                     <button 
                       onClick={() => navigateTo('warehouse')}
-                      className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-colors active:scale-95 shadow-lg shadow-indigo-100"
+                      className="w-full btn-cta"
                     >
                       Send to Our Warehouse
                     </button>
@@ -1041,7 +1104,7 @@ Date: ${new Date().toLocaleDateString()}
                     </div>
                     <button 
                       onClick={() => navigateTo('store')}
-                      className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 transition-colors active:scale-95 shadow-lg shadow-indigo-100"
+                      className="w-full btn-cta"
                     >
                       Shop Now
                     </button>
@@ -1088,7 +1151,7 @@ Date: ${new Date().toLocaleDateString()}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
                 {[
                   { icon: Calendar, title: "1. Schedule Pickup", desc: "Start by scheduling an agent pickup. This becomes the heart of your shipment process.", color: "bg-indigo-600", shadow: "shadow-indigo-200" },
-                  { icon: ShoppingBag, title: "2. Add Everything", desc: "Add items from your home, our Jiffy Store, or even items you've sent to our warehouse.", color: "bg-amber-500", shadow: "shadow-amber-200" },
+                  { icon: ShoppingBag, title: "2. Add Everything", desc: "Add items from your home, our Shop, or even items you've sent to our warehouse.", color: "bg-amber-500", shadow: "shadow-amber-200" },
                   { icon: Truck, title: "3. Home Consolidation", desc: "Our agent brings your warehouse and store items to your home for a final unified collection.", color: "bg-emerald-500", shadow: "shadow-emerald-200" },
                   { icon: CheckCircle2, title: "4. Global Shipping", desc: "Everything is weighed and packed at your home, then shipped globally in one go.", color: "bg-blue-500", shadow: "shadow-blue-200" }
                 ].map((step, i) => (
@@ -1249,18 +1312,18 @@ Date: ${new Date().toLocaleDateString()}
                 <div className="space-y-3 relative z-10">
                   <h4 className="text-2xl font-black">Unified Shipping Protocol</h4>
                   <p className="text-slate-400 leading-relaxed">
-                    When you schedule an agent pickup, JiffEX activates the <span className="text-white font-bold">Home-First Protocol</span>. All your items—whether from Jiffy Store or our warehouse—are consolidated at your doorstep for a truly personalized shipping experience.
+                    When you schedule an agent pickup, JiffEX activates the <span className="text-white font-bold">Home-First Protocol</span>. All your items—whether from Shop or our warehouse—are consolidated at your doorstep for a truly personalized shipping experience.
                   </p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Featured Products from Jiffy Store - Moved to Last */}
+          {/* Featured Products from Shop - Moved to Last */}
           <div className="space-y-8">
             <div className="flex items-end justify-between">
               <div>
-                <h3 className="text-3xl font-black text-slate-900">Featured from <span className="text-indigo-600">Jiffy Store</span></h3>
+                <h3 className="text-3xl font-black text-slate-900">Featured from <span className="text-indigo-600">Shop</span></h3>
                 <p className="text-slate-500">Premium products curated for your special occasions.</p>
               </div>
               <button 
@@ -1854,7 +1917,7 @@ const AdminDashboard = ({
               </div>
               <button 
                 onClick={handleAddAgent}
-                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                className="w-full btn-cta"
               >
                 Create Agent Profile
               </button>
@@ -3276,7 +3339,7 @@ const AdminDashboard = ({
                           </div>
                           <button 
                             onClick={handleAdd}
-                            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2 group"
+                            className="w-full btn-cta flex items-center justify-center gap-2 group"
                           >
                             <Plus size={20} className="group-hover:rotate-90 transition-transform" /> 
                             Add to My Shipment
@@ -3313,7 +3376,7 @@ const AdminDashboard = ({
                           />
                           <button 
                             onClick={handleAdd}
-                            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2"
+                            className="w-full btn-cta flex items-center justify-center gap-2"
                           >
                             <Plus size={20} /> Add to Home Pickup
                           </button>
@@ -3423,7 +3486,7 @@ const AdminDashboard = ({
                       </div>
                       <button 
                         onClick={editingPickupId ? saveEditedPickup : handleSchedulePickup}
-                        className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2"
+                        className="w-full btn-cta flex items-center justify-center gap-2"
                       >
                         {editingPickupId ? <Check size={20} /> : <Truck size={20} />}
                         {editingPickupId ? 'Update Schedule' : (currentUser ? 'Schedule Pickup from home' : 'Sign in to Schedule Pickup')}
@@ -3478,9 +3541,9 @@ const AdminDashboard = ({
                       <p className="text-sm mb-6">Add items from the store or schedule a pickup to get started.</p>
                       <button 
                         onClick={() => navigateTo('store')}
-                        className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center gap-2"
+                        className="btn-cta flex items-center gap-2"
                       >
-                        <Store size={18} /> Shop Jiffy Store
+                        <Store size={18} /> Visit Shop
                       </button>
                     </>
                   )}
@@ -3652,7 +3715,7 @@ const AdminDashboard = ({
 
                     const SourceIcon = source === 'Store' ? Store : source === 'Pickup' ? Package : Database;
                     const sourceColor = source === 'Store' ? 'text-emerald-600' : source === 'Pickup' ? 'text-indigo-600' : 'text-slate-600';
-                    const sourceLabel = source === 'Store' ? 'Jiffy Store Items' : source === 'Pickup' ? 'Items for Pickup from home' : 'Items sent to warehouse';
+                    const sourceLabel = source === 'Store' ? 'Shop Items' : source === 'Pickup' ? 'Items for Pickup from home' : 'Items sent to warehouse';
 
                     return (
                       <div key={source} className="space-y-4">
@@ -3825,7 +3888,7 @@ const AdminDashboard = ({
             </div>
           )}
 
-          {/* Jiffy Store Items for Pickup and Warehouse Pages */}
+          {/* Shop Items for Pickup and Warehouse Pages */}
           {(mode === 'Pickup' || mode === 'Warehouse') && (
             <div className="mt-12">
               <div className="flex items-center justify-between mb-8">
@@ -3834,7 +3897,7 @@ const AdminDashboard = ({
                     <ShoppingBag className="text-white" size={20} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900">Jiffy Store Items</h3>
+                    <h3 className="text-lg font-bold text-slate-900">Shop Items</h3>
                     <p className="text-xs text-slate-500 font-medium tracking-tight">
                       Add essentials to your {mode === 'Pickup' ? 'pickup' : 'shipment'}
                     </p>
@@ -3990,7 +4053,7 @@ const AdminDashboard = ({
       <div className="space-y-8">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
-            <h2 className="text-4xl font-black text-slate-900"><span className="text-indigo-600">Jiffy Store</span></h2>
+            <h2 className="text-4xl font-black text-slate-900"><span className="text-indigo-600">Shop</span></h2>
             <p className="text-slate-500">Premium Indian products delivered globally.</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-4 flex-1 max-w-2xl">
@@ -4218,7 +4281,7 @@ const AdminDashboard = ({
                     </div>
                     <div>
                       <h4 className="text-lg font-black text-slate-900 leading-tight">Ship more from home or Pickup from home?</h4>
-                      <p className="text-slate-500 text-sm">Want to get some items from home or anywhere to ship along with your Jiffy Store items? Add warehouse items or schedule an agent pickup.</p>
+                      <p className="text-slate-500 text-sm">Want to get some items from home or anywhere to ship along with your Shop items? Add warehouse items or schedule an agent pickup.</p>
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 shrink-0">
@@ -4522,7 +4585,7 @@ const AdminDashboard = ({
           <p className="text-slate-500 leading-relaxed">Please sign in to your account to securely complete your payment and finalize your shipment.</p>
           <button 
             onClick={() => setShowLoginModal(true)}
-            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
+            className="w-full btn-cta flex items-center justify-center gap-2"
           >
             <UserIcon size={20} /> Sign In to Pay
           </button>
@@ -4591,17 +4654,17 @@ const AdminDashboard = ({
       )}
       
       {/* Header Area (Sticky) */}
-      <div className="sticky top-0 z-50">
+      <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-md shadow-md">
         {/* Global Pickup Notification Banner */}
         <AnimatePresence>
           {appointments.some(a => a.status === 'Scheduled') && (
             <motion.div 
-              initial={{ y: -100, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -100, opacity: 0 }}
-              className="bg-indigo-600 text-white py-3 px-6 shadow-2xl relative z-[60]"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-indigo-600 text-white overflow-hidden relative z-10"
             >
-              <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+              <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
                     <Bell size={16} className="animate-ring" />
@@ -4616,7 +4679,7 @@ const AdminDashboard = ({
                 </div>
                 <button 
                   onClick={() => { navigateTo('cart'); window.scrollTo(0,0); }}
-                  className="px-4 py-1.5 bg-white text-indigo-600 rounded-lg font-bold text-[10px] hover:bg-indigo-50 transition-all shadow-lg"
+                  className="btn-cta"
                 >
                   View Details
                 </button>
@@ -4626,98 +4689,146 @@ const AdminDashboard = ({
         </AnimatePresence>
 
         {/* Error Banner */}
-      {dbError && (
-        <div className="bg-red-500 text-white p-4 text-center font-bold sticky top-0 z-[100] shadow-lg">
-          <div className="max-w-7xl mx-auto flex items-center justify-center gap-3">
-            <ShieldCheck size={20} />
-            <span>{dbError}</span>
-            <button 
-              onClick={() => setDbError(null)}
-              className="ml-4 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg text-xs transition-colors"
-            >
-              Dismiss
-            </button>
+        {dbError && (
+          <div className="bg-red-500 text-white p-4 text-center font-bold relative z-20 shadow-lg">
+            <div className="max-w-7xl mx-auto flex items-center justify-center gap-3">
+              <ShieldCheck size={20} />
+              <span>{dbError}</span>
+              <button 
+                onClick={() => setDbError(null)}
+                className="ml-4 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg text-xs transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Navigation */}
-        <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200">
-          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+        {/* Navigation */}
+        <nav className="border-b border-slate-200">
+          <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between gap-8">
             <div 
-              className="flex items-center gap-2 cursor-pointer shrink-0" 
+              className="flex items-center gap-3 cursor-pointer shrink-0" 
               onClick={() => {
                 if (currentUser?.role === 'Admin') navigateTo('admin');
                 else if (currentUser?.role === 'Agent') navigateTo('agent');
                 else navigateTo('home');
               }}
             >
-              <Logo height="h-12" />
+              <Logo height="h-14" />
             </div>
             
-            <div className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-              {[
-                { id: 'home', icon: Calculator, label: 'Home', roles: ['Customer'], public: true },
-                { id: 'store', icon: Store, label: 'Jiffy Store', roles: ['Customer'], public: true },
-                { id: 'pickup', icon: Truck, label: 'Pickup from home', roles: ['Customer'], public: true },
-                { id: 'warehouse', icon: Package, label: 'Send to Our Warehouse', roles: ['Customer'], public: true },
-                { id: 'cart', icon: ShoppingCart, label: 'My Cart', roles: ['Customer'], public: true },
-                { id: 'notifications', icon: Bell, label: 'Alerts', roles: ['Customer'], public: false },
-                { id: 'support', icon: HelpCircle, label: 'Support', roles: ['Customer'], public: true },
-                { id: 'history', icon: History, label: 'My Orders', roles: ['Customer'], public: false },
-                { id: 'admin', icon: LayoutDashboard, label: 'Dashboard', roles: ['Admin'], public: false },
-                { id: 'warehouse-mgmt', icon: Warehouse, label: 'Warehouse Mgmt', roles: ['Admin'], public: false },
-                { id: 'agent', icon: Users, label: 'Agent Portal', roles: ['Agent'], public: false },
-              ].filter(tab => tab.public || (currentUser && tab.roles.includes(currentUser.role))).map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => navigateTo(tab.id as Tab)}
-                  className={`relative flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                    activeTab === tab.id 
-                      ? 'bg-white text-indigo-600 shadow-sm' 
-                      : 'text-slate-500 hover:text-slate-900'
+            <div className="hidden lg:flex items-center gap-8">
+              <button 
+                onClick={() => navigateTo('store')}
+                className={`text-base font-bold transition-all ${activeTab === 'store' ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                Shop
+              </button>
+
+              <div 
+                className="relative group"
+                onMouseEnter={() => setShowSendDropdown(true)}
+                onMouseLeave={() => setShowSendDropdown(false)}
+              >
+                <button 
+                  onClick={() => navigateTo('send-options')}
+                  className={`flex items-center gap-1.5 text-lg font-black transition-all px-4 py-2 rounded-xl border-2 hover:underline decoration-2 underline-offset-4 decoration-indigo-500/50 ${
+                    activeTab === 'send-options' || activeTab === 'pickup' || activeTab === 'warehouse'
+                      ? 'bg-indigo-50 border-indigo-600 text-indigo-700' 
+                      : 'border-transparent text-slate-950 hover:bg-slate-50'
                   }`}
                 >
-                  <tab.icon size={16} /> {tab.label}
-                  {(tab.id === 'cart') && (cartItems.length > 0 || appointments.length > 0) && (
-                    <span className="bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] flex items-center justify-center">
-                      {cartItems.length + appointments.length}
-                    </span>
-                  )}
+                  Send <ChevronDown size={20} className={`transition-transform duration-300 ${showSendDropdown ? 'rotate-180' : ''}`} />
                 </button>
-              ))}
+
+                {/* Dropdown */}
+                <AnimatePresence>
+                  {showSendDropdown && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="absolute top-full left-0 mt-4 dropdown-send z-50 flex flex-row gap-4"
+                    >
+                      <button 
+                        onClick={() => { navigateTo('pickup'); setShowSendDropdown(false); }}
+                        className="flex-1 flex flex-col items-center text-center gap-3 p-4 rounded-xl bg-slate-50 hover:bg-white hover:-translate-y-[3px] hover:shadow-[0_10px_25px_rgba(0,0,0,0.1)] text-slate-600 hover:text-indigo-600 transition-all duration-200 border border-transparent hover:border-indigo-100 group"
+                      >
+                        <div className="w-12 h-12 bg-white text-indigo-600 rounded-xl flex items-center justify-center shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                          <Truck size={24} />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-black text-sm">Pickup from Home</span>
+                          <span className="text-[10px] text-slate-400 font-medium group-hover:text-indigo-400 leading-tight">Agent comes to your doorstep to collect</span>
+                        </div>
+                      </button>
+                      <button 
+                        onClick={() => { navigateTo('warehouse'); setShowSendDropdown(false); }}
+                        className="flex-1 flex flex-col items-center text-center gap-3 p-4 rounded-xl bg-slate-50 hover:bg-white hover:-translate-y-[3px] hover:shadow-[0_10px_25px_rgba(0,0,0,0.1)] text-slate-600 hover:text-indigo-600 transition-all duration-200 border border-transparent hover:border-indigo-100 group"
+                      >
+                        <div className="w-12 h-12 bg-white text-slate-600 rounded-xl flex items-center justify-center shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                          <Package size={24} />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-black text-sm">Send to Warehouse</span>
+                          <span className="text-[10px] text-slate-400 font-medium group-hover:text-indigo-400 leading-tight">Ship directly to our processing facility</span>
+                        </div>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <div className="hidden xl:flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2">
+                <input 
+                  type="text" 
+                  placeholder="Enter Tracking ID" 
+                  value={navbarTrackingId}
+                  onChange={(e) => setNavbarTrackingId(e.target.value)}
+                  autoComplete="new-password"
+                  className="bg-transparent border-none focus:ring-0 text-sm w-40 placeholder:text-slate-400 font-medium"
+                />
+                <button 
+                  onClick={() => {
+                    if (navbarTrackingId.trim()) {
+                      toast.success(`Tracking shipment: ${navbarTrackingId}`);
+                      navigateTo('track');
+                      setNavbarTrackingId('');
+                    }
+                  }}
+                  className="btn-cta"
+                >
+                  Track
+                </button>
+              </div>
+
+              <button 
+                onClick={() => navigateTo('support')}
+                className={`text-base font-medium transition-all ${activeTab === 'support' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                Support
+              </button>
             </div>
 
-            <div className="flex items-center gap-4">
-              {/* Compact Tracking Box in Header */}
-              <div className="hidden md:block">
-                <form 
-                  onSubmit={handleTrackShipment}
-                  className="relative flex items-center bg-slate-100 rounded-xl border border-slate-200 p-1 group focus-within:border-indigo-300 transition-all"
-                >
-                  <div className="pl-3 text-slate-400">
-                    <MapPin size={16} />
-                  </div>
-                  <input 
-                    type="text" 
-                    placeholder="Track ID"
-                    value={trackingId}
-                    onChange={(e) => setTrackingId(e.target.value)}
-                    className="bg-transparent border-none focus:ring-0 text-slate-900 placeholder-slate-400 px-2 py-1 text-sm font-bold w-32"
-                  />
-                  <button 
-                    type="submit"
-                    className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-bold text-xs hover:bg-indigo-700 transition-all active:scale-95"
-                  >
-                    Track
-                  </button>
-                </form>
-              </div>
+            <div className="flex items-center gap-8">
+              {/* Cart Icon Only */}
+              <button 
+                onClick={() => navigateTo('cart')}
+                className={`relative p-3 rounded-2xl transition-all ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                <ShoppingCart size={24} />
+                {cartItems.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-black border-2 border-white">
+                    {cartItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}
+                  </span>
+                )}
+              </button>
 
               {currentUser ? (
                 <div className="flex items-center gap-4">
-                  <div className="hidden sm:flex flex-col items-end justify-center">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">{currentUser.role}</span>
+                  <div className="hidden sm:flex flex-col items-end">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{currentUser.role}</span>
                     <span className="text-sm font-black text-slate-900 leading-none">{currentUser.name}</span>
                   </div>
                   <button 
@@ -4725,24 +4836,24 @@ const AdminDashboard = ({
                     className="w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-all border border-slate-200"
                     title="Logout"
                   >
-                    <LogOut size={20} />
+                    <LogOut size={18} />
                   </button>
                 </div>
               ) : (
                 <button 
                   onClick={() => setShowLoginModal(true)}
-                  className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 h-11 self-center"
+                  className="btn-cta flex items-center gap-2"
                 >
-                  <UserIcon size={18} /> <span>Sign In</span>
+                  <UserIcon size={18} /> Sign In
                 </button>
               )}
             </div>
           </div>
         </nav>
-      </div>
+      </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 pt-6 pb-20">
+      <main className="max-w-7xl mx-auto px-4 pt-24 pb-20">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -4753,6 +4864,8 @@ const AdminDashboard = ({
           >
             {activeTab === 'home' && HomeSection}
             {activeTab !== 'home' && <BackButton onClick={goBack} />}
+            {activeTab === 'send-options' && SendSelectionPage}
+            {activeTab === 'track' && TrackSection}
             {activeTab === 'pickup' && renderUnifiedCartSection('Pickup')}
             {activeTab === 'warehouse' && renderUnifiedCartSection('Warehouse')}
             {activeTab === 'cart' && renderUnifiedCartSection()}
@@ -4824,7 +4937,7 @@ const AdminDashboard = ({
             <ul className="space-y-4">
               <li><button onClick={() => navigateTo('pickup')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Pickup from home</button></li>
               <li><button onClick={() => navigateTo('warehouse')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Send to Our Warehouse</button></li>
-              <li><button onClick={() => navigateTo('store')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Jiffy Store</button></li>
+              <li><button onClick={() => navigateTo('store')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Shop</button></li>
               <li><button onClick={() => navigateTo('home')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Rate Calculator</button></li>
             </ul>
           </div>
@@ -4885,7 +4998,7 @@ const AdminDashboard = ({
                       addItem(item, source, true);
                     }
                   }}
-                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+                  className="w-full btn-cta"
                 >
                   Yes, Place Separate Order
                 </button>

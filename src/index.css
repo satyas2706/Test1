@@ -30,6 +30,24 @@
     padding-bottom: calc(env(safe-area-inset-bottom) + 80px);
   }
 
+  .btn-cta {
+    background: linear-gradient(135deg, #5b5cf6, #7c3aed);
+    color: white;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    @apply transition-all hover:opacity-90 active:scale-95;
+  }
+
+  .dropdown-send {
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+    border: 1px solid rgba(0,0,0,0.05);
+    width: 450px;
+  }
+
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
   }

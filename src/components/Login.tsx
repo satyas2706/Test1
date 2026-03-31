@@ -207,7 +207,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
                 <button
                   type="submit"
                   disabled={loading || !identifier || !password}
-                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-70"
+                  className="w-full btn-cta flex items-center justify-center gap-2 disabled:opacity-70"
                 >
                   {loading ? <Loader2 className="animate-spin" size={20} /> : 'Sign In (Test Mode)'}
                 </button>
@@ -243,7 +243,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
                 <button
                   type="submit"
                   disabled={loading || !identifier}
-                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-70"
+                  className="w-full btn-cta flex items-center justify-center gap-2 disabled:opacity-70"
                 >
                   {loading ? <Loader2 className="animate-spin" size={20} /> : (
                     <>
@@ -315,7 +315,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
             <button
               type="submit"
               disabled={loading || otp.length < 6}
-              className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-70"
+              className="w-full btn-cta flex items-center justify-center gap-2 disabled:opacity-70"
             >
               {loading ? <Loader2 className="animate-spin" size={20} /> : 'Verify & Sign In'}
             </button>

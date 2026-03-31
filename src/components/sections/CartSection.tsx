@@ -576,7 +576,7 @@ const CartSection = ({
           )}
         </div>
 
-        {/* Jiffy Store Items for Pickup and Warehouse Pages */}
+        {/* Shop Items for Pickup and Warehouse Pages */}
         {(mode === 'Pickup' || mode === 'Warehouse') && (
           <div className="mt-12">
             <div className="flex items-center justify-between mb-8">
@@ -585,7 +585,7 @@ const CartSection = ({
                   <ShoppingBag className="text-white" size={20} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">Jiffy Store Items</h3>
+                  <h3 className="text-lg font-bold text-slate-900">Shop Items</h3>
                   <p className="text-xs text-slate-500 font-medium tracking-tight">
                     Add essentials to your {mode === 'Pickup' ? 'pickup' : 'shipment'}
                   </p>

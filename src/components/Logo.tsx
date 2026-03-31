@@ -20,10 +20,22 @@ export const Logo: React.FC<LogoProps> = ({
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <img 
-        src="https://lh3.googleusercontent.com/d/18DxK9dI0ubE_q1i_bsb0GXbpo7glmwcs" 
+        src={`https://lh3.googleusercontent.com/d/18DxK9dI0ubE_q1i_bsb0GXbpo7glmwcs`} 
         alt="JiffEX Logo" 
-        className={`${height} w-auto object-contain`}
+        className={`${height} w-auto object-contain min-h-[40px]`}
         referrerPolicy="no-referrer"
+        onError={(e) => {
+          // Fallback to text if image fails
+          const target = e.target as HTMLImageElement;
+          target.style.display = 'none';
+          const parent = target.parentElement;
+          if (parent && !parent.querySelector('.logo-text-fallback')) {
+            const span = document.createElement('span');
+            span.className = 'logo-text-fallback font-black text-2xl text-indigo-600 tracking-tighter';
+            span.innerText = 'JiffEX';
+            parent.appendChild(span);
+          }
+        }}
       />
     </div>
   );
