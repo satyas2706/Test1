@@ -26,6 +26,8 @@ import {
   ShieldCheck,
   Printer,
   Copy,
+  RefreshCw,
+  FileText,
   Image as ImageIcon,
   User as UserIcon,
   ShoppingBag,
@@ -36,6 +38,7 @@ import {
   BarChart3,
   Search,
   ArrowRight,
+  ArrowDown,
   LogOut,
   Database,
   Loader2,
@@ -49,14 +52,12 @@ import {
   Heart,
   Lock,
   MessageSquare,
-  FileText,
   Mail,
   SlidersHorizontal,
   ChevronDown,
   ArrowUpDown,
   HelpCircle,
   ShoppingCart,
-  RefreshCw,
   Warehouse,
   Menu,
 } from 'lucide-react';
@@ -252,6 +253,7 @@ const StaticShipmentTracker = () => {
     }
   }, []);
   const quoteRef = React.useRef<HTMLDivElement>(null);
+  const warehouseItemsRef = React.useRef<HTMLDivElement>(null);
 
   const scrollToQuote = () => {
     quoteRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -3112,7 +3114,18 @@ const AdminDashboard = ({
       setCartItemQuantity(1);
       setCartItemFragile(false);
       setCartItemInvoiceNumber('');
+      setNavbarTrackingId('');
       setCartItemRemarks('');
+      
+      // Scroll to items list after adding
+      if (mode === 'Warehouse') {
+        toast.success(`"${cartItemName}" added to your shipment! Scroll down to review and click "Submit Order" to finalize.`);
+        setTimeout(() => {
+          warehouseItemsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      } else {
+        toast.success(`"${cartItemName}" added to your pickup list!`);
+      }
     };
 
     const handleCopyAddress = () => {
@@ -3221,335 +3234,594 @@ const AdminDashboard = ({
                   </p>
                 </div>
               </motion.div>
-
-              {/* How it Works Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <motion.div 
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group"
-                >
-                  <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                    <Package size={28} />
-                  </div>
-                  <h3 className="text-xl font-black text-slate-900 mb-3">1. Send Your Own Items</h3>
-                  <p className="text-slate-500 text-sm leading-relaxed">
-                    Have items at home? Pack them up and send them directly to our warehouse. We'll receive them, check the contents, and add them to your global shipment.
-                  </p>
-                </motion.div>
-
-                <motion.div 
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group"
-                >
-                  <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                    <ShoppingBag size={28} />
-                  </div>
-                  <h3 className="text-xl font-black text-slate-900 mb-3">2. Shop Online & Send to Our Warehouse</h3>
-                  <p className="text-slate-500 text-sm leading-relaxed">
-                    Buying from Amazon, Flipkart, or any online store? Simply use our warehouse address as your delivery address at checkout. We'll handle the rest!
-                  </p>
-                </motion.div>
-              </div>
             </div>
           )}
 
 
-          {/* Add Items / Schedule Pickup Card - Only show in specific modes, not in My Cart */}
-          {mode && (mode === 'Warehouse' || !appointments.length || editingPickupId) && (
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                  {mode === 'Warehouse' ? <PlusCircle className="text-emerald-600" /> : <Calendar className="text-indigo-600" />}
-                  {editingPickupId ? 'Update Pickup Schedule' : (mode === 'Warehouse' ? 'Add Your Items' : (currentUser ? 'Schedule Pickup from home' : 'Sign in to Schedule Pickup'))}
-                </h3>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {mode === 'Warehouse' ? (
-                  <>
-                    <div className="space-y-4">
-                      <div className="p-6 bg-indigo-50 rounded-[2rem] border border-indigo-100 space-y-4 relative group">
-                        <button 
-                          onClick={handleCopyAddress}
-                          className="absolute top-4 right-4 p-2.5 bg-white rounded-xl text-indigo-600 shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:bg-indigo-50 hover:scale-110"
-                          title="Copy Address"
-                        >
-                          <Copy size={18} />
-                        </button>
-                        <div className="flex items-center gap-2">
-                          <div className="px-2 py-1 bg-indigo-600 text-[10px] font-black text-white uppercase tracking-widest rounded-md">Destination Address</div>
-                          <div className="px-2 py-1 bg-white text-[10px] font-black text-indigo-600 uppercase tracking-widest rounded-md border border-indigo-100">ID: {customerWarehouseId}</div>
-                        </div>
-                        <div className="text-sm font-bold text-indigo-900">{WAREHOUSE_ADDRESS.name}</div>
-                        <div className="text-xs text-indigo-700 leading-relaxed font-medium">
-                          Attn: <span className="text-indigo-900 font-black">{customerWarehouseId}</span><br />
-                          {WAREHOUSE_ADDRESS.street}<br />
-                          {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state} {WAREHOUSE_ADDRESS.zip}<br />
-                          {WAREHOUSE_ADDRESS.country}
-                        </div>
-                        <div className="pt-3 border-t border-indigo-100 flex items-center gap-2 text-xs font-bold text-indigo-900">
-                          <Phone size={14} /> {WAREHOUSE_ADDRESS.phone}
-                        </div>
-                      </div>
-                      <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
-                        <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm shrink-0">
-                          <Info size={16} className="text-indigo-600" />
-                        </div>
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                          <span className="font-bold text-slate-700 block mb-1">Important:</span>
-                          Use the address above as your shipping destination. Once your package is on its way, add the item details here so we can identify it when it arrives.
-                        </p>
-                      </div>
+          {/* Add Items / Schedule Pickup Card */}
+          {(mode || hasActivePickup || editingPickupId) && (
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+              {mode === 'Warehouse' ? (
+                <div className="space-y-8">
+                  {/* Header Section */}
+                  <div className="flex items-center gap-4 border-b border-slate-50 pb-8">
+                    <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-xl shadow-indigo-200">
+                      <Database size={28} />
                     </div>
-                    <div className="space-y-4">
-                      <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-4">
-                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Register Your Package</h4>
+                    <div>
+                      <h2 className="text-2xl font-black text-slate-900 tracking-tight">Warehouse Shipment</h2>
+                      <p className="text-sm text-slate-500 font-medium">Register items you're sending to our facility</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    {/* Left Column: Sticky Inputs & Address */}
+                    <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-8">
+                      {/* Step 1: Warehouse Address Card */}
+                      <div className="p-6 bg-indigo-600 rounded-[2rem] text-white shadow-xl shadow-indigo-200/50 relative overflow-hidden group">
+                        <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
+                          <MapPin size={120} />
+                        </div>
+                        <div className="relative z-10 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <MapPin size={18} />
+                              <span className="text-xs font-black uppercase tracking-widest text-indigo-100">Shipping Address</span>
+                            </div>
+                            <button 
+                              onClick={handleCopyAddress}
+                              className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-all"
+                              title="Copy Address"
+                            >
+                              <Copy size={14} />
+                            </button>
+                          </div>
+                          <div className="space-y-3">
+                            <div>
+                              <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest">Recipient</p>
+                              <p className="text-sm font-black">{WAREHOUSE_ADDRESS.name} (ID: {customerWarehouseId})</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest">Address</p>
+                              <p className="text-sm font-medium leading-relaxed">
+                                {WAREHOUSE_ADDRESS.street}, {WAREHOUSE_ADDRESS.city}<br />
+                                {WAREHOUSE_ADDRESS.state} {WAREHOUSE_ADDRESS.zip}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Step 2: Register Package Form */}
+                      <div className="p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
+                        <div className="flex items-center gap-3 text-indigo-600">
+                          <Package size={24} />
+                          <h4 className="text-xl font-black">Register Item</h4>
+                        </div>
+                        
                         <div className="space-y-4">
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">What's inside?</label>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Item Description</label>
                             <input 
                               type="text" 
-                              className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
-                              placeholder="e.g. Amazon Order #123, Clothes from Home..."
+                              className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-medium"
+                              placeholder="e.g. iPhone 15 Pro, Winter Jacket..."
                               value={cartItemName}
                               onChange={(e) => setCartItemName(e.target.value)}
                             />
                           </div>
+                          
                           <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Quantity</label>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Quantity</label>
                               <input 
                                 type="number" 
-                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-bold"
+                                placeholder="1"
+                                min="1"
                                 value={cartItemQuantity}
-                                min={1}
                                 onChange={(e) => setCartItemQuantity(Number(e.target.value))}
                               />
                             </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Est. Weight (kg)</label>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Weight (kg)</label>
                               <input 
                                 type="number" 
-                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
-                                placeholder="Optional"
-                                value={cartItemWeight}
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-bold"
+                                placeholder="0.5"
                                 step="0.1"
-                                onChange={(e) => setCartItemWeight(e.target.value === '' ? '' : Number(e.target.value))}
+                                value={cartItemWeight}
+                                onChange={(e) => setCartItemWeight(Number(e.target.value))}
                               />
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 gap-4">
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Invoice Number (Optional)</label>
-                              <input 
-                                type="text" 
-                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
-                                placeholder="e.g. INV-2024-001"
-                                value={cartItemInvoiceNumber}
-                                onChange={(e) => setCartItemInvoiceNumber(e.target.value)}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Remarks / Special Instructions</label>
-                              <textarea 
-                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white resize-none"
-                                placeholder="Any special handling instructions..."
-                                rows={2}
-                                value={cartItemRemarks}
-                                onChange={(e) => setCartItemRemarks(e.target.value)}
-                              />
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-3 p-4 bg-white rounded-2xl border border-slate-200 hover:border-indigo-200 transition-colors cursor-pointer group" onClick={() => setCartItemFragile(!cartItemFragile)}>
-                            <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${cartItemFragile ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-200 group-hover:border-indigo-300'}`}>
-                              {cartItemFragile && <Check size={14} />}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <AlertTriangle size={16} className={cartItemFragile ? 'text-amber-500' : 'text-slate-400'} />
-                              <span className={`text-sm font-bold ${cartItemFragile ? 'text-slate-900' : 'text-slate-500'}`}>Fragile Item</span>
-                            </div>
-                          </div>
                           <button 
                             onClick={handleAdd}
-                            className="w-full btn-cta flex items-center justify-center gap-2 group"
+                            disabled={!cartItemName}
+                            className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all ${
+                              cartItemName 
+                                ? 'bg-slate-900 text-white hover:bg-black shadow-xl' 
+                                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                            }`}
                           >
-                            <Plus size={20} className="group-hover:rotate-90 transition-transform" /> 
-                            Add to My Shipment
+                            <Plus size={20} /> Add to Shipment
                           </button>
                         </div>
                       </div>
                     </div>
-                  </>
-                ) : (hasActivePickup && !editingPickupId) ? (
-                  <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-4">
-                      <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
-                        <div className="flex items-center gap-3 text-indigo-600">
-                          <Package size={20} />
-                          <h4 className="font-bold">Add Items to Pickup</h4>
+
+                    {/* Right Column: How it Works & Review */}
+                    <div className="lg:col-span-7 space-y-6">
+                      {/* How it Works Bento Cards */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-3">
+                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                            <Package size={20} />
+                          </div>
+                          <h5 className="font-black text-slate-900">1. Send Items</h5>
+                          <p className="text-xs text-slate-500 leading-relaxed">
+                            Pack your items and send them to our warehouse address.
+                          </p>
                         </div>
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                          Add any items you want the agent to collect from your home.
-                        </p>
-                        <div className="space-y-3">
-                          <input 
-                            type="text" 
-                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
-                            placeholder="Item name..."
-                            value={cartItemName}
-                            onChange={(e) => setCartItemName(e.target.value)}
-                          />
-                          <input 
-                            type="number" 
-                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
-                            placeholder="Weight (kg)"
-                            value={cartItemWeight}
-                            onChange={(e) => setCartItemWeight(Number(e.target.value))}
-                          />
-                          <button 
-                            onClick={handleAdd}
-                            className="w-full btn-cta flex items-center justify-center gap-2"
-                          >
-                            <Plus size={20} /> Add to Home Pickup
-                          </button>
+                        <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-3">
+                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-600 shadow-sm">
+                            <ShoppingBag size={20} />
+                          </div>
+                          <h5 className="font-black text-slate-900">2. Shop Online</h5>
+                          <p className="text-xs text-slate-500 leading-relaxed">
+                            Use our address at checkout on Amazon, Flipkart, etc.
+                          </p>
                         </div>
+                      </div>
+
+                      {/* Review & Finalize Card */}
+                      <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm min-h-[400px] flex flex-col">
+                        <div className="flex items-center justify-between mb-8">
+                          <div className="flex items-center gap-3 text-indigo-600">
+                            <CheckCircle2 size={24} />
+                            <h4 className="text-xl font-black">3. Review Shipment</h4>
+                          </div>
+                          <div className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-black text-indigo-600 border border-indigo-100">
+                            {displayItems.filter(i => i.source === 'Warehouse' && !i.submitted).length} Items
+                          </div>
+                        </div>
+
+                        {displayItems.filter(i => i.source === 'Warehouse' && !i.submitted).length === 0 ? (
+                          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 space-y-4">
+                            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center">
+                              <Package size={40} strokeWidth={1} />
+                            </div>
+                            <p className="font-medium text-center max-w-[200px]">No items registered yet.</p>
+                          </div>
+                        ) : (
+                          <div className="flex-1 flex flex-col">
+                            <div className="space-y-3 mb-8">
+                              {displayItems.filter(i => i.source === 'Warehouse' && !i.submitted).map((item) => (
+                                <motion.div 
+                                  layout
+                                  initial={{ opacity: 0, x: 20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  key={item.id}
+                                  className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group"
+                                >
+                                  <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                                      <Package size={20} />
+                                    </div>
+                                    <div>
+                                      <h5 className="text-sm font-bold text-slate-900">{item.name}</h5>
+                                      <p className="text-[10px] text-slate-500 font-medium">
+                                        {item.quantity} units • {item.weight} kg
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button 
+                                    onClick={() => removeItem(item.id)}
+                                    className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </motion.div>
+                              ))}
+                            </div>
+
+                            <div className="mt-auto pt-8 border-t border-slate-100">
+                              <div className="grid grid-cols-2 gap-4">
+                                <button 
+                                  onClick={() => setActiveTab('cart')}
+                                  className="py-4 px-6 bg-slate-50 text-slate-600 rounded-2xl text-sm font-black hover:bg-slate-100 transition-all flex items-center justify-center gap-2"
+                                >
+                                  <RefreshCw size={18} /> Save
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    setItems(prev => prev.map(i => 
+                                      i.source === 'Warehouse' && !i.submitted 
+                                        ? { ...i, submitted: true } 
+                                        : i
+                                    ));
+                                    setActiveTab('cart');
+                                    toast.success('Shipment submitted!');
+                                  }}
+                                  className="py-4 bg-indigo-600 text-white rounded-2xl text-sm font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 flex items-center justify-center gap-2"
+                                >
+                                  <CheckCircle2 size={20} /> Submit
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                ) : (
-                  <>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Pickup Date</label>
-                          <select 
-                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm font-medium"
-                            value={selectedPickupDate}
-                            onChange={(e) => setSelectedPickupDate(e.target.value)}
-                          >
-                            {filteredPickupSlots.map(slot => <option key={slot.date} value={slot.date}>{slot.date}</option>)}
-                          </select>
-                          {minPickupDate && (
-                            <p className="mt-1 text-[10px] text-emerald-600 font-bold flex items-center gap-1 ml-1">
-                              <Info size={10} /> Dates adjusted for store items
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {/* Header Section with Progress for Pickup */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-50 pb-8">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-xl shadow-indigo-200">
+                        <Truck size={28} />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Home Pickup</h2>
+                        <p className="text-sm text-slate-500 font-medium">
+                          {(hasActivePickup && !editingPickupId) ? 'Add items to your scheduled pickup' : 'Schedule an agent to collect from your home'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Progress Indicator for Pickup */}
+                    <div className="flex items-center gap-2">
+                      {[1, 2].map((step) => (
+                        <div key={step} className="flex items-center">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black border-2 transition-all ${
+                            (step === 1 && !hasActivePickup) || (step === 2 && hasActivePickup) ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-400'
+                          }`}>
+                            {step}
+                          </div>
+                          {step < 2 && <div className="w-8 h-0.5 bg-indigo-100" />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {(hasActivePickup && !editingPickupId) ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                      {/* Left Column: Sticky Add Item Form */}
+                      <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-8">
+                        <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-6">
+                          <div className="flex items-center gap-3 text-indigo-600">
+                            <PlusCircle size={24} />
+                            <h4 className="text-xl font-black">Add Items</h4>
+                          </div>
+                          <p className="text-sm text-slate-500 leading-relaxed">
+                            Add any items you want the agent to collect from your home.
+                          </p>
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Item Name</label>
+                              <input 
+                                type="text" 
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
+                                placeholder="e.g. Traditional Dress, Spices..."
+                                value={cartItemName}
+                                onChange={(e) => setCartItemName(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Est. Weight (kg)</label>
+                              <input 
+                                type="number" 
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
+                                placeholder="1.0"
+                                value={cartItemWeight}
+                                onChange={(e) => setCartItemWeight(Number(e.target.value))}
+                              />
+                            </div>
+                            <button 
+                              onClick={handleAdd}
+                              disabled={!cartItemName}
+                              className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all ${
+                                cartItemName 
+                                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-200' 
+                                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                              }`}
+                            >
+                              <Plus size={20} /> Add to Pickup List
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Pickup Details Summary */}
+                        <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 text-indigo-600">
+                              <Clock size={24} />
+                              <h4 className="text-xl font-black">Pickup Details</h4>
+                            </div>
+                            <button 
+                              onClick={() => {
+                                const activePickup = appointments.find(a => a.status === 'Scheduled');
+                                if (activePickup) {
+                                  setEditingPickupId(activePickup.id);
+                                  setPickupName(activePickup.name || '');
+                                  setPickupPhone(activePickup.phone || '');
+                                  setPickupAddress(activePickup.address || { street: '', apartment: '', city: '', state: '', zip: '' });
+                                  setSelectedPickupDate(activePickup.date);
+                                  setSelectedPickupTime(activePickup.time);
+                                }
+                              }}
+                              className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                            >
+                              <Edit3 size={18} />
+                            </button>
+                          </div>
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                                <Calendar size={20} />
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Scheduled For</p>
+                                <p className="text-sm font-black text-slate-900">
+                                  {appointments.find(a => a.status === 'Scheduled')?.date} at {appointments.find(a => a.status === 'Scheduled')?.time}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                                <MapPin size={20} />
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Address</p>
+                                <p className="text-sm font-black text-slate-900 truncate max-w-[200px]">
+                                  {appointments.find(a => a.status === 'Scheduled')?.address.street}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Column: Pickup Status & Items */}
+                      <div className="lg:col-span-7 space-y-6">
+                        <div className="p-10 bg-indigo-50 rounded-[3rem] border border-indigo-100 text-center space-y-6 flex flex-col items-center justify-center min-h-[300px]">
+                          <div className="w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center text-indigo-600 shadow-xl shadow-indigo-200/50">
+                            <Truck size={48} />
+                          </div>
+                          <div className="space-y-2">
+                            <h4 className="text-2xl font-black text-slate-900">Pickup Scheduled!</h4>
+                            <p className="text-slate-600 max-w-sm mx-auto">
+                              Your agent is assigned. Add all your items here, and they will be collected during your scheduled slot.
                             </p>
+                          </div>
+                        </div>
+
+                        {/* Items List for Pickup */}
+                        <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm">
+                          <div className="flex items-center justify-between mb-8">
+                            <h4 className="text-xl font-black text-slate-900">Items in this Pickup</h4>
+                            <span className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-black text-indigo-600 border border-indigo-100">
+                              {displayItems.length} Items
+                            </span>
+                          </div>
+                          
+                          {displayItems.length === 0 ? (
+                            <div className="py-12 flex flex-col items-center justify-center text-slate-400 space-y-4">
+                              <Package size={48} strokeWidth={1} />
+                              <p className="font-medium">No items added yet.</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {displayItems.map((item) => (
+                                <motion.div 
+                                  layout
+                                  initial={{ opacity: 0, x: 20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  key={item.id}
+                                  className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group"
+                                >
+                                  <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                                      <Package size={20} />
+                                    </div>
+                                    <div>
+                                      <h5 className="text-sm font-bold text-slate-900">{item.name}</h5>
+                                      <p className="text-[10px] text-slate-500 font-medium">
+                                        {item.quantity} units • {item.weight} kg
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button 
+                                    onClick={() => removeItem(item.id)}
+                                    className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </motion.div>
+                              ))}
+                            </div>
                           )}
                         </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Time Slot</label>
-                          <select 
-                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm font-medium"
-                            value={selectedPickupTime}
-                            onChange={(e) => setSelectedPickupTime(e.target.value)}
-                          >
-                            {PICKUP_SLOTS.find(s => s.date === selectedPickupDate)?.times.map(time => (
-                              <option key={time} value={time}>{time}</option>
-                            ))}
-                          </select>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                      {/* Left Column: Sticky Details */}
+                      <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-8">
+                        {/* Step 1: Pickup Details */}
+                        <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-6">
+                          <div className="flex items-center gap-3 text-indigo-600">
+                            <Clock size={24} />
+                            <h4 className="text-xl font-black">1. Pickup Slot</h4>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Date</label>
+                              <select 
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-white transition-all text-sm font-bold"
+                                value={selectedPickupDate}
+                                onChange={(e) => setSelectedPickupDate(e.target.value)}
+                              >
+                                {filteredPickupSlots.map(slot => <option key={slot.date} value={slot.date}>{slot.date}</option>)}
+                              </select>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Time</label>
+                              <select 
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-white transition-all text-sm font-bold"
+                                value={selectedPickupTime}
+                                onChange={(e) => setSelectedPickupTime(e.target.value)}
+                              >
+                                {PICKUP_SLOTS.find(s => s.date === selectedPickupDate)?.times.map(time => (
+                                  <option key={time} value={time}>{time}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Language Preference</label>
+                            <select 
+                              className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-white transition-all text-sm font-bold"
+                              value={pickupLanguage}
+                              onChange={(e) => setPickupLanguage(e.target.value)}
+                            >
+                              {['English', 'Hindi', 'Telugu', 'Tamil', 'Kannada', 'Malayalam', 'Bengali', 'Gujarati', 'Marathi', 'Punjabi'].map(lang => (
+                                <option key={lang} value={lang}>{lang}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Step 2: Contact Info */}
+                        <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+                          <div className="flex items-center gap-3 text-indigo-600">
+                            <UserIcon size={24} />
+                            <h4 className="text-xl font-black">2. Contact Info</h4>
+                          </div>
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                              <input 
+                                type="text" 
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium"
+                                placeholder="Enter your name"
+                                value={pickupName}
+                                onChange={(e) => setPickupName(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                              <div className="relative">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">+91</span>
+                                <input 
+                                  type="tel" 
+                                  className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium"
+                                  placeholder="10-digit mobile"
+                                  value={pickupPhone}
+                                  maxLength={10}
+                                  onChange={(e) => {
+                                    const val = e.target.value.replace(/\D/g, '');
+                                    if (val.length <= 10) setPickupPhone(val);
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Your Name <span className="text-red-500">*</span></label>
-                        <input 
-                          type="text" 
-                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all"
-                          placeholder="Full Name"
-                          value={pickupName}
-                          onChange={(e) => setPickupName(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Contact Number <span className="text-red-500">*</span></label>
-                        <input 
-                          type="tel" 
-                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all"
-                          placeholder="Mobile number for agent"
-                          value={pickupPhone}
-                          maxLength={10}
-                          onChange={(e) => {
-                            const val = e.target.value.replace(/\D/g, '');
-                            if (val.length <= 10) setPickupPhone(val);
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Language Preference</label>
-                        <select 
-                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
-                          value={pickupLanguage}
-                          onChange={(e) => setPickupLanguage(e.target.value)}
-                        >
-                          {['English', 'Hindi', 'Telugu', 'Tamil', 'Kannada', 'Malayalam', 'Bengali', 'Gujarati', 'Marathi', 'Punjabi'].map(lang => (
-                            <option key={lang} value={lang}>{lang}</option>
-                          ))}
-                        </select>
+
+                      {/* Right Column: Address & Action */}
+                      <div className="lg:col-span-7 space-y-6">
+                        <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm space-y-8">
+                          <div className="flex items-center gap-3 text-indigo-600">
+                            <MapPin size={24} />
+                            <h4 className="text-xl font-black">3. Pickup Address</h4>
+                          </div>
+                          
+                          <div className="space-y-6">
+                            <div className="space-y-2">
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Street Address</label>
+                              <input 
+                                type="text" 
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium"
+                                placeholder="House No, Building, Street Name"
+                                value={pickupAddress.street}
+                                onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">City</label>
+                                <input 
+                                  type="text" 
+                                  className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium"
+                                  placeholder="City"
+                                  value={pickupAddress.city}
+                                  onChange={(e) => setPickupAddress({...pickupAddress, city: e.target.value})}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">ZIP Code</label>
+                                <input 
+                                  type="text" 
+                                  className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium"
+                                  placeholder="ZIP Code"
+                                  value={pickupAddress.zip}
+                                  onChange={(e) => setPickupAddress({...pickupAddress, zip: e.target.value})}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="pt-4">
+                              <button 
+                                onClick={editingPickupId ? saveEditedPickup : handleSchedulePickup}
+                                className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] text-lg font-black hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-200 flex items-center justify-center gap-3"
+                              >
+                                {editingPickupId ? <CheckCircle2 size={24} /> : <Truck size={24} />}
+                                {editingPickupId ? 'Update Schedule' : (currentUser ? 'Schedule Pickup Now' : 'Sign in to Schedule')}
+                              </button>
+                              
+                              {editingPickupId && (
+                                <button 
+                                  onClick={() => {
+                                    setEditingPickupId(null);
+                                    setPickupPhone('');
+                                    setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
+                                  }}
+                                  className="w-full mt-4 py-2 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm"
+                                >
+                                  Cancel Editing
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Info Card */}
+                        <div className="p-8 bg-emerald-50 rounded-[2.5rem] border border-emerald-100 flex items-start gap-6">
+                          <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm flex-shrink-0">
+                            <ShieldCheck size={28} />
+                          </div>
+                          <div>
+                            <h5 className="font-black text-slate-900 text-lg">Safe & Verified Agents</h5>
+                            <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                              All our pickup agents are background-verified and follow strict safety protocols. They will call you 30 minutes before arrival.
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Street Address <span className="text-red-500">*</span></label>
-                        <input 
-                          type="text" 
-                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
-                          placeholder="House No, Street Name"
-                          value={pickupAddress.street}
-                          onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">City <span className="text-red-500">*</span></label>
-                        <input 
-                          type="text" 
-                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
-                          placeholder="City"
-                          value={pickupAddress.city}
-                          onChange={(e) => setPickupAddress({...pickupAddress, city: e.target.value})}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">ZIP Code <span className="text-red-500">*</span></label>
-                        <input 
-                          type="text" 
-                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all text-sm"
-                          placeholder="ZIP Code"
-                          value={pickupAddress.zip}
-                          onChange={(e) => setPickupAddress({...pickupAddress, zip: e.target.value})}
-                        />
-                      </div>
-                      <button 
-                        onClick={editingPickupId ? saveEditedPickup : handleSchedulePickup}
-                        className="w-full btn-cta flex items-center justify-center gap-2"
-                      >
-                        {editingPickupId ? <Check size={20} /> : <Truck size={20} />}
-                        {editingPickupId ? 'Update Schedule' : (currentUser ? 'Schedule Pickup from home' : 'Sign in to Schedule Pickup')}
-                      </button>
-                      {editingPickupId && (
-                        <button 
-                          onClick={() => {
-                            setEditingPickupId(null);
-                            setPickupPhone('');
-                            setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
-                          }}
-                          className="w-full py-2 text-slate-400 font-bold hover:text-slate-600 transition-colors text-xs"
-                        >
-                          Cancel Editing
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {/* Item List Card - Visible in all tabs, but specific parts are conditional */}
-          {!((mode === 'Pickup' || mode === 'Warehouse') && isCartEmpty) && (
+          {mode !== 'Warehouse' && !((mode === 'Pickup') && isCartEmpty) && (
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 min-h-[400px]">
               {!mode && !hasAllAgentPickup && (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
@@ -3587,9 +3859,6 @@ const AdminDashboard = ({
                   )}
                   {mode === 'Pickup' && (
                     <p className="text-sm">Schedule a pickup to add items to your shipment.</p>
-                  )}
-                  {mode === 'Warehouse' && (
-                    <p className="text-sm">Add your items details above to track them.</p>
                   )}
                 </div>
               ) : (
@@ -3723,7 +3992,8 @@ const AdminDashboard = ({
                   )}
 
                   {/* Grouped Items by Source */}
-                  {['Store', 'Pickup', 'Warehouse'].map(source => {
+                  <div ref={warehouseItemsRef} className="space-y-8">
+                    {['Store', 'Pickup', 'Warehouse'].map(source => {
                     const sourceItems = displayItems.filter(i => i.source === source);
                     
                     // Special case: If Pickup from home is scheduled, show message instead of item list for Pickup source
@@ -3867,32 +4137,7 @@ const AdminDashboard = ({
                       </div>
                     );
                   })}
-
-                  {/* Save and Submit Buttons for Warehouse Mode */}
-                  {mode === 'Warehouse' && !isCartEmpty && (
-                    <div className="flex flex-col sm:flex-row gap-4 pt-8 border-t border-slate-100 mt-8">
-                      <button 
-                        onClick={() => toast.success('Shipment items saved successfully!')}
-                        className="flex-1 py-2.5 bg-white border-2 border-slate-200 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-                      >
-                        <RefreshCw size={16} /> Save Progress
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setItems(prev => prev.map(i => 
-                            i.source === 'Warehouse' && !i.submitted 
-                              ? { ...i, submitted: true } 
-                              : i
-                          ));
-                          setActiveTab('cart');
-                          toast.success('Shipment submitted successfully! You can now see your items in the cart.');
-                        }}
-                        className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2"
-                      >
-                        <CheckCircle2 size={16} /> Submit Order
-                      </button>
-                    </div>
-                  )}
+                  </div>
 
                   {/* Add More Items section removed as per user request */}
                 </div>
