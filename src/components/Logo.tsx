@@ -22,7 +22,7 @@ export const Logo: React.FC<LogoProps> = ({
       <img 
         src={`https://lh3.googleusercontent.com/d/18DxK9dI0ubE_q1i_bsb0GXbpo7glmwcs`} 
         alt="JiffEX Logo" 
-        className={`${height} w-auto object-contain min-h-[40px]`}
+        className={`${height} w-auto object-contain min-h-[40px] mix-blend-multiply`}
         referrerPolicy="no-referrer"
         onError={(e) => {
           // Fallback to text if image fails

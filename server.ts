@@ -6,6 +6,8 @@ import { createClient } from "@supabase/supabase-js";
 import fs from "fs";
 import twilio from "twilio";
 import nodemailer from "nodemailer";
+import PDFDocument from "pdfkit";
+import path from "path";
 
 dotenv.config();
 
@@ -261,47 +263,282 @@ app.post("/api/notifications/simulate", async (req, res) => {
   res.json({ success: true });
 });
 
-// API: Share Invoice via Email
-app.post("/api/invoice/share", async (req, res) => {
-  const { email, orderId, invoiceDetails } = req.body;
-  console.log(`[Invoice Share] Request received for order ${orderId} to email: ${email}`);
+// API: Share Invoice via Email (PDF Attachment)
+app.post("/api/invoice/send-pdf", async (req, res) => {
+  const { email, order, companyDetails } = req.body;
+  console.log(`[Invoice PDF] Request received for order ${order.id} to email: ${email}`);
   
   if (!mailTransporter || !process.env.SMTP_FROM) {
-    console.error('[Invoice Share] Email service not configured (mailTransporter or SMTP_FROM missing)');
+    console.error('[Invoice PDF] Email service not configured');
     return res.status(503).json({ error: "Email service not configured" });
   }
 
   if (!email || !email.includes('@') || email === 'user@example.com') {
-    console.warn(`[Invoice Share] Invalid email provided: ${email}`);
     return res.status(400).json({ error: "Invalid email address" });
   }
 
   try {
+    // Generate PDF
+    const pdfBuffer = await generateInvoicePDF(order, companyDetails);
+
+    const orderShortId = order.id.slice(0, 8).toUpperCase();
+    const appUrl = process.env.APP_URL || "https://www.jiffex.com";
+    const trackingUrl = `${appUrl}?tab=track&id=BB-${orderShortId}`;
+    
+    const subject = `Invoice for your JiffEX Order: BB-${orderShortId}`;
+    const bodyText = `
+Dear ${order.destination.fullName},
+
+Thank you for choosing JiffEX for your shipping needs. 
+
+We are pleased to inform you that your payment has been successfully processed. Please find the attached tax invoice for your order BB-${orderShortId}.
+
+Your shipment is being processed and will be dispatched as per the scheduled date. 
+
+Track your shipment here: ${trackingUrl}
+
+If you have any questions or require further assistance, please do not hesitate to contact our support team at ${companyDetails.email}.
+
+Best regards,
+
+The JiffEX Team
+JiffEX Shipping & Logistics
+www.jiffex.com
+    `.trim();
+
+    const bodyHtml = `
+<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0; border: 1px solid #eee; padding: 20px; border-radius: 10px; text-align: left;">
+  <p>Dear <strong>${order.destination.fullName}</strong>,</p>
+  <p>Thank you for choosing <strong>JiffEX</strong> for your shipping needs.</p>
+  <p>We are pleased to inform you that your payment has been successfully processed. Please find the attached tax invoice for your order <strong>BB-${orderShortId}</strong>.</p>
+  <p>Your shipment is being processed and will be dispatched as per the scheduled date.</p>
+  
+  <p>You can track your shipment anytime using this link: 
+    <a href="${trackingUrl}" style="color: #4f46e5; font-weight: bold; text-decoration: underline;">
+      Track Shipment Link
+    </a>
+  </p>
+  
+  <p>If you have any questions or require further assistance, please do not hesitate to contact our support team at <a href="mailto:${companyDetails.email}" style="color: #4f46e5;">${companyDetails.email}</a>.</p>
+  
+  <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+  
+  <p style="font-size: 14px; color: #666;">
+    Best regards,<br>
+    <strong>The JiffEX Team</strong><br>
+    JiffEX Shipping & Logistics<br>
+    <a href="https://www.jiffex.com" style="color: #4f46e5; text-decoration: none;">www.jiffex.com</a>
+  </p>
+</div>
+    `.trim();
+
     await mailTransporter.sendMail({
       from: process.env.SMTP_FROM,
       to: email,
-      subject: `JiffEX Invoice: ${orderId}`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-          <h2 style="color: #4f46e5;">JiffEX Shipping & Logistics</h2>
-          <h3>Tax Invoice</h3>
-          <p><strong>Order ID:</strong> ${orderId}</p>
-          <hr />
-          <h4>Shipment Summary</h4>
-          <pre style="background: #f8fafc; padding: 15px; border-radius: 8px; white-space: pre-wrap;">${invoiceDetails}</pre>
-          <p style="color: #64748b; font-size: 12px; margin-top: 20px;">
-            Thank you for choosing JiffEX. For any queries, please contact our support.
-          </p>
-        </div>
-      `
+      subject: subject,
+      text: bodyText,
+      html: bodyHtml,
+      attachments: [
+        {
+          filename: `Invoice_BB-${orderShortId}.pdf`,
+          content: pdfBuffer
+        }
+      ]
     });
-    console.log(`[Invoice Share] Invoice ${orderId} successfully sent to ${email}`);
+
+    console.log(`[Invoice PDF] Invoice ${order.id} successfully sent to ${email}`);
     res.json({ success: true });
   } catch (err: any) {
-    console.error(`[Invoice Share] Error sending to ${email}:`, err.message);
-    res.status(500).json({ error: "Failed to send email" });
+    console.error(`[Invoice PDF] Error:`, err.message);
+    res.status(500).json({ error: "Failed to generate or send invoice" });
   }
 });
+
+async function fetchImageBuffer(url: string): Promise<Buffer | null> {
+  try {
+    let finalUrl = url;
+    
+    // Convert Google Drive share links to direct download links
+    if (url.includes('drive.google.com')) {
+      const idMatch = url.match(/\/d\/([^/]+)/) || url.match(/id=([^&]+)/);
+      if (idMatch && idMatch[1]) {
+        finalUrl = `https://drive.google.com/uc?export=download&id=${idMatch[1]}`;
+      }
+    } else if (url.includes('lh3.googleusercontent.com/d/')) {
+      const idMatch = url.match(/\/d\/([^/]+)/);
+      if (idMatch && idMatch[1]) {
+        finalUrl = `https://drive.google.com/uc?export=download&id=${idMatch[1]}`;
+      }
+    }
+
+    console.log(`[PDF Logo] Fetching logo from: ${finalUrl}`);
+    const response = await fetch(finalUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/png,image/jpeg,image/*;q=0.9'
+      },
+      redirect: 'follow'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+    }
+    
+    const contentType = response.headers.get('content-type');
+    console.log(`[PDF Logo] Content-Type: ${contentType}`);
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    
+    if (buffer.length === 0) {
+      throw new Error('Fetched image buffer is empty');
+    }
+    
+    // Basic check for image header (PNG, JPG, GIF)
+    const isImage = buffer[0] === 0x89 || buffer[0] === 0xFF || buffer[0] === 0x47;
+    if (!isImage && !contentType?.includes('image')) {
+      console.warn('[PDF Logo] Buffer does not appear to be a standard image format');
+    }
+    
+    console.log(`[PDF Logo] Successfully fetched logo buffer, size: ${buffer.length} bytes`);
+    return buffer;
+  } catch (error) {
+    console.error('[PDF Logo] Error fetching image buffer:', error);
+    return null;
+  }
+}
+
+async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buffer> {
+  return new Promise(async (resolve, reject) => {
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const chunks: Buffer[] = [];
+
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    // Header Section
+    const logoUrl = process.env.VITE_LOGO_URL || "https://drive.google.com/uc?export=download&id=18DxK9dI0ubE_q1i_bsb0GXbpo7glmwcs";
+    const logoBuffer = await fetchImageBuffer(logoUrl);
+    
+    if (logoBuffer) {
+      try {
+        // Try to render the image
+        doc.image(logoBuffer, 50, 45, { width: 120 });
+        doc.moveDown(2);
+      } catch (err) {
+        console.error("[PDF Logo] Rendering Error:", err);
+        // Fallback to text logo if image rendering fails
+        doc.fillColor("#4f46e5").fontSize(28).font("Helvetica-Bold").text("JiffEX", 50, 50);
+        doc.moveDown(1.5);
+      }
+    } else {
+      // Fallback to text logo if fetch fails
+      doc.fillColor("#4f46e5").fontSize(28).font("Helvetica-Bold").text("JiffEX", 50, 50);
+      doc.moveDown(1.5);
+    }
+    
+    doc.fillColor("#444444").fontSize(10).font("Helvetica");
+    doc.text(companyDetails.name, 350, 50, { align: "right" });
+    doc.text(companyDetails.address, 350, 65, { align: "right" });
+    doc.text(companyDetails.email, 350, 80, { align: "right" });
+    
+    doc.moveDown(2.5);
+    const pageWidth = doc.page.width;
+    doc.fillColor("#000000").fontSize(22).font("Helvetica-Bold").text("TAX INVOICE", 0, doc.y, { 
+      align: "center",
+      width: pageWidth
+    });
+    doc.moveDown();
+
+    const infoTop = doc.y;
+    doc.fontSize(10).font("Helvetica-Bold").text(`Invoice Number:`, 50, infoTop);
+    doc.font("Helvetica").text(`INV-${order.id.slice(0, 8).toUpperCase()}`, 150, infoTop);
+    
+    doc.font("Helvetica-Bold").text(`Invoice Date:`, 50, infoTop + 15);
+    doc.font("Helvetica").text(`${new Date(order.createdAt || new Date()).toLocaleDateString()}`, 150, infoTop + 15);
+    
+    doc.moveDown(2);
+
+    // Customer Details
+    const customerTop = doc.y;
+    doc.fontSize(12).font("Helvetica-Bold").text("Customer Details", 50, customerTop);
+    doc.moveTo(50, customerTop + 15).lineTo(250, customerTop + 15).stroke();
+    
+    doc.fontSize(10).font("Helvetica").text(`Name: ${order.destination.fullName}`, 50, customerTop + 25);
+    doc.text(`Email: ${order.destination.email}`, 50, customerTop + 40);
+    doc.text(`Phone: ${order.destination.phone}`, 50, customerTop + 55);
+    doc.text(`Address: ${order.destination.addressLine1}, ${order.destination.city}, ${order.destination.state}, ${order.destination.zipCode}, ${order.destination.country}`, 50, customerTop + 70, { width: 200 });
+
+    doc.moveDown(4);
+
+    // Order Details Table
+    const tableTop = doc.y;
+    doc.fontSize(12).font("Helvetica-Bold").text("Order Details", 50, tableTop);
+    
+    doc.fontSize(10).font("Helvetica-Bold");
+    doc.text("Item Description", 50, tableTop + 25);
+    doc.text("Qty", 300, tableTop + 25, { width: 40, align: 'center' });
+    doc.text("Weight", 360, tableTop + 25, { width: 80, align: 'center' });
+    doc.text("Price", 460, tableTop + 25, { width: 80, align: 'right' });
+    
+    doc.moveTo(50, tableTop + 40).lineTo(550, tableTop + 40).stroke();
+    
+    let y = tableTop + 50;
+    doc.font("Helvetica");
+    order.items.forEach((item: any) => {
+      doc.text(item.name, 50, y);
+      doc.text((item.quantity || 1).toString(), 300, y, { width: 40, align: 'center' });
+      doc.text(`${item.weight} kg`, 360, y, { width: 80, align: 'center' });
+      doc.text(`₹${(item.price || 0).toLocaleString()}`, 460, y, { width: 80, align: 'right' });
+      y += 20;
+    });
+
+    doc.moveTo(50, y).lineTo(550, y).stroke();
+    doc.moveDown(2);
+
+    // Shipping Details
+    const shippingTop = doc.y;
+    doc.fontSize(12).font("Helvetica-Bold").text("Shipping Details", 50, shippingTop);
+    doc.fontSize(10).font("Helvetica");
+    doc.text(`Service Type: ${order.items[0]?.source || 'Standard Shipping'}`, 50, shippingTop + 20);
+    doc.text(`Origin: India`, 50, shippingTop + 35);
+    doc.text(`Destination: ${order.destination.country}`, 50, shippingTop + 50);
+    doc.text(`Tracking ID: BB-${order.id.slice(0, 8).toUpperCase()}`, 50, shippingTop + 65);
+
+    // Cost Breakdown
+    const costTop = shippingTop;
+    doc.fontSize(12).font("Helvetica-Bold").text("Cost Breakdown", 350, costTop);
+    
+    const productCost = order.items.reduce((acc: number, i: any) => acc + (i.price || 0), 0);
+    const shippingCharges = order.totalCost - productCost;
+    
+    doc.fontSize(10).font("Helvetica");
+    doc.text(`Product Cost:`, 350, costTop + 20);
+    doc.text(`₹${productCost.toLocaleString()}`, 460, costTop + 20, { width: 80, align: 'right' });
+    
+    doc.text(`Packing Charges:`, 350, costTop + 35);
+    doc.text(`₹0`, 460, costTop + 35, { width: 80, align: 'right' });
+    
+    doc.text(`Shipping Charges:`, 350, costTop + 50);
+    doc.text(`₹${shippingCharges.toLocaleString()}`, 460, costTop + 50, { width: 80, align: 'right' });
+    
+    doc.text(`Taxes:`, 350, costTop + 65);
+    doc.text(`₹0`, 460, costTop + 65, { width: 80, align: 'right' });
+    
+    doc.moveTo(350, costTop + 80).lineTo(550, costTop + 80).stroke();
+    doc.font("Helvetica-Bold").text(`Total Paid:`, 350, costTop + 85);
+    doc.text(`₹${order.totalCost.toLocaleString()}`, 460, costTop + 85, { width: 80, align: 'right' });
+
+    // Footer Section
+    doc.font("Helvetica-Oblique").fontSize(8).fillColor("#666666")
+       .text("This is a system-generated invoice and does not require a physical signature.", 50, 750, { align: "center" });
+    doc.text(`Support: ${companyDetails.email} | Website: www.jiffex.com`, { align: "center" });
+    doc.text("Terms: All shipments are subject to JiffEX terms and conditions.", { align: "center" });
+
+    doc.end();
+  });
+}
 
 // API: Get notification history
 app.get("/api/notifications/:userId", async (req, res) => {

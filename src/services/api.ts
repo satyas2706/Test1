@@ -71,7 +71,7 @@ export const api = {
   },
 
   async shareInvoice(email: string, orderId: string, invoiceDetails: string): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/invoice/share`, {
+    const res = await fetch(`${API_BASE}/invoice/send-pdf`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, orderId, invoiceDetails }),
@@ -79,6 +79,19 @@ export const api = {
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to share invoice');
+    }
+    return res.json();
+  },
+
+  async sendInvoicePDF(email: string, order: Order, companyDetails: any): Promise<{ success: boolean }> {
+    const res = await fetch(`${API_BASE}/invoice/send-pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, order, companyDetails }),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to send invoice PDF');
     }
     return res.json();
   },

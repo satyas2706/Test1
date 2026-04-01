@@ -58,6 +58,7 @@ import {
   ShoppingCart,
   RefreshCw,
   Warehouse,
+  Menu,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
@@ -98,6 +99,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [tabHistory, setTabHistory] = useState<Tab[]>(['home']);
   const [showSendDropdown, setShowSendDropdown] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [navbarTrackingId, setNavbarTrackingId] = useState('');
 
   const navigateTo = (tab: Tab) => {
@@ -165,9 +167,9 @@ const StaticShipmentTracker = () => {
           {steps.map((step, i) => (
             <div key={i} className="flex flex-col items-center gap-3 relative z-10">
               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${
-                step.status === 'completed' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' :
-                step.status === 'current' ? 'bg-white border-2 border-indigo-600 text-indigo-600 shadow-lg shadow-indigo-100' :
-                'bg-white border-2 border-slate-100 text-slate-300'
+                step.status === 'completed' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100' :
+                step.status === 'current' ? 'bg-white border border-indigo-600 text-indigo-600 shadow-md shadow-indigo-50' :
+                'bg-white border border-slate-100 text-slate-300'
               }`}>
                 <step.icon size={20} />
               </div>
@@ -234,10 +236,38 @@ const StaticShipmentTracker = () => {
   const [qWeight, setQWeight] = useState(1);
   const [qMethod, setQMethod] = useState<'Standard' | 'Express'>('Express');
   const [trackingId, setTrackingId] = useState('');
+
+  // Handle URL parameters for tracking
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab') as Tab;
+    const id = params.get('id');
+    
+    if (tab === 'track' && id) {
+      setActiveTab('track');
+      setTrackingId(id);
+      // Clean up URL without refreshing
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, []);
   const quoteRef = React.useRef<HTMLDivElement>(null);
 
   const scrollToQuote = () => {
     quoteRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleQuickQuoteClick = () => {
+    if (activeTab !== 'home') {
+      setActiveTab('home');
+      setTabHistory(prev => [...prev, 'home' as Tab]);
+      setTimeout(() => {
+        scrollToQuote();
+      }, 100);
+    } else {
+      scrollToQuote();
+    }
+    setIsMobileMenuOpen(false);
   };
 
   const handleTrackShipment = (e: React.FormEvent) => {
@@ -819,17 +849,15 @@ const StaticShipmentTracker = () => {
           shipping_date: selectedDate
         } as any);
 
-        // Automatically send invoice email
-        const invoiceDetails = `
-Items: ${cartItems.map(i => `${i.name} (${i.weight}kg)`).join(', ')}
-Total Weight: ${totalWeight}kg
-Total Cost: ₹${totalCost.toLocaleString()}
-Destination: ${address.city}, ${address.country}
-Date: ${new Date().toLocaleDateString()}
-        `.trim();
+        // Automatically send invoice email with PDF
+        const companyDetails = {
+          name: "JiffEX Shipping & Logistics",
+          address: "123 Logistics Hub, Mumbai, India",
+          email: "support@jiffex.com"
+        };
 
         const recipientEmail = address.email || currentUser.email;
-        await api.shareInvoice(recipientEmail, orderId!, invoiceDetails);
+        await api.sendInvoicePDF(recipientEmail, newOrder, companyDetails);
         toast.success(`Payment successful! Invoice sent to ${recipientEmail}`);
       } catch (err: any) {
         console.error('Failed to sync order or send invoice:', err.message);
@@ -956,6 +984,11 @@ Date: ${new Date().toLocaleDateString()}
               onClick={() => navigateTo('pickup')}
               className="group relative bg-white p-10 rounded-[3rem] shadow-xl border-2 border-transparent hover:border-indigo-500 transition-all duration-500 text-left flex flex-col gap-8 overflow-hidden"
             >
+              <div className="absolute top-6 right-6 z-20">
+                <span className="px-4 py-1.5 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-amber-200">
+                  Most Popular
+                </span>
+              </div>
               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-[5rem] -mr-8 -mt-8 transition-all duration-500 group-hover:bg-indigo-100" />
               <div className="w-20 h-20 bg-indigo-600 text-white rounded-3xl flex items-center justify-center shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform duration-500 relative z-10">
                 <Truck size={40} />
@@ -992,12 +1025,12 @@ Date: ${new Date().toLocaleDateString()}
 
     const TrackSection = useMemo(() => {
       return (
-        <div className="max-w-4xl mx-auto py-12 px-4 space-y-12">
+        <div className="max-w-3xl mx-auto py-12 px-4 space-y-12">
           <div className="text-center space-y-4">
             <h1 className="text-4xl md:text-6xl font-black text-slate-900 tracking-tight">Track Your Shipment</h1>
             <p className="text-xl text-slate-500 max-w-2xl mx-auto">Enter your tracking ID to see the real-time status of your global delivery.</p>
           </div>
-          <div className="bg-white p-8 md:p-12 rounded-[3rem] shadow-2xl border border-slate-100">
+          <div className="bg-white p-8 md:p-12 rounded-[3rem] shadow-xl border border-slate-50">
             <StaticShipmentTracker />
           </div>
         </div>
@@ -1054,7 +1087,12 @@ Date: ${new Date().toLocaleDateString()}
                   className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-5xl mx-auto"
                 >
                   {/* Card 1: Pickup from Home */}
-                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+                  <div className="relative bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
+                      <span className="px-4 py-1.5 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-amber-200">
+                        Most Popular
+                      </span>
+                    </div>
                     <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                       <Truck size={40} className="text-indigo-600" />
                     </div>
@@ -4705,26 +4743,27 @@ const AdminDashboard = ({
         )}
 
         {/* Navigation */}
-        <nav className="border-b border-slate-200">
-          <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between gap-8">
+        <nav className="border-b border-slate-200 bg-white sticky top-0 z-[100]">
+          <div className="max-w-7xl mx-auto px-6 h-20 flex items-center">
             <div 
-              className="flex items-center gap-3 cursor-pointer shrink-0" 
+              className="flex items-center gap-3 cursor-pointer shrink-0 mr-10" 
               onClick={() => {
                 if (currentUser?.role === 'Admin') navigateTo('admin');
                 else if (currentUser?.role === 'Agent') navigateTo('agent');
                 else navigateTo('home');
               }}
             >
-              <Logo height="h-14" />
+              <Logo height="h-12 sm:h-14" />
             </div>
             
-            <div className="hidden lg:flex items-center gap-8">
-              <button 
-                onClick={() => navigateTo('store')}
-                className={`text-base font-bold transition-all ${activeTab === 'store' ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}
-              >
-                Shop
-              </button>
+            <div className="flex-1 flex items-center justify-between gap-10 lg:gap-14">
+              <div className="hidden md:flex items-center gap-6">
+                <button 
+                  onClick={() => navigateTo('store')}
+                  className={`text-sm lg:text-base font-bold transition-all ${activeTab === 'store' ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  Shop
+                </button>
 
               <div 
                 className="relative group"
@@ -4733,13 +4772,13 @@ const AdminDashboard = ({
               >
                 <button 
                   onClick={() => navigateTo('send-options')}
-                  className={`flex items-center gap-1.5 text-lg font-black transition-all px-4 py-2 rounded-xl border-2 hover:underline decoration-2 underline-offset-4 decoration-indigo-500/50 ${
+                  className={`flex items-center gap-1.5 text-base lg:text-lg font-black transition-all px-3 lg:px-4 py-2 rounded-xl border-2 hover:underline decoration-2 underline-offset-4 decoration-indigo-500/50 ${
                     activeTab === 'send-options' || activeTab === 'pickup' || activeTab === 'warehouse'
                       ? 'bg-indigo-50 border-indigo-600 text-indigo-700' 
                       : 'border-transparent text-slate-950 hover:bg-slate-50'
                   }`}
                 >
-                  Send <ChevronDown size={20} className={`transition-transform duration-300 ${showSendDropdown ? 'rotate-180' : ''}`} />
+                  Send <ChevronDown size={18} className={`transition-transform duration-300 ${showSendDropdown ? 'rotate-180' : ''}`} />
                 </button>
 
                 {/* Dropdown */}
@@ -4780,75 +4819,172 @@ const AdminDashboard = ({
                 </AnimatePresence>
               </div>
 
-              <div className="hidden xl:flex items-center gap-2 bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-none">
-                <input 
-                  type="text" 
-                  placeholder="Enter Tracking ID" 
-                  value={navbarTrackingId}
-                  onChange={(e) => setNavbarTrackingId(e.target.value)}
-                  autoComplete="new-password"
-                  className="bg-transparent border-none focus:ring-0 text-sm w-32 placeholder:text-slate-400 font-medium"
-                />
+                <div className="hidden xl:flex items-center gap-2 bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-none">
+                  <input 
+                    type="text" 
+                    placeholder="Enter Tracking ID" 
+                    value={navbarTrackingId}
+                    onChange={(e) => setNavbarTrackingId(e.target.value)}
+                    autoComplete="new-password"
+                    className="bg-transparent border-none focus:ring-0 text-sm w-24 lg:w-32 placeholder:text-slate-400 font-medium"
+                  />
+                  <button 
+                    onClick={() => {
+                      if (navbarTrackingId.trim()) {
+                        toast.success(`Tracking shipment: ${navbarTrackingId}`);
+                        navigateTo('track');
+                        setNavbarTrackingId('');
+                      }
+                    }}
+                    className="btn-cta shadow-none py-1 px-3 text-xs"
+                  >
+                    Track
+                  </button>
+                </div>
+
                 <button 
-                  onClick={() => {
-                    if (navbarTrackingId.trim()) {
-                      toast.success(`Tracking shipment: ${navbarTrackingId}`);
-                      navigateTo('track');
-                      setNavbarTrackingId('');
-                    }
-                  }}
-                  className="btn-cta shadow-none"
+                  onClick={() => navigateTo('support')}
+                  className={`text-sm lg:text-base font-medium transition-all ${activeTab === 'support' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
                 >
-                  Track
+                  Support
                 </button>
               </div>
 
-              <button 
-                onClick={() => navigateTo('support')}
-                className={`text-base font-medium transition-all ${activeTab === 'support' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-              >
-                Support
-              </button>
-            </div>
-
-            <div className="flex items-center gap-8">
-              {/* Cart Icon Only */}
-              <button 
-                onClick={() => navigateTo('cart')}
-                className={`relative p-3 rounded-2xl transition-all ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
-              >
-                <ShoppingCart size={24} />
-                {cartItems.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-black border-2 border-white">
-                    {cartItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}
-                  </span>
-                )}
-              </button>
-
-              {currentUser ? (
-                <div className="flex items-center gap-4">
-                  <div className="hidden sm:flex flex-col items-end">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{currentUser.role}</span>
-                    <span className="text-sm font-black text-slate-900 leading-none">{currentUser.name}</span>
-                  </div>
-                  <button 
-                    onClick={handleLogout}
-                    className="w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-all border border-slate-200"
-                    title="Logout"
-                  >
-                    <LogOut size={18} />
-                  </button>
-                </div>
-              ) : (
+              <div className="flex items-center gap-4 lg:gap-6">
                 <button 
-                  onClick={() => setShowLoginModal(true)}
-                  className="btn-cta flex items-center gap-2"
+                  onClick={handleQuickQuoteClick}
+                  className="text-sm lg:text-base font-bold text-indigo-600 hover:text-indigo-700 transition-all"
                 >
-                  <UserIcon size={18} /> Sign In
+                  Quick Quote
                 </button>
-              )}
+                {/* Cart Icon Only */}
+                <button 
+                  onClick={() => navigateTo('cart')}
+                  className={`relative p-2 sm:p-3 rounded-2xl transition-all ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                  <ShoppingCart size={20} className="sm:w-6 sm:h-6" />
+                  {cartItems.length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[10px] w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center font-black border-2 border-white">
+                      {cartItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}
+                    </span>
+                  )}
+                </button>
+
+                {currentUser ? (
+                  <div className="flex items-center gap-2 sm:gap-4">
+                    <div className="hidden sm:flex flex-col items-end">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{currentUser.role}</span>
+                      <span className="text-sm font-black text-slate-900 leading-none">{currentUser.name}</span>
+                    </div>
+                    <button 
+                      onClick={handleLogout}
+                      className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-all border border-slate-200"
+                      title="Logout"
+                    >
+                      <LogOut size={16} className="sm:w-[18px] sm:h-[18px]" />
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => setShowLoginModal(true)}
+                    className="btn-cta flex items-center gap-2 py-2 px-3 sm:px-4 text-xs sm:text-sm"
+                  >
+                    <UserIcon size={16} className="sm:w-[18px] sm:h-[18px]" /> <span>Sign In</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Mobile Menu Button */}
+              <button 
+                className="lg:hidden p-2 text-slate-600 hover:bg-slate-50 rounded-xl transition-all"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              >
+                {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+              </button>
             </div>
           </div>
+
+          {/* Mobile Menu Drawer */}
+          <AnimatePresence>
+            {isMobileMenuOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="lg:hidden border-t border-slate-100 bg-white overflow-hidden"
+              >
+                <div className="flex flex-col p-4 gap-2">
+                  <button 
+                    onClick={() => { navigateTo('store'); setIsMobileMenuOpen(false); }}
+                    className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'store' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    Shop
+                  </button>
+                  <button 
+                    onClick={() => { navigateTo('send-options'); setIsMobileMenuOpen(false); }}
+                    className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'send-options' || activeTab === 'pickup' || activeTab === 'warehouse' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    Send
+                  </button>
+                  <button 
+                    onClick={() => { navigateTo('support'); setIsMobileMenuOpen(false); }}
+                    className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'support' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    Support
+                  </button>
+                  <button 
+                    onClick={handleQuickQuoteClick}
+                    className="text-lg font-bold p-3 rounded-xl text-left text-indigo-600 hover:bg-indigo-50 transition-all"
+                  >
+                    Quick Quote
+                  </button>
+                  
+                  <div className="pt-4 mt-2 border-t border-slate-100">
+                    {!currentUser ? (
+                      <button 
+                        onClick={() => { setShowLoginModal(true); setIsMobileMenuOpen(false); }}
+                        className="w-full btn-cta flex items-center justify-center gap-2 py-3"
+                      >
+                        <UserIcon size={20} />
+                        <span>Sign In</span>
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+                        className="w-full p-3 rounded-xl text-left font-bold text-red-600 bg-red-50 flex items-center gap-2"
+                      >
+                        <LogOut size={20} />
+                        <span>Logout</span>
+                      </button>
+                    )}
+                    
+                    <div className="mt-4 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                      <input 
+                        type="text" 
+                        placeholder="Enter Tracking ID" 
+                        value={navbarTrackingId}
+                        onChange={(e) => setNavbarTrackingId(e.target.value)}
+                        className="bg-transparent border-none focus:ring-0 text-sm flex-1 placeholder:text-slate-400 font-medium"
+                      />
+                      <button 
+                        onClick={() => {
+                          if (navbarTrackingId.trim()) {
+                            toast.success(`Tracking shipment: ${navbarTrackingId}`);
+                            navigateTo('track');
+                            setNavbarTrackingId('');
+                            setIsMobileMenuOpen(false);
+                          }
+                        }}
+                        className="btn-cta py-1.5 px-4 text-xs"
+                      >
+                        Track
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </nav>
       </header>
 
