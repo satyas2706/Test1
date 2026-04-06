@@ -1,107 +1,84 @@
-import { ShippingItem, Appointment, User, Order } from '../types';
+import { ShippingItem, Order, Appointment } from '../types';
 
-const API_BASE = '/api';
+const API_URL = window.location.origin;
 
 export const api = {
-  async getItems(userId: string): Promise<ShippingItem[]> {
-    const res = await fetch(`${API_BASE}/items/${userId}`);
-    if (!res.ok) throw new Error('Failed to fetch items');
-    return res.json();
+  async checkHealth() {
+    try {
+      const response = await fetch(`${API_URL}/api/health`);
+      return await response.json();
+    } catch (error) {
+      return { status: 'error', error: (error as Error).message };
+    }
   },
 
-  async createItem(item: Partial<ShippingItem>): Promise<ShippingItem> {
-    const res = await fetch(`${API_BASE}/items`, {
+  async fetchItems(userId: string): Promise<ShippingItem[]> {
+    const response = await fetch(`${API_URL}/api/items/${userId}`);
+    if (!response.ok) throw new Error('Failed to fetch items');
+    return await response.json();
+  },
+
+  async createItem(item: Partial<ShippingItem> & { customer_id: string }, ...args: any[]) {
+    const response = await fetch(`${API_URL}/api/items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(item),
     });
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Failed to create item');
-    }
-    return res.json();
+    if (!response.ok) throw new Error('Failed to create item');
+    return await response.json();
   },
 
-  async createOrder(order: Partial<Appointment | Order>): Promise<any> {
-    const res = await fetch(`${API_BASE}/orders`, {
+  async createOrder(order: Partial<Order>) {
+    const response = await fetch(`${API_URL}/api/orders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(order),
     });
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Failed to create order');
-    }
-    return res.json();
+    if (!response.ok) throw new Error('Failed to create order');
+    return await response.json();
   },
 
-  async getOrders(customerId: string): Promise<Order[]> {
-    const res = await fetch(`${API_BASE}/orders/${customerId}`);
-    if (!res.ok) throw new Error('Failed to fetch orders');
-    const data = await res.json();
-    return data.map((o: any) => ({
-      ...o,
-      customerId: o.customer_id,
-      totalWeight: o.total_weight,
-      totalCost: o.total_cost,
-      paymentStatus: o.payment_status,
-      createdAt: o.created_at,
-      shippingDate: o.shipping_date
-    }));
+  async fetchOrders(userId: string): Promise<Order[]> {
+    const response = await fetch(`${API_URL}/api/orders/${userId}`);
+    if (!response.ok) throw new Error('Failed to fetch orders');
+    return await response.json();
   },
 
-  async updateItemStatus(itemId: string, status: string, userId: string, name: string, email?: string, phone?: string): Promise<ShippingItem> {
-    const res = await fetch(`${API_BASE}/items/${itemId}`, {
+  async getOrders(userId: string): Promise<Order[]> {
+    return this.fetchOrders(userId);
+  },
+
+  async updateItemStatus(itemId: string, status: string, ...args: any[]) {
+    const response = await fetch(`${API_URL}/api/items/${itemId}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, user_id: userId, name, email, phone }),
+      body: JSON.stringify({ status }),
     });
-    if (!res.ok) throw new Error('Failed to update item status');
-    return res.json();
+    if (!response.ok) throw new Error('Failed to update status');
+    return await response.json();
   },
 
-  async updateOrderStatus(orderId: string, status: string, customerId: string, destination: any): Promise<Order> {
-    const res = await fetch(`${API_BASE}/orders/${orderId}`, {
+  async updateOrderStatus(orderId: string, status: string, ...args: any[]) {
+    const response = await fetch(`${API_URL}/api/orders/${orderId}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, customer_id: customerId, destination }),
+      body: JSON.stringify({ status }),
     });
-    if (!res.ok) throw new Error('Failed to update order status');
-    return res.json();
+    if (!response.ok) throw new Error('Failed to update order status');
+    return await response.json();
   },
 
-  async shareInvoice(email: string, orderId: string, invoiceDetails: string): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/invoice/send-pdf`, {
+  async sendInvoicePDF(order: Order, ...args: any[]) {
+    const response = await fetch(`${API_URL}/api/share-invoice`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, orderId, invoiceDetails }),
+      body: JSON.stringify({ order }),
     });
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Failed to share invoice');
-    }
-    return res.json();
+    if (!response.ok) throw new Error('Failed to send invoice');
+    return await response.json();
   },
 
-  async sendInvoicePDF(email: string, order: Order, companyDetails: any): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/invoice/send-pdf`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, order, companyDetails }),
-    });
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Failed to send invoice PDF');
-    }
-    return res.json();
-  },
-
-  async checkHealth(): Promise<{ status: string; supabaseConnected: boolean; error?: string }> {
-    try {
-      const res = await fetch(`${API_BASE}/health`);
-      return res.json();
-    } catch (err: any) {
-      return { status: 'error', supabaseConnected: false, error: err.message };
-    }
+  async shareInvoice(order: Order, ...args: any[]) {
+    return this.sendInvoicePDF(order, ...args);
   }
 };

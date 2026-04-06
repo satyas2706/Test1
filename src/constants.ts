@@ -1,7 +1,7 @@
 
 import { StoreProduct } from './types';
 
-const getFutureDate = (days: number) => {
+export const getFutureDate = (days: number) => {
   const d = new Date();
   d.setDate(d.getDate() + days);
   return d.toISOString().split('T')[0];
@@ -161,22 +161,10 @@ export const SHIPPING_DATES = [
   getFutureDate(25),
 ];
 
-export const PICKUP_SLOTS = [
-  { date: getFutureDate(1), times: ['09:00 AM', '11:00 AM', '02:00 PM', '04:00 PM'] },
-  { date: getFutureDate(2), times: ['10:00 AM', '12:00 PM', '03:00 PM', '05:00 PM'] },
-  { date: getFutureDate(3), times: ['09:00 AM', '11:00 AM', '01:00 PM', '03:00 PM'] },
-  { date: getFutureDate(4), times: ['10:00 AM', '12:00 PM', '02:00 PM', '04:00 PM'] },
-  { date: getFutureDate(5), times: ['09:00 AM', '11:00 AM', '03:00 PM', '05:00 PM'] },
-  { date: getFutureDate(6), times: ['10:00 AM', '12:00 PM', '01:00 PM', '03:00 PM'] },
-  { date: getFutureDate(7), times: ['09:00 AM', '11:00 AM', '02:00 PM', '04:00 PM'] },
-  { date: getFutureDate(8), times: ['10:00 AM', '12:00 PM', '03:00 PM', '05:00 PM'] },
-  { date: getFutureDate(9), times: ['09:00 AM', '11:00 AM', '01:00 PM', '03:00 PM'] },
-  { date: getFutureDate(10), times: ['10:00 AM', '12:00 PM', '02:00 PM', '04:00 PM'] },
-  { date: getFutureDate(11), times: ['09:00 AM', '11:00 AM', '03:00 PM', '05:00 PM'] },
-  { date: getFutureDate(12), times: ['10:00 AM', '12:00 PM', '01:00 PM', '03:00 PM'] },
-  { date: getFutureDate(13), times: ['09:00 AM', '11:00 AM', '02:00 PM', '04:00 PM'] },
-  { date: getFutureDate(14), times: ['10:00 AM', '12:00 PM', '03:00 PM', '05:00 PM'] },
-];
+export const PICKUP_SLOTS = Array.from({ length: 15 }).map((_, i) => ({
+  date: getFutureDate(i),
+  times: ['9–11 AM', '11–1 PM', '1–3 PM', '3–5 PM', '5–7 PM', '7–9 PM']
+}));
 
 export const WAREHOUSE_ADDRESS = {
   name: 'JiffEX Main Warehouse',

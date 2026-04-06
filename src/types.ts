@@ -1,86 +1,39 @@
-
-export type UserRole = 'Admin' | 'Customer' | 'Agent';
+export type UserRole = 'admin' | 'agent' | 'customer';
 
 export interface User {
   id: string;
-  name: string;
   email: string;
+  name: string;
   role: UserRole;
+  phone?: string;
+  address?: string;
 }
 
-export type ShippingStatus = 'Pending' | 'Ready for Collection' | 'Processing' | 'In Transit' | 'Out for Delivery' | 'Delivered' | 'Cancelled' | 'Received at Warehouse' | 'Pickup Scheduled' | 'Package Collected' | 'To be Received';
+export type ShippingStatus = 
+  | 'Pending' 
+  | 'Scheduled' 
+  | 'Picked Up' 
+  | 'In Warehouse' 
+  | 'Received at Warehouse'
+  | 'In Transit' 
+  | 'Out for Delivery' 
+  | 'Delivered' 
+  | 'Cancelled';
 
 export interface ShippingItem {
   id: string;
   name: string;
   weight: number;
-  image?: string;
-  status: ShippingStatus;
-  source: 'Pickup' | 'Store' | 'Warehouse';
-  price?: number;
   quantity?: number;
+  isFragile?: boolean;
   fragile?: boolean;
-  submitted?: boolean;
   invoiceNumber?: string;
   remarks?: string;
-  estimatedDelivery?: string;
-  customerId?: string;
-}
-
-export interface ShippingQuote {
-  country: string;
-  weight: number;
-  estimatedCost: number;
-}
-
-export interface AgentProfile {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  status: 'Active' | 'Inactive';
-  vehicleNumber?: string;
-}
-
-export interface Appointment {
-  id: string;
-  date: string;
-  time: string;
-  address: string;
-  phone: string;
-  customerName?: string;
-  status: 'Scheduled' | 'Completed' | 'Cancelled';
-  items: ShippingItem[];
-  paymentStatus: 'Pending' | 'Paid';
-  orderId?: string;
-  assignedAgentId?: string;
-  assignedAgent?: AgentProfile;
-  customerId: string;
-  pickupType?: 'AllAgent' | 'Mixed';
-  languagePreference?: string;
-}
-
-export interface Order {
-  id: string;
-  customerId: string;
-  items: ShippingItem[];
-  totalWeight: number;
-  totalCost: number;
   status: ShippingStatus;
-  createdAt: string;
-  shippingDate?: string;
-  destination: DestinationAddress;
-  paymentStatus: 'Pending' | 'Paid';
-}
-
-export interface StoreProduct {
-  id: string;
-  name: string;
-  price: number;
-  category: 'Pooja' | 'Return Gifts' | 'Decorative';
-  image: string;
-  weight: number;
-  estimatedDelivery?: string;
+  source: 'Pickup' | 'Warehouse' | 'Store';
+  submitted?: boolean;
+  price?: number;
+  image?: string;
 }
 
 export interface DestinationAddress {
@@ -88,9 +41,67 @@ export interface DestinationAddress {
   email: string;
   phone: string;
   addressLine1: string;
-  addressLine2?: string;
   city: string;
   state: string;
   zipCode: string;
   country: string;
+}
+
+export interface Order {
+  id: string;
+  customer_id?: string;
+  customerId?: string;
+  items: ShippingItem[];
+  destination: DestinationAddress;
+  total_weight?: number;
+  totalWeight?: number;
+  total_cost?: number;
+  totalCost?: number;
+  status: ShippingStatus;
+  payment_status?: 'Pending' | 'Paid';
+  paymentStatus?: 'Pending' | 'Paid';
+  shipping_date?: string;
+  shippingDate?: string;
+  created_at?: string;
+  createdAt?: string;
+}
+
+export interface Appointment {
+  id: string;
+  customer_id?: string;
+  customerId?: string;
+  customerName: string;
+  date: string;
+  time: string;
+  address: string;
+  phone: string;
+  status: 'Scheduled' | 'Completed' | 'Cancelled';
+  items?: ShippingItem[];
+  paymentStatus: 'Pending' | 'Paid';
+  pickupType: 'AllAgent' | 'Mixed';
+  assignedAgent?: AgentProfile;
+  assignedAgentId?: string;
+  languagePreference?: string;
+  itemType?: string;
+  vehicleType?: string;
+}
+
+export interface AgentProfile {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  status: 'Active' | 'Inactive' | 'On Delivery';
+  vehicleNumber?: string;
+}
+
+export interface StoreProduct {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  image: string;
+  weight: number;
+  description?: string;
+  estimatedDelivery?: string;
 }

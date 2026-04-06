@@ -62,7 +62,7 @@ if (mailTransporter) {
 }
 
 // Notification Helper
-async function sendNotification(userId: string, event: string, message: string, channels: string[], recipientInfo?: { email?: string, phone?: string }) {
+async function sendNotification(userId: string, event: string, message: string, channels: string[], recipientInfo?: { email?: string, phone?: string, fullName?: string, orderId?: string, pickupDate?: string, pickupTime?: string, pickupAddress?: string }) {
   console.log(`[Notification] User: ${userId}, Event: ${event}, Message: ${message}, Channels: ${channels.join(', ')}`);
   
   // Store in database for history
@@ -109,12 +109,69 @@ async function sendNotification(userId: string, event: string, message: string, 
     const to = recipientInfo?.email;
     console.log(`[Notification] Attempting to send email to: ${to} for event: ${event}`);
     if (to && to !== 'user@example.com' && to.includes('@')) {
+      let subject = `JiffEX Notification: ${event}`;
+      let html = null;
+      let text = message;
+
+      if (event === 'Pickup confirmed') {
+        const fullName = recipientInfo?.fullName || 'Valued Customer';
+        const orderId = recipientInfo?.orderId || 'N/A';
+        const pickupDate = recipientInfo?.pickupDate || 'Scheduled Date';
+        const pickupTime = recipientInfo?.pickupTime || 'Scheduled Time';
+        const pickupAddress = recipientInfo?.pickupAddress || 'Your Address';
+        const appUrl = process.env.APP_URL || "https://www.jiffex.com";
+        const trackingUrl = `${appUrl}?tab=track&id=${orderId}`;
+
+        subject = `Pickup Scheduled: Your JiffEX Appointment ${orderId}`;
+        
+        html = `
+<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0; border: 1px solid #eee; padding: 20px; border-radius: 10px; text-align: left;">
+  <p>Dear <strong>${fullName}</strong>,</p>
+  <p>Thank you for choosing <strong>JiffEX</strong> for your shipping needs.</p>
+  <p>We are pleased to confirm that your home pickup has been successfully scheduled. Our agent will visit your location as per the details below:</p>
+  
+  <div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4f46e5;">
+    <p style="margin: 5px 0;"><strong>Booking ID:</strong> ${orderId}</p>
+    <p style="margin: 5px 0;"><strong>Scheduled Date:</strong> ${pickupDate}</p>
+    <p style="margin: 5px 0;"><strong>Time Slot:</strong> ${pickupTime}</p>
+    <p style="margin: 5px 0;"><strong>Pickup Address:</strong> ${pickupAddress}</p>
+  </div>
+
+  <p><strong>What happens next?</strong></p>
+  <ul style="padding-left: 20px;">
+    <li>Our agent will arrive within the scheduled time slot.</li>
+    <li>They will weigh your items and provide an instant quote.</li>
+    <li>Once you approve, you can make the payment securely via the app or to the agent.</li>
+    <li>Your items will be packed and dispatched immediately.</li>
+  </ul>
+  
+  <p>You can track your booking status anytime using this link: 
+    <a href="${trackingUrl}" style="color: #4f46e5; font-weight: bold; text-decoration: underline;">
+      Track Booking Status
+    </a>
+  </p>
+  
+  <p>If you need to reschedule or have any questions, please contact our support team at <a href="mailto:support@jiffex.com" style="color: #4f46e5;">support@jiffex.com</a>.</p>
+  
+  <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+  
+  <p style="font-size: 14px; color: #666;">
+    Best regards,<br>
+    <strong>The JiffEX Team</strong><br>
+    JiffEX Shipping & Logistics<br>
+    <a href="https://www.jiffex.com" style="color: #4f46e5; text-decoration: none;">www.jiffex.com</a>
+  </p>
+</div>
+        `;
+      }
+
       promises.push(
         mailTransporter.sendMail({
           from: process.env.SMTP_FROM,
           to,
-          subject: `JiffEX Notification: ${event}`,
-          text: message
+          subject,
+          text,
+          html: html || undefined
         }).then(() => {
           console.log(`[Notification] Email successfully sent to ${to}`);
         }).catch(err => {
@@ -204,7 +261,15 @@ app.post("/api/orders", async (req, res) => {
 
   // Trigger Notification: Shipment dispatched (if status is 'Dispatched') or Pickup confirmed (if it's an appointment)
   if (status === 'Scheduled') {
-    await sendNotification(customer_id, 'Pickup confirmed', `Your agent pickup for ${destination.city}, ${destination.country} has been confirmed.`, ['SMS', 'Email', 'whatsapp'], { email: destination.email, phone: destination.phone });
+    await sendNotification(customer_id, 'Pickup confirmed', `Your agent pickup for ${destination.city}, ${destination.country} has been confirmed.`, ['SMS', 'Email', 'whatsapp'], { 
+      email: destination.email, 
+      phone: destination.phone,
+      fullName: destination.fullName,
+      orderId: id,
+      pickupDate: shipping_date,
+      pickupTime: req.body.time, // Appointments have time field
+      pickupAddress: destination.addressLine1
+    });
   } else if (status === 'Dispatched') {
     await sendNotification(customer_id, 'Shipment dispatched', `Your shipment BB-${id.slice(0,8)} has been dispatched to ${destination.city}, ${destination.country}.`, ['SMS', 'Email', 'whatsapp'], { email: destination.email, phone: destination.phone });
   }
@@ -360,12 +425,12 @@ async function fetchImageBuffer(url: string): Promise<Buffer | null> {
     
     // Convert Google Drive share links to direct download links
     if (url.includes('drive.google.com')) {
-      const idMatch = url.match(/\/d\/([^/]+)/) || url.match(/id=([^&]+)/);
+      const idMatch = url.match(/\/d\/([^\/]+)\//) || url.match(/id=([^&]+)/);
       if (idMatch && idMatch[1]) {
         finalUrl = `https://drive.google.com/uc?export=download&id=${idMatch[1]}`;
       }
     } else if (url.includes('lh3.googleusercontent.com/d/')) {
-      const idMatch = url.match(/\/d\/([^/]+)/);
+      const idMatch = url.match(/\/d\/([^\/]+)/);
       if (idMatch && idMatch[1]) {
         finalUrl = `https://drive.google.com/uc?export=download&id=${idMatch[1]}`;
       }
@@ -418,7 +483,7 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
     doc.on("error", reject);
 
     // Header Section
-    const logoUrl = process.env.VITE_LOGO_URL || "https://drive.google.com/uc?export=download&id=18DxK9dI0ubE_q1i_bsb0GXbpo7glmwcs";
+    const logoUrl = process.env.VITE_LOGO_URL || "https://raw.githubusercontent.com/satyas2706/Test1/main/public/logo.png";
     const logoBuffer = await fetchImageBuffer(logoUrl);
     
     if (logoBuffer) {
@@ -429,12 +494,12 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
       } catch (err) {
         console.error("[PDF Logo] Rendering Error:", err);
         // Fallback to text logo if image rendering fails
-        doc.fillColor("#4f46e5").fontSize(28).font("Helvetica-Bold").text("JiffEX", 50, 50);
+        doc.fillColor("#4f46e5").fontSize(28).font("Helvetica-Bold").text("JIFFEX", 50, 50);
         doc.moveDown(1.5);
       }
     } else {
       // Fallback to text logo if fetch fails
-      doc.fillColor("#4f46e5").fontSize(28).font("Helvetica-Bold").text("JiffEX", 50, 50);
+      doc.fillColor("#4f46e5").fontSize(28).font("Helvetica-Bold").text("JIFFEX", 50, 50);
       doc.moveDown(1.5);
     }
     
@@ -456,7 +521,7 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
     doc.font("Helvetica").text(`INV-${order.id.slice(0, 8).toUpperCase()}`, 150, infoTop);
     
     doc.font("Helvetica-Bold").text(`Invoice Date:`, 50, infoTop + 15);
-    doc.font("Helvetica").text(`${new Date(order.createdAt || new Date()).toLocaleDateString()}`, 150, infoTop + 15);
+    doc.font("Helvetica").text(`${new Date(order.created_at || new Date()).toLocaleDateString()}`, 150, infoTop + 15);
     
     doc.moveDown(2);
 
@@ -511,7 +576,7 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
     doc.fontSize(12).font("Helvetica-Bold").text("Cost Breakdown", 350, costTop);
     
     const productCost = order.items.reduce((acc: number, i: any) => acc + (i.price || 0), 0);
-    const shippingCharges = order.totalCost - productCost;
+    const shippingCharges = order.total_cost - productCost;
     
     doc.fontSize(10).font("Helvetica");
     doc.text(`Product Cost:`, 350, costTop + 20);
@@ -528,7 +593,7 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
     
     doc.moveTo(350, costTop + 80).lineTo(550, costTop + 80).stroke();
     doc.font("Helvetica-Bold").text(`Total Paid:`, 350, costTop + 85);
-    doc.text(`₹${order.totalCost.toLocaleString()}`, 460, costTop + 85, { width: 80, align: 'right' });
+    doc.text(`₹${order.total_cost.toLocaleString()}`, 460, costTop + 85, { width: 80, align: 'right' });
 
     // Footer Section
     doc.font("Helvetica-Oblique").fontSize(8).fillColor("#666666")

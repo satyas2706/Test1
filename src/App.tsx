@@ -11,6 +11,9 @@ import {
   Store, 
   Calculator, 
   Calendar, 
+  Car,
+  Box,
+  Boxes,
   MapPin, 
   CreditCard, 
   AlertTriangle, 
@@ -22,6 +25,7 @@ import {
   ChevronRight, 
   CheckCircle2, 
   Clock,
+  LogIn,
   Share,
   ShieldCheck,
   Printer,
@@ -38,6 +42,7 @@ import {
   BarChart3,
   Search,
   ArrowRight,
+  ArrowLeft,
   ArrowDown,
   LogOut,
   Database,
@@ -62,6 +67,7 @@ import {
   Menu,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import confetti from 'canvas-confetti';
 import { Toaster, toast } from 'sonner';
 import { 
   ShippingItem, 
@@ -104,6 +110,9 @@ export default function App() {
   const [navbarTrackingId, setNavbarTrackingId] = useState('');
 
   const navigateTo = (tab: Tab) => {
+    if (tab === 'pickup' && appointments.some(a => a.status === 'Scheduled') && !isSchedulingNewPickup) {
+      setActivePickupStep(5);
+    }
     if (tab !== activeTab) {
       setTabHistory(prev => [...prev, tab]);
       setActiveTab(tab);
@@ -211,6 +220,7 @@ const StaticShipmentTracker = () => {
   const [agents, setAgents] = useState<AgentProfile[]>([
     { id: 'AG-1', name: 'Rahul Sharma', phone: '+91 98765 43210', email: 'rahul@jiffex.com', status: 'Active', vehicleNumber: 'KA-01-AB-1234' },
     { id: 'AG-2', name: 'Priya Patel', phone: '+91 87654 32109', email: 'priya@jiffex.com', status: 'Active', vehicleNumber: 'MH-02-CD-5678' },
+    { id: 'AG-TEST', name: 'Test Agent (You)', phone: '+91 00000 00000', email: 'agent@jiffex.com', status: 'Active', vehicleNumber: 'TEST-001' },
   ]);
 
   // Cart Section States
@@ -226,10 +236,46 @@ const StaticShipmentTracker = () => {
     zip: ''
   });
   const [pickupLanguage, setPickupLanguage] = useState('English');
+  const [pickupItemType, setPickupItemType] = useState('Everyday Items');
+  const [pickupVehicleType, setPickupVehicleType] = useState('Fits in a car');
+  const [pickupSpecialInstructions, setPickupSpecialInstructions] = useState('');
+  const [pickupCategory, setPickupCategory] = useState('Personal Effects');
+  const [pickupEstimatedWeight, setPickupEstimatedWeight] = useState('1-5 kg');
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; checked: boolean }>({ connected: false, checked: false });
   const [isGuestMode, setIsGuestMode] = useState(false);
   const [guestEmail, setGuestEmail] = useState('');
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginTriggerSource, setLoginTriggerSource] = useState<'default' | 'checkout' | 'pickup'>('default');
+  const [showPickupConfirmModal, setShowPickupConfirmModal] = useState(false);
+  const [activePickupStep, setActivePickupStep] = useState(1);
+
+  // Celebration effect for pickup confirmation
+  useEffect(() => {
+    if (activePickupStep === 5) {
+      const duration = 3 * 1000;
+      const animationEnd = Date.now() + duration;
+      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+      const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+      const interval: any = setInterval(() => {
+        const timeLeft = animationEnd - Date.now();
+
+        if (timeLeft <= 0) {
+          return clearInterval(interval);
+        }
+
+        const particleCount = 50 * (timeLeft / duration);
+        // since particles fall down, start a bit higher than random
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+      }, 250);
+
+      return () => clearInterval(interval);
+    }
+  }, [activePickupStep]);
+  const [isSchedulingNewPickup, setIsSchedulingNewPickup] = useState(false);
+  const [lastBookingRef, setLastBookingRef] = useState<string | null>(null);
   const [categories, setCategories] = useState(['Pooja', 'Return Gifts', 'Decorative']);
 
   // Home Section States
@@ -252,8 +298,18 @@ const StaticShipmentTracker = () => {
       window.history.replaceState({}, '', newUrl);
     }
   }, []);
+
+  // Scroll to pickup header when step changes
+  useEffect(() => {
+    if (activePickupStep > 1 && activePickupStep < 5) {
+      setTimeout(() => {
+        pickupHeaderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [activePickupStep]);
   const quoteRef = React.useRef<HTMLDivElement>(null);
   const warehouseItemsRef = React.useRef<HTMLDivElement>(null);
+  const pickupHeaderRef = React.useRef<HTMLDivElement>(null);
 
   const scrollToQuote = () => {
     quoteRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -408,11 +464,6 @@ const StaticShipmentTracker = () => {
   };
 
   const handleSchedulePickup = () => {
-    if (!currentUser) {
-      setShowLoginModal(true);
-      return;
-    }
-    
     const missingFields = [];
     if (!pickupName) missingFields.push('Your Name');
     if (!pickupPhone) missingFields.push('Contact Number');
@@ -427,6 +478,12 @@ const StaticShipmentTracker = () => {
 
     if (pickupPhone.length !== 10 || !/^\d+$/.test(pickupPhone)) {
       toast.error('Contact Number must be exactly 10 digits.');
+      return;
+    }
+
+    if (!currentUser) {
+      setLoginTriggerSource('pickup');
+      setShowLoginModal(true);
       return;
     }
 
@@ -451,9 +508,15 @@ const StaticShipmentTracker = () => {
       pickupType: type,
       assignedAgent: assignedAgent,
       assignedAgentId: assignedAgent?.id,
-      languagePreference: pickupLanguage
+      languagePreference: pickupLanguage,
+      itemType: pickupItemType,
+      vehicleType: pickupVehicleType
     };
     setAppointments([...appointments, newAppointment]);
+    setLastBookingRef(newAppointment.id);
+    setIsSchedulingNewPickup(false);
+    setActivePickupStep(5);
+    window.scrollTo(0, 0);
     
     // Sync to DB and trigger notification
     if (dbStatus.connected && currentUser) {
@@ -468,7 +531,8 @@ const StaticShipmentTracker = () => {
             city: pickupAddress.city, 
             country: 'India',
             email: currentUser.email,
-            phone: pickupPhone
+            phone: pickupPhone,
+            fullName: pickupName || currentUser.name
           },
           payment_status: 'Pending',
           shipping_date: selectedPickupDate
@@ -951,6 +1015,7 @@ Date: ${new Date().toLocaleDateString()}
 
   const handleCheckout = async () => {
     if (!currentUser) {
+      setLoginTriggerSource('checkout');
       setShowLoginModal(true);
       return;
     }
@@ -3095,6 +3160,74 @@ const AdminDashboard = ({
     );
   };
 
+  const renderShopSidebar = () => {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xl font-black text-slate-900">From our Shop</h4>
+          <button 
+            onClick={() => navigateTo('store')}
+            className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+          >
+            View All <ArrowRight size={12} />
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-4">
+          {storeProducts.slice(0, 3).map(product => {
+            const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
+            const itemCount = cartItem?.quantity || 0;
+            return (
+              <div key={product.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex gap-4">
+                <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0">
+                  <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
+                  <div>
+                    <h5 className="text-sm font-bold text-slate-900 truncate">{product.name}</h5>
+                    <p className="text-[10px] text-slate-500">${product.price} • {product.weight} kg</p>
+                  </div>
+                  <button 
+                    onClick={() => addItem({ 
+                      name: product.name, 
+                      weight: product.weight, 
+                      price: product.price, 
+                      image: product.image,
+                      estimatedDelivery: product.estimatedDelivery 
+                    }, 'Store')}
+                    className={`mt-2 py-2 px-3 rounded-lg text-[10px] font-black flex items-center justify-center gap-2 transition-all ${
+                      itemCount > 0 
+                        ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' 
+                        : 'bg-slate-900 text-white hover:bg-black'
+                    }`}
+                  >
+                    {itemCount > 0 ? <><CheckCircle2 size={12} /> Added</> : <><Plus size={12} /> Add to Cart</>}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="p-6 bg-indigo-600 rounded-[2rem] text-white shadow-xl shadow-indigo-200/50 relative overflow-hidden">
+          <div className="absolute -right-4 -bottom-4 opacity-10">
+            <ShoppingBag size={80} />
+          </div>
+          <div className="relative z-10 space-y-3">
+            <h5 className="font-black text-lg">Consolidate & Save</h5>
+            <p className="text-xs text-indigo-100 leading-relaxed">
+              Add items from our shop to your pickup or warehouse shipment. We'll pack everything together to save you on global shipping!
+            </p>
+            <button 
+              onClick={() => navigateTo('store')}
+              className="px-4 py-2 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-all"
+            >
+              Start Shopping
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderUnifiedCartSection = (mode?: 'Pickup' | 'Warehouse') => {
     // States are now in App to prevent focus loss
 
@@ -3256,7 +3389,7 @@ const AdminDashboard = ({
 
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                     {/* Left Column: Sticky Inputs & Address */}
-                    <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-8">
+                    <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
                       {/* Step 1: Warehouse Address Card */}
                       <div className="p-6 bg-indigo-600 rounded-[2rem] text-white shadow-xl shadow-indigo-200/50 relative overflow-hidden group">
                         <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
@@ -3351,8 +3484,8 @@ const AdminDashboard = ({
                       </div>
                     </div>
 
-                    {/* Right Column: How it Works & Review */}
-                    <div className="lg:col-span-7 space-y-6">
+                    {/* Middle Column: How it Works & Review */}
+                    <div className="lg:col-span-5 space-y-6">
                       {/* How it Works Bento Cards */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-3">
@@ -3453,44 +3586,64 @@ const AdminDashboard = ({
                           </div>
                         )}
                       </div>
+
+                      {/* Right Column: Shop Sidebar */}
+                      <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-8">
+                        {renderShopSidebar()}
+                      </div>
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-8">
                   {/* Header Section with Progress for Pickup */}
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-50 pb-8">
+                  <div ref={pickupHeaderRef} className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-8">
                     <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-xl shadow-indigo-200">
+                      <div className="w-14 h-14 rounded-2xl bg-deep-blue flex items-center justify-center text-jiffex-orange shadow-xl shadow-deep-blue/20">
                         <Truck size={28} />
                       </div>
                       <div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Home Pickup</h2>
+                        <h2 className="text-2xl font-black text-deep-blue tracking-tight">Home Pickup</h2>
                         <p className="text-sm text-slate-500 font-medium">
-                          {(hasActivePickup && !editingPickupId) ? 'Add items to your scheduled pickup' : 'Schedule an agent to collect from your home'}
+                          {activePickupStep === 5 ? 'Booking Confirmed' : (hasActivePickup && !editingPickupId) ? 'Add items to your scheduled pickup' : 'Schedule an agent to collect from your home'}
                         </p>
                       </div>
                     </div>
                     
                     {/* Progress Indicator for Pickup */}
-                    <div className="flex items-center gap-2">
-                      {[1, 2].map((step) => (
-                        <div key={step} className="flex items-center">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black border-2 transition-all ${
-                            (step === 1 && !hasActivePickup) || (step === 2 && hasActivePickup) ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-slate-50 border-slate-200 text-slate-400'
+                    <div className="flex items-center gap-3 overflow-x-auto pb-1 no-scrollbar">
+                      {[
+                        { step: 1, label: 'Items' },
+                        { step: 2, label: 'Schedule' },
+                        { step: 3, label: 'Address' },
+                        { step: 4, label: 'Review' },
+                        { step: 5, label: 'Confirmation' }
+                      ].map((s, idx) => (
+                        <div key={s.step} className="flex items-center gap-2 shrink-0">
+                          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border-2 transition-all ${
+                            activePickupStep === s.step ? 'bg-jiffex-orange/10 border-jiffex-orange text-jiffex-orange' : 
+                            activePickupStep > s.step ? 'bg-deep-blue text-white border-deep-blue' :
+                            'bg-slate-50 border-slate-200 text-slate-400'
                           }`}>
-                            {step}
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                              activePickupStep === s.step ? 'bg-jiffex-orange text-white' : 
+                              activePickupStep > s.step ? 'bg-white text-deep-blue' :
+                              'bg-slate-200 text-slate-500'
+                            }`}>
+                              {activePickupStep > s.step ? <CheckCircle2 size={12} /> : s.step}
+                            </div>
+                            <span className="text-[11px] font-black whitespace-nowrap">{s.label}</span>
                           </div>
-                          {step < 2 && <div className="w-8 h-0.5 bg-indigo-100" />}
+                          {idx < 4 && <div className={`w-4 h-0.5 rounded-full ${activePickupStep > s.step ? 'bg-deep-blue' : 'bg-slate-100'}`} />}
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {(hasActivePickup && !editingPickupId) ? (
+                  {(hasActivePickup && !editingPickupId && activePickupStep !== 5 && !isSchedulingNewPickup) ? (
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                       {/* Left Column: Sticky Add Item Form */}
-                      <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-8">
+                      <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
                         <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-6">
                           <div className="flex items-center gap-3 text-indigo-600">
                             <PlusCircle size={24} />
@@ -3585,8 +3738,8 @@ const AdminDashboard = ({
                         </div>
                       </div>
 
-                      {/* Right Column: Pickup Status & Items */}
-                      <div className="lg:col-span-7 space-y-6">
+                      {/* Middle Column: Pickup Status & Items */}
+                      <div className="lg:col-span-8 space-y-6">
                         <div className="p-10 bg-indigo-50 rounded-[3rem] border border-indigo-100 text-center space-y-6 flex flex-col items-center justify-center min-h-[300px]">
                           <div className="w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center text-indigo-600 shadow-xl shadow-indigo-200/50">
                             <Truck size={48} />
@@ -3649,179 +3802,618 @@ const AdminDashboard = ({
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                      {/* Left Column: Sticky Details */}
-                      <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-8">
-                        {/* Step 1: Pickup Details */}
-                        <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-6">
-                          <div className="flex items-center gap-3 text-indigo-600">
-                            <Clock size={24} />
-                            <h4 className="text-xl font-black">1. Pickup Slot</h4>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Date</label>
-                              <select 
-                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-white transition-all text-sm font-bold"
-                                value={selectedPickupDate}
-                                onChange={(e) => setSelectedPickupDate(e.target.value)}
-                              >
-                                {filteredPickupSlots.map(slot => <option key={slot.date} value={slot.date}>{slot.date}</option>)}
-                              </select>
-                            </div>
-                            <div className="space-y-2">
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Time</label>
-                              <select 
-                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-white transition-all text-sm font-bold"
-                                value={selectedPickupTime}
-                                onChange={(e) => setSelectedPickupTime(e.target.value)}
-                              >
-                                {PICKUP_SLOTS.find(s => s.date === selectedPickupDate)?.times.map(time => (
-                                  <option key={time} value={time}>{time}</option>
-                                ))}
-                              </select>
+                      <div className="lg:col-span-12 space-y-6">
+                        {/* Step 1: What type of items are you sending? */}
+                      {activePickupStep === 1 && (
+                        <div className={`p-8 rounded-[2.5rem] border transition-all duration-300 ${activePickupStep === 1 ? 'bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5' : 'bg-slate-50 border-slate-100'}`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${activePickupStep === 1 ? 'bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10' : 'bg-deep-blue/5 text-deep-blue'}`}>
+                                <Package size={24} />
+                              </div>
+                              <div>
+                                <h4 className="text-xl font-black text-deep-blue">1. What type of items are you sending?</h4>
+                              </div>
                             </div>
                           </div>
-                          <div className="space-y-2">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Language Preference</label>
-                            <select 
-                              className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-white transition-all text-sm font-bold"
-                              value={pickupLanguage}
-                              onChange={(e) => setPickupLanguage(e.target.value)}
+
+                          <AnimatePresence>
+                            {activePickupStep === 1 && (
+                              <motion.div 
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="pt-8 space-y-8">
+                                  <div className="space-y-4">
+                                    <h5 className="text-sm font-black text-deep-blue uppercase tracking-wider">Select Item Type</h5>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                      {[
+                                        { id: 'Everyday Items', icon: <ShoppingBag size={20} /> },
+                                        { id: 'Large/Furniture', icon: <Box size={20} /> },
+                                        { id: 'Mixed Items', icon: <Boxes size={20} /> },
+                                        { id: 'Documents', icon: <FileText size={20} /> }
+                                      ].map(type => (
+                                        <motion.button
+                                          key={type.id}
+                                          whileHover={{ scale: 1.02, y: -2 }}
+                                          whileTap={{ scale: 0.98 }}
+                                          onClick={() => setPickupItemType(type.id)}
+                                          className={`p-6 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 text-center relative overflow-hidden ${
+                                            pickupItemType === type.id 
+                                              ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange shadow-[0_0_20px_rgba(249,115,22,0.15)]' 
+                                              : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
+                                          }`}
+                                        >
+                                          {pickupItemType === type.id && (
+                                            <motion.div 
+                                              layoutId="item-type-glow"
+                                              className="absolute inset-0 bg-jiffex-orange/5"
+                                              initial={{ opacity: 0 }}
+                                              animate={{ opacity: 1 }}
+                                              transition={{ duration: 0.2 }}
+                                            />
+                                          )}
+                                          <div className="relative z-10">
+                                            {type.icon}
+                                          </div>
+                                          <p className="text-[10px] font-black uppercase tracking-wider leading-tight relative z-10">{type.id}</p>
+                                        </motion.button>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <h5 className="text-sm font-black text-deep-blue uppercase tracking-wider">How much to pick up?</h5>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                      {[
+                                        { id: 'Fits in a car', desc: 'Small boxes, luggage, less than 50kg', icon: <Car size={24} /> },
+                                        { id: 'Need a Van', desc: 'Furniture, large boxes, bulk shipments', icon: <Truck size={24} /> }
+                                      ].map(v => (
+                                        <motion.button
+                                          key={v.id}
+                                          whileHover={{ scale: 1.02, x: 4 }}
+                                          whileTap={{ scale: 0.98 }}
+                                          onClick={() => setPickupVehicleType(v.id)}
+                                          className={`p-6 rounded-3xl border-2 transition-all flex items-center gap-5 text-left relative overflow-hidden ${
+                                            pickupVehicleType === v.id 
+                                              ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange shadow-[0_0_25px_rgba(249,115,22,0.1)]' 
+                                              : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
+                                          }`}
+                                        >
+                                          {pickupVehicleType === v.id && (
+                                            <motion.div 
+                                              layoutId="vehicle-type-glow"
+                                              className="absolute inset-0 bg-jiffex-orange/5"
+                                              initial={{ opacity: 0 }}
+                                              animate={{ opacity: 1 }}
+                                              transition={{ duration: 0.2 }}
+                                            />
+                                          )}
+                                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 relative z-10 transition-transform duration-200 ${pickupVehicleType === v.id ? 'bg-jiffex-orange text-white shadow-lg shadow-jiffex-orange/20 scale-110' : 'bg-white text-slate-400'}`}>
+                                            {v.icon}
+                                          </div>
+                                          <div className="relative z-10">
+                                            <p className="text-base font-black text-slate-900">{v.id}</p>
+                                            <p className="text-xs font-medium text-slate-500 mt-1 leading-relaxed">{v.desc}</p>
+                                          </div>
+                                        </motion.button>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 space-y-3">
+                                    <div className="flex items-center gap-2 text-amber-700">
+                                      <Info size={18} />
+                                      <p className="text-sm font-black text-amber-900">You’ll receive a price estimate before confirmation — no payment required yet.</p>
+                                    </div>
+                                    <p className="text-xs text-amber-600 font-bold leading-relaxed">
+                                      Once your pickup is confirmed, our agent will contact you with a final price based on size, weight, and distance before collecting payment.
+                                    </p>
+                                  </div>
+
+                                  <button 
+                                    onClick={() => {
+                                      setActivePickupStep(2);
+                                      window.scrollTo(0, 0);
+                                    }}
+                                    className="w-full py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
+                                  >
+                                    Continue to Schedule <ArrowRight size={18} />
+                                  </button>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
+
+                      {/* Step 2: When should we arrive? */}
+                      {activePickupStep === 2 && (
+                        <div className={`p-8 rounded-[2.5rem] border transition-all duration-300 ${activePickupStep === 2 ? 'bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5' : 'bg-slate-50 border-slate-100'}`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${activePickupStep === 2 ? 'bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10' : 'bg-deep-blue/5 text-deep-blue'}`}>
+                                <Clock size={24} />
+                              </div>
+                              <div>
+                                <h4 className="text-xl font-black text-deep-blue">2. When should we arrive?</h4>
+                                <p className="text-sm font-bold text-slate-400 mt-1">Choose your preferred date and time window.</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <AnimatePresence>
+                            {activePickupStep === 2 && (
+                              <motion.div 
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="pt-8 space-y-8">
+                                  <div className="space-y-4">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Select Date</label>
+                                    <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
+                                      {filteredPickupSlots.map(slot => {
+                                        const d = new Date(slot.date);
+                                        const isSelected = selectedPickupDate === slot.date;
+                                        return (
+                                          <button
+                                            key={slot.date}
+                                            onClick={() => setSelectedPickupDate(slot.date)}
+                                            className={`flex-shrink-0 w-20 h-24 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-1 ${isSelected ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}
+                                          >
+                                            <span className="text-[10px] font-black uppercase">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                                            <span className="text-xl font-black">{d.getDate()}</span>
+                                            <span className="text-[10px] font-bold">{d.toLocaleDateString('en-US', { month: 'short' })}</span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Select Time Window</label>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                      {PICKUP_SLOTS.find(s => s.date === selectedPickupDate)?.times.map(time => {
+                                        const isSelected = selectedPickupTime === time;
+                                        return (
+                                          <button
+                                            key={time}
+                                            onClick={() => setSelectedPickupTime(time)}
+                                            className={`py-4 px-2 rounded-2xl border-2 transition-all text-center ${isSelected ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}
+                                          >
+                                            <span className="text-xs font-black">{time}</span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex gap-4">
+                                    <button 
+                                      onClick={() => {
+                                        setActivePickupStep(1);
+                                        window.scrollTo(0, 0);
+                                      }}
+                                      className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                                    >
+                                      <ArrowLeft size={18} /> Back
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        setActivePickupStep(3);
+                                        window.scrollTo(0, 0);
+                                      }}
+                                      className="flex-[2] py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
+                                    >
+                                      Continue to Address <ArrowRight size={18} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
+
+                    {/* Step 3: Pickup details */}
+                    {activePickupStep === 3 && (
+                      <div className={`p-8 rounded-[2.5rem] border transition-all duration-300 ${activePickupStep === 3 ? 'bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5' : 'bg-slate-50 border-slate-100'}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${activePickupStep === 3 ? 'bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10' : 'bg-deep-blue/5 text-deep-blue'}`}>
+                              <MapPin size={24} />
+                            </div>
+                            <div>
+                              <h4 className="text-xl font-black text-deep-blue">3. Pickup details</h4>
+                              <p className="text-sm font-bold text-slate-400 mt-1">Where should our agent come? We'll confirm via SMS.</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <AnimatePresence>
+                          {activePickupStep === 3 && (
+                            <motion.div 
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
                             >
-                              {['English', 'Hindi', 'Telugu', 'Tamil', 'Kannada', 'Malayalam', 'Bengali', 'Gujarati', 'Marathi', 'Punjabi'].map(lang => (
-                                <option key={lang} value={lang}>{lang}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
+                              <div className="pt-8 space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  <div className="space-y-2">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                                    <div className="relative">
+                                      <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                      <input 
+                                        type="text" 
+                                        className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium"
+                                        placeholder="Enter your name"
+                                        value={pickupName}
+                                        onChange={(e) => setPickupName(e.target.value)}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                                    <div className="relative">
+                                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">+91</span>
+                                      <input 
+                                        type="tel" 
+                                        className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium"
+                                        placeholder="10-digit mobile"
+                                        value={pickupPhone}
+                                        maxLength={10}
+                                        onChange={(e) => {
+                                          const val = e.target.value.replace(/\D/g, '');
+                                          if (val.length <= 10) setPickupPhone(val);
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
 
-                        {/* Step 2: Contact Info */}
-                        <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
-                          <div className="flex items-center gap-3 text-indigo-600">
-                            <UserIcon size={24} />
-                            <h4 className="text-xl font-black">2. Contact Info</h4>
-                          </div>
-                          <div className="space-y-4">
-                            <div className="space-y-2">
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
-                              <input 
-                                type="text" 
-                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium"
-                                placeholder="Enter your name"
-                                value={pickupName}
-                                onChange={(e) => setPickupName(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
-                              <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">+91</span>
-                                <input 
-                                  type="tel" 
-                                  className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium"
-                                  placeholder="10-digit mobile"
-                                  value={pickupPhone}
-                                  maxLength={10}
-                                  onChange={(e) => {
-                                    const val = e.target.value.replace(/\D/g, '');
-                                    if (val.length <= 10) setPickupPhone(val);
-                                  }}
-                                />
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Pick up address</label>
+                                  <input 
+                                    type="text" 
+                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium"
+                                    placeholder="House No, Building, Street Name"
+                                    value={pickupAddress.street}
+                                    onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
+                                  />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-2">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">City</label>
+                                    <input 
+                                      type="text" 
+                                      className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium"
+                                      placeholder="City"
+                                      value={pickupAddress.city}
+                                      onChange={(e) => setPickupAddress({...pickupAddress, city: e.target.value})}
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">PIN code</label>
+                                    <input 
+                                      type="text" 
+                                      className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium"
+                                      placeholder="PIN Code"
+                                      value={pickupAddress.zip}
+                                      onChange={(e) => setPickupAddress({...pickupAddress, zip: e.target.value})}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Special Instructions</label>
+                                  <textarea 
+                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium min-h-[100px]"
+                                    placeholder="Any specific instructions for our agent?"
+                                    value={pickupSpecialInstructions}
+                                    onChange={(e) => setPickupSpecialInstructions(e.target.value)}
+                                  />
+                                </div>
+
+                                <div className="flex gap-4">
+                                  <button 
+                                    onClick={() => {
+                                      setActivePickupStep(2);
+                                      window.scrollTo(0, 0);
+                                    }}
+                                    className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                                  >
+                                    <ArrowLeft size={18} /> Back
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      if (!pickupName || !pickupPhone || !pickupAddress.street || !pickupAddress.city || !pickupAddress.zip) {
+                                        toast.error('Please fill in all required fields');
+                                        return;
+                                      }
+                                      if (pickupPhone.length !== 10) {
+                                        toast.error('Phone number must be 10 digits');
+                                        return;
+                                      }
+                                      setActivePickupStep(4);
+                                      window.scrollTo(0, 0);
+                                    }}
+                                    className="flex-[2] py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
+                                  >
+                                    Continue to Review <ArrowRight size={18} />
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
+                    )}
 
-                      {/* Right Column: Address & Action */}
-                      <div className="lg:col-span-7 space-y-6">
-                        <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm space-y-8">
-                          <div className="flex items-center gap-3 text-indigo-600">
-                            <MapPin size={24} />
-                            <h4 className="text-xl font-black">3. Pickup Address</h4>
-                          </div>
-                          
-                          <div className="space-y-6">
-                            <div className="space-y-2">
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Street Address</label>
-                              <input 
-                                type="text" 
-                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium"
-                                placeholder="House No, Building, Street Name"
-                                value={pickupAddress.street}
-                                onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">City</label>
-                                <input 
-                                  type="text" 
-                                  className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium"
-                                  placeholder="City"
-                                  value={pickupAddress.city}
-                                  onChange={(e) => setPickupAddress({...pickupAddress, city: e.target.value})}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">ZIP Code</label>
-                                <input 
-                                  type="text" 
-                                  className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium"
-                                  placeholder="ZIP Code"
-                                  value={pickupAddress.zip}
-                                  onChange={(e) => setPickupAddress({...pickupAddress, zip: e.target.value})}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="pt-4">
-                              <button 
-                                onClick={editingPickupId ? saveEditedPickup : handleSchedulePickup}
-                                className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] text-lg font-black hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-200 flex items-center justify-center gap-3"
-                              >
-                                {editingPickupId ? <CheckCircle2 size={24} /> : <Truck size={24} />}
-                                {editingPickupId ? 'Update Schedule' : (currentUser ? 'Schedule Pickup Now' : 'Sign in to Schedule')}
-                              </button>
-                              
-                              {editingPickupId && (
-                                <button 
-                                  onClick={() => {
-                                    setEditingPickupId(null);
-                                    setPickupPhone('');
-                                    setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
-                                  }}
-                                  className="w-full mt-4 py-2 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm"
-                                >
-                                  Cancel Editing
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Info Card */}
-                        <div className="p-8 bg-emerald-50 rounded-[2.5rem] border border-emerald-100 flex items-start gap-6">
-                          <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm flex-shrink-0">
-                            <ShieldCheck size={28} />
+                    {/* Step 4: Review your booking */}
+                    {activePickupStep === 4 && (
+                      <div className={`p-8 rounded-[2.5rem] border transition-all duration-300 ${activePickupStep === 4 ? 'bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5' : 'bg-slate-50 border-slate-100'}`}>
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${activePickupStep === 4 ? 'bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10' : 'bg-deep-blue/5 text-deep-blue'}`}>
+                            <CheckCircle2 size={24} />
                           </div>
                           <div>
-                            <h5 className="font-black text-slate-900 text-lg">Safe & Verified Agents</h5>
-                            <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-                              All our pickup agents are background-verified and follow strict safety protocols. They will call you 30 minutes before arrival.
-                            </p>
+                            <h4 className="text-xl font-black text-deep-blue">4. Review your booking</h4>
                           </div>
                         </div>
+
+                        <AnimatePresence>
+                          {activePickupStep === 4 && (
+                            <motion.div 
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="pt-8 space-y-6">
+                                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                                  <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Items</p>
+                                      <p className="font-bold text-slate-900">{pickupItemType} ({pickupVehicleType})</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Slot</p>
+                                      <p className="font-bold text-slate-900">{new Date(selectedPickupDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at {selectedPickupTime}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact</p>
+                                      <p className="font-bold text-slate-900">{pickupName} (+91 {pickupPhone})</p>
+                                    </div>
+                                    <div className="col-span-2">
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Address</p>
+                                      <p className="font-bold text-slate-900">{pickupAddress.street}, {pickupAddress.city}, {pickupAddress.zip}</p>
+                                    </div>
+                                    {pickupSpecialInstructions && (
+                                      <div className="col-span-2">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instructions</p>
+                                        <p className="font-bold text-slate-900">{pickupSpecialInstructions}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Payment Info Section */}
+                                <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100 flex items-start gap-4">
+                                  <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center flex-shrink-0">
+                                    <CreditCard size={20} />
+                                  </div>
+                                  <div>
+                                    <h5 className="font-bold text-emerald-900 text-sm">Payment — agent will quote on arrival</h5>
+                                    <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+                                      No payment now. Your agent will share the quote when they arrive and collect after your approval.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {!currentUser && (
+                                  <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center gap-3">
+                                    <div className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center shrink-0">
+                                      <LogIn size={16} />
+                                    </div>
+                                    <p className="text-xs font-bold text-indigo-900">
+                                      Please sign in to schedule your pickup. You can review everything before confirming.
+                                    </p>
+                                  </div>
+                                )}
+
+                                <div className="flex gap-4">
+                                  <button 
+                                    onClick={() => {
+                                      setActivePickupStep(3);
+                                      window.scrollTo(0, 0);
+                                    }}
+                                    className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                                  >
+                                    Edit Details
+                                  </button>
+                                  <button 
+                                    onClick={editingPickupId ? saveEditedPickup : handleSchedulePickup}
+                                    className="flex-[2] py-5 bg-jiffex-orange text-white rounded-[2rem] text-lg font-black hover:bg-amber-600 transition-all shadow-2xl shadow-jiffex-orange/20 flex items-center justify-center gap-3"
+                                  >
+                                    {editingPickupId ? 'Update Schedule' : (currentUser ? 'Confirm Booking' : 'Sign In to Confirm')}
+                                  </button>
+                                </div>
+                                
+                                {editingPickupId && (
+                                  <button 
+                                    onClick={() => {
+                                      setEditingPickupId(null);
+                                      setPickupPhone('');
+                                      setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
+                                    }}
+                                    className="w-full mt-4 py-2 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm"
+                                  >
+                                    Cancel Editing
+                                  </button>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
+                    )}
+
+                    {/* Step 5: Booking confirmed */}
+                    {activePickupStep === 5 && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="p-10 rounded-[3rem] bg-white border border-slate-100 shadow-2xl shadow-indigo-500/5 text-center space-y-10"
+                      >
+                        <div className="space-y-6">
+                          <motion.div 
+                            initial={{ scale: 0 }}
+                            animate={{ 
+                              scale: [1, 1.1, 1],
+                              transition: { 
+                                scale: {
+                                  repeat: Infinity,
+                                  duration: 2,
+                                  ease: "easeInOut"
+                                }
+                              }
+                            }}
+                            className="w-24 h-24 bg-emerald-500 text-white rounded-[2rem] flex items-center justify-center mx-auto shadow-xl shadow-emerald-500/20"
+                          >
+                            <CheckCircle2 size={48} />
+                          </motion.div>
+                          
+                          <div className="space-y-3">
+                            <h2 className="text-4xl font-black text-slate-900 tracking-tight">
+                              Thanks, {appointments.find(a => a.id === lastBookingRef)?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 'there'}! Your pickup is confirmed.
+                            </h2>
+                            <p className="text-lg text-slate-500 max-w-md mx-auto leading-relaxed font-medium">
+                              Your agent has been notified. Expect a call or SMS shortly to confirm the arrival window.
+                            </p>
+                          </div>
+
+                          <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 inline-block">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Booking ref</p>
+                            <p className="text-3xl font-black text-deep-blue tracking-wider">{lastBookingRef || appointments.find(a => a.status === 'Scheduled')?.id}</p>
+                          </div>
+                        </div>
+
+                        {/* Next Steps & Documents Section */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left border-t border-slate-100 pt-10">
+                          {/* Next Steps */}
+                          <div className="space-y-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-deep-blue">
+                                <ArrowRight size={20} className="text-indigo-600" />
+                              </div>
+                              <h4 className="text-xl font-black text-deep-blue">Next Steps</h4>
+                            </div>
+                            <div className="space-y-4">
+                              {[
+                                { title: "Agent Call", desc: "Agent will call 30 mins before arrival." },
+                                { title: "Collection", desc: "Hand over items; agent will weigh & pack." },
+                                { title: "Warehouse", desc: "Items sent for final consolidation." },
+                                { title: "Payment", desc: "Pay once items are ready for dispatch." }
+                              ].map((step, i) => (
+                                <div key={i} className="flex gap-4 group">
+                                  <div className="w-6 h-6 rounded-full bg-jiffex-orange/10 text-jiffex-orange flex items-center justify-center text-xs font-black shrink-0 mt-0.5 group-hover:bg-jiffex-orange group-hover:text-white transition-colors">
+                                    {i + 1}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-black text-slate-900">{step.title}</p>
+                                    <p className="text-xs text-slate-500 font-medium">{step.desc}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Documents Required */}
+                          <div className="space-y-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-jiffex-orange">
+                                <FileText size={20} />
+                              </div>
+                              <h4 className="text-xl font-black text-deep-blue">Documents Required</h4>
+                            </div>
+                            <div className="space-y-4">
+                              {[
+                                { title: "ID Proof", desc: "Aadhar Card or Passport copy for verification." },
+                                { title: "Item List", desc: "Simple list of items for customs declaration." },
+                                { title: "Invoices", desc: "Purchase bills for any new items." }
+                              ].map((doc, i) => (
+                                <div key={i} className="flex gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-jiffex-orange/30 transition-all">
+                                  <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-jiffex-orange shadow-sm shrink-0">
+                                    <ShieldCheck size={16} />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-black text-slate-900">{doc.title}</p>
+                                    <p className="text-xs text-slate-500 font-medium">{doc.desc}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-center gap-4 pt-6">
+                          {appointments.some(a => a.status === 'Scheduled') && (
+                            <button 
+                              onClick={() => {
+                                setActivePickupStep(1);
+                                window.scrollTo(0, 0);
+                              }}
+                              className="w-full max-w-xs py-5 bg-jiffex-orange text-white rounded-[2rem] text-lg font-black hover:bg-amber-600 transition-all shadow-2xl shadow-jiffex-orange/20 flex items-center justify-center gap-3"
+                            >
+                              <PlusCircle size={24} /> Add Items to Pickup
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => {
+                              navigateTo('home');
+                              setActivePickupStep(1);
+                              setLastBookingRef(null);
+                              setIsSchedulingNewPickup(false);
+                              window.scrollTo(0, 0);
+                            }}
+                            className="px-12 py-4 bg-deep-blue text-white rounded-2xl font-black hover:bg-slate-900 transition-all shadow-xl shadow-indigo-200 flex items-center justify-center gap-2"
+                          >
+                            <ArrowLeft size={20} /> Back to Home
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* Info Card */}
+                    {activePickupStep !== 5 && (
+                      <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex items-start gap-6">
+                        <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-deep-blue shadow-sm flex-shrink-0">
+                          <ShieldCheck size={28} />
+                        </div>
+                        <div>
+                          <h5 className="font-black text-deep-blue text-lg">Safe & Verified Agents</h5>
+                          <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                            All our pickup agents are background-verified and follow strict safety protocols. They will call you 30 minutes before arrival.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
+            )}
             </div>
           )}
 
           {/* Item List Card - Visible in all tabs, but specific parts are conditional */}
-          {mode !== 'Warehouse' && !((mode === 'Pickup') && isCartEmpty) && (
+          {mode !== 'Warehouse' && !((mode === 'Pickup') && (isCartEmpty || activePickupStep === 5)) && (
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 min-h-[400px]">
               {!mode && !hasAllAgentPickup && (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
@@ -3879,7 +4471,7 @@ const AdminDashboard = ({
                   )}
 
                   {/* Scheduled Pickups */}
-                  {(mode === 'Pickup') && appointments.length > 0 && (
+                  {(mode === 'Pickup') && appointments.length > 0 && activePickupStep !== 5 && (
                     <div className="space-y-4">
                       <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
                         <Truck size={18} className="text-indigo-600" /> Scheduled Pickups
@@ -3993,11 +4585,11 @@ const AdminDashboard = ({
 
                   {/* Grouped Items by Source */}
                   <div ref={warehouseItemsRef} className="space-y-8">
-                    {['Store', 'Pickup', 'Warehouse'].map(source => {
+                    {(mode ? [mode] : ['Store', 'Warehouse']).map(source => {
                     const sourceItems = displayItems.filter(i => i.source === source);
                     
                     // Special case: If Pickup from home is scheduled, show message instead of item list for Pickup source
-                    if (!mode && source === 'Pickup' && hasActivePickup) {
+                    if (mode === 'Pickup' && source === 'Pickup' && hasActivePickup) {
                       return (
                         <div key={source} className="p-8 bg-indigo-50 rounded-[2rem] border border-indigo-100 text-center space-y-4">
                           <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-indigo-600 mx-auto shadow-sm">
@@ -4867,7 +5459,7 @@ const AdminDashboard = ({
           <h2 className="text-3xl font-black text-slate-900">Secure Checkout</h2>
           <p className="text-slate-500 leading-relaxed">Please sign in to your account to securely complete your payment and finalize your shipment.</p>
           <button 
-            onClick={() => setShowLoginModal(true)}
+            onClick={() => { setLoginTriggerSource('checkout'); setShowLoginModal(true); }}
             className="w-full btn-cta flex items-center justify-center gap-2"
           >
             <UserIcon size={20} /> Sign In to Pay
@@ -4885,11 +5477,17 @@ const AdminDashboard = ({
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    const wasGuest = isGuestMode;
     setIsGuestMode(false);
     setGuestEmail('');
-    setItems([]);
-    setAppointments([]);
-    setOrders([]);
+    
+    // Only clear local state if it's a real logout, not just switching roles in guest mode for testing
+    if (!wasGuest) {
+      setItems([]);
+      setAppointments([]);
+      setOrders([]);
+    }
+    
     setAddress({
       fullName: '',
       email: '',
@@ -4938,39 +5536,6 @@ const AdminDashboard = ({
       
       {/* Header Area (Sticky) */}
       <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-md shadow-md">
-        {/* Global Pickup Notification Banner */}
-        <AnimatePresence>
-          {appointments.some(a => a.status === 'Scheduled') && (
-            <motion.div 
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="bg-indigo-600 text-white overflow-hidden relative z-10"
-            >
-              <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                    <Bell size={16} className="animate-ring" />
-                  </div>
-                  <div>
-                    <h4 className="font-black text-[10px] uppercase tracking-widest">Active Pickup Scheduled</h4>
-                    <p className="text-[10px] text-indigo-100">
-                      Agent collection on <span className="font-bold text-white">{appointments.find(a => a.status === 'Scheduled')?.date}</span>. 
-                      Check <button onClick={() => { navigateTo('history'); window.scrollTo(0,0); }} className="underline font-bold hover:text-white">My Orders</button> after pickup.
-                    </p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => { navigateTo('cart'); window.scrollTo(0,0); }}
-                  className="btn-cta"
-                >
-                  View Details
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Error Banner */}
         {dbError && (
           <div className="bg-red-500 text-white p-4 text-center font-bold relative z-20 shadow-lg">
@@ -5017,46 +5582,48 @@ const AdminDashboard = ({
               >
                 <button 
                   onClick={() => navigateTo('send-options')}
-                  className={`flex items-center gap-1.5 text-base lg:text-lg font-black transition-all px-3 lg:px-4 py-2 rounded-xl border-2 hover:underline decoration-2 underline-offset-4 decoration-indigo-500/50 ${
+                  className={`flex items-center gap-2 text-base lg:text-lg font-black transition-all px-4 lg:px-5 py-2.5 rounded-2xl border-2 ${
                     activeTab === 'send-options' || activeTab === 'pickup' || activeTab === 'warehouse'
-                      ? 'bg-indigo-50 border-indigo-600 text-indigo-700' 
-                      : 'border-transparent text-slate-950 hover:bg-slate-50'
+                      ? 'bg-indigo-50 border-indigo-600 text-indigo-700 shadow-sm' 
+                      : 'border-transparent text-slate-900 hover:text-black hover:bg-slate-100/60 hover:border-slate-200/40'
                   }`}
                 >
-                  Send <ChevronDown size={18} className={`transition-transform duration-300 ${showSendDropdown ? 'rotate-180' : ''}`} />
+                  Send <ChevronDown size={20} strokeWidth={3} className={`transition-transform duration-500 ${showSendDropdown ? 'rotate-180 text-indigo-600' : 'text-slate-900'}`} />
                 </button>
 
                 {/* Dropdown */}
                 <AnimatePresence>
                   {showSendDropdown && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
-                      className="absolute top-full left-0 mt-4 dropdown-send z-50 flex flex-row gap-4"
-                    >
+                      <motion.div 
+                        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                        className="absolute top-full left-0 mt-3 dropdown-send z-50 flex flex-row gap-4 p-3 bg-white/90 backdrop-blur-xl rounded-[2.5rem] border border-slate-200/60 shadow-2xl shadow-slate-200/50"
+                      >
                       <button 
                         onClick={() => { navigateTo('pickup'); setShowSendDropdown(false); }}
-                        className="flex-1 flex flex-col items-center text-center gap-3 p-4 rounded-xl bg-slate-50 hover:bg-white hover:-translate-y-[3px] hover:shadow-[0_10px_25px_rgba(0,0,0,0.1)] text-slate-600 hover:text-indigo-600 transition-all duration-200 border border-transparent hover:border-indigo-100 group"
+                        className="w-44 aspect-square flex flex-col items-center justify-center text-center gap-4 p-4 rounded-xl bg-[#f8fafc] hover:bg-white hover:-translate-y-[3px] hover:shadow-[0_10px_25px_rgba(0,0,0,0.1)] text-slate-600 hover:text-indigo-600 transition-all duration-200 ease-in-out border border-transparent hover:border-indigo-100 group/item"
                       >
-                        <div className="w-12 h-12 bg-white text-indigo-600 rounded-xl flex items-center justify-center shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                          <Truck size={24} />
+                        <div className="w-14 h-14 bg-white text-indigo-600 rounded-2xl flex items-center justify-center shadow-sm group-hover/item:bg-indigo-600 group-hover/item:text-white transition-all duration-300">
+                          <Truck size={28} />
                         </div>
                         <div className="flex flex-col">
                           <span className="font-black text-sm">Pickup from Home</span>
-                          <span className="text-[10px] text-slate-400 font-medium group-hover:text-indigo-400 leading-tight">Agent comes to your doorstep to collect</span>
+                          <span className="text-[10px] text-slate-400 font-bold mt-0.5">Agent collects from you</span>
                         </div>
                       </button>
+
                       <button 
                         onClick={() => { navigateTo('warehouse'); setShowSendDropdown(false); }}
-                        className="flex-1 flex flex-col items-center text-center gap-3 p-4 rounded-xl bg-slate-50 hover:bg-white hover:-translate-y-[3px] hover:shadow-[0_10px_25px_rgba(0,0,0,0.1)] text-slate-600 hover:text-indigo-600 transition-all duration-200 border border-transparent hover:border-indigo-100 group"
+                        className="w-44 aspect-square flex flex-col items-center justify-center text-center gap-4 p-4 rounded-xl bg-[#f8fafc] hover:bg-white hover:-translate-y-[3px] hover:shadow-[0_10px_25px_rgba(0,0,0,0.1)] text-slate-600 hover:text-indigo-600 transition-all duration-200 ease-in-out border border-transparent hover:border-indigo-100 group/item"
                       >
-                        <div className="w-12 h-12 bg-white text-slate-600 rounded-xl flex items-center justify-center shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                          <Package size={24} />
+                        <div className="w-14 h-14 bg-white text-indigo-600 rounded-2xl flex items-center justify-center shadow-sm group-hover/item:bg-indigo-600 group-hover/item:text-white transition-all duration-300">
+                          <Package size={28} />
                         </div>
                         <div className="flex flex-col">
                           <span className="font-black text-sm">Send to Warehouse</span>
-                          <span className="text-[10px] text-slate-400 font-medium group-hover:text-indigo-400 leading-tight">Ship directly to our processing facility</span>
+                          <span className="text-[10px] text-slate-400 font-bold mt-0.5">Ship from our facility</span>
                         </div>
                       </button>
                     </motion.div>
@@ -5131,7 +5698,7 @@ const AdminDashboard = ({
                   </div>
                 ) : (
                   <button 
-                    onClick={() => setShowLoginModal(true)}
+                    onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }}
                     className="btn-cta flex items-center gap-2 py-2 px-3 sm:px-4 text-xs sm:text-sm"
                   >
                     <UserIcon size={16} className="sm:w-[18px] sm:h-[18px]" /> <span>Sign In</span>
@@ -5159,6 +5726,9 @@ const AdminDashboard = ({
                 className="lg:hidden border-t border-slate-100 bg-white overflow-hidden"
               >
                 <div className="flex flex-col p-4 gap-2">
+                  <div className="px-3 py-4 mb-2 border-b border-slate-50">
+                    <Logo height="h-10" />
+                  </div>
                   <button 
                     onClick={() => { navigateTo('store'); setIsMobileMenuOpen(false); }}
                     className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'store' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
@@ -5187,7 +5757,7 @@ const AdminDashboard = ({
                   <div className="pt-4 mt-2 border-t border-slate-100">
                     {!currentUser ? (
                       <button 
-                        onClick={() => { setShowLoginModal(true); setIsMobileMenuOpen(false); }}
+                        onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); setIsMobileMenuOpen(false); }}
                         className="w-full btn-cta flex items-center justify-center gap-2 py-3"
                       >
                         <UserIcon size={20} />
@@ -5234,7 +5804,7 @@ const AdminDashboard = ({
       </header>
 
       {/* Main Content */}
-      <main className={`max-w-7xl mx-auto px-4 pb-20 ${activeTab === 'pickup' || activeTab === 'warehouse' || activeTab === 'store' ? 'pt-12' : 'pt-20'}`}>
+      <main className={`max-w-7xl mx-auto px-4 pb-20 ${activeTab === 'pickup' ? 'pt-0' : (activeTab === 'warehouse' || activeTab === 'store' ? 'pt-12' : 'pt-20')}`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -5306,7 +5876,7 @@ const AdminDashboard = ({
           <div>
             <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Account</h4>
             <ul className="space-y-4">
-              <li><button onClick={() => setShowLoginModal(true)} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Sign In</button></li>
+              <li><button onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Sign In</button></li>
               <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">My Shipments</button></li>
               <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Order History</button></li>
               <li><button onClick={() => navigateTo('notifications')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Notifications</button></li>
@@ -5460,14 +6030,116 @@ const AdminDashboard = ({
                   <div className="flex items-center justify-center mx-auto mb-4">
                     <Logo height="h-16" />
                   </div>
-                  <h2 className="text-3xl font-black text-slate-900">Welcome Back</h2>
-                  <p className="text-slate-500 mt-2">Sign in to continue your shipment</p>
+                  <h2 className="text-3xl font-black text-slate-900">
+                    {loginTriggerSource === 'checkout' ? 'Almost There!' : loginTriggerSource === 'pickup' ? 'One Last Step!' : 'Welcome Back'}
+                  </h2>
+                  <p className="text-slate-500 mt-2">
+                    {loginTriggerSource === 'checkout' 
+                      ? 'Sign in to complete your secure checkout' 
+                      : loginTriggerSource === 'pickup'
+                      ? 'Sign in to schedule your agent pickup'
+                      : 'Sign in to continue your shipment'}
+                  </p>
                 </div>
                 <Login onSuccess={(email) => {
                   setGuestEmail(email);
                   setIsGuestMode(true);
                   setShowLoginModal(false);
+                  
+                  // Auto-redirect based on role for smoother testing
+                  const isAdmin = email === 'admin@jiffex.com';
+                  const isAgent = email === 'agent@jiffex.com';
+                  if (isAdmin) navigateTo('admin');
+                  else if (isAgent) navigateTo('agent');
+                  else if (loginTriggerSource === 'pickup') navigateTo('pickup');
+                  else if (loginTriggerSource === 'checkout') navigateTo('finalize');
                 }} />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showPickupConfirmModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[2.5rem] p-8 max-w-lg w-full shadow-2xl border border-slate-100 overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-2xl font-black text-slate-900">Confirm Pickup</h3>
+                <button 
+                  onClick={() => setShowPickupConfirmModal(false)}
+                  className="w-10 h-10 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-200 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                      <UserIcon size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Customer Name</p>
+                      <p className="text-base font-bold text-slate-900">{pickupName}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                      <Phone size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact Number</p>
+                      <p className="text-base font-bold text-slate-900">+91 {pickupPhone}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                      <MapPin size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Address</p>
+                      <p className="text-sm font-bold text-slate-900 leading-relaxed">
+                        {pickupAddress.street}{pickupAddress.apartment ? `, ${pickupAddress.apartment}` : ''}, {pickupAddress.city}, {pickupAddress.zip}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                      <Clock size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Scheduled Slot</p>
+                      <p className="text-base font-bold text-slate-900">{selectedPickupDate} at {selectedPickupTime}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 pt-4">
+                  <button 
+                    onClick={() => {
+                      setShowPickupConfirmModal(false);
+                      confirmPickup('AllAgent');
+                    }}
+                    className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] text-lg font-black hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-200 flex items-center justify-center gap-3"
+                  >
+                    <CheckCircle2 size={24} /> Confirm & Schedule
+                  </button>
+                  <button 
+                    onClick={() => setShowPickupConfirmModal(false)}
+                    className="w-full py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm"
+                  >
+                    Back to Edit
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
