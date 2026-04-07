@@ -224,8 +224,39 @@ const StaticShipmentTracker = () => {
   ]);
 
   // Cart Section States
-  const [selectedPickupDate, setSelectedPickupDate] = useState(PICKUP_SLOTS[0].date);
-  const [selectedPickupTime, setSelectedPickupTime] = useState(PICKUP_SLOTS[0].times[0]);
+  const getInitialPickupSlot = () => {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const istNow = new Date(utc + (3600000 * 5.5));
+    const istDateStr = istNow.toISOString().split('T')[0];
+    
+    const hourMap: Record<string, number> = {
+      '9–11 AM': 9,
+      '11–1 PM': 11,
+      '1–3 PM': 13,
+      '3–5 PM': 15,
+      '5–7 PM': 17,
+      '7–9 PM': 19
+    };
+
+    for (const slot of PICKUP_SLOTS) {
+      if (slot.date < istDateStr) continue;
+      
+      const validTime = slot.times.find(time => {
+        if (slot.date > istDateStr) return true;
+        return istNow.getHours() < hourMap[time];
+      });
+      
+      if (validTime) {
+        return { date: slot.date, time: validTime };
+      }
+    }
+    return { date: PICKUP_SLOTS[0].date, time: PICKUP_SLOTS[0].times[0] };
+  };
+
+  const initialSlot = getInitialPickupSlot();
+  const [selectedPickupDate, setSelectedPickupDate] = useState(initialSlot.date);
+  const [selectedPickupTime, setSelectedPickupTime] = useState(initialSlot.time);
   const [pickupName, setPickupName] = useState('');
   const [pickupPhone, setPickupPhone] = useState('');
   const [pickupAddress, setPickupAddress] = useState({
@@ -274,6 +305,43 @@ const StaticShipmentTracker = () => {
       return () => clearInterval(interval);
     }
   }, [activePickupStep]);
+
+  // Ensure selected pickup time is valid for the selected date (IST)
+  useEffect(() => {
+    const getISTTime = () => {
+      const now = new Date();
+      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+      return new Date(utc + (3600000 * 5.5));
+    };
+    
+    const istNow = getISTTime();
+    const istDateStr = istNow.toISOString().split('T')[0];
+    
+    const currentSlots = PICKUP_SLOTS.find(s => s.date === selectedPickupDate);
+    if (!currentSlots) return;
+
+    const hourMap: Record<string, number> = {
+      '9–11 AM': 9,
+      '11–1 PM': 11,
+      '1–3 PM': 13,
+      '3–5 PM': 15,
+      '5–7 PM': 17,
+      '7–9 PM': 19
+    };
+
+    const isPast = (time: string) => {
+      if (selectedPickupDate < istDateStr) return true;
+      if (selectedPickupDate > istDateStr) return false;
+      return istNow.getHours() >= hourMap[time];
+    };
+
+    if (isPast(selectedPickupTime)) {
+      const firstValidTime = currentSlots.times.find(t => !isPast(t));
+      if (firstValidTime) {
+        setSelectedPickupTime(firstValidTime);
+      }
+    }
+  }, [selectedPickupDate, selectedPickupTime]);
   const [isSchedulingNewPickup, setIsSchedulingNewPickup] = useState(false);
   const [lastBookingRef, setLastBookingRef] = useState<string | null>(null);
   const [categories, setCategories] = useState(['Pooja', 'Return Gifts', 'Decorative']);
@@ -1734,8 +1802,8 @@ interface AdminDashboardProps {
   setNewAgent: React.Dispatch<React.SetStateAction<any>>;
   categories: string[];
   setCategories: React.Dispatch<React.SetStateAction<string[]>>;
-  adminTab: 'Overview' | 'Agents' | 'Inventory';
-  setAdminTab: React.Dispatch<React.SetStateAction<'Overview' | 'Agents' | 'Inventory'>>;
+  adminTab: 'Overview' | 'Agents' | 'Inventory' | 'Settings';
+  setAdminTab: React.Dispatch<React.SetStateAction<'Overview' | 'Agents' | 'Inventory' | 'Settings'>>;
   newProduct: Partial<StoreProduct>;
   setNewProduct: React.Dispatch<React.SetStateAction<Partial<StoreProduct>>>;
   storeProducts: StoreProduct[];
@@ -1842,6 +1910,12 @@ const AdminDashboard = ({
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${adminTab === 'Inventory' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
           >
             Inventory
+          </button>
+          <button 
+            onClick={() => setAdminTab('Settings')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${adminTab === 'Settings' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+          >
+            Settings
           </button>
         </div>
       </div>
@@ -2060,7 +2134,7 @@ const AdminDashboard = ({
             </div>
           </div>
         </div>
-      ) : (
+      ) : adminTab === 'Inventory' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1 space-y-8">
             <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm h-fit">
@@ -2293,7 +2367,99 @@ const AdminDashboard = ({
             </div>
           </div>
         </div>
-      )}
+      ) : adminTab === 'Settings' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+            <h3 className="text-xl font-bold flex items-center gap-2">
+              <ShieldCheck className="text-indigo-600" /> System Configuration
+            </h3>
+            
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare size={18} className="text-indigo-600" />
+                    <span className="font-bold text-slate-900">Twilio SMS/WhatsApp</span>
+                  </div>
+                  <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase">Configured</span>
+                </div>
+                <p className="text-xs text-slate-500">Handles automated shipping alerts and agent pickup confirmations.</p>
+                
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                  <div className="flex items-center gap-2 text-amber-700 mb-1">
+                    <AlertTriangle size={14} />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Troubleshooting: SMS Permissions</span>
+                  </div>
+                  <p className="text-[10px] text-amber-600 leading-relaxed">
+                    If you see errors like <strong>"Permission to send an SMS has not been enabled for the region"</strong>, you must enable <strong>Geo-Permissions</strong> for the destination country in your Twilio Console.
+                  </p>
+                  <a 
+                    href="https://console.twilio.com/us1/develop/sms/settings/geo-permissions" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-block text-[10px] font-bold text-indigo-600 hover:underline"
+                  >
+                    Open Twilio Geo-Permissions →
+                  </a>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Mail size={18} className="text-indigo-600" />
+                    <span className="font-bold text-slate-900">SMTP Email Service</span>
+                  </div>
+                  <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase">Active</span>
+                </div>
+                <p className="text-xs text-slate-500">Sends digital invoices and detailed order summaries to customers.</p>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Database size={18} className="text-indigo-600" />
+                    <span className="font-bold text-slate-900">Supabase Database</span>
+                  </div>
+                  <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase">Connected</span>
+                </div>
+                <p className="text-xs text-slate-500">Persistent storage for orders, inventory, and notification history.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+            <h3 className="text-xl font-bold flex items-center gap-2">
+              <Bell className="text-indigo-600" /> Test Notifications
+            </h3>
+            <p className="text-sm text-slate-500">Send a test alert to verify your configuration is working correctly.</p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Test Phone Number</label>
+                <input 
+                  type="tel" 
+                  placeholder="+91 XXXXX XXXXX"
+                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button className="p-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
+                  <MessageSquare size={14} /> Test SMS
+                </button>
+                <button className="p-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
+                  <Mail size={14} /> Test Email
+                </button>
+              </div>
+              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
+                <p className="text-[10px] text-indigo-600 leading-relaxed">
+                  <strong>Note:</strong> Test notifications will use the credentials defined in your environment variables. Ensure your Twilio balance is sufficient.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -3621,16 +3787,18 @@ const AdminDashboard = ({
                       ].map((s, idx) => (
                         <div key={s.step} className="flex items-center gap-2 shrink-0">
                           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border-2 transition-all ${
+                            (activePickupStep === 5 && s.step === 5) ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-100' :
                             activePickupStep === s.step ? 'bg-jiffex-orange/10 border-jiffex-orange text-jiffex-orange' : 
                             activePickupStep > s.step ? 'bg-deep-blue text-white border-deep-blue' :
                             'bg-slate-50 border-slate-200 text-slate-400'
                           }`}>
                             <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                              (activePickupStep === 5 && s.step === 5) ? 'bg-white text-emerald-600' :
                               activePickupStep === s.step ? 'bg-jiffex-orange text-white' : 
                               activePickupStep > s.step ? 'bg-white text-deep-blue' :
                               'bg-slate-200 text-slate-500'
                             }`}>
-                              {activePickupStep > s.step ? <CheckCircle2 size={12} /> : s.step}
+                              {(activePickupStep > s.step || (activePickupStep === 5 && s.step === 5)) ? <CheckCircle2 size={12} /> : s.step}
                             </div>
                             <span className="text-[11px] font-black whitespace-nowrap">{s.label}</span>
                           </div>
@@ -3959,11 +4127,29 @@ const AdminDashboard = ({
                                       {filteredPickupSlots.map(slot => {
                                         const d = new Date(slot.date);
                                         const isSelected = selectedPickupDate === slot.date;
+                                        
+                                        // IST check for past dates
+                                        const getISTTime = () => {
+                                          const now = new Date();
+                                          const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+                                          return new Date(utc + (3600000 * 5.5));
+                                        };
+                                        const istNow = getISTTime();
+                                        const istDateStr = istNow.toISOString().split('T')[0];
+                                        
+                                        // A date is past if its last slot is past (last slot starts at 7 PM / 19:00)
+                                        const isDatePast = slot.date < istDateStr || (slot.date === istDateStr && istNow.getHours() >= 19);
+                                        
                                         return (
                                           <button
                                             key={slot.date}
+                                            disabled={isDatePast}
                                             onClick={() => setSelectedPickupDate(slot.date)}
-                                            className={`flex-shrink-0 w-20 h-24 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-1 ${isSelected ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}
+                                            className={`flex-shrink-0 w-20 h-24 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-1 ${
+                                              isDatePast ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-100 text-slate-300' :
+                                              isSelected ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange' : 
+                                              'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
+                                            }`}
                                           >
                                             <span className="text-[10px] font-black uppercase">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
                                             <span className="text-xl font-black">{d.getDate()}</span>
@@ -3979,11 +4165,45 @@ const AdminDashboard = ({
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                       {PICKUP_SLOTS.find(s => s.date === selectedPickupDate)?.times.map(time => {
                                         const isSelected = selectedPickupTime === time;
+                                        
+                                        // IST check for past slots
+                                        const getISTTime = () => {
+                                          const now = new Date();
+                                          const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+                                          return new Date(utc + (3600000 * 5.5));
+                                        };
+                                        
+                                        const istNow = getISTTime();
+                                        const istDateStr = istNow.toISOString().split('T')[0];
+                                        
+                                        let isPast = false;
+                                        if (selectedPickupDate < istDateStr) {
+                                          isPast = true;
+                                        } else if (selectedPickupDate === istDateStr) {
+                                          const hourMap: Record<string, number> = {
+                                            '9–11 AM': 9,
+                                            '11–1 PM': 11,
+                                            '1–3 PM': 13,
+                                            '3–5 PM': 15,
+                                            '5–7 PM': 17,
+                                            '7–9 PM': 19
+                                          };
+                                          const startHour = hourMap[time];
+                                          if (istNow.getHours() >= startHour) {
+                                            isPast = true;
+                                          }
+                                        }
+
                                         return (
                                           <button
                                             key={time}
+                                            disabled={isPast}
                                             onClick={() => setSelectedPickupTime(time)}
-                                            className={`py-4 px-2 rounded-2xl border-2 transition-all text-center ${isSelected ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange' : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}
+                                            className={`py-4 px-2 rounded-2xl border-2 transition-all text-center ${
+                                              isPast ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-100 text-slate-300' :
+                                              isSelected ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange' : 
+                                              'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
+                                            }`}
                                           >
                                             <span className="text-xs font-black">{time}</span>
                                           </button>
@@ -4298,9 +4518,67 @@ const AdminDashboard = ({
                             </p>
                           </div>
 
-                          <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 inline-block">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Booking ref</p>
-                            <p className="text-3xl font-black text-deep-blue tracking-wider">{lastBookingRef || appointments.find(a => a.status === 'Scheduled')?.id}</p>
+                          <div className="space-y-4">
+                            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 inline-block relative group">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Booking ref</p>
+                              <div className="flex items-center justify-center gap-3">
+                                <p className="text-3xl font-black text-deep-blue tracking-wider">
+                                  {lastBookingRef || appointments.find(a => a.status === 'Scheduled')?.id}
+                                </p>
+                                <button 
+                                  onClick={() => {
+                                    const ref = lastBookingRef || appointments.find(a => a.status === 'Scheduled')?.id;
+                                    if (ref) {
+                                      navigator.clipboard.writeText(ref);
+                                      toast.success('Booking reference copied!');
+                                    }
+                                  }}
+                                  className="p-2 bg-white rounded-xl border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-100 transition-all shadow-sm"
+                                  title="Copy Reference"
+                                >
+                                  <Copy size={16} />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-center gap-3">
+                              <button 
+                                onClick={() => {
+                                  const ref = lastBookingRef || appointments.find(a => a.status === 'Scheduled')?.id;
+                                  if (ref) {
+                                    setNavbarTrackingId(ref);
+                                    navigateTo('track');
+                                  }
+                                }}
+                                className="flex items-center gap-2 text-xs font-black text-indigo-600 hover:text-indigo-700 transition-colors"
+                              >
+                                <Share size={14} /> Track this booking
+                              </button>
+                              
+                              <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100/50">
+                                <Mail size={12} />
+                                <span className="text-[10px] font-bold">Confirmation sent to your email</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap justify-center gap-3 pt-2">
+                            {[
+                              { icon: Check, text: "No payment required yet", color: "text-emerald-600", bg: "bg-emerald-50" },
+                              { icon: ShieldCheck, text: "Secure handling & packaging", color: "text-indigo-600", bg: "bg-indigo-50" },
+                              { icon: Users, text: "Trusted by 1000+ customers", color: "text-amber-600", bg: "bg-amber-50" }
+                            ].map((badge, i) => (
+                              <motion.div 
+                                key={i}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.5 + (i * 0.1) }}
+                                className={`flex items-center gap-2 px-4 py-2 ${badge.bg} rounded-full border border-white shadow-sm`}
+                              >
+                                <badge.icon size={14} className={badge.color} />
+                                <span className="text-[11px] font-bold text-slate-700">{badge.text}</span>
+                              </motion.div>
+                            ))}
                           </div>
                         </div>
 
@@ -4310,24 +4588,38 @@ const AdminDashboard = ({
                           <div className="space-y-6">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-deep-blue">
-                                <ArrowRight size={20} className="text-indigo-600" />
+                                <Clock size={20} className="text-indigo-600" />
                               </div>
-                              <h4 className="text-xl font-black text-deep-blue">Next Steps</h4>
+                              <h4 className="text-xl font-black text-deep-blue">What to Expect</h4>
                             </div>
-                            <div className="space-y-4">
+                            
+                            <div className="relative pl-8 space-y-8">
+                              {/* Timeline Line */}
+                              <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-slate-100" />
+                              
                               {[
-                                { title: "Agent Call", desc: "Agent will call 30 mins before arrival." },
-                                { title: "Collection", desc: "Hand over items; agent will weigh & pack." },
-                                { title: "Warehouse", desc: "Items sent for final consolidation." },
-                                { title: "Payment", desc: "Pay once items are ready for dispatch." }
+                                { time: "Today", title: "Agent Call", desc: "Agent will call 30 mins before arrival", active: true },
+                                { time: "Today", title: "Pickup & Weighing", desc: "Agent collects items and gives final quote", active: true },
+                                { time: "Next 1-2 days", title: "Warehouse Processing", desc: "Items received and prepared for shipping", active: false },
+                                { time: "Then", title: "Payment & Dispatch", desc: "Pay securely to release for global delivery", active: false }
                               ].map((step, i) => (
-                                <div key={i} className="flex gap-4 group">
-                                  <div className="w-6 h-6 rounded-full bg-jiffex-orange/10 text-jiffex-orange flex items-center justify-center text-xs font-black shrink-0 mt-0.5 group-hover:bg-jiffex-orange group-hover:text-white transition-colors">
-                                    {i + 1}
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-black text-slate-900">{step.title}</p>
-                                    <p className="text-xs text-slate-500 font-medium">{step.desc}</p>
+                                <div key={i} className="relative group">
+                                  {/* Dot */}
+                                  <div className={`absolute -left-[26px] top-1.5 w-4 h-4 rounded-full border-2 transition-all duration-500 ${
+                                    step.active ? 'bg-indigo-600 border-indigo-200 scale-110' : 'bg-white border-slate-200'
+                                  }`} />
+                                  
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-[10px] font-black uppercase tracking-widest ${step.active ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                        {step.time}
+                                      </span>
+                                      {step.active && (
+                                        <span className="flex h-1.5 w-1.5 rounded-full bg-indigo-600 animate-pulse" />
+                                      )}
+                                    </div>
+                                    <p className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{step.title}</p>
+                                    <p className="text-xs text-slate-500 font-medium leading-relaxed">{step.desc}</p>
                                   </div>
                                 </div>
                               ))}
@@ -4342,6 +4634,7 @@ const AdminDashboard = ({
                               </div>
                               <h4 className="text-xl font-black text-deep-blue">Documents Required</h4>
                             </div>
+                            <p className="text-xs text-slate-500 font-medium -mt-4 ml-[52px]">Keep these ready for a smooth pickup</p>
                             <div className="space-y-4">
                               {[
                                 { title: "ID Proof", desc: "Aadhar Card or Passport copy for verification." },
@@ -4358,6 +4651,34 @@ const AdminDashboard = ({
                                   </div>
                                 </div>
                               ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-10 border-t border-slate-100 space-y-6">
+                          <div className="flex flex-col items-center gap-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Need help? Contact support</p>
+                            <div className="flex flex-wrap justify-center gap-4 md:gap-8">
+                              <button className="flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-all border border-slate-100 hover:border-indigo-100 group">
+                                <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                                  <MessageSquare size={16} className="text-indigo-600" />
+                                </div>
+                                <span className="text-sm font-black tracking-tight">Live Chat</span>
+                              </button>
+                              
+                              <button className="flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-all border border-slate-100 hover:border-indigo-100 group">
+                                <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                                  <Phone size={16} className="text-indigo-600" />
+                                </div>
+                                <span className="text-sm font-black tracking-tight">Call Us</span>
+                              </button>
+
+                              <button className="flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all border border-emerald-100 group">
+                                <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                                  <MessageSquare size={16} className="text-emerald-600" />
+                                </div>
+                                <span className="text-sm font-black tracking-tight">WhatsApp</span>
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -5481,12 +5802,14 @@ const AdminDashboard = ({
     setIsGuestMode(false);
     setGuestEmail('');
     
-    // Only clear local state if it's a real logout, not just switching roles in guest mode for testing
-    if (!wasGuest) {
-      setItems([]);
-      setAppointments([]);
-      setOrders([]);
-    }
+    // Clear all local state on logout
+    setItems([]);
+    setAppointments([]);
+    setOrders([]);
+    setActivePickupStep(1);
+    setLastBookingRef(null);
+    setIsSchedulingNewPickup(false);
+    setShowPickupConfirmModal(false);
     
     setAddress({
       fullName: '',
@@ -5507,6 +5830,12 @@ const AdminDashboard = ({
     });
     setPickupName('');
     setPickupPhone('');
+    setPickupLanguage('English');
+    setPickupItemType('Everyday Items');
+    setPickupVehicleType('Fits in a car');
+    setPickupSpecialInstructions('');
+    setPickupCategory('Personal Effects');
+    setPickupEstimatedWeight('1-5 kg');
     setCartItemName('');
     setCartItemWeight('');
     setCartItemQuantity(1);

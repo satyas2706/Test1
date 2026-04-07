@@ -62,6 +62,29 @@ if (mailTransporter) {
 }
 
 // Notification Helper
+function normalizePhoneNumber(phone: string): string {
+  // Remove all non-numeric characters except '+'
+  let cleaned = phone.replace(/[^\d+]/g, '');
+  
+  // If it doesn't start with '+', assume it's an Indian number and add '+91'
+  if (!cleaned.startsWith('+')) {
+    // If it starts with '0', remove it
+    if (cleaned.startsWith('0')) {
+      cleaned = cleaned.substring(1);
+    }
+    // If it's 10 digits, add +91
+    if (cleaned.length === 10) {
+      cleaned = '+91' + cleaned;
+    } else if (!cleaned.startsWith('91') && cleaned.length < 10) {
+       // Fallback for shorter numbers, still assume India
+       cleaned = '+91' + cleaned;
+    } else if (cleaned.startsWith('91') && cleaned.length === 12) {
+       cleaned = '+' + cleaned;
+    }
+  }
+  return cleaned;
+}
+
 async function sendNotification(userId: string, event: string, message: string, channels: string[], recipientInfo?: { email?: string, phone?: string, fullName?: string, orderId?: string, pickupDate?: string, pickupTime?: string, pickupAddress?: string }) {
   console.log(`[Notification] User: ${userId}, Event: ${event}, Message: ${message}, Channels: ${channels.join(', ')}`);
   
@@ -84,18 +107,29 @@ async function sendNotification(userId: string, event: string, message: string, 
   const promises = [];
 
   if (channels.includes('SMS') && twilioClient && process.env.TWILIO_PHONE_NUMBER) {
-    const to = recipientInfo?.phone || '+919999999999';
+    const rawPhone = recipientInfo?.phone || '+919999999999';
+    const to = normalizePhoneNumber(rawPhone);
+    
     promises.push(
       twilioClient.messages.create({
         body: message,
         from: process.env.TWILIO_PHONE_NUMBER,
         to
-      }).catch(err => console.error('SMS Error:', err.message))
+      }).catch(err => {
+        if (err.code === 21408) {
+          console.error(`SMS Error: Permission to send an SMS to ${to} has not been enabled in your Twilio Geo-Permissions. Please enable it at https://console.twilio.com/us1/develop/sms/settings/geo-permissions`);
+        } else {
+          console.error('SMS Error:', err.message);
+        }
+      })
     );
   }
 
   if (channels.includes('whatsapp') && twilioClient && process.env.TWILIO_WHATSAPP_NUMBER) {
-    const to = recipientInfo?.phone ? `whatsapp:${recipientInfo.phone}` : 'whatsapp:+919999999999';
+    const rawPhone = recipientInfo?.phone || '+919999999999';
+    const normalizedPhone = normalizePhoneNumber(rawPhone);
+    const to = `whatsapp:${normalizedPhone}`;
+    
     promises.push(
       twilioClient.messages.create({
         body: message,
