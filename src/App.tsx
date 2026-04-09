@@ -116,7 +116,9 @@ export default function App() {
     if (tab !== activeTab) {
       setTabHistory(prev => [...prev, tab]);
       setActiveTab(tab);
-      window.scrollTo(0, 0);
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
     }
   };
 
@@ -127,11 +129,15 @@ export default function App() {
       const prevTab = newHistory[newHistory.length - 1];
       setTabHistory(newHistory);
       setActiveTab(prevTab);
-      window.scrollTo(0, 0);
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
     } else {
       setActiveTab('home');
       setTabHistory(['home']);
-      window.scrollTo(0, 0);
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
     }
   };
 
@@ -367,14 +373,15 @@ const StaticShipmentTracker = () => {
     }
   }, []);
 
-  // Scroll to pickup header when step changes
+  // Scroll to top when pickup step or tab changes
   useEffect(() => {
-    if (activePickupStep >= 1) {
-      setTimeout(() => {
-        pickupHeaderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 400);
+    if (activeTab === 'pickup' && activePickupStep >= 1) {
+      const timer = setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [activePickupStep]);
+  }, [activePickupStep, activeTab]);
   const quoteRef = React.useRef<HTMLDivElement>(null);
   const warehouseItemsRef = React.useRef<HTMLDivElement>(null);
   const pickupHeaderRef = React.useRef<HTMLDivElement>(null);
@@ -3758,11 +3765,11 @@ const AdminDashboard = ({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-8">
+                <div className="space-y-4">
                   {/* Header Section with Progress for Pickup */}
                   <div 
                     ref={pickupHeaderRef} 
-                    className="sticky top-[80px] z-30 bg-white pt-4 pb-6 border-b border-slate-100 -mx-8 px-8 flex flex-col md:flex-row md:items-center justify-between gap-6 scroll-mt-[100px]"
+                    className="sticky top-[80px] z-30 bg-white pt-4 pb-3 border-b border-slate-100 -mx-8 px-8 flex flex-col md:flex-row md:items-center justify-between gap-6 scroll-mt-[100px]"
                   >
                     <div className="flex items-center gap-4">
                       <div className="w-14 h-14 rounded-2xl bg-deep-blue flex items-center justify-center text-jiffex-orange shadow-xl shadow-deep-blue/20">
@@ -3777,32 +3784,28 @@ const AdminDashboard = ({
                     </div>
                     
                     {/* Progress Indicator for Pickup */}
-                    <div className="flex items-center gap-3 overflow-x-auto pb-1 no-scrollbar">
+                    <div className="flex items-center gap-2 w-full md:w-[450px]">
                       {[
                         { step: 1, label: 'Items' },
                         { step: 2, label: 'Schedule' },
                         { step: 3, label: 'Address' },
                         { step: 4, label: 'Review' },
-                        { step: 5, label: 'Confirmation' }
+                        { step: 5, label: 'Done' }
                       ].map((s, idx) => (
-                        <div key={s.step} className="flex items-center gap-2 shrink-0">
-                          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border-2 transition-all ${
-                            (activePickupStep === 5 && s.step === 5) ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-100' :
-                            activePickupStep === s.step ? 'bg-jiffex-orange/10 border-jiffex-orange text-jiffex-orange' : 
-                            activePickupStep > s.step ? 'bg-deep-blue text-white border-deep-blue' :
-                            'bg-slate-50 border-slate-200 text-slate-400'
+                        <div key={s.step} className="flex-1 flex flex-col gap-2">
+                          <div 
+                            className={`h-1.5 rounded-full transition-all duration-500 ${
+                              activePickupStep === 5 && s.step === 5 ? 'bg-emerald-500 shadow-sm shadow-emerald-100' :
+                              activePickupStep === s.step ? 'bg-jiffex-orange shadow-sm shadow-jiffex-orange/20' :
+                              activePickupStep > s.step ? 'bg-deep-blue' : 'bg-slate-100'
+                            }`}
+                          />
+                          <span className={`text-[9px] font-black uppercase tracking-tighter text-center transition-colors duration-500 ${
+                            activePickupStep === s.step ? 'text-jiffex-orange' : 
+                            activePickupStep > s.step ? 'text-deep-blue' : 'text-slate-400'
                           }`}>
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${
-                              (activePickupStep === 5 && s.step === 5) ? 'bg-white text-emerald-600' :
-                              activePickupStep === s.step ? 'bg-jiffex-orange text-white' : 
-                              activePickupStep > s.step ? 'bg-white text-deep-blue' :
-                              'bg-slate-200 text-slate-500'
-                            }`}>
-                              {(activePickupStep > s.step || (activePickupStep === 5 && s.step === 5)) ? <CheckCircle2 size={12} /> : s.step}
-                            </div>
-                            <span className="text-[11px] font-black whitespace-nowrap">{s.label}</span>
-                          </div>
-                          {idx < 4 && <div className={`w-4 h-0.5 rounded-full ${activePickupStep > s.step ? 'bg-deep-blue' : 'bg-slate-100'}`} />}
+                            {s.label}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -3970,7 +3973,7 @@ const AdminDashboard = ({
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                      <div className="lg:col-span-12 space-y-6">
+                      <div className="lg:col-span-12 space-y-6 min-h-[600px]">
                         <AnimatePresence mode="wait">
                         {/* Step 1: What type of items are you sending? */}
                       {activePickupStep === 1 && (
