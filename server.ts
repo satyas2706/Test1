@@ -66,6 +66,9 @@ function normalizePhoneNumber(phone: string): string {
   // Remove all non-numeric characters except '+'
   let cleaned = phone.replace(/[^\d+]/g, '');
   
+  // Strict cleanup: remove any letters (like 'X' in placeholders)
+  cleaned = cleaned.replace(/[a-zA-Z]/g, '');
+
   // If it doesn't start with '+', assume it's an Indian number and add '+91'
   if (!cleaned.startsWith('+')) {
     // If it starts with '0', remove it
@@ -110,33 +113,40 @@ async function sendNotification(userId: string, event: string, message: string, 
     const rawPhone = recipientInfo?.phone || '+919999999999';
     const to = normalizePhoneNumber(rawPhone);
     
-    promises.push(
-      twilioClient.messages.create({
-        body: message,
-        from: process.env.TWILIO_PHONE_NUMBER,
-        to
-      }).catch(err => {
-        if (err.code === 21408) {
-          console.error(`SMS Error: Permission to send an SMS to ${to} has not been enabled in your Twilio Geo-Permissions. Please enable it at https://console.twilio.com/us1/develop/sms/settings/geo-permissions`);
-        } else {
-          console.error('SMS Error:', err.message);
-        }
-      })
-    );
+    // Skip if it looks like a placeholder (contains too many 1s or 0s or is too short)
+    const isPlaceholder = to.includes('11111') || to.includes('00000') || to.length < 10;
+
+    if (!isPlaceholder) {
+      promises.push(
+        twilioClient.messages.create({
+          body: message,
+          from: process.env.TWILIO_PHONE_NUMBER,
+          to
+        }).catch(err => console.error(`SMS Error (${to}):`, err.message))
+      );
+    } else {
+      console.warn(`[Notification] Skipping SMS to placeholder number: ${to}`);
+    }
   }
 
   if (channels.includes('whatsapp') && twilioClient && process.env.TWILIO_WHATSAPP_NUMBER) {
     const rawPhone = recipientInfo?.phone || '+919999999999';
-    const normalizedPhone = normalizePhoneNumber(rawPhone);
-    const to = `whatsapp:${normalizedPhone}`;
+    const normalized = normalizePhoneNumber(rawPhone);
+    const to = `whatsapp:${normalized}`;
     
-    promises.push(
-      twilioClient.messages.create({
-        body: message,
-        from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`,
-        to
-      }).catch(err => console.error('WhatsApp Error:', err.message))
-    );
+    const isPlaceholder = normalized.includes('11111') || normalized.includes('00000') || normalized.length < 10;
+
+    if (!isPlaceholder) {
+      promises.push(
+        twilioClient.messages.create({
+          body: message,
+          from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`,
+          to
+        }).catch(err => console.error(`WhatsApp Error (${to}):`, err.message))
+      );
+    } else {
+      console.warn(`[Notification] Skipping WhatsApp to placeholder number: ${to}`);
+    }
   }
 
   if (channels.includes('Email') && mailTransporter && process.env.SMTP_FROM) {
