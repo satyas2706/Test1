@@ -369,10 +369,10 @@ const StaticShipmentTracker = () => {
 
   // Scroll to pickup header when step changes
   useEffect(() => {
-    if (activePickupStep > 1 && activePickupStep < 5) {
+    if (activePickupStep >= 1) {
       setTimeout(() => {
         pickupHeaderRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
+      }, 400);
     }
   }, [activePickupStep]);
   const quoteRef = React.useRef<HTMLDivElement>(null);
@@ -1323,10 +1323,10 @@ Date: ${new Date().toLocaleDateString()}
               <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 -translate-y-1/2 hidden lg:block" />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
                 {[
-                  { icon: Calendar, title: "1. Schedule Pickup", desc: "Start by scheduling an agent pickup. This becomes the heart of your shipment process.", color: "bg-indigo-600", shadow: "shadow-indigo-200" },
-                  { icon: ShoppingBag, title: "2. Add Everything", desc: "Add items from your home, our Shop, or even items you've sent to our warehouse.", color: "bg-amber-500", shadow: "shadow-amber-200" },
-                  { icon: Truck, title: "3. Home Consolidation", desc: "Our agent brings your warehouse and store items to your home for a final unified collection.", color: "bg-emerald-500", shadow: "shadow-emerald-200" },
-                  { icon: CheckCircle2, title: "4. Global Shipping", desc: "Everything is weighed and packed at your home, then shipped globally in one go.", color: "bg-blue-500", shadow: "shadow-blue-200" }
+                  { icon: Calendar, title: "Schedule Pickup", desc: "Start by scheduling an agent pickup. This becomes the heart of your shipment process.", color: "bg-indigo-600", shadow: "shadow-indigo-200" },
+                  { icon: ShoppingBag, title: "Add Everything", desc: "Add items from your home, our Shop, or even items you've sent to our warehouse.", color: "bg-amber-500", shadow: "shadow-amber-200" },
+                  { icon: Truck, title: "Home Consolidation", desc: "Our agent brings your warehouse and store items to your home for a final unified collection.", color: "bg-emerald-500", shadow: "shadow-emerald-200" },
+                  { icon: CheckCircle2, title: "Global Shipping", desc: "Everything is weighed and packed at your home, then shipped globally in one go.", color: "bg-blue-500", shadow: "shadow-blue-200" }
                 ].map((step, i) => (
                   <motion.div 
                     key={step.title}
@@ -1339,9 +1339,6 @@ Date: ${new Date().toLocaleDateString()}
                     <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 flex flex-col items-center text-center h-full">
                       <div className={`w-16 h-16 ${step.color} text-white rounded-3xl flex items-center justify-center mb-6 shadow-2xl ${step.shadow} group-hover:scale-110 transition-transform duration-500`}>
                         <step.icon size={32} />
-                      </div>
-                      <div className="absolute -top-4 -right-4 w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center font-black text-sm border-4 border-white shadow-lg">
-                        0{i + 1}
                       </div>
                       <h4 className="text-xl font-black text-slate-900 mb-3">{step.title}</h4>
                       <p className="text-sm text-slate-500 leading-relaxed">{step.desc}</p>
@@ -3658,7 +3655,7 @@ const AdminDashboard = ({
                           <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
                             <Package size={20} />
                           </div>
-                          <h5 className="font-black text-slate-900">1. Send Items</h5>
+                          <h5 className="font-black text-slate-900">Send Items</h5>
                           <p className="text-xs text-slate-500 leading-relaxed">
                             Pack your items and send them to our warehouse address.
                           </p>
@@ -3667,7 +3664,7 @@ const AdminDashboard = ({
                           <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-600 shadow-sm">
                             <ShoppingBag size={20} />
                           </div>
-                          <h5 className="font-black text-slate-900">2. Shop Online</h5>
+                          <h5 className="font-black text-slate-900">Shop Online</h5>
                           <p className="text-xs text-slate-500 leading-relaxed">
                             Use our address at checkout on Amazon, Flipkart, etc.
                           </p>
@@ -3679,7 +3676,7 @@ const AdminDashboard = ({
                         <div className="flex items-center justify-between mb-8">
                           <div className="flex items-center gap-3 text-indigo-600">
                             <CheckCircle2 size={24} />
-                            <h4 className="text-xl font-black">3. Review Shipment</h4>
+                            <h4 className="text-xl font-black">Review Shipment</h4>
                           </div>
                           <div className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-black text-indigo-600 border border-indigo-100">
                             {displayItems.filter(i => i.source === 'Warehouse' && !i.submitted).length} Items
@@ -3763,7 +3760,10 @@ const AdminDashboard = ({
               ) : (
                 <div className="space-y-8">
                   {/* Header Section with Progress for Pickup */}
-                  <div ref={pickupHeaderRef} className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-8">
+                  <div 
+                    ref={pickupHeaderRef} 
+                    className="sticky top-[80px] z-30 bg-white pt-4 pb-6 border-b border-slate-100 -mx-8 px-8 flex flex-col md:flex-row md:items-center justify-between gap-6 scroll-mt-[100px]"
+                  >
                     <div className="flex items-center gap-4">
                       <div className="w-14 h-14 rounded-2xl bg-deep-blue flex items-center justify-center text-jiffex-orange shadow-xl shadow-deep-blue/20">
                         <Truck size={28} />
@@ -3971,29 +3971,29 @@ const AdminDashboard = ({
                   ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                       <div className="lg:col-span-12 space-y-6">
+                        <AnimatePresence mode="wait">
                         {/* Step 1: What type of items are you sending? */}
                       {activePickupStep === 1 && (
-                        <div className={`p-8 rounded-[2.5rem] border transition-all duration-300 ${activePickupStep === 1 ? 'bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5' : 'bg-slate-50 border-slate-100'}`}>
+                        <motion.div 
+                          key="step1"
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -20 }}
+                          transition={{ duration: 0.3 }}
+                          className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5"
+                        >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
-                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${activePickupStep === 1 ? 'bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10' : 'bg-deep-blue/5 text-deep-blue'}`}>
+                              <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10">
                                 <Package size={24} />
                               </div>
                               <div>
-                                <h4 className="text-xl font-black text-deep-blue">1. What type of items are you sending?</h4>
+                                <h4 className="text-xl font-black text-deep-blue">What type of items are you sending?</h4>
                               </div>
                             </div>
                           </div>
 
-                          <AnimatePresence>
-                            {activePickupStep === 1 && (
-                              <motion.div 
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="overflow-hidden"
-                              >
-                                <div className="pt-8 space-y-8">
+                          <div className="pt-8 space-y-8">
                                   <div className="space-y-4">
                                     <h5 className="text-sm font-black text-deep-blue uppercase tracking-wider">Select Item Type</h5>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -4091,43 +4091,37 @@ const AdminDashboard = ({
                                   <button 
                                     onClick={() => {
                                       setActivePickupStep(2);
-                                      window.scrollTo(0, 0);
                                     }}
                                     className="w-full py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
                                   >
                                     Continue to Schedule <ArrowRight size={18} />
                                   </button>
                                 </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
+                        </motion.div>
                       )}
 
                       {/* Step 2: When should we arrive? */}
                       {activePickupStep === 2 && (
-                        <div className={`p-8 rounded-[2.5rem] border transition-all duration-300 ${activePickupStep === 2 ? 'bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5' : 'bg-slate-50 border-slate-100'}`}>
+                        <motion.div 
+                          key="step2"
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -20 }}
+                          transition={{ duration: 0.3 }}
+                          className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5"
+                        >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
-                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${activePickupStep === 2 ? 'bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10' : 'bg-deep-blue/5 text-deep-blue'}`}>
+                              <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10">
                                 <Clock size={24} />
                               </div>
                               <div>
-                                <h4 className="text-xl font-black text-deep-blue">2. When should we arrive?</h4>
-                                <p className="text-sm font-bold text-slate-400 mt-1">Choose your preferred date and time window.</p>
+                                <h4 className="text-xl font-black text-deep-blue">When should we arrive?</h4>
                               </div>
                             </div>
                           </div>
 
-                          <AnimatePresence>
-                            {activePickupStep === 2 && (
-                              <motion.div 
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="overflow-hidden"
-                              >
-                                <div className="pt-8 space-y-8">
+                          <div className="pt-8 space-y-8">
                                   <div className="space-y-4">
                                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Select Date</label>
                                     <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
@@ -4223,7 +4217,6 @@ const AdminDashboard = ({
                                     <button 
                                       onClick={() => {
                                         setActivePickupStep(1);
-                                        window.scrollTo(0, 0);
                                       }}
                                       className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                                     >
@@ -4232,7 +4225,6 @@ const AdminDashboard = ({
                                     <button 
                                       onClick={() => {
                                         setActivePickupStep(3);
-                                        window.scrollTo(0, 0);
                                       }}
                                       className="flex-[2] py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
                                     >
@@ -4240,36 +4232,31 @@ const AdminDashboard = ({
                                     </button>
                                   </div>
                                 </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
+                        </motion.div>
                       )}
 
                     {/* Step 3: Pickup details */}
                     {activePickupStep === 3 && (
-                      <div className={`p-8 rounded-[2.5rem] border transition-all duration-300 ${activePickupStep === 3 ? 'bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5' : 'bg-slate-50 border-slate-100'}`}>
+                      <motion.div 
+                        key="step3"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.3 }}
+                        className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5"
+                      >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${activePickupStep === 3 ? 'bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10' : 'bg-deep-blue/5 text-deep-blue'}`}>
+                            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10">
                               <MapPin size={24} />
                             </div>
                             <div>
-                              <h4 className="text-xl font-black text-deep-blue">3. Pickup details</h4>
-                              <p className="text-sm font-bold text-slate-400 mt-1">Where should our agent come? We'll confirm via SMS.</p>
+                              <h4 className="text-xl font-black text-deep-blue">Pickup details</h4>
                             </div>
                           </div>
                         </div>
 
-                        <AnimatePresence>
-                          {activePickupStep === 3 && (
-                            <motion.div 
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden"
-                            >
-                              <div className="pt-8 space-y-6">
+                        <div className="pt-8 space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                   <div className="space-y-2">
                                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
@@ -4351,7 +4338,6 @@ const AdminDashboard = ({
                                   <button 
                                     onClick={() => {
                                       setActivePickupStep(2);
-                                      window.scrollTo(0, 0);
                                     }}
                                     className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                                   >
@@ -4368,7 +4354,6 @@ const AdminDashboard = ({
                                         return;
                                       }
                                       setActivePickupStep(4);
-                                      window.scrollTo(0, 0);
                                     }}
                                     className="flex-[2] py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
                                   >
@@ -4376,33 +4361,31 @@ const AdminDashboard = ({
                                   </button>
                                 </div>
                               </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    )}
+                        </motion.div>
+                      )}
 
                     {/* Step 4: Review your booking */}
                     {activePickupStep === 4 && (
-                      <div className={`p-8 rounded-[2.5rem] border transition-all duration-300 ${activePickupStep === 4 ? 'bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5' : 'bg-slate-50 border-slate-100'}`}>
-                        <div className="flex items-center gap-4">
-                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${activePickupStep === 4 ? 'bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10' : 'bg-deep-blue/5 text-deep-blue'}`}>
-                            <CheckCircle2 size={24} />
-                          </div>
-                          <div>
-                            <h4 className="text-xl font-black text-deep-blue">4. Review your booking</h4>
+                      <motion.div 
+                        key="step4"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.3 }}
+                        className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10">
+                              <CheckCircle2 size={24} />
+                            </div>
+                            <div>
+                              <h4 className="text-xl font-black text-deep-blue">Review your booking</h4>
+                            </div>
                           </div>
                         </div>
 
-                        <AnimatePresence>
-                          {activePickupStep === 4 && (
-                            <motion.div 
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden"
-                            >
-                              <div className="pt-8 space-y-6">
+                        <div className="pt-8 space-y-6">
                                 <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
                                   <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
@@ -4458,7 +4441,6 @@ const AdminDashboard = ({
                                   <button 
                                     onClick={() => {
                                       setActivePickupStep(3);
-                                      window.scrollTo(0, 0);
                                     }}
                                     className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                                   >
@@ -4485,18 +4467,18 @@ const AdminDashboard = ({
                                   </button>
                                 )}
                               </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    )}
+                        </motion.div>
+                      )}
 
                     {/* Step 5: Booking confirmed */}
                     {activePickupStep === 5 && (
                       <motion.div 
+                        key="step5"
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="p-10 rounded-[3rem] bg-white border border-slate-100 shadow-2xl shadow-indigo-500/5 text-center space-y-10"
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.3 }}
+                        className="p-8 rounded-[2.5rem] bg-white border border-slate-100 shadow-2xl shadow-indigo-500/5 text-center space-y-10"
                       >
                         <div className="space-y-6">
                           <motion.div 
@@ -4721,7 +4703,6 @@ const AdminDashboard = ({
                             <button 
                               onClick={() => {
                                 setActivePickupStep(1);
-                                window.scrollTo(0, 0);
                               }}
                               className="w-full max-w-xs py-5 bg-jiffex-orange text-white rounded-[2rem] text-lg font-black hover:bg-amber-600 transition-all shadow-2xl shadow-jiffex-orange/20 flex items-center justify-center gap-3"
                             >
@@ -4743,6 +4724,7 @@ const AdminDashboard = ({
                         </div>
                       </motion.div>
                     )}
+                    </AnimatePresence>
 
                     {/* Info Card */}
                     {activePickupStep !== 5 && (
