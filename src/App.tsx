@@ -976,6 +976,14 @@ const StaticShipmentTracker = () => {
   };
 
   const updateItemQuantity = (id: string, delta: number) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    if (delta === -1 && (item.quantity || 1) === 1) {
+      removeItem(id);
+      return;
+    }
+
     setItems(items.map(i => {
       if (i.id === id) {
         const newQuantity = Math.max(1, (i.quantity || 1) + delta);
@@ -1510,13 +1518,13 @@ Date: ${new Date().toLocaleDateString()}
                           initial={{ scale: 0, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
                           exit={{ scale: 0, opacity: 0 }}
-                          className="absolute top-3 right-3 z-10 w-7 h-7 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg border-2 border-white"
+                          className="absolute top-3 right-3 z-10 w-7 h-7 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg border-2 border-white"
                         >
                           {itemCount}
                         </motion.div>
                       )}
                     </AnimatePresence>
-                    <div className="aspect-square overflow-hidden relative">
+                    <div className="relative aspect-square rounded-2xl overflow-hidden mb-4 bg-slate-50">
                       <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
                       <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-600">
                         {product.category}
@@ -1530,32 +1538,16 @@ Date: ${new Date().toLocaleDateString()}
                           <span className="text-[10px] text-slate-400 font-medium">{product.weight}kg</span>
                         </div>
                         
-                        {itemCount > 0 ? (
-                          <div className="flex items-center gap-2">
-                            <button 
-                              onClick={() => removeStoreItem(product.name)}
-                              className="w-8 h-8 bg-slate-100 text-slate-600 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                            <div className="flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 shadow-md shadow-indigo-100">
-                              <ShoppingBag size={12} /> Added ({itemCount})
-                            </div>
-                            <button 
-                              onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                              className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100"
-                            >
-                              <Plus size={14} />
-                            </button>
-                          </div>
-                        ) : (
-                          <button 
+                        <div className="flex justify-center">
+                          <motion.button 
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
                             onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                            className="w-full py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"
+                            className="w-10 h-10 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10"
                           >
-                            <Plus size={14} /> Add to Shipment
-                          </button>
-                        )}
+                            <Plus size={16} />
+                          </motion.button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -3371,7 +3363,19 @@ const AdminDashboard = ({
             const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
             const itemCount = cartItem?.quantity || 0;
             return (
-              <div key={product.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex gap-4">
+              <div key={product.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex gap-4 relative">
+                <AnimatePresence>
+                  {itemCount > 0 && (
+                    <motion.div 
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      className="absolute -top-1 -left-1 z-10 w-6 h-6 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg border-2 border-white"
+                    >
+                      {itemCount}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0">
                   <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
                 </div>
@@ -3380,22 +3384,22 @@ const AdminDashboard = ({
                     <h5 className="text-sm font-bold text-slate-900 truncate">{product.name}</h5>
                     <p className="text-[10px] text-slate-500">${product.price} • {product.weight} kg</p>
                   </div>
-                  <button 
-                    onClick={() => addItem({ 
-                      name: product.name, 
-                      weight: product.weight, 
-                      price: product.price, 
-                      image: product.image,
-                      estimatedDelivery: product.estimatedDelivery 
-                    }, 'Store')}
-                    className={`mt-2 py-2 px-3 rounded-lg text-[10px] font-black flex items-center justify-center gap-2 transition-all ${
-                      itemCount > 0 
-                        ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' 
-                        : 'bg-slate-900 text-white hover:bg-black'
-                    }`}
-                  >
-                    {itemCount > 0 ? <><CheckCircle2 size={12} /> Added</> : <><Plus size={12} /> Add to Cart</>}
-                  </button>
+                  <div className="flex justify-center mt-2">
+                    <motion.button 
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => addItem({ 
+                        name: product.name, 
+                        weight: product.weight, 
+                        price: product.price, 
+                        image: product.image,
+                        estimatedDelivery: product.estimatedDelivery 
+                      }, 'Store')}
+                      className="w-8 h-8 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-md shadow-deep-blue/10"
+                    >
+                      <Plus size={14} />
+                    </motion.button>
+                  </div>
                 </div>
               </div>
             );
@@ -3668,11 +3672,11 @@ const AdminDashboard = ({
                             disabled={!cartItemName}
                             className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all ${
                               cartItemName 
-                                ? 'bg-slate-900 text-white hover:bg-black shadow-xl' 
+                                ? 'bg-deep-blue text-white hover:bg-slate-800 shadow-xl shadow-deep-blue/20' 
                                 : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                             }`}
                           >
-                            <Plus size={20} /> Add to Shipment
+                            <Plus size={20} />
                           </button>
                         </div>
                       </div>
@@ -5077,18 +5081,20 @@ const AdminDashboard = ({
 
                               <div className="md:col-span-2">
                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</div>
-                                {item.status === 'Received at Warehouse' ? (
-                                  <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 inline-block">
-                                    RECEIVED
-                                  </span>
-                                ) : (
-                                  <button 
-                                    onClick={() => updateItemStatus(item.id, 'Received at Warehouse')}
-                                    className="text-[9px] bg-indigo-600 text-white px-2 py-1 rounded-lg font-black hover:bg-indigo-700 transition-colors shadow-sm"
-                                  >
-                                    MARK RECEIVED
-                                  </button>
-                                )}
+                                <div className="flex items-center gap-2">
+                                  {item.status === 'Received at Warehouse' ? (
+                                    <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 inline-block">
+                                      RECEIVED
+                                    </span>
+                                  ) : (
+                                    <button 
+                                      onClick={() => updateItemStatus(item.id, 'Received at Warehouse')}
+                                      className="text-[9px] bg-indigo-600 text-white px-2 py-1 rounded-lg font-black hover:bg-indigo-700 transition-colors shadow-sm"
+                                    >
+                                      MARK RECEIVED
+                                    </button>
+                                  )}
+                                </div>
                               </div>
 
                               <div className="md:col-span-1 flex justify-end">
@@ -5149,11 +5155,11 @@ const AdminDashboard = ({
             <div className="mt-12">
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center shadow-lg shadow-amber-200">
-                    <ShoppingBag className="text-white" size={20} />
+                  <div className="w-10 h-10 rounded-xl bg-deep-blue flex items-center justify-center shadow-lg shadow-deep-blue/20">
+                    <ShoppingBag className="text-jiffex-orange" size={20} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900">Shop Items</h3>
+                    <h3 className="text-lg font-bold text-deep-blue">Shop Items</h3>
                     <p className="text-xs text-slate-500 font-medium tracking-tight">
                       Add essentials to your shipment
                     </p>
@@ -5177,7 +5183,7 @@ const AdminDashboard = ({
                             initial={{ scale: 0, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0, opacity: 0 }}
-                            className="absolute top-3 right-3 z-10 w-7 h-7 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg border-2 border-white"
+                            className="absolute top-3 right-3 z-10 w-7 h-7 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg border-2 border-white"
                           >
                             {itemCount}
                           </motion.div>
@@ -5192,39 +5198,30 @@ const AdminDashboard = ({
                         />
                         <div className="absolute top-3 left-3">
                           <div className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-full shadow-sm border border-white/20">
-                            <span className="text-xs font-bold text-slate-900">${product.price}</span>
+                            <span className="text-xs font-bold text-deep-blue">₹{product.price}</span>
                           </div>
                         </div>
                       </div>
-                      <h4 className="font-bold text-slate-900 mb-1">{product.name}</h4>
+                      <h4 className="font-bold text-deep-blue mb-1">{product.name}</h4>
                       <p className="text-[10px] text-slate-500 mb-4 line-clamp-2 leading-relaxed">Premium quality {product.category.toLowerCase()} item for your home.</p>
                       
-                      {itemCount > 0 ? (
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => removeStoreItem(product.name)}
-                            className="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center hover:bg-slate-200 transition-colors"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                          <div className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-200">
-                            <ShoppingBag size={14} /> Added ({itemCount})
-                          </div>
-                          <button 
-                            onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                            className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
-                          >
-                            <Plus size={16} />
-                          </button>
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Weight</span>
+                          <span className="text-xs font-bold text-slate-900">{product.weight} kg</span>
                         </div>
-                      ) : (
-                        <button
-                          onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image, quantity: 1 }, 'Store')}
-                          className="w-full py-3 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Plus size={14} /> Add to Shipment
-                        </button>
-                      )}
+                        <div className="flex items-center gap-2">
+                          <motion.button 
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
+                            className="w-10 h-10 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/20"
+                            title="Add to shipment"
+                          >
+                            <Plus size={18} />
+                          </motion.button>
+                        </div>
+                      </div>
                     </motion.div>
                   );
                 })}
@@ -5309,7 +5306,7 @@ const AdminDashboard = ({
       <div className="space-y-8">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
-            <h2 className="text-4xl font-black text-slate-900"><span className="text-indigo-600">Shop</span></h2>
+            <h2 className="text-4xl font-black text-deep-blue"><span className="text-indigo-600">Shop</span></h2>
             <p className="text-slate-500">Premium Indian products delivered globally.</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-4 flex-1 max-w-2xl">
@@ -5328,14 +5325,14 @@ const AdminDashboard = ({
                 onClick={() => setShowFilters(!showFilters)}
                 className={`px-4 py-3 rounded-2xl border transition-all flex items-center gap-2 font-bold text-sm ${
                   showFilters || minPrice !== '' || maxPrice !== ''
-                    ? 'bg-indigo-50 border-indigo-200 text-indigo-600' 
+                    ? 'bg-jiffex-orange/10 border-jiffex-orange/30 text-jiffex-orange' 
                     : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 <SlidersHorizontal size={18} />
                 <span>Filters</span>
                 {(minPrice !== '' || maxPrice !== '') && (
-                  <span className="w-2 h-2 bg-indigo-600 rounded-full"></span>
+                  <span className="w-2 h-2 bg-jiffex-orange rounded-full"></span>
                 )}
               </button>
               <div className="relative group">
@@ -5366,7 +5363,7 @@ const AdminDashboard = ({
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-4 py-2 rounded-xl border transition-all text-xs font-bold uppercase tracking-widest ${
                   selectedCategory === cat 
-                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200' 
+                    ? 'bg-deep-blue border-deep-blue text-white shadow-lg shadow-deep-blue/20' 
                     : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                 }`}
               >
@@ -5435,7 +5432,7 @@ const AdminDashboard = ({
                       initial={{ scale: 0, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0, opacity: 0 }}
-                      className="absolute top-4 right-4 z-10 w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-lg border-2 border-white"
+                      className="absolute top-4 right-4 z-10 w-8 h-8 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-xs font-bold shadow-lg border-2 border-white"
                     >
                       {itemCount}
                     </motion.div>
@@ -5449,44 +5446,22 @@ const AdminDashboard = ({
                 </div>
                 <div className="p-5 flex-1 flex flex-col">
                   <div className="flex justify-between items-start mb-1">
-                    <h3 className="font-bold text-slate-900 leading-tight truncate flex-1 mr-2">{product.name}</h3>
-                    <span className="text-indigo-600 font-bold shrink-0">${product.price}</span>
+                    <h3 className="font-bold text-deep-blue leading-tight truncate flex-1 mr-2">{product.name}</h3>
+                    <span className="text-jiffex-orange font-bold shrink-0">₹{product.price}</span>
                   </div>
                   <div className="flex flex-col gap-1 mb-4">
                     <p className="text-[10px] text-slate-500">Weight: {product.weight} kg</p>
                     {product.estimatedDelivery && (
                       <div className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                        <Calendar size={10} /> Ready by: {product.estimatedDelivery}
+                        <Calendar size={10} /> Ready to ship by: {product.estimatedDelivery}
                       </div>
                     )}
                   </div>
                   <div className="mt-auto">
-                    {itemCount > 0 ? (
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => removeStoreItem(product.name)}
-                          className="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center hover:bg-slate-200 transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                        <div className="flex-1 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-200">
-                          <ShoppingBag size={16} /> Added ({itemCount})
-                        </div>
-                        <button 
-                          onClick={() => addItem({ 
-                            name: product.name, 
-                            weight: product.weight, 
-                            price: product.price, 
-                            image: product.image,
-                            estimatedDelivery: product.estimatedDelivery 
-                          }, 'Store')}
-                          className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
-                        >
-                          <Plus size={16} />
-                        </button>
-                      </div>
-                    ) : (
-                      <button 
+                    <div className="flex justify-center">
+                      <motion.button 
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
                         onClick={() => addItem({ 
                           name: product.name, 
                           weight: product.weight, 
@@ -5494,11 +5469,11 @@ const AdminDashboard = ({
                           image: product.image,
                           estimatedDelivery: product.estimatedDelivery 
                         }, 'Store')}
-                        className="w-full py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-indigo-600 transition-all flex items-center justify-center gap-2"
+                        className="w-12 h-12 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/20"
                       >
-                        <ShoppingBag size={16} /> Add to Shipment
-                      </button>
-                    )}
+                        <Plus size={24} />
+                      </motion.button>
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -6138,7 +6113,7 @@ const AdminDashboard = ({
                     onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }}
                     className="bg-deep-blue text-white flex items-center gap-2 py-2 px-3 sm:px-4 text-xs sm:text-sm rounded-xl font-bold hover:bg-slate-800 transition-all active:scale-95"
                   >
-                    <UserIcon size={16} className="sm:w-[18px] sm:h-[18px]" /> <span>Sign In / Sign Up</span>
+                    <UserIcon size={16} className="sm:w-[18px] sm:h-[18px]" /> <span>Sign In</span>
                   </button>
                 )}
               </div>
@@ -6207,7 +6182,7 @@ const AdminDashboard = ({
                         className="w-full bg-deep-blue text-white flex items-center justify-center gap-2 py-3 rounded-xl font-bold hover:bg-slate-800 transition-all active:scale-95"
                       >
                         <UserIcon size={20} />
-                        <span>Sign In / Sign Up</span>
+                        <span>Sign In</span>
                       </button>
                     ) : (
                       <div className="flex flex-col gap-2">
@@ -6270,7 +6245,7 @@ const AdminDashboard = ({
       </header>
 
       {/* Main Content */}
-      <main className={`max-w-7xl mx-auto px-4 pb-20 ${activeTab === 'pickup' ? 'pt-0' : (activeTab === 'warehouse' || activeTab === 'store' ? 'pt-12' : 'pt-20')}`}>
+      <main className={`max-w-7xl mx-auto px-4 pb-20 ${activeTab === 'pickup' ? 'pt-0' : (activeTab === 'warehouse' ? 'pt-0' : (activeTab === 'store' ? 'pt-8' : 'pt-20'))}`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
