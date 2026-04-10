@@ -94,7 +94,7 @@ import { supabase } from './lib/supabase';
 import { Login } from './components/Login';
 import { Session } from '@supabase/supabase-js';
 
-type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'history' | 'admin' | 'warehouse-mgmt' | 'agent' | 'support' | 'notifications' | 'send-options' | 'track';
+type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'history' | 'admin' | 'warehouse-mgmt' | 'agent' | 'support' | 'notifications' | 'track';
 
 
 const API_URL = window.location.origin;
@@ -106,6 +106,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [tabHistory, setTabHistory] = useState<Tab[]>(['home']);
   const [showSendDropdown, setShowSendDropdown] = useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [navbarTrackingId, setNavbarTrackingId] = useState('');
 
@@ -281,6 +282,7 @@ const StaticShipmentTracker = () => {
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; checked: boolean }>({ connected: false, checked: false });
   const [isGuestMode, setIsGuestMode] = useState(false);
   const [guestEmail, setGuestEmail] = useState('');
+  const [guestName, setGuestName] = useState('');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginTriggerSource, setLoginTriggerSource] = useState<'default' | 'checkout' | 'pickup'>('default');
   const [showPickupConfirmModal, setShowPickupConfirmModal] = useState(false);
@@ -588,6 +590,31 @@ const StaticShipmentTracker = () => {
       vehicleType: pickupVehicleType
     };
     setAppointments([...appointments, newAppointment]);
+    
+    // Also add to orders so it reflects in "My Orders"
+    const newOrder: Order = {
+      id: newAppointment.id,
+      customerId: newAppointment.customerId!,
+      items: [],
+      totalWeight: 0,
+      totalCost: 0,
+      status: 'Scheduled',
+      createdAt: new Date().toISOString(),
+      shippingDate: newAppointment.date,
+      destination: {
+        fullName: newAppointment.customerName || currentUser?.name || 'Guest User',
+        email: currentUser?.email || '',
+        phone: newAppointment.phone,
+        addressLine1: newAppointment.address,
+        city: pickupAddress.city,
+        state: pickupAddress.state,
+        zipCode: pickupAddress.zip,
+        country: 'India'
+      },
+      paymentStatus: 'Pending'
+    };
+    setOrders([...orders, newOrder]);
+
     setLastBookingRef(newAppointment.id);
     setIsSchedulingNewPickup(false);
     setActivePickupStep(5);
@@ -759,18 +786,18 @@ const StaticShipmentTracker = () => {
     if (session?.user) {
       setCurrentUser({
         id: session.user.id,
-        name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
+        name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Guest User',
         email: session.user.email || '',
-        role: (session.user.user_metadata?.role as UserRole) || 'Customer'
+        role: (session.user.user_metadata?.role as UserRole) || 'customer'
       });
     } else if (isGuestMode) {
       const isAdmin = guestEmail === 'admin@jiffex.com';
       const isAgent = guestEmail === 'agent@jiffex.com';
       setCurrentUser({
         id: 'guest-user',
-        name: isAdmin ? 'Admin User' : isAgent ? 'Agent User' : 'Guest User',
+        name: guestName || (isAdmin ? 'Admin User' : isAgent ? 'Agent User' : 'Guest User'),
         email: guestEmail || 'guest@example.com',
-        role: isAdmin ? 'Admin' : isAgent ? 'Agent' : 'Customer'
+        role: isAdmin ? 'Admin' : isAgent ? 'Agent' : 'customer'
       });
     } else {
       setCurrentUser(null);
@@ -781,7 +808,18 @@ const StaticShipmentTracker = () => {
   useEffect(() => {
     if (dbStatus.connected && currentUser) {
       if (activeTab === 'history' || activeTab === 'home') {
-        api.getOrders(currentUser.id).then(setOrders).catch(console.error);
+        api.getOrders(currentUser.id).then(data => {
+          const normalized = data.map(o => ({
+            ...o,
+            customerId: o.customerId || o.customer_id,
+            totalWeight: o.totalWeight || o.total_weight,
+            totalCost: o.totalCost || o.total_cost,
+            paymentStatus: o.paymentStatus || o.payment_status,
+            shippingDate: o.shippingDate || o.shipping_date,
+            createdAt: o.createdAt || o.created_at
+          }));
+          setOrders(normalized);
+        }).catch(console.error);
       }
     }
   }, [currentUser, activeTab, dbStatus.connected]);
@@ -1112,58 +1150,6 @@ Date: ${new Date().toLocaleDateString()}
   };
 
   // --- Components ---
-
-    const SendSelectionPage = useMemo(() => {
-      return (
-        <div className="max-w-4xl mx-auto py-12 px-4 space-y-12">
-          <div className="text-center space-y-4">
-            <h1 className="text-4xl md:text-6xl font-black text-slate-900 tracking-tight">How would you like to send?</h1>
-            <p className="text-xl text-slate-500 max-w-2xl mx-auto">Choose the most convenient way to get your items to our global warehouse.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <button 
-              onClick={() => navigateTo('pickup')}
-              className="group relative bg-white p-10 rounded-[3rem] shadow-xl border-2 border-transparent hover:border-indigo-500 transition-all duration-500 text-left flex flex-col gap-8 overflow-hidden"
-            >
-              <div className="absolute top-6 right-6 z-20">
-                <span className="px-4 py-1.5 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-amber-200">
-                  Most Popular
-                </span>
-              </div>
-              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-[5rem] -mr-8 -mt-8 transition-all duration-500 group-hover:bg-indigo-100" />
-              <div className="w-20 h-20 bg-indigo-600 text-white rounded-3xl flex items-center justify-center shadow-lg shadow-indigo-200 group-hover:scale-110 transition-transform duration-500 relative z-10">
-                <Truck size={40} />
-              </div>
-              <div className="space-y-4 relative z-10">
-                <h3 className="text-3xl font-black text-slate-900">Pickup from Home</h3>
-                <p className="text-slate-500 text-lg leading-relaxed">Our agent will come to your doorstep, pack your items professionally, and bring them to our warehouse.</p>
-              </div>
-              <div className="flex items-center gap-3 text-indigo-600 font-black text-lg mt-auto relative z-10">
-                Get Started <ArrowRight size={24} className="group-hover:translate-x-2 transition-transform" />
-              </div>
-            </button>
-
-            <button 
-              onClick={() => navigateTo('warehouse')}
-              className="group relative bg-white p-10 rounded-[3rem] shadow-xl border-2 border-transparent hover:border-indigo-500 transition-all duration-500 text-left flex flex-col gap-8 overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-bl-[5rem] -mr-8 -mt-8 transition-all duration-500 group-hover:bg-slate-100" />
-              <div className="w-20 h-20 bg-slate-900 text-white rounded-3xl flex items-center justify-center shadow-lg shadow-slate-200 group-hover:scale-110 transition-transform duration-500 relative z-10">
-                <Package size={40} />
-              </div>
-              <div className="space-y-4 relative z-10">
-                <h3 className="text-3xl font-black text-slate-900">Send to Warehouse</h3>
-                <p className="text-slate-500 text-lg leading-relaxed">Ship your items directly to our warehouse using any local courier. We'll receive and process them for global shipping.</p>
-              </div>
-              <div className="flex items-center gap-3 text-slate-900 font-black text-lg mt-auto relative z-10">
-                Get Started <ArrowRight size={24} className="group-hover:translate-x-2 transition-transform" />
-              </div>
-            </button>
-          </div>
-        </div>
-      );
-    }, [navigateTo]);
 
     const TrackSection = useMemo(() => {
       return (
@@ -1958,7 +1944,7 @@ const AdminDashboard = ({
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="font-bold text-slate-900">{apt.id}</div>
-                          <div className="text-xs font-bold text-indigo-600">{apt.customerName || 'Customer'}</div>
+                          <div className="text-xs font-bold text-indigo-600">{apt.customerName || 'Guest User'}</div>
                           <div className="text-xs text-slate-500">{apt.date} at {apt.time}</div>
                         </div>
                         <div className="text-right">
@@ -2472,7 +2458,45 @@ const AdminDashboard = ({
 
   const CustomerHistory = useMemo(() => {
     if (!currentUser) return null;
-    const customerOrders = orders.filter(o => o.customerId === currentUser.id);
+    
+    // Merge orders and appointments for a complete view
+    const customerOrders = orders.filter(o => (o.customerId || o.customer_id) === currentUser.id);
+    const customerAppointments = appointments.filter(a => (a.customerId || a.customer_id) === currentUser.id);
+    
+    // Combine them, avoiding duplicates by ID
+    const unifiedHistory = [...customerOrders];
+    customerAppointments.forEach(apt => {
+      if (!unifiedHistory.find(o => o.id === apt.id)) {
+        unifiedHistory.push({
+          id: apt.id,
+          customerId: apt.customerId || apt.customer_id,
+          items: apt.items || [],
+          totalWeight: 0,
+          totalCost: 0,
+          status: apt.status as ShippingStatus,
+          createdAt: new Date().toISOString(),
+          shippingDate: apt.date,
+          destination: {
+            fullName: apt.customerName || currentUser.name,
+            email: currentUser.email,
+            phone: apt.phone,
+            addressLine1: apt.address,
+            city: '',
+            state: '',
+            zipCode: '',
+            country: 'India'
+          },
+          paymentStatus: apt.paymentStatus
+        } as Order);
+      }
+    });
+
+    // Sort by date descending
+    unifiedHistory.sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.created_at || 0).getTime();
+      const dateB = new Date(b.createdAt || b.created_at || 0).getTime();
+      return dateB - dateA;
+    });
 
     return (
       <div className="space-y-8">
@@ -2484,14 +2508,14 @@ const AdminDashboard = ({
             <Truck className="text-indigo-600" /> Active Shipments
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {customerOrders.length === 0 ? (
+            {unifiedHistory.length === 0 ? (
               <div className="col-span-full text-center py-12 text-slate-400">
                 <Package size={48} className="mx-auto mb-4 opacity-20" />
                 <p>You have no active shipments.</p>
                 <button onClick={() => navigateTo('home')} className="mt-4 text-indigo-600 font-bold hover:underline">Start a shipment</button>
               </div>
             ) : (
-              customerOrders.map(order => (
+              unifiedHistory.map(order => (
                 <div key={order.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-200 hover:border-indigo-300 transition-all group">
                   <div className="flex justify-between items-start mb-4">
                     <button 
@@ -2508,21 +2532,21 @@ const AdminDashboard = ({
                   <div className="grid grid-cols-3 gap-4 mb-4">
                     <div>
                       <div className="text-[10px] font-bold text-slate-400 uppercase">Destination</div>
-                      <div className="text-sm font-bold">{order.destination.country}</div>
+                      <div className="text-sm font-bold">{order.destination?.country || 'N/A'}</div>
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-slate-400 uppercase">Weight</div>
-                      <div className="text-sm font-bold">{order.totalWeight} kg</div>
+                      <div className="text-sm font-bold">{order.totalWeight || order.total_weight || 0} kg</div>
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-slate-400 uppercase">Total Paid</div>
-                      <div className="text-sm font-bold">${order.totalCost}</div>
+                      <div className="text-sm font-bold">${order.totalCost || order.total_cost || 0}</div>
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200">
                       <Clock size={12} className="text-indigo-600" />
-                      <span className="text-[10px] text-slate-600">{new Date(order.createdAt).toLocaleDateString()}</span>
+                      <span className="text-[10px] text-slate-600">{new Date(order.createdAt || order.created_at || Date.now()).toLocaleDateString()}</span>
                     </div>
                     <div className="flex gap-2">
                       {order.status === 'Received at Warehouse' && (
@@ -2646,7 +2670,7 @@ const AdminDashboard = ({
         </AnimatePresence>
       </div>
     );
-  }, [orders, currentUser, setActiveTab, selectedOrderForInvoice]);
+  }, [orders, appointments, currentUser, setActiveTab, selectedOrderForInvoice]);
 
 
   const WorkOrderSection = useMemo(() => {
@@ -4714,6 +4738,18 @@ const AdminDashboard = ({
                           )}
                           <button 
                             onClick={() => {
+                              navigateTo('history');
+                              setActivePickupStep(1);
+                              setLastBookingRef(null);
+                              setIsSchedulingNewPickup(false);
+                              window.scrollTo(0, 0);
+                            }}
+                            className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 flex items-center justify-center gap-2"
+                          >
+                            <Package size={20} /> View My Orders
+                          </button>
+                          <button 
+                            onClick={() => {
                               navigateTo('home');
                               setActivePickupStep(1);
                               setLastBookingRef(null);
@@ -4865,7 +4901,7 @@ const AdminDashboard = ({
                                 <div className="space-y-3">
                                   <div className="flex items-center gap-3 text-sm">
                                     <UserIcon size={16} className="text-indigo-600" />
-                                    <span className="font-bold text-slate-900">{apt.customerName || 'Customer'}</span>
+                                    <span className="font-bold text-slate-900">{apt.customerName || 'Guest User'}</span>
                                   </div>
                                   <div className="flex items-center gap-3 text-sm">
                                     <Calendar size={16} className="text-indigo-600" />
@@ -5934,9 +5970,9 @@ const AdminDashboard = ({
                 onMouseLeave={() => setShowSendDropdown(false)}
               >
                 <button 
-                  onClick={() => navigateTo('send-options')}
+                  onClick={() => setShowSendDropdown(!showSendDropdown)}
                   className={`flex items-center gap-2 text-base lg:text-lg font-black transition-all px-4 lg:px-5 py-2.5 rounded-2xl border-2 ${
-                    activeTab === 'send-options' || activeTab === 'pickup' || activeTab === 'warehouse'
+                    activeTab === 'pickup' || activeTab === 'warehouse'
                       ? 'bg-indigo-50 border-indigo-600 text-indigo-700 shadow-sm' 
                       : 'border-transparent text-slate-900 hover:text-black hover:bg-slate-100/60 hover:border-slate-200/40'
                   }`}
@@ -6001,7 +6037,7 @@ const AdminDashboard = ({
                         setNavbarTrackingId('');
                       }
                     }}
-                    className="btn-cta shadow-none py-1 px-3 text-xs"
+                    className="bg-deep-blue text-white shadow-none py-1 px-3 text-xs rounded-lg font-bold hover:bg-slate-800 transition-all active:scale-95 flex items-center justify-center gap-2"
                   >
                     Track
                   </button>
@@ -6036,25 +6072,73 @@ const AdminDashboard = ({
                 </button>
 
                 {currentUser ? (
-                  <div className="flex items-center gap-2 sm:gap-4">
-                    <div className="hidden sm:flex flex-col items-end">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{currentUser.role}</span>
-                      <span className="text-sm font-black text-slate-900 leading-none">{currentUser.name}</span>
-                    </div>
+                  <div 
+                    className="relative"
+                    onMouseEnter={() => setShowUserDropdown(true)}
+                    onMouseLeave={() => setShowUserDropdown(false)}
+                  >
                     <button 
-                      onClick={handleLogout}
-                      className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-all border border-slate-200"
-                      title="Logout"
+                      className={`flex items-center gap-3 px-4 py-2 rounded-2xl transition-all border-2 ${
+                        showUserDropdown ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-transparent text-slate-700 hover:bg-slate-100'
+                      }`}
                     >
-                      <LogOut size={16} className="sm:w-[18px] sm:h-[18px]" />
+                      <div className="w-8 h-8 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-black text-sm shadow-sm">
+                        {currentUser.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex flex-col items-start leading-none">
+                        {currentUser.role.toLowerCase() !== 'customer' && (
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{currentUser.role}</span>
+                        )}
+                        <span className="text-sm font-black text-slate-900">{currentUser.name}</span>
+                      </div>
+                      <ChevronDown size={16} className={`transition-transform duration-300 ${showUserDropdown ? 'rotate-180' : ''}`} />
                     </button>
+
+                    <AnimatePresence>
+                      {showUserDropdown && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                          className="absolute top-full right-0 mt-2 w-56 bg-white rounded-3xl border border-slate-200 shadow-2xl shadow-slate-200/50 py-2 z-50"
+                        >
+                          <div className="px-4 py-3 border-b border-slate-50 mb-1">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Signed in as</p>
+                            <p className="text-sm font-bold text-slate-900 truncate">{currentUser.email}</p>
+                          </div>
+                          
+                          <button 
+                            onClick={() => { navigateTo('history'); setShowUserDropdown(false); }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                          >
+                            <History size={18} /> My Orders
+                          </button>
+                          
+                          <button 
+                            onClick={() => { /* Account page doesn't exist yet, but we'll show a toast */ toast.info("Account settings coming soon!"); setShowUserDropdown(false); }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                          >
+                            <UserIcon size={18} /> My Account
+                          </button>
+
+                          <div className="h-px bg-slate-50 my-1 mx-2" />
+                          
+                          <button 
+                            onClick={() => { handleLogout(); setShowUserDropdown(false); }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-red-500 hover:bg-red-50 transition-all"
+                          >
+                            <LogOut size={18} /> Sign Out
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 ) : (
                   <button 
                     onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }}
-                    className="btn-cta flex items-center gap-2 py-2 px-3 sm:px-4 text-xs sm:text-sm"
+                    className="bg-deep-blue text-white flex items-center gap-2 py-2 px-3 sm:px-4 text-xs sm:text-sm rounded-xl font-bold hover:bg-slate-800 transition-all active:scale-95"
                   >
-                    <UserIcon size={16} className="sm:w-[18px] sm:h-[18px]" /> <span>Sign In</span>
+                    <UserIcon size={16} className="sm:w-[18px] sm:h-[18px]" /> <span>Sign In / Sign Up</span>
                   </button>
                 )}
               </div>
@@ -6088,12 +6172,21 @@ const AdminDashboard = ({
                   >
                     Shop
                   </button>
-                  <button 
-                    onClick={() => { navigateTo('send-options'); setIsMobileMenuOpen(false); }}
-                    className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'send-options' || activeTab === 'pickup' || activeTab === 'warehouse' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    Send
-                  </button>
+                  <div className="flex flex-col gap-1">
+                    <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Send Items</div>
+                    <button 
+                      onClick={() => { navigateTo('pickup'); setIsMobileMenuOpen(false); }}
+                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'pickup' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      <Truck size={20} /> Pickup from Home
+                    </button>
+                    <button 
+                      onClick={() => { navigateTo('warehouse'); setIsMobileMenuOpen(false); }}
+                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'warehouse' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      <Package size={20} /> Send to Warehouse
+                    </button>
+                  </div>
                   <button 
                     onClick={() => { navigateTo('support'); setIsMobileMenuOpen(false); }}
                     className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'support' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
@@ -6111,19 +6204,39 @@ const AdminDashboard = ({
                     {!currentUser ? (
                       <button 
                         onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); setIsMobileMenuOpen(false); }}
-                        className="w-full btn-cta flex items-center justify-center gap-2 py-3"
+                        className="w-full bg-deep-blue text-white flex items-center justify-center gap-2 py-3 rounded-xl font-bold hover:bg-slate-800 transition-all active:scale-95"
                       >
                         <UserIcon size={20} />
-                        <span>Sign In</span>
+                        <span>Sign In / Sign Up</span>
                       </button>
                     ) : (
-                      <button 
-                        onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
-                        className="w-full p-3 rounded-xl text-left font-bold text-red-600 bg-red-50 flex items-center gap-2"
-                      >
-                        <LogOut size={20} />
-                        <span>Logout</span>
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <div className="px-3 py-2 flex flex-col">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Account</span>
+                          <span className="text-lg font-black text-slate-900 leading-tight">{currentUser.name}</span>
+                          <span className="text-xs text-slate-500 font-medium truncate">{currentUser.email}</span>
+                        </div>
+                        <div className="h-px bg-slate-100 my-2 mx-3" />
+                        <button 
+                          onClick={() => { navigateTo('history'); setIsMobileMenuOpen(false); }}
+                          className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'history' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                        >
+                          <History size={20} /> My Orders
+                        </button>
+                        <button 
+                          onClick={() => { toast.info("Account settings coming soon!"); setIsMobileMenuOpen(false); }}
+                          className="text-lg font-bold p-3 rounded-xl text-left text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-3"
+                        >
+                          <UserIcon size={20} /> My Account
+                        </button>
+                        <button 
+                          onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+                          className="w-full p-3 rounded-xl text-left font-bold text-red-600 bg-red-50 flex items-center gap-2 mt-2"
+                        >
+                          <LogOut size={20} />
+                          <span>Sign Out</span>
+                        </button>
+                      </div>
                     )}
                     
                     <div className="mt-4 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
@@ -6143,7 +6256,7 @@ const AdminDashboard = ({
                             setIsMobileMenuOpen(false);
                           }
                         }}
-                        className="btn-cta py-1.5 px-4 text-xs"
+                        className="bg-deep-blue text-white py-1.5 px-4 text-xs rounded-lg font-bold hover:bg-slate-800 transition-all active:scale-95"
                       >
                         Track
                       </button>
@@ -6168,7 +6281,6 @@ const AdminDashboard = ({
           >
             {activeTab === 'home' && HomeSection}
             {activeTab !== 'home' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && <BackButton onClick={goBack} />}
-            {activeTab === 'send-options' && SendSelectionPage}
             {activeTab === 'track' && TrackSection}
             {activeTab === 'pickup' && renderUnifiedCartSection('Pickup')}
             {activeTab === 'warehouse' && renderUnifiedCartSection('Warehouse')}
@@ -6384,18 +6496,19 @@ const AdminDashboard = ({
                     <Logo height="h-16" />
                   </div>
                   <h2 className="text-3xl font-black text-slate-900">
-                    {loginTriggerSource === 'checkout' ? 'Almost There!' : loginTriggerSource === 'pickup' ? 'One Last Step!' : 'Welcome Back'}
+                    {loginTriggerSource === 'checkout' ? 'Almost There!' : loginTriggerSource === 'pickup' ? 'One Last Step!' : 'Welcome to Jiffex'}
                   </h2>
                   <p className="text-slate-500 mt-2">
                     {loginTriggerSource === 'checkout' 
-                      ? 'Sign in to complete your secure checkout' 
+                      ? 'Sign in or create an account to complete your secure checkout' 
                       : loginTriggerSource === 'pickup'
-                      ? 'Verify your mobile number via OTP to confirm your pickup'
-                      : 'Sign in to continue your shipment'}
+                      ? 'Verify your identity to confirm your pickup'
+                      : 'Sign in or create an account to continue'}
                   </p>
                 </div>
-                <Login onSuccess={(email) => {
+                <Login onSuccess={(email, name) => {
                   setGuestEmail(email);
+                  if (name) setGuestName(name);
                   setIsGuestMode(true);
                   setShowLoginModal(false);
                   
