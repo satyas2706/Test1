@@ -1494,7 +1494,9 @@ Date: ${new Date().toLocaleDateString()}
           <div className="space-y-8">
             <div className="flex items-end justify-between">
               <div>
-                <h3 className="text-3xl font-black text-slate-900">Featured from <span className="text-indigo-600">Shop</span></h3>
+                <h3 className="text-3xl font-black text-slate-900">
+                  Featured from <span className="bg-gradient-to-r from-deep-blue to-indigo-600 bg-clip-text text-transparent">Shop</span>
+                </h3>
                 <p className="text-slate-500">Premium products curated for your special occasions.</p>
               </div>
               <button 
@@ -3350,7 +3352,9 @@ const AdminDashboard = ({
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h4 className="text-xl font-black text-slate-900">From our Shop</h4>
+          <h4 className="text-xl font-black text-slate-900">
+            From our <span className="bg-gradient-to-r from-deep-blue to-indigo-600 bg-clip-text text-transparent">Shop</span>
+          </h4>
           <button 
             onClick={() => navigateTo('store')}
             className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
@@ -3484,62 +3488,88 @@ const AdminDashboard = ({
     const hasTBDWeight = displayItems.some(i => i.weight === 0);
 
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className={`${mode ? 'lg:col-span-3' : 'lg:col-span-2'} space-y-6`}>
-          {/* Progress Bar - Moved to top */}
-          {!mode && (
-            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-              <div className="flex items-center justify-between mb-6">
-                <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Shipment Progress</h4>
-                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
-                  {displayItems.every(i => i.status === 'Received at Warehouse') && displayItems.length > 0 ? 'Ready to Ship' : 'In Progress'}
-                </span>
+      <div className="space-y-6">
+        {/* Top Section: Progress */}
+        {!mode && (
+          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em]">Order Progress</h4>
               </div>
-              <div className="relative">
-                <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 -translate-y-1/2 rounded-full" />
-                <div 
-                  className="absolute top-1/2 left-0 h-1 bg-indigo-600 -translate-y-1/2 rounded-full transition-all duration-1000" 
-                  style={{ 
-                    width: `${
-                      displayItems.every(i => i.status === 'Received at Warehouse') && displayItems.length > 0 ? '100%' :
-                      displayItems.some(i => i.status === 'Received at Warehouse') ? '75%' :
-                      appointments.length > 0 ? '50%' : '25%'
-                    }` 
-                  }} 
-                />
-                <div className="relative flex justify-between">
-                  {[
-                    { label: 'Items Added', icon: Package, active: displayItems.length > 0 },
-                    { label: 'Pickup Scheduled', icon: Truck, active: appointments.length > 0 },
-                    { label: 'Received', icon: CheckCircle2, active: displayItems.some(i => i.status === 'Received at Warehouse') },
-                    { label: 'Ready to Ship', icon: ArrowRight, active: displayItems.every(i => i.status === 'Received at Warehouse') && displayItems.length > 0 }
-                  ].map((step, i) => (
-                    <div key={i} className="flex flex-col items-center gap-3 relative z-10">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ${step.active ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-white border-2 border-slate-100 text-slate-300'}`}>
-                        <step.icon size={18} />
-                      </div>
-                      <span className={`text-[10px] font-bold uppercase tracking-tight ${step.active ? 'text-indigo-600' : 'text-slate-400'}`}>{step.label}</span>
+              <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100 uppercase tracking-wider">
+                {displayItems.every(i => i.status === 'Received at Warehouse') && displayItems.length > 0 ? 'Ready to Ship' : 'Processing'}
+              </span>
+            </div>
+            
+            <div className="relative">
+              {/* Progress Line Background */}
+              <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 -translate-y-1/2 rounded-full" />
+              
+              {/* Active Progress Line */}
+              <motion.div 
+                className="absolute top-1/2 left-0 h-1 bg-slate-400 -translate-y-1/2 rounded-full z-10" 
+                initial={{ width: 0 }}
+                animate={{ 
+                  width: `${
+                    displayItems.every(i => i.status === 'Received at Warehouse') && displayItems.length > 0 ? '100%' :
+                    displayItems.some(i => i.status === 'Received at Warehouse') ? '60%' :
+                    appointments.length > 0 ? '40%' : '20%'
+                  }` 
+                }}
+                transition={{ duration: 1, ease: "easeOut" }}
+              />
+
+              {/* Milestones */}
+              <div className="relative z-20 flex justify-between items-center">
+                {[
+                  { name: "Request Placed", color: "blue" },
+                  { name: "Order Confirmed", color: "indigo" },
+                  { name: "Processing Order", color: "amber" },
+                  { name: "Consolidating items", color: "purple" },
+                  { name: "Packed", color: "rose" },
+                  { name: "Ready to Ship", color: "emerald" }
+                ].map((milestone, index, arr) => {
+                  const progress = (index / (arr.length - 1)) * 100;
+                  const currentProgress = displayItems.every(i => i.status === 'Received at Warehouse') && displayItems.length > 0 ? 100 :
+                                        displayItems.some(i => i.status === 'Received at Warehouse') ? 60 :
+                                        appointments.length > 0 ? 40 : 20;
+                  const isActive = progress <= currentProgress;
+                  
+                  const colorClasses: Record<string, string> = {
+                    blue: isActive ? 'bg-blue-600 border-blue-600 text-blue-600' : 'text-slate-400',
+                    indigo: isActive ? 'bg-indigo-600 border-indigo-600 text-indigo-600' : 'text-slate-400',
+                    amber: isActive ? 'bg-amber-500 border-amber-500 text-amber-600' : 'text-slate-400',
+                    purple: isActive ? 'bg-purple-600 border-purple-600 text-purple-600' : 'text-slate-400',
+                    rose: isActive ? 'bg-rose-500 border-rose-500 text-rose-600' : 'text-slate-400',
+                    emerald: isActive ? 'bg-emerald-600 border-emerald-600 text-emerald-600' : 'text-slate-400'
+                  };
+
+                  const activeColor = colorClasses[milestone.color].split(' ');
+                  const dotClass = activeColor.filter(c => c.startsWith('bg-') || c.startsWith('border-')).join(' ');
+                  const textClass = activeColor.find(c => c.startsWith('text-'));
+                  
+                  return (
+                    <div key={milestone.name} className="flex flex-col items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full border-2 transition-all duration-500 ${
+                        isActive ? `${dotClass} scale-125 shadow-lg` : 'bg-white border-slate-200'
+                      }`} />
+                      <span className={`text-[9px] font-bold uppercase tracking-tighter whitespace-nowrap transition-colors duration-500 ${
+                        isActive ? textClass : 'text-slate-400'
+                      }`}>
+                        {milestone.name}
+                      </span>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Unified Cart Header */}
-          {!mode && (
-            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-3xl font-black text-slate-900">My Shipping Cart</h2>
-                <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-200">
-                  <ShoppingCart size={24} />
-                </div>
-              </div>
-              <p className="text-slate-500">Review and manage all your items before checkout.</p>
-            </div>
-          )}
-
-          {/* Heart-touching Warehouse Message */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className={`${mode ? 'lg:col-span-3' : 'lg:col-span-2'} space-y-6`}>
+            {/* Heart-touching Warehouse Message */}
           {mode === 'Warehouse' && (
             <div className="space-y-8">
               <motion.div 
@@ -5022,7 +5052,7 @@ const AdminDashboard = ({
                                 </div>
                               </div>
                               
-                              <div className="md:col-span-4">
+                              <div className={item.source === 'Store' ? "md:col-span-6" : "md:col-span-4"}>
                                 <h4 className="font-bold text-slate-900 truncate">{item.name}</h4>
                                 <div className="flex flex-wrap gap-2 mt-1">
                                   {item.fragile && (
@@ -5079,23 +5109,25 @@ const AdminDashboard = ({
                                 </div>
                               </div>
 
-                              <div className="md:col-span-2">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</div>
-                                <div className="flex items-center gap-2">
-                                  {item.status === 'Received at Warehouse' ? (
-                                    <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 inline-block">
-                                      RECEIVED
-                                    </span>
-                                  ) : (
-                                    <button 
-                                      onClick={() => updateItemStatus(item.id, 'Received at Warehouse')}
-                                      className="text-[9px] bg-indigo-600 text-white px-2 py-1 rounded-lg font-black hover:bg-indigo-700 transition-colors shadow-sm"
-                                    >
-                                      MARK RECEIVED
-                                    </button>
-                                  )}
+                              {item.source !== 'Store' && (
+                                <div className="md:col-span-2">
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</div>
+                                  <div className="flex items-center gap-2">
+                                    {item.status === 'Received at Warehouse' ? (
+                                      <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 inline-block">
+                                        RECEIVED
+                                      </span>
+                                    ) : (
+                                      <button 
+                                        onClick={() => updateItemStatus(item.id, 'Received at Warehouse')}
+                                        className="text-[9px] bg-indigo-600 text-white px-2 py-1 rounded-lg font-black hover:bg-indigo-700 transition-colors shadow-sm"
+                                      >
+                                        MARK RECEIVED
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
+                              )}
 
                               <div className="md:col-span-1 flex justify-end">
                                 {!mode && !hasCompletedPickup && (
@@ -5275,8 +5307,9 @@ const AdminDashboard = ({
           </div>
         )}
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   const StoreSection = useMemo(() => {
     let filteredProducts = storeProducts.filter(p => {
@@ -5302,28 +5335,218 @@ const AdminDashboard = ({
 
     const hasActivePickup = appointments.some(a => a.status === 'Scheduled');
 
+    const ShopHeroSlider = () => {
+      const [currentSlide, setCurrentSlide] = useState(0);
+      const [progress, setProgress] = useState(0);
+      const slides = [
+        {
+          title: "Bring a Piece of India to Your Doorstep",
+          subtitle: "FESTIVE TRADITIONS",
+          desc: "Authentic sweets, pooja items, and gifts delivered worldwide. Experience the joy of Indian festivals wherever you are.",
+          image: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&q=80&w=1000",
+          accent: "text-amber-400",
+          bg: "from-slate-900 via-slate-900 to-amber-900/20",
+          glow: "bg-amber-500/20",
+          badge: "Festive Special"
+        },
+        {
+          title: "Perfect Return Gifts for Every Celebration",
+          subtitle: "CURATED GIFTING",
+          desc: "Curated Indian gift packs for weddings, festivals & housewarmings. Make your special moments memorable with authentic Indian gifts.",
+          image: "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&q=80&w=1000",
+          accent: "text-rose-400",
+          bg: "from-slate-900 via-slate-900 to-rose-900/20",
+          glow: "bg-rose-500/20",
+          badge: "Celebration Ready"
+        },
+        {
+          title: "Missing Indian Sweets?",
+          subtitle: "TASTE OF HOME",
+          desc: "Get fresh, authentic sweets shipped directly from India. From Moti choor laddoo to Kaju Katli, we bring your favorite treats to your doorstep.",
+          image: "https://images.unsplash.com/photo-1605197509751-62ad15fc0a1b?auto=format&fit=crop&q=80&w=1000",
+          accent: "text-amber-400",
+          bg: "from-slate-900 via-slate-900 to-amber-900/20",
+          glow: "bg-amber-500/20",
+          badge: "Fresh & Authentic"
+        },
+        {
+          title: "All Your Pooja Essentials in One Place",
+          subtitle: "SPIRITUAL HERITAGE",
+          desc: "From diyas to idols—everything you need for rituals abroad. Maintain your spiritual traditions with authentic pooja items.",
+          image: "https://images.unsplash.com/photo-1609130767011-d6a5bc403e6d?auto=format&fit=crop&q=80&w=1000",
+          accent: "text-teal-400",
+          bg: "from-slate-900 via-slate-900 to-teal-900/20",
+          glow: "bg-teal-500/20",
+          badge: "Spiritual Essentials"
+        }
+      ];
+
+      useEffect(() => {
+        const timer = setInterval(() => {
+          setCurrentSlide((prev) => (prev + 1) % slides.length);
+          setProgress(0);
+        }, 6000);
+        
+        const progressTimer = setInterval(() => {
+          setProgress((prev) => Math.min(prev + (100 / 60), 100));
+        }, 100);
+
+        return () => {
+          clearInterval(timer);
+          clearInterval(progressTimer);
+        };
+      }, [currentSlide]);
+
+      return (
+        <div className="relative overflow-hidden rounded-[3rem] bg-slate-900 text-white shadow-2xl mb-12 h-[500px] group">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentSlide}
+              initial={{ x: 500, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -500, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 80, damping: 20 }}
+              className="absolute inset-0"
+            >
+              <div 
+                className={`absolute inset-0 bg-gradient-to-r ${slides[currentSlide].bg} z-10`}
+              />
+              <div className={`absolute top-1/2 right-0 -translate-y-1/2 w-[700px] h-[700px] ${slides[currentSlide].glow} rounded-full blur-[150px] z-0`} />
+              
+              <div className="relative z-20 h-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center px-10 md:px-24">
+                <div className="space-y-8">
+                  <div className="space-y-4">
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                      className="flex items-center gap-3"
+                    >
+                      <div className={`px-4 py-1.5 bg-white/5 backdrop-blur-md border border-white/10 rounded-full ${slides[currentSlide].accent} text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 shadow-lg`}>
+                        <Sparkles size={12} /> {slides[currentSlide].subtitle}
+                      </div>
+                      <div className="px-4 py-1.5 bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 rounded-full text-emerald-400 text-[10px] font-black uppercase tracking-[0.2em]">
+                        {slides[currentSlide].badge}
+                      </div>
+                    </motion.div>
+                    <motion.h1 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                      className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9] drop-shadow-2xl"
+                    >
+                      {slides[currentSlide].title.split(',').map((part, i) => (
+                        <React.Fragment key={i}>
+                          {part}{i === 0 && slides[currentSlide].title.includes(',') && <br />}
+                        </React.Fragment>
+                      ))}
+                    </motion.h1 >
+                  </div>
+
+                  <motion.p 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                    className="text-xl text-slate-400 font-medium leading-relaxed max-w-xl"
+                  >
+                    {slides[currentSlide].desc}
+                  </motion.p>
+
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className="flex items-center gap-8"
+                  >
+                    <div className="flex -space-x-4">
+                      {[1, 2, 3, 4].map((i) => (
+                        <div key={i} className="w-12 h-12 rounded-full border-4 border-slate-900 bg-slate-800 flex items-center justify-center overflow-hidden shadow-xl">
+                          <img src={`https://i.pravatar.cc/150?img=${i + 20}`} alt="User" />
+                        </div>
+                      ))}
+                      <div className="w-12 h-12 rounded-full border-4 border-slate-900 bg-indigo-600 flex items-center justify-center text-xs font-black shadow-xl">
+                        +5k
+                      </div>
+                    </div>
+                    <div className="text-sm font-bold text-slate-400 leading-tight">
+                      <span className="text-white text-base">Trusted by thousands</span> <br /> of Indians living abroad
+                    </div>
+                  </motion.div>
+                </div>
+
+                <div className="hidden lg:block relative h-full py-16">
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9, x: 50 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    transition={{ delay: 0.3, duration: 1, ease: "easeOut" }}
+                    className="relative z-10 h-full group/img"
+                  >
+                    <div className="absolute -inset-4 bg-gradient-to-br from-white/10 to-transparent rounded-[4rem] blur-3xl opacity-50 group-hover/img:opacity-100 transition-opacity duration-700" />
+                    <img 
+                      src={slides[currentSlide].image} 
+                      alt={slides[currentSlide].title} 
+                      className="relative z-10 rounded-[4rem] shadow-2xl border border-white/10 object-cover w-full h-full transform transition-transform duration-700 group-hover/img:scale-[1.02]"
+                      referrerPolicy="no-referrer"
+                    />
+                  </motion.div>
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Progress Bar */}
+          <div className="absolute bottom-0 left-0 w-full h-1 bg-white/5 z-40">
+            <motion.div 
+              className={`h-full bg-gradient-to-r ${currentSlide === 0 ? 'from-teal-500 to-emerald-500' : 'from-indigo-500 to-purple-500'}`}
+              initial={{ width: "0%" }}
+              animate={{ width: `${progress}%` }}
+              transition={{ ease: "linear" }}
+            />
+          </div>
+
+          {/* Indicators */}
+          <div className="absolute bottom-10 left-10 md:left-24 z-30 flex items-center gap-4">
+            {slides.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  setCurrentSlide(i);
+                  setProgress(0);
+                }}
+                className="group flex items-center gap-2"
+              >
+                <div className={`h-2 rounded-full transition-all duration-500 ${
+                  currentSlide === i ? 'w-12 bg-white' : 'w-2 bg-white/20 group-hover:bg-white/40'
+                }`} />
+                <span className={`text-[10px] font-black tracking-widest transition-opacity duration-500 ${currentSlide === i ? 'opacity-100' : 'opacity-0'}`}>
+                  0{i + 1}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div className="space-y-8">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div>
-            <h2 className="text-4xl font-black text-deep-blue"><span className="text-indigo-600">Shop</span></h2>
-            <p className="text-slate-500">Premium Indian products delivered globally.</p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-4 flex-1 max-w-2xl">
-            <div className="relative flex-1">
+        <ShopHeroSlider />
+        <div className="flex flex-col items-center justify-center gap-6">
+          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-4xl justify-center items-center">
+            <div className="relative w-full sm:w-72">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input 
                 type="text"
                 placeholder="Search products..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                className="w-full pl-12 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
               />
             </div>
             <div className="flex gap-2">
               <button 
                 onClick={() => setShowFilters(!showFilters)}
-                className={`px-4 py-3 rounded-2xl border transition-all flex items-center gap-2 font-bold text-sm ${
+                className={`px-4 py-2.5 rounded-2xl border transition-all flex items-center gap-2 font-bold text-sm ${
                   showFilters || minPrice !== '' || maxPrice !== ''
                     ? 'bg-jiffex-orange/10 border-jiffex-orange/30 text-jiffex-orange' 
                     : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -5339,7 +5562,7 @@ const AdminDashboard = ({
                 <select 
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="appearance-none pl-4 pr-10 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-sm text-slate-600 cursor-pointer"
+                  className="appearance-none pl-4 pr-10 py-2.5 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-sm text-slate-600 cursor-pointer"
                 >
                   <option value="featured">Featured</option>
                   <option value="price-low">Price: Low to High</option>
@@ -5355,8 +5578,8 @@ const AdminDashboard = ({
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
+        <div className="space-y-6 flex flex-col items-center">
+          <div className="flex flex-wrap gap-2 justify-center">
             {['All', ...categories].map(cat => (
               <button 
                 key={cat} 
@@ -6245,7 +6468,7 @@ const AdminDashboard = ({
       </header>
 
       {/* Main Content */}
-      <main className={`max-w-7xl mx-auto px-4 pb-20 ${activeTab === 'pickup' ? 'pt-0' : (activeTab === 'warehouse' ? 'pt-0' : (activeTab === 'store' ? 'pt-8' : 'pt-20'))}`}>
+      <main className={`max-w-7xl mx-auto px-4 pb-20 ${activeTab === 'pickup' ? 'pt-0' : (activeTab === 'warehouse' ? 'pt-0' : (activeTab === 'store' ? 'pt-8' : (activeTab === 'cart' ? 'pt-8' : 'pt-20')))}`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -6255,7 +6478,7 @@ const AdminDashboard = ({
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'home' && HomeSection}
-            {activeTab !== 'home' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && <BackButton onClick={goBack} />}
+            {activeTab !== 'home' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'cart' && <BackButton onClick={goBack} />}
             {activeTab === 'track' && TrackSection}
             {activeTab === 'pickup' && renderUnifiedCartSection('Pickup')}
             {activeTab === 'warehouse' && renderUnifiedCartSection('Warehouse')}
