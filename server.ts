@@ -463,6 +463,110 @@ www.jiffex.com
   }
 });
 
+// API: Send Order Confirmation Email for Home Pickup
+// This route handles sending a professional email summary to customers
+app.post("/api/order-confirmation", async (req, res) => {
+  const { email, items, appointment } = req.body;
+  console.log(`[Order Confirmation] Request received for ${email}`);
+
+  if (!mailTransporter || !process.env.SMTP_FROM) {
+    console.error('[Order Confirmation] Email service not configured');
+    return res.status(503).json({ error: "Email service not configured" });
+  }
+
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: "Invalid email address" });
+  }
+
+  try {
+    const totalWeight = items.reduce((sum: number, item: any) => sum + (item.weight * (item.quantity || 1)), 0);
+    const subject = `Order Confirmation: Your Home Pickup is Scheduled!`;
+    
+    const itemsHtml = items.map((item: any) => `
+      <div style="padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+        <div style="flex: 1;">
+          <p style="margin: 0; font-weight: bold; color: #1e293b;">${item.name}</p>
+          <p style="margin: 5px 0 0; font-size: 12px; color: #64748b;">${item.source} • Qty: ${item.quantity || 1}</p>
+        </div>
+        <div style="text-align: right; min-width: 80px;">
+          <p style="margin: 0; font-weight: 900; color: #1e293b;">${item.weight} kg</p>
+        </div>
+      </div>
+    `).join('');
+
+    const bodyHtml = `
+<div style="font-family: 'Inter', Arial, sans-serif; line-height: 1.6; color: #334155; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 0; border-radius: 24px; overflow: hidden; background-color: #ffffff;">
+  <div style="background-color: #4f46e5; padding: 40px 20px; text-align: center; color: #ffffff;">
+    <h1 style="margin: 0; font-size: 28px; font-weight: 900; letter-spacing: -0.025em;">Order Confirmed!</h1>
+    <p style="margin: 10px 0 0; font-size: 16px; opacity: 0.9;">We're ready for your home pickup</p>
+  </div>
+
+  <div style="padding: 40px 30px;">
+    <p style="margin: 0 0 20px; font-size: 16px;">Dear <strong>${appointment.customerName || 'Customer'}</strong>,</p>
+    <p style="margin: 0 0 30px; font-size: 16px;">Thank you for choosing <strong>JiffEX</strong>. Your order has been confirmed and our agent is scheduled to visit you for the collection of your items.</p>
+
+    <div style="margin-bottom: 40px;">
+      <div style="background-color: #f8fafc; padding: 20px; border-radius: 16px; border: 1px solid #f1f5f9; margin-bottom: 15px;">
+        <p style="margin: 0 0 10px; font-size: 11px; font-weight: 900; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Pickup Schedule</p>
+        <p style="margin: 0; font-size: 16px; font-weight: 700; color: #1e293b;">${appointment.date}</p>
+        <p style="margin: 4px 0 0; font-size: 14px; color: #64748b;">${appointment.time}</p>
+      </div>
+      <div style="background-color: #f8fafc; padding: 20px; border-radius: 16px; border: 1px solid #f1f5f9;">
+        <p style="margin: 0 0 10px; font-size: 11px; font-weight: 900; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Pickup Address</p>
+        <p style="margin: 0; font-size: 14px; color: #1e293b; line-height: 1.4;">
+          ${appointment.customerAddress?.street}, ${appointment.customerAddress?.apartment ? appointment.customerAddress.apartment + ', ' : ''}<br>
+          ${appointment.customerAddress?.city}, ${appointment.customerAddress?.state} ${appointment.customerAddress?.zip}
+        </p>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 40px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h3 style="margin: 0; font-size: 14px; font-weight: 900; color: #1e293b; text-transform: uppercase; letter-spacing: 0.05em;">Items to be Collected</h3>
+        <span style="font-size: 12px; font-weight: 700; color: #4f46e5; background-color: #eef2ff; padding: 4px 12px; border-radius: 999px;">Est. ${totalWeight.toFixed(1)} kg</span>
+      </div>
+      <div style="border: 1px solid #f1f5f9; border-radius: 16px; overflow: hidden;">
+        ${itemsHtml}
+      </div>
+    </div>
+
+    <div style="background-color: #ecfdf5; padding: 25px; border-radius: 20px; border: 1px solid #d1fae5; margin-bottom: 40px;">
+      <p style="margin: 0; font-size: 14px; color: #065f46; font-style: italic; line-height: 1.6;">
+        "Since you have opted for Home Pickup, our agent will verify these items, weigh them accurately, and process the final payment at your doorstep. Please ensure all items are ready for collection."
+      </p>
+    </div>
+
+    <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 40px 0;">
+
+    <div style="text-align: center;">
+      <p style="margin: 0; font-size: 14px; color: #64748b;">If you need to reschedule or have any questions, please contact us.</p>
+      <p style="margin: 10px 0 0; font-size: 14px; font-weight: 700; color: #4f46e5;">support@jiffex.com</p>
+    </div>
+  </div>
+
+  <div style="background-color: #f8fafc; padding: 30px; text-align: center; border-top: 1px solid #f1f5f9;">
+    <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+      &copy; 2026 JiffEX Shipping & Logistics. All rights reserved.<br>
+      123 Logistics Hub, Mumbai, India
+    </p>
+  </div>
+</div>
+    `;
+
+    await mailTransporter.sendMail({
+      from: process.env.SMTP_FROM,
+      to: email,
+      subject: subject,
+      html: bodyHtml,
+    });
+
+    res.json({ success: true, message: "Order confirmation email sent" });
+  } catch (err: any) {
+    console.error('[Order Confirmation] Error sending email:', err.message);
+    res.status(500).json({ error: "Failed to send confirmation email" });
+  }
+});
+
 async function fetchImageBuffer(url: string): Promise<Buffer | null> {
   try {
     let finalUrl = url;

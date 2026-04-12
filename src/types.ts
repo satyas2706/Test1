@@ -10,6 +10,12 @@ export interface User {
 }
 
 export type ShippingStatus = 
+  | 'Request Placed'
+  | 'Order Confirmed'
+  | 'Processing Order'
+  | 'Consolidating items'
+  | 'Packed'
+  | 'Ready to Ship'
   | 'Pending' 
   | 'Scheduled' 
   | 'Picked Up' 

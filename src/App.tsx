@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { OrderConfirmationSummary } from './components/OrderConfirmationSummary';
 import { Logo } from './components/Logo';
 import { 
   Package, 
@@ -65,6 +66,8 @@ import {
   ShoppingCart,
   Warehouse,
   Menu,
+  Send,
+  Weight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -286,6 +289,8 @@ const StaticShipmentTracker = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginTriggerSource, setLoginTriggerSource] = useState<'default' | 'checkout' | 'pickup'>('default');
   const [showPickupConfirmModal, setShowPickupConfirmModal] = useState(false);
+  const [showOrderConfirmationSummary, setShowOrderConfirmationSummary] = useState(false);
+  const [isSendingConfirmation, setIsSendingConfirmation] = useState(false);
   const [activePickupStep, setActivePickupStep] = useState(1);
 
   // Celebration effect for pickup confirmation
@@ -910,7 +915,7 @@ const StaticShipmentTracker = () => {
 
     const newItem: ShippingItem = {
       ...item,
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       status: source === 'Store' ? 'Received at Warehouse' : 'Pending',
       source: source,
       quantity: item.quantity || 1,
@@ -1011,7 +1016,7 @@ const StaticShipmentTracker = () => {
       items: [...cartItems],
       totalWeight,
       totalCost,
-      status: 'Received at Warehouse',
+      status: 'Request Placed',
       createdAt: new Date().toISOString(),
       shippingDate: selectedDate,
       destination: address,
@@ -1060,7 +1065,7 @@ const StaticShipmentTracker = () => {
   const addWOItem = () => {
     if (!woItemName) return;
     const newItem: ShippingItem = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: crypto.randomUUID(),
       name: woItemName,
       weight: woItemWeight,
       status: 'Pending',
@@ -1143,7 +1148,12 @@ Date: ${new Date().toLocaleDateString()}
 
     const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled');
     if (hasScheduledPickup) {
-      toast.warning("You have an active agent pickup scheduled. To ensure all your items are shipped together, payment is only available once the agent has collected your items and they are received at our warehouse.");
+      const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
+      if (cartItems.length > 0) {
+        setShowOrderConfirmationSummary(true);
+      } else {
+        toast.warning("You have an active agent pickup scheduled. Please add items to your cart first.");
+      }
       return;
     }
 
@@ -1155,6 +1165,27 @@ Date: ${new Date().toLocaleDateString()}
     const newOrderId = 'BB-' + Math.random().toString(36).substr(2, 9).toUpperCase();
     setOrderId(newOrderId);
     navigateTo('finalize');
+  };
+
+  const handleConfirmOrder = async () => {
+    if (!currentUser) return;
+    const scheduledAppointment = appointments.find(a => a.status === 'Scheduled');
+    if (!scheduledAppointment) return;
+
+    const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
+    
+    setIsSendingConfirmation(true);
+    try {
+      await api.sendOrderConfirmationEmail(currentUser.email, cartItems, scheduledAppointment);
+      toast.success("Order confirmed! A professional summary has been sent to your email.");
+      setShowOrderConfirmationSummary(false);
+    } catch (error: any) {
+      console.error('Failed to send confirmation email:', error.message);
+      toast.error("Order confirmed locally, but failed to send email summary.");
+      setShowOrderConfirmationSummary(false);
+    } finally {
+      setIsSendingConfirmation(false);
+    }
   };
 
   // --- Components ---
@@ -2015,8 +2046,12 @@ const AdminDashboard = ({
                           value={order.status}
                           onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value as ShippingStatus)}
                         >
-                          <option value="Received at Warehouse">Received at Warehouse</option>
-                          <option value="Processing">Processing</option>
+                          <option value="Request Placed">Request Placed</option>
+                          <option value="Order Confirmed">Order Confirmed</option>
+                          <option value="Processing Order">Processing Order</option>
+                          <option value="Consolidating items">Consolidating items</option>
+                          <option value="Packed">Packed</option>
+                          <option value="Ready to Ship">Ready to Ship</option>
                           <option value="In Transit">In Transit</option>
                           <option value="Out for Delivery">Out for Delivery</option>
                           <option value="Delivered">Delivered</option>
@@ -3489,82 +3524,23 @@ const AdminDashboard = ({
 
     return (
       <div className="space-y-6">
-        {/* Top Section: Progress */}
-        {!mode && (
-          <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
-                <h4 className="text-xs font-black text-slate-900 uppercase tracking-[0.2em]">Order Progress</h4>
-              </div>
-              <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100 uppercase tracking-wider">
-                {displayItems.every(i => i.status === 'Received at Warehouse') && displayItems.length > 0 ? 'Ready to Ship' : 'Processing'}
-              </span>
+        {!mode && hasActivePickup && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-indigo-50 border border-indigo-100 p-6 rounded-[2rem] flex items-start gap-4 shadow-sm"
+          >
+            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+              <Truck size={24} />
             </div>
-            
-            <div className="relative">
-              {/* Progress Line Background */}
-              <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 -translate-y-1/2 rounded-full" />
-              
-              {/* Active Progress Line */}
-              <motion.div 
-                className="absolute top-1/2 left-0 h-1 bg-slate-400 -translate-y-1/2 rounded-full z-10" 
-                initial={{ width: 0 }}
-                animate={{ 
-                  width: `${
-                    displayItems.every(i => i.status === 'Received at Warehouse') && displayItems.length > 0 ? '100%' :
-                    displayItems.some(i => i.status === 'Received at Warehouse') ? '60%' :
-                    appointments.length > 0 ? '40%' : '20%'
-                  }` 
-                }}
-                transition={{ duration: 1, ease: "easeOut" }}
-              />
-
-              {/* Milestones */}
-              <div className="relative z-20 flex justify-between items-center">
-                {[
-                  { name: "Request Placed", color: "blue" },
-                  { name: "Order Confirmed", color: "indigo" },
-                  { name: "Processing Order", color: "amber" },
-                  { name: "Consolidating items", color: "purple" },
-                  { name: "Packed", color: "rose" },
-                  { name: "Ready to Ship", color: "emerald" }
-                ].map((milestone, index, arr) => {
-                  const progress = (index / (arr.length - 1)) * 100;
-                  const currentProgress = displayItems.every(i => i.status === 'Received at Warehouse') && displayItems.length > 0 ? 100 :
-                                        displayItems.some(i => i.status === 'Received at Warehouse') ? 60 :
-                                        appointments.length > 0 ? 40 : 20;
-                  const isActive = progress <= currentProgress;
-                  
-                  const colorClasses: Record<string, string> = {
-                    blue: isActive ? 'bg-blue-600 border-blue-600 text-blue-600' : 'text-slate-400',
-                    indigo: isActive ? 'bg-indigo-600 border-indigo-600 text-indigo-600' : 'text-slate-400',
-                    amber: isActive ? 'bg-amber-500 border-amber-500 text-amber-600' : 'text-slate-400',
-                    purple: isActive ? 'bg-purple-600 border-purple-600 text-purple-600' : 'text-slate-400',
-                    rose: isActive ? 'bg-rose-500 border-rose-500 text-rose-600' : 'text-slate-400',
-                    emerald: isActive ? 'bg-emerald-600 border-emerald-600 text-emerald-600' : 'text-slate-400'
-                  };
-
-                  const activeColor = colorClasses[milestone.color].split(' ');
-                  const dotClass = activeColor.filter(c => c.startsWith('bg-') || c.startsWith('border-')).join(' ');
-                  const textClass = activeColor.find(c => c.startsWith('text-'));
-                  
-                  return (
-                    <div key={milestone.name} className="flex flex-col items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full border-2 transition-all duration-500 ${
-                        isActive ? `${dotClass} scale-125 shadow-lg` : 'bg-white border-slate-200'
-                      }`} />
-                      <span className={`text-[9px] font-bold uppercase tracking-tighter whitespace-nowrap transition-colors duration-500 ${
-                        isActive ? textClass : 'text-slate-400'
-                      }`}>
-                        {milestone.name}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+            <div className="space-y-1">
+              <h4 className="text-lg font-black text-slate-900">Home Pickup Scheduled</h4>
+              <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                Your pickup is confirmed for <span className="text-indigo-600 font-bold">{appointments.find(a => a.status === 'Scheduled')?.date}</span> at <span className="text-indigo-600 font-bold">{appointments.find(a => a.status === 'Scheduled')?.time}</span>. 
+                Since you have opted for Home Pickup, item collection, weighing, and payment processing will be handled by our agent at your doorstep. Once processed at our warehouse, you can track the full details in <span className="text-indigo-600 font-bold">My Orders</span>.
+              </p>
             </div>
-          </div>
+          </motion.div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -3600,7 +3576,7 @@ const AdminDashboard = ({
 
 
           {/* Add Items / Schedule Pickup Card */}
-          {(mode || hasActivePickup || editingPickupId) && (
+          {(mode || editingPickupId) && (
             <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
               {mode === 'Warehouse' ? (
                 <div className="space-y-8">
@@ -3825,49 +3801,51 @@ const AdminDashboard = ({
               ) : (
                 <div className="space-y-4">
                   {/* Header Section with Progress for Pickup */}
-                  <div 
-                    ref={pickupHeaderRef} 
-                    className="sticky top-[80px] z-30 bg-white pt-4 pb-3 border-b border-slate-100 -mx-8 px-8 flex flex-col md:flex-row md:items-center justify-between gap-6 scroll-mt-[100px]"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-2xl bg-deep-blue flex items-center justify-center text-jiffex-orange shadow-xl shadow-deep-blue/20">
-                        <Truck size={28} />
-                      </div>
-                      <div>
-                        <h2 className="text-2xl font-black text-deep-blue tracking-tight">Home Pickup</h2>
-                        <p className="text-sm text-slate-500 font-medium">
-                          {activePickupStep === 5 ? 'Booking Confirmed' : (hasActivePickup && !editingPickupId) ? 'Add items to your scheduled pickup' : 'Schedule an agent to collect from your home'}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    {/* Progress Indicator for Pickup */}
-                    <div className="flex items-center gap-2 w-full md:w-[450px]">
-                      {[
-                        { step: 1, label: 'Items' },
-                        { step: 2, label: 'Schedule' },
-                        { step: 3, label: 'Address' },
-                        { step: 4, label: 'Review' },
-                        { step: 5, label: 'Done' }
-                      ].map((s, idx) => (
-                        <div key={s.step} className="flex-1 flex flex-col gap-2">
-                          <div 
-                            className={`h-1.5 rounded-full transition-all duration-500 ${
-                              activePickupStep === 5 && s.step === 5 ? 'bg-emerald-500 shadow-sm shadow-emerald-100' :
-                              activePickupStep === s.step ? 'bg-jiffex-orange shadow-sm shadow-jiffex-orange/20' :
-                              activePickupStep > s.step ? 'bg-deep-blue' : 'bg-slate-100'
-                            }`}
-                          />
-                          <span className={`text-[9px] font-black uppercase tracking-tighter text-center transition-colors duration-500 ${
-                            activePickupStep === s.step ? 'text-jiffex-orange' : 
-                            activePickupStep > s.step ? 'text-deep-blue' : 'text-slate-400'
-                          }`}>
-                            {s.label}
-                          </span>
+                  {mode === 'Pickup' && (
+                    <div 
+                      ref={pickupHeaderRef} 
+                      className="sticky top-[80px] z-30 bg-white pt-4 pb-3 border-b border-slate-100 -mx-8 px-8 flex flex-col md:flex-row md:items-center justify-between gap-6 scroll-mt-[100px]"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-2xl bg-deep-blue flex items-center justify-center text-jiffex-orange shadow-xl shadow-deep-blue/20">
+                          <Truck size={28} />
                         </div>
-                      ))}
+                        <div>
+                          <h2 className="text-2xl font-black text-deep-blue tracking-tight">Home Pickup</h2>
+                          <p className="text-sm text-slate-500 font-medium">
+                            {activePickupStep === 5 ? 'Booking Confirmed' : (hasActivePickup && !editingPickupId) ? 'Add items to your scheduled pickup' : 'Schedule an agent to collect from your home'}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {/* Progress Indicator for Pickup */}
+                      <div className="flex items-center gap-2 w-full md:w-[450px]">
+                        {[
+                          { step: 1, label: 'Items' },
+                          { step: 2, label: 'Schedule' },
+                          { step: 3, label: 'Address' },
+                          { step: 4, label: 'Review' },
+                          { step: 5, label: 'Done' }
+                        ].map((s, idx) => (
+                          <div key={s.step} className="flex-1 flex flex-col gap-2">
+                            <div 
+                              className={`h-1.5 rounded-full transition-all duration-500 ${
+                                activePickupStep === 5 && s.step === 5 ? 'bg-emerald-500 shadow-sm shadow-emerald-100' :
+                                activePickupStep === s.step ? 'bg-jiffex-orange shadow-sm shadow-jiffex-orange/20' :
+                                activePickupStep > s.step ? 'bg-deep-blue' : 'bg-slate-100'
+                              }`}
+                            />
+                            <span className={`text-[9px] font-black uppercase tracking-tighter text-center transition-colors duration-500 ${
+                              activePickupStep === s.step ? 'text-jiffex-orange' : 
+                              activePickupStep > s.step ? 'text-deep-blue' : 'text-slate-400'
+                            }`}>
+                              {s.label}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {(hasActivePickup && !editingPickupId && activePickupStep !== 5 && !isSchedulingNewPickup) ? (
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -3917,69 +3895,73 @@ const AdminDashboard = ({
                         </div>
 
                         {/* Pickup Details Summary */}
-                        <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3 text-indigo-600">
-                              <Clock size={24} />
-                              <h4 className="text-xl font-black">Pickup Details</h4>
+                        {mode === 'Pickup' && (
+                          <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3 text-indigo-600">
+                                <Clock size={24} />
+                                <h4 className="text-xl font-black">Pickup Details</h4>
+                              </div>
+                              <button 
+                                onClick={() => {
+                                  const activePickup = appointments.find(a => a.status === 'Scheduled');
+                                  if (activePickup) {
+                                    setEditingPickupId(activePickup.id);
+                                    setPickupName(activePickup.name || '');
+                                    setPickupPhone(activePickup.phone || '');
+                                    setPickupAddress(activePickup.address || { street: '', apartment: '', city: '', state: '', zip: '' });
+                                    setSelectedPickupDate(activePickup.date);
+                                    setSelectedPickupTime(activePickup.time);
+                                  }
+                                }}
+                                className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                              >
+                                <Edit3 size={18} />
+                              </button>
                             </div>
-                            <button 
-                              onClick={() => {
-                                const activePickup = appointments.find(a => a.status === 'Scheduled');
-                                if (activePickup) {
-                                  setEditingPickupId(activePickup.id);
-                                  setPickupName(activePickup.name || '');
-                                  setPickupPhone(activePickup.phone || '');
-                                  setPickupAddress(activePickup.address || { street: '', apartment: '', city: '', state: '', zip: '' });
-                                  setSelectedPickupDate(activePickup.date);
-                                  setSelectedPickupTime(activePickup.time);
-                                }
-                              }}
-                              className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
-                            >
-                              <Edit3 size={18} />
-                            </button>
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                                  <Calendar size={20} />
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Scheduled For</p>
+                                  <p className="text-sm font-black text-slate-900">
+                                    {appointments.find(a => a.status === 'Scheduled')?.date} at {appointments.find(a => a.status === 'Scheduled')?.time}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                                  <MapPin size={20} />
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Address</p>
+                                  <p className="text-sm font-black text-slate-900 truncate max-w-[200px]">
+                                    {appointments.find(a => a.status === 'Scheduled')?.address.street}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          <div className="space-y-4">
-                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
-                                <Calendar size={20} />
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Scheduled For</p>
-                                <p className="text-sm font-black text-slate-900">
-                                  {appointments.find(a => a.status === 'Scheduled')?.date} at {appointments.find(a => a.status === 'Scheduled')?.time}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
-                                <MapPin size={20} />
-                              </div>
-                              <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Address</p>
-                                <p className="text-sm font-black text-slate-900 truncate max-w-[200px]">
-                                  {appointments.find(a => a.status === 'Scheduled')?.address.street}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                        )}
                       </div>
 
                       {/* Middle Column: Pickup Status & Items */}
                       <div className="lg:col-span-8 space-y-6">
-                        <div className="p-10 bg-indigo-50 rounded-[3rem] border border-indigo-100 text-center space-y-6 flex flex-col items-center justify-center min-h-[300px]">
-                          <div className="w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center text-indigo-600 shadow-xl shadow-indigo-200/50">
-                            <Truck size={48} />
+                        {mode === 'Pickup' && (
+                          <div className="p-10 bg-indigo-50 rounded-[3rem] border border-indigo-100 text-center space-y-6 flex flex-col items-center justify-center min-h-[300px]">
+                            <div className="w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center text-indigo-600 shadow-xl shadow-indigo-200/50">
+                              <Truck size={48} />
+                            </div>
+                            <div className="space-y-2">
+                              <h4 className="text-2xl font-black text-slate-900">Pickup Scheduled!</h4>
+                              <p className="text-slate-600 max-w-sm mx-auto">
+                                Your agent is assigned. Add all your items here, and they will be collected during your scheduled slot.
+                              </p>
+                            </div>
                           </div>
-                          <div className="space-y-2">
-                            <h4 className="text-2xl font-black text-slate-900">Pickup Scheduled!</h4>
-                            <p className="text-slate-600 max-w-sm mx-auto">
-                              Your agent is assigned. Add all your items here, and they will be collected during your scheduled slot.
-                            </p>
-                          </div>
-                        </div>
+                        )}
 
                         {/* Items List for Pickup */}
                         <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm">
@@ -4564,7 +4546,7 @@ const AdminDashboard = ({
                               Thanks, {appointments.find(a => a.id === lastBookingRef)?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 'there'}! Your pickup is confirmed.
                             </h2>
                             <p className="text-lg text-slate-500 max-w-md mx-auto leading-relaxed font-medium">
-                              Your agent has been notified. Expect a call or SMS shortly to confirm the arrival window.
+                              Your agent has been notified. Since you have opted for Home Pickup, item collection, weighing, and payment processing will be handled by our agent at your doorstep.
                             </p>
                           </div>
 
@@ -4760,16 +4742,6 @@ const AdminDashboard = ({
                         </div>
 
                         <div className="flex flex-col items-center gap-4 pt-6">
-                          {appointments.some(a => a.status === 'Scheduled') && (
-                            <button 
-                              onClick={() => {
-                                setActivePickupStep(1);
-                              }}
-                              className="w-full max-w-xs py-5 bg-jiffex-orange text-white rounded-[2rem] text-lg font-black hover:bg-amber-600 transition-all shadow-2xl shadow-jiffex-orange/20 flex items-center justify-center gap-3"
-                            >
-                              <PlusCircle size={24} /> Add Items to Pickup
-                            </button>
-                          )}
                           <button 
                             onClick={() => {
                               navigateTo('history');
@@ -4830,7 +4802,7 @@ const AdminDashboard = ({
           {/* Item List Card - Visible in all tabs, but specific parts are conditional */}
           {mode !== 'Warehouse' && !((mode === 'Pickup') && (isCartEmpty || activePickupStep === 5)) && (
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 min-h-[400px]">
-              {!mode && !hasAllAgentPickup && (
+              {!mode && (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                 <div>
                   <h3 className="text-2xl font-black text-slate-900">Your Shipment Items</h3>
@@ -5161,7 +5133,7 @@ const AdminDashboard = ({
                     <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-3">
                       <Info size={18} className="text-indigo-600 shrink-0 mt-0.5" />
                       <p className="text-xs text-indigo-700 leading-relaxed font-medium">
-                        Payment will be enabled once your scheduled agent pickup is completed and all items are received at our warehouse. This ensures a single consolidated shipment for you.
+                        Since you have opted for Home Pickup, item collection, weighing, and payment processing will be done at your home.
                       </p>
                     </div>
                   )}
@@ -5169,12 +5141,15 @@ const AdminDashboard = ({
                     <button 
                       onClick={handleCheckout}
                       className={`flex-1 py-5 px-8 rounded-2xl font-bold transition-all shadow-2xl flex items-center justify-center gap-2 group ${
-                        appointments.some(a => a.status === 'Scheduled')
+                        appointments.some(a => a.status === 'Scheduled') && displayItems.length === 0
                           ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                           : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/20'
                       }`}
                     >
-                      {currentUser ? 'Checkout' : 'Sign in to Checkout'} <ArrowRight size={20} className={appointments.some(a => a.status === 'Scheduled') ? '' : 'group-hover:translate-x-1 transition-transform'} />
+                      {appointments.some(a => a.status === 'Scheduled') 
+                        ? (displayItems.length > 0 ? 'Confirm Order' : 'Checkout')
+                        : (currentUser ? 'Checkout' : 'Sign in to Checkout')} 
+                      <ArrowRight size={20} className={appointments.some(a => a.status === 'Scheduled') && displayItems.length === 0 ? '' : 'group-hover:translate-x-1 transition-transform'} />
                     </button>
                   </div>
                 </div>
@@ -5921,7 +5896,9 @@ const AdminDashboard = ({
                   onClick={() => setSelectedDate(date)}
                   className={`p-4 rounded-xl border-2 transition-all text-center ${selectedDate === date ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}
                 >
-                  <div className="text-xs font-bold uppercase opacity-60 mb-1">March</div>
+                  <div className="text-xs font-bold uppercase opacity-60 mb-1">
+                    {new Date(date).toLocaleString('default', { month: 'long' })}
+                  </div>
                   <div className="text-xl font-black">{date.split('-')[2]}</div>
                 </button>
               ))}
@@ -6807,6 +6784,18 @@ const AdminDashboard = ({
               </div>
             </motion.div>
           </div>
+        )}
+
+        {showOrderConfirmationSummary && (
+          <OrderConfirmationSummary
+            isOpen={showOrderConfirmationSummary}
+            onClose={() => setShowOrderConfirmationSummary(false)}
+            items={items.filter(i => i.source !== 'Warehouse' || i.submitted)}
+            appointment={appointments.find(a => a.status === 'Scheduled')!}
+            user={currentUser}
+            onConfirm={handleConfirmOrder}
+            isSending={isSendingConfirmation}
+          />
         )}
       </AnimatePresence>
       <Toaster position="top-center" richColors />
