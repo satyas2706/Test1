@@ -64,8 +64,8 @@ export interface Order {
   total_cost?: number;
   totalCost?: number;
   status: ShippingStatus;
-  payment_status?: 'Pending' | 'Paid';
-  paymentStatus?: 'Pending' | 'Paid';
+  payment_status?: 'Pending' | 'Paid' | 'Pay at Home';
+  paymentStatus?: 'Pending' | 'Paid' | 'Pay at Home';
   shipping_date?: string;
   shippingDate?: string;
   created_at?: string;

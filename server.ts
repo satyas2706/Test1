@@ -463,6 +463,77 @@ www.jiffex.com
   }
 });
 
+// API: Send Order Confirmation for Pay at Home
+app.post("/api/order-confirmation", async (req, res) => {
+  const { email, order, companyDetails } = req.body;
+  console.log(`[Order Confirmation] Request received for order ${order.id} to email: ${email}`);
+  
+  if (!mailTransporter || !process.env.SMTP_FROM) {
+    console.error('[Order Confirmation] Email service not configured');
+    return res.status(503).json({ error: "Email service not configured" });
+  }
+
+  if (!email || !email.includes('@') || email === 'user@example.com') {
+    return res.status(400).json({ error: "Invalid email address" });
+  }
+
+  try {
+    const orderShortId = order.id.slice(0, 8).toUpperCase();
+    const appUrl = process.env.APP_URL || "https://www.jiffex.com";
+    const trackingUrl = `${appUrl}?tab=track&id=BB-${orderShortId}`;
+    
+    const subject = `Order Confirmed: Your JiffEX Order BB-${orderShortId}`;
+    
+    const bodyHtml = `
+<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0; border: 1px solid #eee; padding: 20px; border-radius: 10px; text-align: left;">
+  <p>Dear <strong>${order.destination.fullName}</strong>,</p>
+  <p>Thank you for choosing <strong>JiffEX</strong>!</p>
+  <p>We are pleased to confirm your order <strong>BB-${orderShortId}</strong>. Since you have a scheduled pickup, we have consolidated your shop items with your pickup request.</p>
+  
+  <div style="background-color: #ecfdf5; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10b981;">
+    <p style="margin: 5px 0; color: #065f46; font-weight: bold;">Final Billing at Home</p>
+    <p style="margin: 5px 0; color: #065f46;">Our agent will arrive at your selected time to collect your items. Final billing for your shop items and shipping charges will be done at your home during pickup.</p>
+  </div>
+
+  <p><strong>Order Summary:</strong></p>
+  <ul style="padding-left: 20px;">
+    ${order.items.map((item: any) => `<li>${item.name} (Qty: ${item.quantity || 1})</li>`).join('')}
+  </ul>
+  
+  <p>You can track your order status anytime using this link: 
+    <a href="${trackingUrl}" style="color: #4f46e5; font-weight: bold; text-decoration: underline;">
+      Track Order Link
+    </a>
+  </p>
+  
+  <p>If you have any questions, please contact our support team at <a href="mailto:${companyDetails.email}" style="color: #4f46e5;">${companyDetails.email}</a>.</p>
+  
+  <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+  
+  <p style="font-size: 14px; color: #666;">
+    Best regards,<br>
+    <strong>The JiffEX Team</strong><br>
+    JiffEX Shipping & Logistics<br>
+    <a href="https://www.jiffex.com" style="color: #4f46e5; text-decoration: none;">www.jiffex.com</a>
+  </p>
+</div>
+    `.trim();
+
+    await mailTransporter.sendMail({
+      from: process.env.SMTP_FROM,
+      to: email,
+      subject: subject,
+      html: bodyHtml
+    });
+
+    console.log(`[Order Confirmation] Order ${order.id} confirmation successfully sent to ${email}`);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error(`[Order Confirmation] Error:`, err.message);
+    res.status(500).json({ error: "Failed to send order confirmation" });
+  }
+});
+
 async function fetchImageBuffer(url: string): Promise<Buffer | null> {
   try {
     let finalUrl = url;

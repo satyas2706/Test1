@@ -25,6 +25,7 @@ import {
   ChevronRight, 
   CheckCircle2, 
   Clock,
+  Globe,
   LogIn,
   Share,
   ShieldCheck,
@@ -38,6 +39,7 @@ import {
   Info,
   LayoutDashboard,
   History,
+  Home,
   Users,
   BarChart3,
   Search,
@@ -203,6 +205,7 @@ const StaticShipmentTracker = () => {
   );
 };
 
+  const [shippingPreference, setShippingPreference] = useState<'International' | 'LocalPickup'>('International');
   const [isPaid, setIsPaid] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -956,7 +959,13 @@ const StaticShipmentTracker = () => {
 
   const handleFinalPayment = async () => {
     if (!currentUser) return;
+    const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled');
     const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
+    
+    // Determine payment status based on pickup and shipping preference
+    const isPayAtHome = hasScheduledPickup && shippingPreference === 'International';
+    const paymentStatus = isPayAtHome ? 'Pay at Home' : 'Paid';
+
     const newOrder: Order = {
       id: orderId!,
       customerId: currentUser.id,
@@ -967,7 +976,7 @@ const StaticShipmentTracker = () => {
       createdAt: new Date().toISOString(),
       shippingDate: selectedDate,
       destination: address,
-      paymentStatus: 'Paid'
+      paymentStatus: paymentStatus
     };
     
     // Optimistic update
@@ -984,7 +993,7 @@ const StaticShipmentTracker = () => {
           customer_id: currentUser.id, // Snake case for DB
           total_weight: totalWeight,
           total_cost: totalCost,
-          payment_status: 'Paid',
+          payment_status: paymentStatus,
           shipping_date: selectedDate
         } as any);
 
@@ -996,14 +1005,21 @@ const StaticShipmentTracker = () => {
         };
 
         const recipientEmail = address.email || currentUser.email;
-        await api.sendInvoicePDF(recipientEmail, newOrder, companyDetails);
-        toast.success(`Payment successful! Invoice sent to ${recipientEmail}`);
-      } catch (err: any) {
-        console.error('Failed to sync order or send invoice:', err.message);
-        if (err.message.includes('Email service not configured')) {
-          toast.error('Payment successful, but email service is not configured. Please check your settings.');
+        if (isPayAtHome) {
+          // Send a special "Pay at Home" confirmation email
+          await api.sendOrderConfirmationEmail(recipientEmail, newOrder, companyDetails);
+          toast.success(`Order confirmed! Confirmation sent to ${recipientEmail}. Final billing will be done at your home.`);
         } else {
-          toast.error('Payment successful, but failed to send invoice email.');
+          await api.sendInvoicePDF(recipientEmail, newOrder, companyDetails);
+          toast.success(`Payment successful! Invoice sent to ${recipientEmail}`);
+        }
+      } catch (err: any) {
+        console.error('Failed to sync order or send email:', err.message);
+        const successMsg = isPayAtHome ? 'Order confirmed' : 'Payment successful';
+        if (err.message.includes('Email service not configured')) {
+          toast.error(`${successMsg}, but email service is not configured. Please check your settings.`);
+        } else {
+          toast.error(`${successMsg}, but failed to send confirmation email.`);
         }
       }
     }
@@ -1094,13 +1110,17 @@ Date: ${new Date().toLocaleDateString()}
     }
 
     const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled');
+    const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
+
+    if (hasScheduledPickup && cartItems.length > 0) {
+      const newOrderId = 'BB-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+      setOrderId(newOrderId);
+      navigateTo('finalize');
+      return;
+    }
+
     if (hasScheduledPickup) {
-      const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
-      if (cartItems.length > 0) {
-        toast.success("Order Confirmed! Our agent will collect and weigh these items during your scheduled pickup.");
-      } else {
-        toast.warning("You have an active agent pickup scheduled. Please add items to your cart first.");
-      }
+      toast.warning("You have an active agent pickup scheduled. Please add items to your cart first.");
       return;
     }
 
@@ -3471,7 +3491,7 @@ const AdminDashboard = ({
               <h4 className="text-lg font-black text-slate-900">Home Pickup Scheduled</h4>
               <p className="text-sm text-slate-600 font-medium leading-relaxed">
                 Your pickup is confirmed for <span className="text-indigo-600 font-bold">{appointments.find(a => a.status === 'Scheduled')?.date}</span> at <span className="text-indigo-600 font-bold">{appointments.find(a => a.status === 'Scheduled')?.time}</span>. 
-                Since you have opted for Home Pickup, item collection, weighing, and payment processing will be handled by our agent at your doorstep. Once processed at our warehouse, you can track the full details in <span className="text-indigo-600 font-bold">My Orders</span>.
+                Since you have opted for Home Pickup, item collection, weighing, and payment processing will be handled by our agent at your doorstep. <span className="font-bold">Final billing will be done at your home during pickup.</span> Once processed at our warehouse, you can track the full details in <span className="text-indigo-600 font-bold">My Orders</span>.
               </p>
             </div>
           </motion.div>
@@ -4450,8 +4470,8 @@ const AdminDashboard = ({
                             <h2 className="text-4xl font-black text-slate-900 tracking-tight">
                               Thanks, {appointments.find(a => a.id === lastBookingRef)?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 'there'}! Your pickup is confirmed.
                             </h2>
-                            <p className="text-lg text-slate-500 max-w-md mx-auto leading-relaxed font-medium">
-                              Your agent has been notified. Since you have opted for Home Pickup, item collection, weighing, and payment processing will be handled by our agent at your doorstep.
+                            <p className="text-lg text-slate-500 max-w-lg mx-auto leading-relaxed font-medium">
+                              Our agent will arrive at your selected time to collect your items. You can still <button onClick={() => navigateTo('store')} className="text-indigo-600 font-bold hover:underline">add products from our shop</button> before shipping.
                             </p>
                           </div>
 
@@ -4492,9 +4512,6 @@ const AdminDashboard = ({
                                 <Share size={14} /> Track this booking
                               </button>
 
-                              <p className="text-[10px] text-slate-400 font-medium mt-1">
-                                Need to change something? Cancel from <button onClick={() => navigateTo('history')} className="text-indigo-600 font-bold hover:underline">My Orders</button>
-                              </p>
                             </div>
                           </div>
 
@@ -5001,10 +5018,12 @@ const AdminDashboard = ({
               {!mode && (displayItems.length > 0 || appointments.length > 0) && !hasCompletedPickup && (
                 <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col gap-6">
                   {appointments.some(a => a.status === 'Scheduled') && (
-                    <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-3">
-                      <Info size={18} className="text-indigo-600 shrink-0 mt-0.5" />
-                      <p className="text-xs text-indigo-700 leading-relaxed font-medium">
-                        Since you have opted for Home Pickup, item collection, weighing, and payment processing will be done at your home.
+                    <div className="p-5 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-start gap-4">
+                      <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-sm">
+                        <Home size={20} />
+                      </div>
+                      <p className="text-sm text-emerald-800 leading-relaxed font-medium">
+                        Since you have opted for Home Pickup, you can add items from our store and pay for them along with your shipping charges. <span className="font-black">Final billing will be done at your home during pickup.</span>
                       </p>
                     </div>
                   )}
@@ -5183,7 +5202,6 @@ const AdminDashboard = ({
 
     const ShopHeroSlider = () => {
       const [currentSlide, setCurrentSlide] = useState(0);
-      const [progress, setProgress] = useState(0);
       const slides = [
         {
           title: "Bring a Piece of India to Your Doorstep",
@@ -5234,16 +5252,10 @@ const AdminDashboard = ({
       useEffect(() => {
         const timer = setInterval(() => {
           setCurrentSlide((prev) => (prev + 1) % slides.length);
-          setProgress(0);
-        }, 6000);
+        }, 7000);
         
-        const progressTimer = setInterval(() => {
-          setProgress((prev) => Math.min(prev + (100 / 60), 100));
-        }, 100);
-
         return () => {
           clearInterval(timer);
-          clearInterval(progressTimer);
         };
       }, [currentSlide]);
 
@@ -5357,16 +5369,6 @@ const AdminDashboard = ({
             </motion.div>
           </AnimatePresence>
 
-          {/* Progress Bar */}
-          <div className="absolute bottom-0 left-0 w-full h-1 bg-white/5 z-40">
-            <motion.div 
-              className={`h-full bg-gradient-to-r ${currentSlide === 0 ? 'from-teal-500 to-emerald-500' : 'from-indigo-500 to-purple-500'}`}
-              initial={{ width: "0%" }}
-              animate={{ width: `${progress}%` }}
-              transition={{ ease: "linear" }}
-            />
-          </div>
-
           {/* Indicators */}
           <div className="absolute bottom-10 left-10 md:left-24 z-30 flex items-center gap-4">
             {slides.map((_, i) => (
@@ -5374,7 +5376,6 @@ const AdminDashboard = ({
                 key={i}
                 onClick={() => {
                   setCurrentSlide(i);
-                  setProgress(0);
                 }}
                 className="group flex items-center gap-2"
               >
@@ -5640,6 +5641,9 @@ const AdminDashboard = ({
     if (!currentUser) return null;
     const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
     if (isPaid) {
+      const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled');
+      const isPayAtHome = hasScheduledPickup && shippingPreference === 'International';
+      
       return (
         <div className="max-w-2xl mx-auto text-center space-y-8 py-12">
           <CheckoutProgressTracker />
@@ -5651,7 +5655,9 @@ const AdminDashboard = ({
             <CheckCircle2 size={64} />
           </motion.div>
           <div className="space-y-2">
-            <h2 className="text-4xl font-black text-slate-900">Payment Successful!</h2>
+            <h2 className="text-4xl font-black text-slate-900">
+              {isPayAtHome ? 'Order Confirmed!' : 'Payment Successful!'}
+            </h2>
             <p className="text-slate-500">Your order <span className="font-bold text-indigo-600">{orderId}</span> has been placed successfully.</p>
           </div>
           <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-4">
@@ -5660,7 +5666,12 @@ const AdminDashboard = ({
               <span className="font-black text-slate-900">12-15 Business Days</span>
             </div>
             <p className="text-sm text-slate-500 leading-relaxed">
-              We have received your payment. Our team will consolidate your items and ship them on <span className="font-bold">{selectedDate}</span>. You can track your shipment in your history.
+              {isPayAtHome 
+                ? "Your order is confirmed. Our agent will collect your items and finalize the billing at your home during pickup. You'll receive a confirmation email shortly."
+                : shippingPreference === 'LocalPickup'
+                  ? "Your payment is successful. Our agent will bring these items when they come for your scheduled home pickup. You'll receive a confirmation email shortly."
+                  : `We have received your payment. Our team will consolidate your items and ship them on ${selectedDate}. You can track your shipment in your history.`
+              }
             </p>
           </div>
           <div className="flex gap-4">
@@ -5685,6 +5696,61 @@ const AdminDashboard = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           <CheckoutProgressTracker />
+          
+          {/* Shipping Preference Selection */}
+          {appointments.some(a => a.status === 'Scheduled') && cartItems.length > 0 && (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                <Truck className="text-indigo-600" /> Shipping Preference
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div 
+                  onClick={() => {
+                    setShippingPreference('International');
+                    setAddress({
+                      fullName: pickupName || currentUser?.name || '',
+                      email: currentUser?.email || '',
+                      phone: pickupPhone || '',
+                      addressLine1: `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}`,
+                      city: pickupAddress.city,
+                      state: pickupAddress.state,
+                      zipCode: pickupAddress.zip,
+                      country: 'India'
+                    });
+                  }}
+                  className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${shippingPreference === 'International' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 hover:border-slate-200'}`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${shippingPreference === 'International' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                      <Globe size={20} />
+                    </div>
+                    <div className="font-bold">Ship to my home</div>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Consolidate with your pickup items and ship to your home address. <span className="font-bold text-indigo-600">Pay at Home enabled.</span>
+                  </p>
+                </div>
+                <div 
+                  onClick={() => {
+                    setShippingPreference('LocalPickup');
+                    setAddress(WAREHOUSE_ADDRESS);
+                  }}
+                  className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${shippingPreference === 'LocalPickup' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 hover:border-slate-200'}`}
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${shippingPreference === 'LocalPickup' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                      <Package size={20} />
+                    </div>
+                    <div className="font-bold">Bring items during Home Pickup</div>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Our agent will bring these items when they come for your pickup. <span className="font-bold text-emerald-600">Pay Now to confirm.</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Order ID Header */}
           {orderId && (
             <div className="bg-indigo-600 p-6 rounded-2xl text-white shadow-lg shadow-indigo-200 flex items-center justify-between">
@@ -5701,14 +5767,15 @@ const AdminDashboard = ({
           {/* Address Form */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
             <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <MapPin className="text-red-500" /> Destination Address
+              <MapPin className="text-red-500" /> {shippingPreference === 'LocalPickup' ? 'Warehouse Destination' : 'Destination Address'}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Full Name</label>
                 <input 
                   type="text" 
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  disabled={!!shippingPreference}
+                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   value={address.fullName}
                   onChange={e => setAddress({...address, fullName: e.target.value})}
                 />
@@ -5717,7 +5784,8 @@ const AdminDashboard = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Email</label>
                 <input 
                   type="email" 
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  disabled={!!shippingPreference}
+                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   value={address.email}
                   onChange={e => setAddress({...address, email: e.target.value})}
                 />
@@ -5726,7 +5794,8 @@ const AdminDashboard = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Phone</label>
                 <input 
                   type="tel" 
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  disabled={!!shippingPreference}
+                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   value={address.phone}
                   onChange={e => setAddress({...address, phone: e.target.value})}
                 />
@@ -5735,7 +5804,8 @@ const AdminDashboard = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Address Line 1</label>
                 <input 
                   type="text" 
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  disabled={!!shippingPreference}
+                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   value={address.addressLine1}
                   onChange={e => setAddress({...address, addressLine1: e.target.value})}
                 />
@@ -5744,7 +5814,8 @@ const AdminDashboard = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">City</label>
                 <input 
                   type="text" 
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  disabled={!!shippingPreference}
+                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   value={address.city}
                   onChange={e => setAddress({...address, city: e.target.value})}
                 />
@@ -5753,7 +5824,8 @@ const AdminDashboard = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Zip Code</label>
                 <input 
                   type="text" 
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  disabled={!!shippingPreference}
+                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   placeholder="e.g. 123456"
                   value={address.zipCode}
                   onChange={e => setAddress({...address, zipCode: e.target.value})}
@@ -5762,7 +5834,8 @@ const AdminDashboard = ({
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Country</label>
                 <select 
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  disabled={!!shippingPreference}
+                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   value={address.country}
                   onChange={e => setAddress({...address, country: e.target.value})}
                 >
@@ -5770,6 +5843,16 @@ const AdminDashboard = ({
                 </select>
               </div>
             </div>
+            {shippingPreference && (
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-2 text-xs text-amber-700">
+                <Info size={14} />
+                <span>
+                  {shippingPreference === 'LocalPickup' 
+                    ? 'Warehouse address is used for local pickup items.' 
+                    : 'Destination address is locked to your scheduled pickup location.'}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Shipping Date */}
@@ -5794,39 +5877,54 @@ const AdminDashboard = ({
           </div>
 
           {/* Payment */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <CreditCard className="text-emerald-600" /> Payment Method
-            </h3>
-            <div className="space-y-4">
-              <div 
-                onClick={() => setPaymentMethod('phonepe')}
-                className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
-              >
-                <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold">Pe</div>
-                <div>
-                  <div className="font-bold">PhonePe</div>
-                  <div className="text-xs text-slate-500">UPI, Wallet & Cards</div>
+          {(!appointments.some(a => a.status === 'Scheduled') || shippingPreference === 'LocalPickup') ? (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                <CreditCard className="text-emerald-600" /> Payment Method
+              </h3>
+              <div className="space-y-4">
+                <div 
+                  onClick={() => setPaymentMethod('phonepe')}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                >
+                  <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold">Pe</div>
+                  <div>
+                    <div className="font-bold">PhonePe</div>
+                    <div className="text-xs text-slate-500">UPI, Wallet & Cards</div>
+                  </div>
+                  <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                    {paymentMethod === 'phonepe' && <div className="w-2 h-2 bg-white rounded-full" />}
+                  </div>
                 </div>
-                <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                  {paymentMethod === 'phonepe' && <div className="w-2 h-2 bg-white rounded-full" />}
-                </div>
-              </div>
-              <div 
-                onClick={() => setPaymentMethod('card')}
-                className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
-              >
-                <div className="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center text-white"><CreditCard size={24} /></div>
-                <div>
-                  <div className="font-bold">Credit / Debit Card</div>
-                  <div className="text-xs text-slate-500">Visa, Mastercard, Amex</div>
-                </div>
-                <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                  {paymentMethod === 'card' && <div className="w-2 h-2 bg-white rounded-full" />}
+                <div 
+                  onClick={() => setPaymentMethod('card')}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                >
+                  <div className="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center text-white"><CreditCard size={24} /></div>
+                  <div>
+                    <div className="font-bold">Credit / Debit Card</div>
+                    <div className="text-xs text-slate-500">Visa, Mastercard, Amex</div>
+                  </div>
+                  <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                    {paymentMethod === 'card' && <div className="w-2 h-2 bg-white rounded-full" />}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-emerald-50 p-8 rounded-3xl border border-emerald-100 space-y-4">
+              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm">
+                <Home size={32} />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-900">Pay at Home enabled</h3>
+                <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                  Since you have a scheduled pickup and opted to ship to your home, you can pay for your shop items along with your shipping charges. 
+                  <span className="block mt-2 font-bold text-emerald-700">Final billing will be done at your home during pickup.</span>
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Summary Sidebar */}
@@ -5865,7 +5963,7 @@ const AdminDashboard = ({
               onClick={handleFinalPayment}
               className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-200"
             >
-              Confirm & Pay
+              {(appointments.some(a => a.status === 'Scheduled') && shippingPreference === 'International') ? 'Confirm Order (Pay at Home)' : 'Confirm & Pay'}
             </button>
 
             <div className="mt-8 pt-8 border-t border-slate-800">
@@ -5883,7 +5981,7 @@ const AdminDashboard = ({
         </div>
       </div>
     );
-  }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser?.id, handleFinalPayment]);
+  }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser?.id, handleFinalPayment, shippingPreference, appointments, pickupAddress, pickupName, pickupPhone]);
 
   if (authLoading) {
     return (
