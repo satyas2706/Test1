@@ -4,7 +4,6 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { OrderConfirmationSummary } from './components/OrderConfirmationSummary';
 import { Logo } from './components/Logo';
 import { 
   Package, 
@@ -50,7 +49,6 @@ import {
   Loader2,
   Check,
   Phone,
-  Edit3,
   Upload,
   X,
   XCircle,
@@ -66,8 +64,6 @@ import {
   ShoppingCart,
   Warehouse,
   Menu,
-  Send,
-  Weight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -289,8 +285,6 @@ const StaticShipmentTracker = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginTriggerSource, setLoginTriggerSource] = useState<'default' | 'checkout' | 'pickup'>('default');
   const [showPickupConfirmModal, setShowPickupConfirmModal] = useState(false);
-  const [showOrderConfirmationSummary, setShowOrderConfirmationSummary] = useState(false);
-  const [isSendingConfirmation, setIsSendingConfirmation] = useState(false);
   const [activePickupStep, setActivePickupStep] = useState(1);
 
   // Celebration effect for pickup confirmation
@@ -483,7 +477,6 @@ const StaticShipmentTracker = () => {
   const [woPaymentMethod, setWoPaymentMethod] = useState<'card' | 'phonepe'>('card');
   const [woShippingDate, setWoShippingDate] = useState<string>(SHIPPING_DATES[0]);
   const [showPickupChoiceModal, setShowPickupChoiceModal] = useState(false);
-  const [editingPickupId, setEditingPickupId] = useState<string | null>(null);
   const [showConflictModal, setShowConflictModal] = useState<{ show: boolean; item: any; source: any }>({ show: false, item: null, source: null });
   const [cancellingPickupId, setCancellingPickupId] = useState<string | null>(null);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
@@ -663,56 +656,10 @@ const StaticShipmentTracker = () => {
   const confirmCancelPickup = () => {
     if (cancellingPickupId) {
       setAppointments(prev => prev.filter(a => a.id !== cancellingPickupId));
+      setOrders(prev => prev.filter(o => o.id !== cancellingPickupId));
       setCancellingPickupId(null);
+      toast.success('Pickup cancelled successfully.');
     }
-  };
-
-  const startEditingPickup = (apt: Appointment) => {
-    setEditingPickupId(apt.id);
-    setSelectedPickupDate(apt.date);
-    setSelectedPickupTime(apt.time);
-    setPickupName(apt.customerName || '');
-    setPickupPhone(apt.phone);
-    // Parse address back if possible, or just set street
-    setPickupAddress({ street: apt.address, apartment: '', city: '', state: '', zip: '' });
-    setPickupLanguage(apt.languagePreference || 'English');
-    navigateTo('pickup');
-  };
-
-  const saveEditedPickup = () => {
-    const missingFields = [];
-    if (!pickupName) missingFields.push('Your Name');
-    if (!pickupPhone) missingFields.push('Contact Number');
-    if (!pickupAddress.street) missingFields.push('Street Address');
-    if (!pickupAddress.city) missingFields.push('City');
-    if (!pickupAddress.zip) missingFields.push('ZIP Code');
-
-    if (missingFields.length > 0) {
-      toast.error(`${missingFields.join(', ')} is not entered. Enter to schedule.`);
-      return;
-    }
-
-    if (pickupPhone.length !== 10 || !/^\d+$/.test(pickupPhone)) {
-      toast.error('Contact Number must be exactly 10 digits.');
-      return;
-    }
-
-    const fullAddress = `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}, ${pickupAddress.city}, ${pickupAddress.state} ${pickupAddress.zip}`;
-    setAppointments(prev => prev.map(a => a.id === editingPickupId ? {
-      ...a,
-      date: selectedPickupDate,
-      time: selectedPickupTime,
-      customerName: pickupName,
-      phone: pickupPhone,
-      address: fullAddress,
-      languagePreference: pickupLanguage
-    } : a));
-    setEditingPickupId(null);
-    setPickupName('');
-    setPickupPhone('');
-    setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
-    setPickupLanguage('English');
-    toast.success('Pickup schedule updated successfully!');
   };
 
   const CheckoutProgressTracker = () => {
@@ -1150,7 +1097,7 @@ Date: ${new Date().toLocaleDateString()}
     if (hasScheduledPickup) {
       const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
       if (cartItems.length > 0) {
-        setShowOrderConfirmationSummary(true);
+        toast.success("Order Confirmed! Our agent will collect and weigh these items during your scheduled pickup.");
       } else {
         toast.warning("You have an active agent pickup scheduled. Please add items to your cart first.");
       }
@@ -1165,27 +1112,6 @@ Date: ${new Date().toLocaleDateString()}
     const newOrderId = 'BB-' + Math.random().toString(36).substr(2, 9).toUpperCase();
     setOrderId(newOrderId);
     navigateTo('finalize');
-  };
-
-  const handleConfirmOrder = async () => {
-    if (!currentUser) return;
-    const scheduledAppointment = appointments.find(a => a.status === 'Scheduled');
-    if (!scheduledAppointment) return;
-
-    const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
-    
-    setIsSendingConfirmation(true);
-    try {
-      await api.sendOrderConfirmationEmail(currentUser.email, cartItems, scheduledAppointment);
-      toast.success("Order confirmed! A professional summary has been sent to your email.");
-      setShowOrderConfirmationSummary(false);
-    } catch (error: any) {
-      console.error('Failed to send confirmation email:', error.message);
-      toast.error("Order confirmed locally, but failed to send email summary.");
-      setShowOrderConfirmationSummary(false);
-    } finally {
-      setIsSendingConfirmation(false);
-    }
   };
 
   // --- Components ---
@@ -1355,10 +1281,10 @@ Date: ${new Date().toLocaleDateString()}
               <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 -translate-y-1/2 hidden lg:block" />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
                 {[
-                  { icon: Calendar, title: "Schedule Pickup", desc: "Start by scheduling an agent pickup. This becomes the heart of your shipment process.", color: "bg-indigo-600", shadow: "shadow-indigo-200" },
-                  { icon: ShoppingBag, title: "Add Everything", desc: "Add items from your home, our Shop, or even items you've sent to our warehouse.", color: "bg-amber-500", shadow: "shadow-amber-200" },
-                  { icon: Truck, title: "Home Consolidation", desc: "Our agent brings your warehouse and store items to your home for a final unified collection.", color: "bg-emerald-500", shadow: "shadow-emerald-200" },
-                  { icon: CheckCircle2, title: "Global Shipping", desc: "Everything is weighed and packed at your home, then shipped globally in one go.", color: "bg-blue-500", shadow: "shadow-blue-200" }
+                  { icon: Calendar, title: "Book a Pickup in 30 Seconds", desc: "Start by scheduling an agent pickup. This becomes the heart of your shipment process.", color: "bg-indigo-600", shadow: "shadow-indigo-200" },
+                  { icon: ShoppingBag, title: "Add Items from Anywhere", desc: "Add items from your home, our Shop, or even items you've sent to our warehouse.", color: "bg-amber-500", shadow: "shadow-amber-200" },
+                  { icon: Truck, title: "We Combine Everything for You", desc: "Our agent brings your warehouse and store items to your home for a final unified collection.", color: "bg-emerald-500", shadow: "shadow-emerald-200" },
+                  { icon: CheckCircle2, title: "Delivered to Your Doorstep", desc: "Everything is weighed and packed at your home, then shipped globally in one go.", color: "bg-blue-500", shadow: "shadow-blue-200" }
                 ].map((step, i) => (
                   <motion.div 
                     key={step.title}
@@ -2578,6 +2504,14 @@ const AdminDashboard = ({
                       <span className="text-[10px] text-slate-600">{new Date(order.createdAt || order.created_at || Date.now()).toLocaleDateString()}</span>
                     </div>
                     <div className="flex gap-2">
+                      {order.status !== 'Delivered' && order.status !== 'Cancelled' && (
+                        <button 
+                          onClick={() => cancelPickup(order.id)}
+                          className="px-2 py-1 bg-red-500 text-white text-[9px] font-bold rounded hover:bg-red-600 transition-colors flex items-center gap-1"
+                        >
+                          <Trash2 size={10} /> Cancel
+                        </button>
+                      )}
                       {order.status === 'Received at Warehouse' && (
                         <button 
                           onClick={() => simulateNotification('Shipment dispatched', `Your shipment ${order.id} has been dispatched to ${order.destination.country}.`)}
@@ -3576,7 +3510,7 @@ const AdminDashboard = ({
 
 
           {/* Add Items / Schedule Pickup Card */}
-          {(mode || editingPickupId) && (
+          {mode && (
             <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
               {mode === 'Warehouse' ? (
                 <div className="space-y-8">
@@ -3813,7 +3747,7 @@ const AdminDashboard = ({
                         <div>
                           <h2 className="text-2xl font-black text-deep-blue tracking-tight">Home Pickup</h2>
                           <p className="text-sm text-slate-500 font-medium">
-                            {activePickupStep === 5 ? 'Booking Confirmed' : (hasActivePickup && !editingPickupId) ? 'Add items to your scheduled pickup' : 'Schedule an agent to collect from your home'}
+                            {activePickupStep === 5 ? 'Booking Confirmed' : hasActivePickup ? 'Add items to your scheduled pickup' : 'Schedule an agent to collect from your home'}
                           </p>
                         </div>
                       </div>
@@ -3847,7 +3781,7 @@ const AdminDashboard = ({
                     </div>
                   )}
 
-                  {(hasActivePickup && !editingPickupId && activePickupStep !== 5 && !isSchedulingNewPickup) ? (
+                  {(hasActivePickup && activePickupStep !== 5 && !isSchedulingNewPickup) ? (
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                       {/* Left Column: Sticky Add Item Form */}
                       <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
@@ -3902,22 +3836,6 @@ const AdminDashboard = ({
                                 <Clock size={24} />
                                 <h4 className="text-xl font-black">Pickup Details</h4>
                               </div>
-                              <button 
-                                onClick={() => {
-                                  const activePickup = appointments.find(a => a.status === 'Scheduled');
-                                  if (activePickup) {
-                                    setEditingPickupId(activePickup.id);
-                                    setPickupName(activePickup.name || '');
-                                    setPickupPhone(activePickup.phone || '');
-                                    setPickupAddress(activePickup.address || { street: '', apartment: '', city: '', state: '', zip: '' });
-                                    setSelectedPickupDate(activePickup.date);
-                                    setSelectedPickupTime(activePickup.time);
-                                  }
-                                }}
-                                className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"
-                              >
-                                <Edit3 size={18} />
-                              </button>
                             </div>
                             <div className="space-y-4">
                               <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
@@ -4490,25 +4408,12 @@ const AdminDashboard = ({
                                     Edit Details
                                   </button>
                                   <button 
-                                    onClick={editingPickupId ? saveEditedPickup : handleSchedulePickup}
+                                    onClick={handleSchedulePickup}
                                     className="flex-[2] py-5 bg-jiffex-orange text-white rounded-[2rem] text-lg font-black hover:bg-amber-600 transition-all shadow-2xl shadow-jiffex-orange/20 flex items-center justify-center gap-3"
                                   >
-                                    {editingPickupId ? 'Update Schedule' : (currentUser ? 'Confirm Booking' : 'Guest Checkout (OTP-based)')}
+                                    {currentUser ? 'Confirm Booking' : 'Guest Checkout (OTP-based)'}
                                   </button>
                                 </div>
-                                
-                                {editingPickupId && (
-                                  <button 
-                                    onClick={() => {
-                                      setEditingPickupId(null);
-                                      setPickupPhone('');
-                                      setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
-                                    }}
-                                    className="w-full mt-4 py-2 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm"
-                                  >
-                                    Cancel Editing
-                                  </button>
-                                )}
                               </div>
                         </motion.div>
                       )}
@@ -4586,11 +4491,10 @@ const AdminDashboard = ({
                               >
                                 <Share size={14} /> Track this booking
                               </button>
-                              
-                              <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100/50">
-                                <Mail size={12} />
-                                <span className="text-[10px] font-bold">Confirmation sent to your email</span>
-                              </div>
+
+                              <p className="text-[10px] text-slate-400 font-medium mt-1">
+                                Need to change something? Cancel from <button onClick={() => navigateTo('history')} className="text-indigo-600 font-bold hover:underline">My Orders</button>
+                              </p>
                             </div>
                           </div>
 
@@ -4712,32 +4616,6 @@ const AdminDashboard = ({
                                 <span className="text-sm font-black tracking-tight">WhatsApp</span>
                               </button>
                             </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-10 p-8 rounded-[2.5rem] bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 shadow-sm relative overflow-hidden group">
-                          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                            <ShoppingBag size={120} className="text-amber-500" />
-                          </div>
-                          <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
-                            <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center text-amber-500 shadow-md shrink-0">
-                              <Sparkles size={32} />
-                            </div>
-                            <div className="flex-1">
-                              <h4 className="text-xl font-black text-slate-900">Shop Premium Indian Items</h4>
-                              <p className="text-sm text-slate-600 mt-1 font-medium leading-relaxed">
-                                Want to add some authentic Indian essentials or gifts to this shipment? You can shop from our curated collection and we'll pack them together for you!
-                              </p>
-                            </div>
-                            <button 
-                              onClick={() => {
-                                navigateTo('store');
-                                window.scrollTo(0, 0);
-                              }}
-                              className="px-8 py-4 bg-amber-500 text-white rounded-2xl font-black hover:bg-amber-600 transition-all shadow-lg shadow-amber-200 flex items-center gap-2 shrink-0"
-                            >
-                              Visit Shop <ArrowRight size={18} />
-                            </button>
                           </div>
                         </div>
 
@@ -4884,13 +4762,6 @@ const AdminDashboard = ({
                               <div className="px-3 py-1 bg-white/20 backdrop-blur rounded-full text-[10px] font-black uppercase tracking-widest">
                                 {apt.status}
                               </div>
-                              <button 
-                                onClick={() => startEditingPickup(apt)}
-                                className="p-2 hover:bg-white/20 rounded-xl transition-colors"
-                                title="Modify Schedule"
-                              >
-                                <Edit3 size={18} />
-                              </button>
                               <button 
                                 onClick={() => cancelPickup(apt.id)}
                                 className="p-2 hover:bg-white/20 rounded-xl transition-colors"
@@ -5318,41 +5189,45 @@ const AdminDashboard = ({
           title: "Bring a Piece of India to Your Doorstep",
           subtitle: "FESTIVE TRADITIONS",
           desc: "Authentic sweets, pooja items, and gifts delivered worldwide. Experience the joy of Indian festivals wherever you are.",
-          image: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&q=80&w=1000",
+          image: "https://lh3.googleusercontent.com/d/1aAVjEX_ZdnuYP7hULa1_EsD9yO_xzPph",
           accent: "text-amber-400",
           bg: "from-slate-900 via-slate-900 to-amber-900/20",
           glow: "bg-amber-500/20",
-          badge: "Festive Special"
+          badge: "Festive Special",
+          fullImage: true
         },
         {
           title: "Perfect Return Gifts for Every Celebration",
           subtitle: "CURATED GIFTING",
           desc: "Curated Indian gift packs for weddings, festivals & housewarmings. Make your special moments memorable with authentic Indian gifts.",
-          image: "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&q=80&w=1000",
+          image: "https://lh3.googleusercontent.com/d/1dxLyoYCj5EPfQP5mp9TEVxxbHCvyw4jg",
           accent: "text-rose-400",
           bg: "from-slate-900 via-slate-900 to-rose-900/20",
           glow: "bg-rose-500/20",
-          badge: "Celebration Ready"
+          badge: "Celebration Ready",
+          fullImage: true
         },
         {
           title: "Missing Indian Sweets?",
           subtitle: "TASTE OF HOME",
           desc: "Get fresh, authentic sweets shipped directly from India. From Moti choor laddoo to Kaju Katli, we bring your favorite treats to your doorstep.",
-          image: "https://images.unsplash.com/photo-1605197509751-62ad15fc0a1b?auto=format&fit=crop&q=80&w=1000",
+          image: "https://lh3.googleusercontent.com/d/1UkJBaJFV91unv7jYqOXwEYY91r7ZOkvE",
           accent: "text-amber-400",
           bg: "from-slate-900 via-slate-900 to-amber-900/20",
           glow: "bg-amber-500/20",
-          badge: "Fresh & Authentic"
+          badge: "Fresh & Authentic",
+          fullImage: true
         },
         {
           title: "All Your Pooja Essentials in One Place",
           subtitle: "SPIRITUAL HERITAGE",
           desc: "From diyas to idols—everything you need for rituals abroad. Maintain your spiritual traditions with authentic pooja items.",
-          image: "https://images.unsplash.com/photo-1609130767011-d6a5bc403e6d?auto=format&fit=crop&q=80&w=1000",
+          image: "https://lh3.googleusercontent.com/d/1gpGBNFhoBWpcTMg5nV2-OEdWRWfQGFEy",
           accent: "text-teal-400",
           bg: "from-slate-900 via-slate-900 to-teal-900/20",
           glow: "bg-teal-500/20",
-          badge: "Spiritual Essentials"
+          badge: "Spiritual Essentials",
+          fullImage: true
         }
       ];
 
@@ -5374,98 +5249,111 @@ const AdminDashboard = ({
 
       return (
         <div className="relative overflow-hidden rounded-[3rem] bg-slate-900 text-white shadow-2xl mb-12 h-[500px] group">
-          <AnimatePresence mode="wait">
+          <AnimatePresence>
             <motion.div
               key={currentSlide}
-              initial={{ x: 500, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -500, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 80, damping: 20 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1, ease: "easeInOut" }}
               className="absolute inset-0"
             >
-              <div 
-                className={`absolute inset-0 bg-gradient-to-r ${slides[currentSlide].bg} z-10`}
-              />
-              <div className={`absolute top-1/2 right-0 -translate-y-1/2 w-[700px] h-[700px] ${slides[currentSlide].glow} rounded-full blur-[150px] z-0`} />
+              {slides[currentSlide].fullImage ? (
+                <img 
+                  src={slides[currentSlide].image} 
+                  alt={slides[currentSlide].title}
+                  className="absolute inset-0 w-full h-full object-cover z-0"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <>
+                  <div 
+                    className={`absolute inset-0 bg-gradient-to-r ${slides[currentSlide].bg} z-10`}
+                  />
+                  <div className={`absolute top-1/2 right-0 -translate-y-1/2 w-[700px] h-[700px] ${slides[currentSlide].glow} rounded-full blur-[150px] z-0`} />
+                </>
+              )}
               
-              <div className="relative z-20 h-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center px-10 md:px-24">
-                <div className="space-y-8">
-                  <div className="space-y-4">
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 }}
-                      className="flex items-center gap-3"
-                    >
-                      <div className={`px-4 py-1.5 bg-white/5 backdrop-blur-md border border-white/10 rounded-full ${slides[currentSlide].accent} text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 shadow-lg`}>
-                        <Sparkles size={12} /> {slides[currentSlide].subtitle}
-                      </div>
-                      <div className="px-4 py-1.5 bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 rounded-full text-emerald-400 text-[10px] font-black uppercase tracking-[0.2em]">
-                        {slides[currentSlide].badge}
-                      </div>
-                    </motion.div>
-                    <motion.h1 
+              {!slides[currentSlide].fullImage && (
+                <div className="relative z-20 h-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center px-10 md:px-24">
+                  <div className="space-y-8">
+                    <div className="space-y-4">
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="flex items-center gap-3"
+                      >
+                        <div className={`px-4 py-1.5 bg-white/5 backdrop-blur-md border border-white/10 rounded-full ${slides[currentSlide].accent} text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 shadow-lg`}>
+                          <Sparkles size={12} /> {slides[currentSlide].subtitle}
+                        </div>
+                        <div className="px-4 py-1.5 bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 rounded-full text-emerald-400 text-[10px] font-black uppercase tracking-[0.2em]">
+                          {slides[currentSlide].badge}
+                        </div>
+                      </motion.div>
+                      <motion.h1 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9] drop-shadow-2xl"
+                      >
+                        {slides[currentSlide].title.split(',').map((part, i) => (
+                          <React.Fragment key={i}>
+                            {part}{i === 0 && slides[currentSlide].title.includes(',') && <br />}
+                          </React.Fragment>
+                        ))}
+                      </motion.h1 >
+                    </div>
+
+                    <motion.p 
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3 }}
-                      className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9] drop-shadow-2xl"
+                      transition={{ delay: 0.4 }}
+                      className="text-xl text-slate-400 font-medium leading-relaxed max-w-xl"
                     >
-                      {slides[currentSlide].title.split(',').map((part, i) => (
-                        <React.Fragment key={i}>
-                          {part}{i === 0 && slides[currentSlide].title.includes(',') && <br />}
-                        </React.Fragment>
-                      ))}
-                    </motion.h1 >
+                      {slides[currentSlide].desc}
+                    </motion.p>
+
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5 }}
+                      className="flex items-center gap-8"
+                    >
+                      <div className="flex -space-x-4">
+                        {[1, 2, 3, 4].map((i) => (
+                          <div key={i} className="w-12 h-12 rounded-full border-4 border-slate-900 bg-slate-800 flex items-center justify-center overflow-hidden shadow-xl">
+                            <img src={`https://i.pravatar.cc/150?img=${i + 20}`} alt="User" />
+                          </div>
+                        ))}
+                        <div className="w-12 h-12 rounded-full border-4 border-slate-900 bg-indigo-600 flex items-center justify-center text-xs font-black shadow-xl">
+                          +5k
+                        </div>
+                      </div>
+                      <div className="text-sm font-bold text-slate-400 leading-tight">
+                        <span className="text-white text-base">Trusted by thousands</span> <br /> of Indians living abroad
+                      </div>
+                    </motion.div>
                   </div>
 
-                  <motion.p 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className="text-xl text-slate-400 font-medium leading-relaxed max-w-xl"
-                  >
-                    {slides[currentSlide].desc}
-                  </motion.p>
-
-                  <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
-                    className="flex items-center gap-8"
-                  >
-                    <div className="flex -space-x-4">
-                      {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="w-12 h-12 rounded-full border-4 border-slate-900 bg-slate-800 flex items-center justify-center overflow-hidden shadow-xl">
-                          <img src={`https://i.pravatar.cc/150?img=${i + 20}`} alt="User" />
-                        </div>
-                      ))}
-                      <div className="w-12 h-12 rounded-full border-4 border-slate-900 bg-indigo-600 flex items-center justify-center text-xs font-black shadow-xl">
-                        +5k
-                      </div>
-                    </div>
-                    <div className="text-sm font-bold text-slate-400 leading-tight">
-                      <span className="text-white text-base">Trusted by thousands</span> <br /> of Indians living abroad
-                    </div>
-                  </motion.div>
+                  <div className="hidden lg:block relative h-full py-16">
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9, x: 50 }}
+                      animate={{ opacity: 1, scale: 1, x: 0 }}
+                      transition={{ delay: 0.3, duration: 1, ease: "easeOut" }}
+                      className="relative z-10 h-full group/img"
+                    >
+                      <div className="absolute -inset-4 bg-gradient-to-br from-white/10 to-transparent rounded-[4rem] blur-3xl opacity-50 group-hover/img:opacity-100 transition-opacity duration-700" />
+                      <img 
+                        src={slides[currentSlide].image} 
+                        alt={slides[currentSlide].title} 
+                        className="relative z-10 rounded-[4rem] shadow-2xl border border-white/10 object-cover w-full h-full transform transition-transform duration-700 group-hover/img:scale-[1.02]"
+                        referrerPolicy="no-referrer"
+                      />
+                    </motion.div>
+                  </div>
                 </div>
-
-                <div className="hidden lg:block relative h-full py-16">
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.9, x: 50 }}
-                    animate={{ opacity: 1, scale: 1, x: 0 }}
-                    transition={{ delay: 0.3, duration: 1, ease: "easeOut" }}
-                    className="relative z-10 h-full group/img"
-                  >
-                    <div className="absolute -inset-4 bg-gradient-to-br from-white/10 to-transparent rounded-[4rem] blur-3xl opacity-50 group-hover/img:opacity-100 transition-opacity duration-700" />
-                    <img 
-                      src={slides[currentSlide].image} 
-                      alt={slides[currentSlide].title} 
-                      className="relative z-10 rounded-[4rem] shadow-2xl border border-white/10 object-cover w-full h-full transform transition-transform duration-700 group-hover/img:scale-[1.02]"
-                      referrerPolicy="no-referrer"
-                    />
-                  </motion.div>
-                </div>
-              </div>
+              )}
             </motion.div>
           </AnimatePresence>
 
@@ -6445,7 +6333,7 @@ const AdminDashboard = ({
       </header>
 
       {/* Main Content */}
-      <main className={`max-w-7xl mx-auto px-4 pb-20 ${activeTab === 'pickup' ? 'pt-0' : (activeTab === 'warehouse' ? 'pt-0' : (activeTab === 'store' ? 'pt-8' : (activeTab === 'cart' ? 'pt-8' : 'pt-20')))}`}>
+      <main className={`max-w-7xl mx-auto px-4 pb-20 ${activeTab === 'pickup' ? 'pt-0' : (activeTab === 'warehouse' ? 'pt-0' : (activeTab === 'store' ? 'pt-8' : (activeTab === 'cart' ? 'pt-8' : (activeTab === 'history' ? 'pt-6' : 'pt-20'))))}`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -6455,7 +6343,7 @@ const AdminDashboard = ({
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'home' && HomeSection}
-            {activeTab !== 'home' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'cart' && <BackButton onClick={goBack} />}
+            {activeTab !== 'home' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'cart' && activeTab !== 'history' && <BackButton onClick={goBack} />}
             {activeTab === 'track' && TrackSection}
             {activeTab === 'pickup' && renderUnifiedCartSection('Pickup')}
             {activeTab === 'warehouse' && renderUnifiedCartSection('Warehouse')}
@@ -6784,18 +6672,6 @@ const AdminDashboard = ({
               </div>
             </motion.div>
           </div>
-        )}
-
-        {showOrderConfirmationSummary && (
-          <OrderConfirmationSummary
-            isOpen={showOrderConfirmationSummary}
-            onClose={() => setShowOrderConfirmationSummary(false)}
-            items={items.filter(i => i.source !== 'Warehouse' || i.submitted)}
-            appointment={appointments.find(a => a.status === 'Scheduled')!}
-            user={currentUser}
-            onConfirm={handleConfirmOrder}
-            isSending={isSendingConfirmation}
-          />
         )}
       </AnimatePresence>
       <Toaster position="top-center" richColors />

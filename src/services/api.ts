@@ -80,15 +80,5 @@ export const api = {
 
   async shareInvoice(order: Order, ...args: any[]) {
     return this.sendInvoicePDF(order, ...args);
-  },
-
-  async sendOrderConfirmationEmail(email: string, items: ShippingItem[], appointment: Appointment) {
-    const response = await fetch(`${API_URL}/api/order-confirmation`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, items, appointment }),
-    });
-    if (!response.ok) throw new Error('Failed to send order confirmation email');
-    return await response.json();
   }
 };

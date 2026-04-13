@@ -8,10 +8,8 @@ interface LoginProps {
 }
 
 export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [method, setMethod] = useState<'email' | 'phone'>('email');
   const [step, setStep] = useState<'input' | 'otp'>('input');
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -37,8 +35,8 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
     await new Promise(resolve => setTimeout(resolve, 500));
     
     setIsLoading(false);
-    toast.success(mode === 'signup' ? 'Account created successfully!' : 'Login successful!');
-    onSuccess(method === 'email' ? email : `${phone}@phone.com`, mode === 'signup' ? name : undefined);
+    toast.success('Login successful!');
+    onSuccess(method === 'email' ? email : `${phone}@phone.com`);
   };
 
   const handleOtpChange = (index: number, value: string) => {
@@ -67,32 +65,6 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
     <div className="space-y-6">
       {step === 'input' ? (
         <>
-          {/* Mode Toggle */}
-          <div className="flex justify-center gap-8 border-b border-slate-100 pb-4">
-            <button
-              onClick={() => setMode('login')}
-              className={`text-sm font-black uppercase tracking-widest transition-all relative ${
-                mode === 'login' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              Sign In
-              {mode === 'login' && (
-                <motion.div layoutId="activeMode" className="absolute -bottom-4 left-0 right-0 h-1 bg-indigo-600 rounded-full" />
-              )}
-            </button>
-            <button
-              onClick={() => setMode('signup')}
-              className={`text-sm font-black uppercase tracking-widest transition-all relative ${
-                mode === 'signup' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              Sign Up
-              {mode === 'signup' && (
-                <motion.div layoutId="activeMode" className="absolute -bottom-4 left-0 right-0 h-1 bg-indigo-600 rounded-full" />
-              )}
-            </button>
-          </div>
-
           {/* Tabs */}
           <div className="flex p-1 bg-slate-100 rounded-2xl">
             <button
@@ -114,27 +86,6 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
           </div>
 
           <form onSubmit={handleSendOTP} className="space-y-4">
-            {mode === 'signup' && (
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                  Full Name
-                </label>
-                <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                    <CheckCircle2 size={18} />
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter your full name"
-                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
-
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                 {method === 'email' ? 'Email Address' : 'Phone Number'}
@@ -162,7 +113,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
               {isLoading ? (
                 <Loader2 size={20} className="animate-spin" />
               ) : (
-                <>{mode === 'signup' ? 'Create Account' : 'Send OTP'} <ArrowRight size={20} /></>
+                <>Send OTP <ArrowRight size={20} /></>
               )}
             </button>
           </form>
