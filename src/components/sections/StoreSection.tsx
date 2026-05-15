@@ -152,7 +152,7 @@ const StoreSection = ({
             >
               <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Price Range ($)</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Price Range (₹)</label>
                   <div className="flex items-center gap-3">
                     <input 
                       type="number" 
@@ -217,7 +217,7 @@ const StoreSection = ({
               <div className="p-5 flex-1 flex flex-col">
                 <div className="flex justify-between items-start mb-1">
                   <h3 className="font-bold text-slate-900 leading-tight truncate flex-1 mr-2">{product.name}</h3>
-                  <span className="text-indigo-600 font-bold shrink-0">${product.price}</span>
+                  <span className="text-indigo-600 font-bold shrink-0">₹{product.price}</span>
                 </div>
                 <div className="flex flex-col gap-1 mb-4">
                   <p className="text-[10px] text-slate-500">Weight: {product.weight} kg</p>

@@ -4,39 +4,94 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
 interface LoginProps {
-  onSuccess: (email: string, name?: string) => void;
+  onSuccess: (identifier: string, name?: string) => void;
+  initialEmail?: string;
+  initialPhone?: string;
+  initialMethod?: 'email' | 'phone';
 }
 
-export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
-  const [method, setMethod] = useState<'email' | 'phone'>('email');
+export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '', initialPhone = '', initialMethod = 'email' }) => {
+  const [method, setMethod] = useState<'email' | 'phone'>(initialMethod);
   const [step, setStep] = useState<'input' | 'otp'>('input');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState(initialEmail);
+  const [phone, setPhone] = useState(initialPhone);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[Login] Sending OTP request for method:", method);
     setIsLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    setIsLoading(false);
-    setStep('otp');
-    toast.success(`OTP sent to your ${method === 'email' ? 'email' : 'phone'}`);
+    if (method === 'email') {
+      if (!email || !email.includes('@')) {
+        toast.error('Please enter a valid email address');
+        setIsLoading(false);
+        return;
+      }
+    } else {
+      if (!phone || phone.replace(/\D/g, '').length < 10) {
+        toast.error('Please enter a valid 10-digit mobile number');
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    try {
+      const payload = method === 'email' ? { email } : { phone };
+      const response = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      console.log("[Login] Send OTP Response:", data);
+      if (data.success) {
+        setStep('otp');
+        toast.success(`OTP sent to your ${method}`);
+        if (data.devCode) {
+          console.log(`DEV MODE: ${method} OTP is`, data.devCode);
+          toast.info(`DEV MODE: Your code is ${data.devCode}`, {
+            duration: 10000,
+            description: "In a real app, this would be sent via " + method
+          });
+        }
+      } else {
+        throw new Error(data.error || 'Failed to send OTP');
+      }
+    } catch (err: any) {
+      console.error("Login Error:", err);
+      toast.error(err.message || 'Failed to send OTP');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    const otpCode = otp.join('');
     
-    // Simulate verification
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    setIsLoading(false);
-    toast.success('Login successful!');
-    onSuccess(method === 'email' ? email : `${phone}@phone.com`);
+    try {
+      const payload = method === 'email' ? { email, code: otpCode } : { phone, code: otpCode };
+      const response = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success('Login successful!');
+        onSuccess(method === 'email' ? email : phone);
+      } else {
+        throw new Error(data.error || 'Invalid OTP');
+      }
+    } catch (err: any) {
+      console.error("Verification Error:", err);
+      toast.error(err.message || 'Verification failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleOtpChange = (index: number, value: string) => {
@@ -133,9 +188,9 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
         </>
       ) : (
         <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="space-y-6"
+           initial={{ opacity: 0, x: 20 }}
+           animate={{ opacity: 1, x: 0 }}
+           className="space-y-6"
         >
           <div className="text-center space-y-2">
             <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -145,6 +200,9 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
             <p className="text-sm text-slate-500">
               Enter the 6-digit code sent to <span className="font-bold text-slate-900">{method === 'email' ? email : phone}</span>
             </p>
+            <div className="mt-2 p-2 bg-indigo-50 rounded-lg text-[10px] font-bold text-indigo-600 uppercase tracking-widest inline-block">
+              Testing Mode: Use any 6 digits (e.g. 123456)
+            </div>
           </div>
 
           <form onSubmit={handleVerifyOTP} className="space-y-6">

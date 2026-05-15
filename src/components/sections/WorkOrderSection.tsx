@@ -53,7 +53,7 @@ const WorkOrderSection = ({
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-lg font-black text-slate-900">{item.price ? `$${item.price}` : '-'}</div>
+                  <div className="text-lg font-black text-slate-900">{item.price ? `₹${item.price}` : '-'}</div>
                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Qty: {item.quantity || 1}</div>
                 </div>
               </div>
@@ -118,22 +118,22 @@ const WorkOrderSection = ({
           <div className="space-y-6 mb-10">
             <div className="flex justify-between items-center">
               <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Subtotal</span>
-              <span className="font-bold">${(totalCost * 0.85).toLocaleString()}</span>
+              <span className="font-bold">₹{(totalCost * 0.85).toLocaleString()}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Shipping & Handling</span>
-              <span className="font-bold">${(totalCost * 0.1).toLocaleString()}</span>
+              <span className="font-bold">₹{(totalCost * 0.1).toLocaleString()}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Tax (GST 5%)</span>
-              <span className="font-bold">${(totalCost * 0.05).toLocaleString()}</span>
+              <span className="font-bold">₹{(totalCost * 0.05).toLocaleString()}</span>
             </div>
             
             <div className="pt-6 border-t border-white/10">
               <div className="flex justify-between items-end">
                 <div>
                   <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Amount</span>
-                  <div className="text-4xl font-black mt-1">${totalCost.toLocaleString()}</div>
+                  <div className="text-4xl font-black mt-1">₹{totalCost.toLocaleString()}</div>
                 </div>
               </div>
             </div>

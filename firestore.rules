@@ -139,6 +139,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
     match /agents/{agentId} {
       allow read: if isAuthenticated() && (isAdmin() || isAgent());
       allow write: if isAdmin();

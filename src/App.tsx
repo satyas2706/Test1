@@ -18,6 +18,10 @@ import {
   CreditCard, 
   AlertTriangle, 
   Sparkles,
+  TrendingUp,
+  CheckCircle,
+  AlertCircle,
+  PieChart as PieChartIcon,
   Plus, 
   Minus,
   PlusCircle,
@@ -47,6 +51,7 @@ import {
   ArrowLeft,
   ArrowDown,
   LogOut,
+  Zap,
   Database,
   Loader2,
   Check,
@@ -54,13 +59,16 @@ import {
   Upload,
   X,
   XCircle,
+  Cpu,
+  Shield,
+  ChevronDown,
   Bell,
   Heart,
   Lock,
   MessageSquare,
+  MessageCircle,
   Mail,
   SlidersHorizontal,
-  ChevronDown,
   ArrowUpDown,
   HelpCircle,
   ShoppingCart,
@@ -71,6 +79,18 @@ import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { Toaster, toast } from 'sonner';
 import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
+import { 
   ShippingItem, 
   ShippingStatus, 
   StoreProduct, 
@@ -79,7 +99,10 @@ import {
   User,
   UserRole,
   Order,
-  AgentProfile
+  AgentProfile,
+  Ticket,
+  TicketComment,
+  RefundRequest
 } from './types';
 import { 
   SHIPPING_RATES, 
@@ -88,7 +111,8 @@ import {
   PROHIBITED_ITEMS, 
   SHIPPING_DATES,
   PICKUP_SLOTS,
-  WAREHOUSE_ADDRESS
+  WAREHOUSE_ADDRESS,
+  COMPANY_DETAILS
 } from './constants';
 import { api } from './services/api';
 import { supabase } from './lib/supabase';
@@ -100,60 +124,29 @@ type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'hi
 
 const API_URL = window.location.origin;
 
-export default function App() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('home');
-  const [tabHistory, setTabHistory] = useState<Tab[]>(['home']);
-  const [showSendDropdown, setShowSendDropdown] = useState(false);
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [navbarTrackingId, setNavbarTrackingId] = useState('');
-
-  const navigateTo = (tab: Tab) => {
-    if (tab === 'pickup' && appointments.some(a => a.status === 'Scheduled') && !isSchedulingNewPickup) {
-      setActivePickupStep(5);
-    }
-    if (tab !== activeTab) {
-      setTabHistory(prev => [...prev, tab]);
-      setActiveTab(tab);
-      setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 100);
-    }
-  };
-
-  const goBack = () => {
-    if (tabHistory.length > 1) {
-      const newHistory = [...tabHistory];
-      newHistory.pop(); // remove current
-      const prevTab = newHistory[newHistory.length - 1];
-      setTabHistory(newHistory);
-      setActiveTab(prevTab);
-      setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 100);
-    } else {
-      setActiveTab('home');
-      setTabHistory(['home']);
-      setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 100);
-    }
-  };
+const sendWhatsApp = (phone: string, message: string) => {
+  if (!phone) {
+    toast.error('No phone number provided');
+    return;
+  }
+  let cleanPhone = phone.replace(/\D/g, '');
+  // If it's a 10-digit number, assume Indian prefix 91
+  if (cleanPhone.length === 10) {
+    cleanPhone = '91' + cleanPhone;
+  }
+  const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+  window.open(url, '_blank');
+};
 
 const BackButton = ({ onClick }: { onClick: () => void }) => (
   <motion.button
     initial={{ opacity: 0, x: -10 }}
     animate={{ opacity: 1, x: 0 }}
+    exit={{ opacity: 0, x: -10 }}
     onClick={onClick}
-    className="mb-3 flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors group"
+    className="absolute top-1 left-6 flex items-center justify-center w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm group z-20"
   >
-    <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center group-hover:border-indigo-200 group-hover:bg-indigo-50 transition-all">
-      <ArrowRight size={16} className="rotate-180" />
-    </div>
-    <span>Go Back</span>
+    <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
   </motion.button>
 );
 
@@ -205,7 +198,1680 @@ const StaticShipmentTracker = () => {
   );
 };
 
-  const [shippingPreference, setShippingPreference] = useState<'International' | 'LocalPickup'>('International');
+interface AdminDashboardProps {
+  currentUser: User | null;
+  orders: Order[];
+  appointments: Appointment[];
+  setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>;
+  agents: AgentProfile[];
+  setAgents: React.Dispatch<React.SetStateAction<AgentProfile[]>>;
+  categories: string[];
+  setCategories: React.Dispatch<React.SetStateAction<string[]>>;
+  adminTab: 'Overview' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds';
+  setAdminTab: React.Dispatch<React.SetStateAction<'Overview' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds'>>;
+  storeProducts: StoreProduct[];
+  setStoreProducts: React.Dispatch<React.SetStateAction<StoreProduct[]>>;
+  setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
+  refundRequests: RefundRequest[];
+  setRefundRequests: React.Dispatch<React.SetStateAction<RefundRequest[]>>;
+  isWebmaster: boolean;
+}
+
+interface SupportDeskDashboardProps {
+  orders: Order[];
+  tickets: Ticket[];
+  setTickets: React.Dispatch<React.SetStateAction<Ticket[]>>;
+  refundRequests: RefundRequest[];
+  setRefundRequests: React.Dispatch<React.SetStateAction<RefundRequest[]>>;
+  currentUser: User | null;
+}
+
+const SupportDeskDashboard = ({ orders, tickets, setTickets, refundRequests, setRefundRequests, currentUser }: SupportDeskDashboardProps) => {
+  const [activeSupportTab, setActiveSupportTab] = useState<'Tickets' | 'Refunds' | 'Stats'>('Tickets');
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [responseText, setResponseText] = useState('');
+  const [isResponding, setIsResponding] = useState(false);
+
+  const stats = {
+    completed: orders.filter(o => o.status === 'Delivered').length,
+    inProgress: orders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled').length,
+    cancelled: orders.filter(o => o.status === 'Cancelled').length,
+    totalTickets: tickets.length,
+    openTickets: tickets.filter(t => t.status !== 'Resolved').length
+  };
+
+  const handleResolveTicket = (ticketId: string) => {
+    setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, status: 'Resolved' } : t));
+    toast.success(`Ticket ${ticketId} resolved successfully.`);
+    if (selectedTicket?.id === ticketId) setSelectedTicket(null);
+  };
+
+  const handleRespond = () => {
+    if (!responseText.trim() || !selectedTicket) return;
+
+    const newComment: TicketComment = {
+      id: 'CMT-' + Math.floor(Math.random() * 10000),
+      author: currentUser?.name || currentUser?.email || 'CSR',
+      content: responseText,
+      createdAt: 'Just now'
+    };
+
+    const updatedTickets = tickets.map(t => 
+      t.id === selectedTicket.id 
+        ? { ...t, comments: [...(t.comments || []), newComment], status: 'In Progress' as const } 
+        : t
+    );
+
+    setTickets(updatedTickets);
+    // Find the updated ticket to refresh selection
+    const updatedSelected = updatedTickets.find(t => t.id === selectedTicket.id);
+    if (updatedSelected) setSelectedTicket(updatedSelected);
+    
+    setResponseText('');
+    setIsResponding(false);
+    toast.success('Response added to ticket');
+  };
+
+  const handleCreateRefundRequest = (orderId: string) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) {
+      toast.error('Order not found');
+      return;
+    }
+
+    const newRequest: RefundRequest = {
+      id: 'REF-' + Math.floor(Math.random() * 10000),
+      orderId,
+      amount: order.totalCost || 0,
+      reason: 'CSR Initiated Refund',
+      status: 'Pending Approval',
+      requestedAt: 'Just now'
+    };
+
+    setRefundRequests([...refundRequests, newRequest]);
+    toast.success(`Refund request created for order ${orderId}. Awaiting Admin Approval.`);
+  };
+
+  return (
+    <div className="space-y-4 pb-20">
+      <div className="bg-slate-900 rounded-[3rem] p-8 md:p-12 text-white overflow-hidden relative">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/20 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
+        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">CSR Terminal Activity</span>
+            </div>
+            <h3 className="text-3xl font-black mb-2">Service Hub</h3>
+            <p className="text-slate-400 font-medium tracking-tight">Active Session: <span className="text-white">{currentUser?.email}</span></p>
+          </div>
+          <div className="flex gap-4">
+            {['Tickets', 'Refunds', 'Stats'].map((t: any) => (
+              <button 
+                key={t}
+                onClick={() => setActiveSupportTab(t)}
+                className={`px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                  activeSupportTab === t ? 'bg-white text-slate-900' : 'bg-white/10 text-white/60 hover:bg-white/20'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {activeSupportTab === 'Stats' ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-emerald-50 border border-emerald-100 p-8 rounded-[3rem] group hover:bg-emerald-100 transition-colors">
+            <div className="flex items-center justify-between mb-6">
+              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm border border-emerald-100">
+                <CheckCircle size={24} />
+              </div>
+              <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Efficiency</span>
+            </div>
+            <div className="text-4xl font-black text-emerald-900 mb-1">{stats.completed}</div>
+            <p className="text-sm font-bold text-emerald-700 uppercase tracking-widest">Orders Completed</p>
+          </div>
+          
+          <div className="bg-indigo-50 border border-indigo-100 p-8 rounded-[3rem] group hover:bg-indigo-100 transition-colors">
+            <div className="flex items-center justify-between mb-6">
+              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-100">
+                <Truck size={24} />
+              </div>
+              <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Active Load</span>
+            </div>
+            <div className="text-4xl font-black text-indigo-900 mb-1">{stats.inProgress}</div>
+            <p className="text-sm font-bold text-indigo-700 uppercase tracking-widest">In Progress</p>
+          </div>
+
+          <div className="bg-red-50 border border-red-100 p-8 rounded-[3rem] group hover:bg-red-100 transition-colors">
+            <div className="flex items-center justify-between mb-6">
+              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-red-600 shadow-sm border border-red-100">
+                <XCircle size={24} />
+              </div>
+              <span className="text-[10px] font-black text-red-600 uppercase tracking-widest">Churn</span>
+            </div>
+            <div className="text-4xl font-black text-red-900 mb-1">{stats.cancelled}</div>
+            <p className="text-sm font-bold text-red-700 uppercase tracking-widest">Cancelled Orders</p>
+          </div>
+        </div>
+      ) : activeSupportTab === 'Tickets' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-8 space-y-4">
+            <div className="flex items-center justify-between mb-2 px-6">
+              <h4 className="text-xl font-black text-slate-900">Queue Management</h4>
+              <div className="relative group">
+                <input 
+                  type="text" 
+                  placeholder="Filter tickets..."
+                  className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none w-64 transition-all"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={14} />
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              {tickets.filter(t => t.subject.toLowerCase().includes(searchQuery.toLowerCase()) || t.id.toLowerCase().includes(searchQuery.toLowerCase())).map((t) => (
+                <div 
+                  key={t.id} 
+                  onClick={() => setSelectedTicket(t)}
+                  className={`bg-white p-6 rounded-[2.5rem] border transition-all cursor-pointer group ${
+                    selectedTicket?.id === t.id ? 'border-indigo-500 shadow-xl shadow-indigo-100' : 'border-slate-100 shadow-sm hover:border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-black ${
+                        t.priority === 'High' ? 'bg-red-50 text-red-600' : 
+                        t.priority === 'Medium' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'
+                      }`}>
+                        {t.id.split('-')[1]}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t.id} • {t.createdAt}</span>
+                          {t.status === 'Resolved' && <CheckCircle size={12} className="text-emerald-500" />}
+                        </div>
+                        <h5 className="font-black text-slate-900 text-lg tracking-tight group-hover:text-indigo-600 transition-colors leading-tight">{t.subject}</h5>
+                        <p className="text-sm font-bold text-slate-400 mt-0.5 inline-flex items-center gap-1">
+                          <Mail size={12} /> {t.customerEmail}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                       <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.1em] ${
+                        t.priority === 'High' ? 'bg-red-600 text-white' : 
+                        t.priority === 'Medium' ? 'bg-amber-500 text-white' : 'bg-indigo-600 text-white'
+                      }`}>
+                        {t.priority}
+                      </span>
+                      <span className={`text-[10px] font-black uppercase ${t.status === 'Resolved' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {t.status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="lg:col-span-4">
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl shadow-slate-100 flex flex-col min-h-[500px] sticky top-24">
+              {selectedTicket ? (
+                <div className="flex-1 flex flex-col h-full overflow-hidden">
+                  <div className="flex-1 overflow-y-auto px-1">
+                    <div className="mb-8">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black uppercase tracking-widest">
+                          Case: {selectedTicket.id}
+                        </div>
+                        <button onClick={() => setSelectedTicket(null)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                          <X size={20} />
+                        </button>
+                      </div>
+                      <h3 className="text-2xl font-black text-slate-900 leading-tight mb-4">{selectedTicket.subject}</h3>
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 mb-6">
+                        <p className="text-sm text-slate-600 leading-relaxed font-medium">"{selectedTicket.description}"</p>
+                      </div>
+
+                      {/* Conversation History */}
+                      {selectedTicket.comments && selectedTicket.comments.length > 0 && (
+                        <div className="space-y-4 mb-8">
+                          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Conversation History</h4>
+                          {selectedTicket.comments.map((comment) => (
+                            <div key={comment.id} className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-wider">{comment.author}</span>
+                                <span className="text-[10px] font-bold text-slate-400">{comment.createdAt}</span>
+                              </div>
+                              <p className="text-sm text-slate-600 font-medium">{comment.content}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-6 mt-4 pt-6 border-t border-slate-50">
+                    {/* Response Input Area */}
+                    {isResponding ? (
+                      <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2">
+                        <textarea 
+                          className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none min-h-[120px]"
+                          placeholder="Type your response or internal comments here..."
+                          value={responseText}
+                          onChange={(e) => setResponseText(e.target.value)}
+                        />
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={handleRespond}
+                            className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all"
+                          >
+                            Send Response
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setIsResponding(false);
+                              setResponseText('');
+                            }}
+                            className="px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="p-6 bg-indigo-50 rounded-[2rem] border border-indigo-100">
+                          <h4 className="text-xs font-black text-indigo-900 uppercase tracking-[0.2em] mb-4">Linked Order</h4>
+                          <div className="flex flex-col gap-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-black text-indigo-600">{selectedTicket.orderId}</p>
+                                <p className="text-[10px] font-bold text-indigo-400 uppercase">Linked Customer Record</p>
+                              </div>
+                              <button 
+                                onClick={() => handleCreateRefundRequest(selectedTicket.orderId)}
+                                className="px-4 py-2 bg-white text-indigo-600 border border-indigo-200 rounded-xl text-xs font-bold hover:bg-slate-900 hover:text-white transition-all shadow-sm"
+                              >
+                                Initiate Refund
+                              </button>
+                            </div>
+                            
+                            {orders.find(o => o.id === selectedTicket.orderId) && (
+                              <button 
+                                onClick={() => {
+                                  const order = orders.find(o => o.id === selectedTicket.orderId);
+                                  if (order) {
+                                    const message = `*JiffEX Support HUB*\n\nRegarding your ticket: ${selectedTicket.id}\nOrder ID: ${order.id}\nStatus: ${order.status}\n\nHere is your current invoice summary.\nTotal: ₹${order.totalCost.toFixed(2)}\n\nHow else can we help you today?`;
+                                    sendWhatsApp(order.destination.phone, message);
+                                  }
+                                }}
+                                className="w-full py-3 bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
+                              >
+                                <MessageCircle size={16} /> Send Invoice via WhatsApp
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <button 
+                            onClick={() => setIsResponding(true)}
+                            className="py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all"
+                          >
+                            Respond
+                          </button>
+                          <button 
+                            disabled={selectedTicket.status === 'Resolved'}
+                            onClick={() => handleResolveTicket(selectedTicket.id)}
+                            className={`py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${
+                              selectedTicket.status === 'Resolved' ? 'bg-emerald-50 text-emerald-600' : 'bg-emerald-600 text-white hover:bg-slate-900'
+                            }`}
+                          >
+                            {selectedTicket.status === 'Resolved' ? 'Closed' : 'Resolve'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-slate-100 rounded-[2.5rem]">
+                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4">
+                    <MessageSquare size={32} />
+                  </div>
+                  <h4 className="text-lg font-black text-slate-900 mb-2">No Ticket Selected</h4>
+                  <p className="text-sm text-slate-400 font-medium leading-relaxed">Select a ticket from the queue to view customer details and internal resolution tools.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-xl font-black text-slate-900">Refund Pipelines</h3>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Tiered Approval Workflow</p>
+            </div>
+            <ShieldCheck size={32} className="text-slate-100" />
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Req ID</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Order</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Amount</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Requested</th>
+                </tr>
+              </thead>
+              <tbody>
+                {refundRequests.map((req) => (
+                  <tr key={req.id} className="border-b border-slate-50 last:border-0 group hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 font-black text-slate-900">{req.id}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-indigo-600">{req.orderId}</td>
+                    <td className="px-6 py-4 font-black text-slate-900">₹{req.amount.toLocaleString()}</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${
+                        req.status === 'Pending Approval' ? 'bg-amber-100 text-amber-700' :
+                        req.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
+                        'bg-red-100 text-red-700'
+                      }`}>
+                        {req.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-[11px] font-bold text-slate-400">{req.requestedAt}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          {refundRequests.length === 0 && (
+            <div className="p-20 text-center">
+              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-4 mx-auto">
+                <RefreshCw size={32} />
+              </div>
+              <h4 className="text-xl font-black text-slate-900 mb-1">No Refund Footprint</h4>
+              <p className="text-sm text-slate-400 font-medium">Historical refund requests will appear here once initiated for orders.</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface SupportSectionProps {
+  currentUser: User | null;
+  orders: Order[];
+  tickets: Ticket[];
+  setTickets: React.Dispatch<React.SetStateAction<Ticket[]>>;
+  refundRequests: RefundRequest[];
+  setRefundRequests: React.Dispatch<React.SetStateAction<RefundRequest[]>>;
+}
+
+const SupportSection = ({ currentUser, orders, tickets, setTickets, refundRequests, setRefundRequests }: SupportSectionProps) => {
+  if (currentUser?.role === 'customer_service') {
+    return (
+      <SupportDeskDashboard 
+        orders={orders} 
+        tickets={tickets} 
+        setTickets={setTickets} 
+        refundRequests={refundRequests} 
+        setRefundRequests={setRefundRequests} 
+        currentUser={currentUser} 
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-12 pb-24">
+      <div className="text-center space-y-4">
+        <h3 className="text-4xl font-black text-slate-900 tracking-tight">Need Help?</h3>
+        <p className="text-slate-500 max-w-2xl mx-auto">Our support team is here to ensure your shipping experience is flawless.</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {[
+          { 
+            icon: MessageSquare, 
+            title: "Live Chat", 
+            desc: "Chat with our logistics experts for immediate assistance with your shipment.",
+            action: "Start Chat",
+            color: "text-indigo-600",
+            bg: "bg-indigo-50"
+          },
+          { 
+            icon: Mail, 
+            title: "Email Support", 
+            desc: "Send us your queries and we'll get back to you within 24 hours.",
+            action: "support@jiffex.com",
+            color: "text-emerald-600",
+            bg: "bg-emerald-50"
+          },
+          { 
+            icon: HelpCircle, 
+            title: "Help Center", 
+            desc: "Browse our extensive library of FAQs and shipping guides.",
+            action: "Visit FAQ",
+            color: "text-amber-600",
+            bg: "bg-amber-50"
+          }
+        ].map((item, i) => (
+          <motion.div
+            key={item.title}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group"
+          >
+            <div className={`w-14 h-14 ${item.bg} ${item.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
+              <item.icon size={28} />
+            </div>
+            <h4 className="text-xl font-black text-slate-900 mb-2">{item.title}</h4>
+            <p className="text-sm text-slate-500 mb-6 leading-relaxed">{item.desc}</p>
+            <button className={`text-sm font-bold ${item.color} flex items-center gap-2 hover:underline`}>
+              {item.action} <ArrowRight size={16} />
+            </button>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        {/* Comprehensive FAQ Section */}
+        <div className="bg-slate-50 rounded-[3rem] p-8 md:p-12">
+          <h4 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
+            <HelpCircle className="text-indigo-600" />
+            Frequently Asked Questions
+          </h4>
+          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-4 custom-scrollbar">
+            {[
+              { q: "How long does shipping to the US take?", a: "Express shipments typically take 5-7 business days. Standard shipping takes 10-14 business days. These times depend on customs clearance and the final destination city." },
+              { q: "What is the 'Send to Our Warehouse' service?", a: "This service allows you to send items from online stores (Amazon, Flipkart, etc.) or your home to our warehouse. We consolidate all your packages into one shipment to save you money on international shipping." },
+              { q: "How do I calculate shipping costs?", a: "Shipping is calculated based on the higher of actual weight or volumetric weight. You can use our calculator on the home page for an instant estimate." },
+              { q: "Can I track my shipment in real-time?", a: "Yes! Once your shipment is dispatched, you'll receive a tracking ID. You can enter this ID in the 'Track Shipment' box on our home page." },
+              { q: "What happens if my items are fragile?", a: "We offer professional repacking services. If you mark an item as fragile, our warehouse team will add extra protective layers (bubble wrap, corrugated sheets) to ensure safe transit." },
+              { q: "Are there any hidden charges?", a: "Our quotes include door-to-door delivery. However, customs duties or taxes (if applicable in the destination country) are determined by local authorities and are the recipient's responsibility." },
+              { q: "What is the 'Pickup from home' service?", a: "If you're in a supported city in India, our agent will come to your doorstep to collect your items. They can even help with basic packing!" },
+              { q: "How do I pay for my shipment?", a: "We accept all major credit cards, debit cards, and digital payment methods like PhonePe. Payment is required once all your items are received and weighed at our warehouse." },
+              { q: "Can I ship homemade food items?", a: "Yes, you can ship dry, non-perishable homemade food (like sweets or snacks). However, they must be properly packed and have a reasonable shelf life. Perishables are strictly prohibited." },
+              { q: "What if my package is lost or damaged?", a: "We take extreme care, but in rare cases of loss or damage, we offer limited liability coverage. For high-value items, we strongly recommend purchasing additional shipping insurance." }
+            ].map((faq, i) => (
+              <div key={i} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:border-indigo-200 transition-colors">
+                <div className="font-bold text-slate-900 mb-2 flex items-start gap-3">
+                  <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5">?</div>
+                  {faq.q}
+                </div>
+                <p className="text-sm text-slate-500 ml-9 leading-relaxed">{faq.a}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Prohibited Items Section */}
+        <div className="bg-white rounded-[3rem] p-8 md:p-12 border border-slate-100 shadow-sm">
+          <h4 className="text-2xl font-black text-slate-900 mb-2 flex items-center gap-3">
+            <AlertTriangle className="text-amber-500" />
+            Prohibited Items (US Shipping)
+          </h4>
+          <p className="text-sm text-slate-500 mb-8">
+            To comply with international regulations and US Customs, the following items cannot be shipped. Attempting to ship these may result in delays, fines, or seizure.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+            {PROHIBITED_ITEMS.map((item, i) => (
+              <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 group hover:bg-red-50 hover:border-red-100 transition-all">
+                <div className="w-2 h-2 rounded-full bg-red-400 group-hover:scale-125 transition-transform" />
+                <span className="text-xs font-medium text-slate-700 group-hover:text-red-700">{item}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-4">
+            <Info className="text-amber-600 shrink-0 mt-1" size={20} />
+            <div className="space-y-2">
+              <h5 className="text-sm font-black text-amber-900 uppercase tracking-widest">Important Note</h5>
+              <p className="text-xs text-amber-800 leading-relaxed">
+                This list is not exhaustive. If you are unsure about an item, please contact our support team before sending it to the warehouse. Certain items like medicines or seeds require specific documentation and prior approval.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AdminDashboard = ({
+  currentUser,
+  orders,
+  appointments,
+  setAppointments,
+  agents,
+  setAgents,
+  categories,
+  setCategories,
+  adminTab,
+  setAdminTab,
+  storeProducts,
+  setStoreProducts,
+  setOrders,
+  refundRequests,
+  setRefundRequests,
+  isWebmaster: isWebmasterProp
+}: AdminDashboardProps) => {
+  const [categoryInput, setCategoryInput] = useState('');
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [editPriceValue, setEditPriceValue] = useState<string>('');
+  const [editDeliveryValue, setEditDeliveryValue] = useState<string>('');
+
+  // Local state for drafts to prevent global re-renders and focus loss
+  const [newAgent, setNewAgent] = useState({ name: '', phone: '', email: '', vehicleNumber: '' });
+  const [newProduct, setNewProduct] = useState<Partial<StoreProduct>>({ name: '', price: 0, category: categories[0] || 'Pooja', image: '', weight: 0, estimatedDelivery: '' });
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewProduct(prev => ({ ...prev, image: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  if (!currentUser) return null;
+  const isWebmaster = isWebmasterProp ?? (currentUser?.role === 'webmaster');
+
+  const stats = [
+    { label: 'Total Shipments', value: orders.length + appointments.length, icon: Package, color: 'bg-blue-500' },
+    { label: 'Pending Pickups', value: appointments.filter(a => a.status === 'Scheduled').length, icon: Clock, color: 'bg-amber-500' },
+    { label: 'Active Shipments', value: orders.filter(o => o.status !== 'Delivered').length, icon: Truck, color: 'bg-indigo-500' },
+    { label: 'Pending Refunds', value: refundRequests.filter(r => r.status === 'Pending Approval').length, icon: RefreshCw, color: 'bg-red-500' },
+  ].filter((_, i) => !isWebmaster || i !== 3);
+
+  const availableTabs = (isWebmaster 
+    ? ['Inventory', 'Settings'] 
+    : ['Overview', 'Agents', 'Inventory', 'Reports', 'Refunds', 'Settings']) as any[];
+
+  // Force tab if webmaster is on restricted tab
+  useEffect(() => {
+    if (isWebmaster && !['Inventory', 'Reports', 'Settings'].includes(adminTab)) {
+      setAdminTab('Inventory');
+    }
+  }, [isWebmaster, adminTab, setAdminTab]);
+
+  const handleAddAgent = () => {
+    if (!newAgent.name || !newAgent.phone) return;
+    const agent: AgentProfile = {
+      id: 'AG-' + Math.random().toString(36).substr(2, 4).toUpperCase(),
+      ...newAgent,
+      status: 'Active'
+    };
+    setAgents([...agents, agent]);
+    setNewAgent({ name: '', phone: '', email: '', vehicleNumber: '' });
+  };
+
+  const handleAssignAgent = (aptId: string, agentId: string) => {
+    const agent = agents.find(a => a.id === agentId);
+    if (!agent) return;
+    
+    setAppointments(prev => prev.map(apt => 
+      apt.id === aptId ? { ...apt, assignedAgent: agent, assignedAgentId: agent.id } : apt
+    ));
+  };
+
+  const handleAddCategory = () => {
+    if (categoryInput && !categories.includes(categoryInput)) {
+      setCategories([...categories, categoryInput]);
+      setCategoryInput('');
+    }
+  };
+
+  const handleDeleteCategory = (cat: string) => {
+    setCategories(categories.filter(c => c !== cat));
+  };
+
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: ShippingStatus) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    try {
+      await api.updateOrderStatus(orderId, newStatus, order.customerId, order.destination);
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      toast.success(`Order ${orderId} status updated to ${newStatus}. WhatsApp notification sent.`);
+    } catch (err: any) {
+      console.error('Failed to update order status:', err.message);
+      toast.error('Failed to update order status.');
+    }
+  };
+
+  return (
+    <div className="flex flex-col lg:flex-row gap-8 -mx-4 lg:-mx-8 min-h-[80vh]">
+      {/* Professional Sidebar Navigation */}
+      <aside className="w-full lg:w-64 shrink-0 bg-white border-r border-slate-100 p-6 flex flex-col gap-8 rounded-r-3xl hidden lg:flex shadow-sm">
+        <div className="flex items-center gap-3 px-2">
+          <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+            <ShieldCheck size={22} />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-slate-900 tracking-tight leading-none">Admin</h2>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Command Center</span>
+          </div>
+        </div>
+
+        <nav className="flex flex-col gap-2">
+          {availableTabs.map((tab: any) => {
+            const Icon = tab === 'Overview' ? LayoutDashboard : 
+                         tab === 'Agents' ? Users : 
+                         tab === 'Inventory' ? Package : 
+                         tab === 'Reports' ? BarChart3 : 
+                         tab === 'Refunds' ? RefreshCw :
+                         tab === 'Settings' ? ShieldCheck : LayoutDashboard;
+            
+            return (
+              <button 
+                key={tab}
+                onClick={() => setAdminTab(tab)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all group ${
+                  adminTab === tab 
+                    ? 'bg-indigo-50 text-indigo-600 shadow-sm' 
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <Icon size={18} className={`${adminTab === tab ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                {tab === 'Inventory' && isWebmaster ? 'Catalog' : (tab === 'Agents' ? 'Logistics' : tab)}
+                {adminTab === tab && (
+                  <motion.div 
+                    layoutId="activeTabIndicator"
+                    className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-600"
+                  />
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="mt-auto p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold">
+              {currentUser.email?.[0].toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Active Operator</p>
+              <p className="text-xs font-bold text-slate-900 truncate">{currentUser.email}</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Mobile Top Navigation */}
+      <div className="lg:hidden flex gap-2 overflow-x-auto p-2 bg-white border-b border-slate-100 sticky top-0 z-10 no-scrollbar">
+        {availableTabs.map((tab: any) => (
+          <button 
+            key={tab}
+            onClick={() => setAdminTab(tab)}
+            className={`whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              adminTab === tab 
+                ? 'bg-indigo-600 text-white shadow-md' 
+                : 'bg-slate-100 text-slate-500'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {/* Main Content Area */}
+      <main className="flex-1 lg:p-8 lg:pt-3 lg:pb-8 space-y-6 overflow-y-auto">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+              {adminTab === 'Overview' && 'Dashboard Overview'}
+              {adminTab === 'Agents' && 'Logistics & Agent Network'}
+              {adminTab === 'Inventory' && (isWebmaster ? 'Product Catalog' : 'Inventory Management')}
+              {adminTab === 'Reports' && 'Business Intelligence'}
+              {adminTab === 'Refunds' && 'Refund Management'}
+              {adminTab === 'Settings' && 'Control Panel Settings'}
+            </h1>
+            <p className="text-slate-500 font-medium">
+              Manage your operations and track key performance indicators.
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 transition-all shadow-sm">
+              <RefreshCw size={18} />
+            </button>
+            <div className="h-6 w-px bg-slate-200 mx-1" />
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-100 text-xs font-black uppercase tracking-wider">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Server
+            </div>
+          </div>
+        </header>
+
+        <div className="space-y-4 pb-20">
+          {adminTab === 'Overview' ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {stats.map((stat, i) => (
+                  <motion.div 
+                    key={stat.label}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="group bg-white p-6 rounded-[2rem] border border-slate-200 hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-500/5 transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className={`w-12 h-12 ${stat.color} text-white rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
+                        <stat.icon size={24} />
+                      </div>
+                      <div className="px-2 py-1 bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest rounded-lg">Realtime</div>
+                    </div>
+                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{stat.label}</div>
+                    <div className="text-3xl font-black text-slate-900 tracking-tight">{stat.value}</div>
+                  </motion.div>
+                ))}
+              </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                  <Clock className="text-amber-500" /> Pending Pickups
+                </h3>
+                <span className="px-3 py-1 bg-amber-50 text-amber-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-amber-100">
+                  Action Required
+                </span>
+              </div>
+              <div className="space-y-4">
+                {appointments.length === 0 ? (
+                  <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                    <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                    <p className="text-slate-400 font-medium">No appointments scheduled</p>
+                  </div>
+                ) : (
+                  appointments.map(apt => (
+                    <div key={apt.id} className="p-5 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 transition-colors group">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:text-indigo-600 transition-colors">
+                            <UserIcon size={18} />
+                          </div>
+                          <div>
+                            <div className="font-black text-slate-900 text-sm tracking-tight">{apt.id}</div>
+                            <div className="text-xs font-bold text-indigo-600 truncate max-w-[120px]">{apt.customerName || 'Guest User'}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs font-black text-slate-900">{apt.date}</div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{apt.time}</div>
+                        </div>
+                      </div>
+
+                      {apt.assignedAgent ? (
+                        <div className="flex items-center justify-between p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
+                          <div className="flex items-center gap-3">
+                             <div className="w-8 h-8 bg-white text-indigo-600 rounded-lg flex items-center justify-center shadow-sm">
+                              <Car size={14} />
+                            </div>
+                            <div>
+                              <div className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Assigned Agent</div>
+                              <div className="text-xs font-black text-slate-900">{apt.assignedAgent.name}</div>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, assignedAgent: undefined, assignedAgentId: undefined } : a))}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Unassign Agent"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex-1">
+                            <select 
+                              className="w-full p-2.5 pl-3 pr-8 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 appearance-none transition-all cursor-pointer"
+                              onChange={(e) => handleAssignAgent(apt.id, e.target.value)}
+                              defaultValue=""
+                            >
+                              <option value="" disabled>Dispatch Agent...</option>
+                              {agents.filter(a => a.status === 'Active').map(agent => (
+                                <option key={agent.id} value={agent.id}>{agent.name}</option>
+                              ))}
+                            </select>
+                            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                          </div>
+                          <div className="px-3 py-2.5 bg-amber-50 text-amber-600 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-amber-100">
+                            Waiting
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                  <Truck className="text-indigo-500" /> Active Logistics
+                </h3>
+                <div className="flex gap-2">
+                  <button className="text-[10px] font-black px-3 py-1 bg-slate-50 text-slate-500 rounded-lg hover:bg-slate-100 transition-all uppercase tracking-widest">View All</button>
+                </div>
+              </div>
+              <div className="space-y-4">
+                {orders.length === 0 ? (
+                  <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                    <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                    <p className="text-slate-400 font-medium">No active shipments</p>
+                  </div>
+                ) : (
+                  orders.slice(0, 5).map(order => (
+                    <div key={order.id} className="p-5 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 transition-colors group">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                            <Box size={18} />
+                          </div>
+                          <div>
+                            <div className="font-black text-slate-900 text-sm tracking-tight">{order.id}</div>
+                            <div className="text-xs font-bold text-slate-500">{order.destination.country} • {order.totalWeight}kg</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-black text-slate-900">₹{order.totalCost.toLocaleString()}</div>
+                          <div className="text-[9px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded-full mt-1">
+                            {order.status}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 mt-4">
+                        <div className="relative flex-1">
+                          <select 
+                            className="w-full p-2.5 pl-3 pr-8 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 appearance-none transition-all cursor-pointer"
+                            value={order.status}
+                            onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value as ShippingStatus)}
+                          >
+                            <option value="Request Placed">Request Placed</option>
+                            <option value="Order Confirmed">Order Confirmed</option>
+                            <option value="Processing Order">Processing Order</option>
+                            <option value="Consolidating items">Consolidating items</option>
+                            <option value="Packed">Packed</option>
+                            <option value="Ready to Ship">Ready to Ship</option>
+                            <option value="In Transit">In Transit</option>
+                            <option value="Out for Delivery">Out for Delivery</option>
+                            <option value="Delivered">Delivered</option>
+                            <option value="Cancelled">Cancelled</option>
+                          </select>
+                          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        </div>
+                        <button 
+                          onClick={() => {
+                            const message = `*JiffEX Invoice Update*\n\nOrder ID: ${order.id}\nCustomer: ${order.destination.fullName}\nTotal Amount: ₹${order.totalCost.toLocaleString()}\nCurrent Status: ${order.status}\n\nTrack your shipment: ${window.location.origin}?tab=track&id=${order.id}\n\nThank you for choosing JiffEX!`;
+                            sendWhatsApp(order.destination.phone, message);
+                          }}
+                          className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all group/btn" 
+                          title="Send Invoice via WhatsApp"
+                        >
+                          <MessageCircle size={16} />
+                        </button>
+                        <button className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all group/btn" title="Notify Customer via SMS/Email">
+                          <MessageSquare size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      ) : adminTab === 'Refunds' ? (
+        <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-xl font-black text-slate-900 leading-none mb-2">Refund Approval Queue</h3>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Pending CS Requests</p>
+            </div>
+            <div className="px-5 py-3 bg-amber-50 text-amber-700 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-amber-100 flex items-center gap-2">
+              <Clock size={14} className="animate-pulse" />
+              {refundRequests.filter(r => r.status === 'Pending Approval').length} Actions Required
+            </div>
+          </div>
+
+          <div className="overflow-x-auto overflow-hidden rounded-[2rem] border border-slate-100">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Req ID</th>
+                  <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Order</th>
+                  <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Amount</th>
+                  <th className="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Reason</th>
+                  <th className="px-8 py-5 text-right text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Resolution</th>
+                </tr>
+              </thead>
+              <tbody>
+                {refundRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-8 py-20 text-center">
+                      <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-200 mx-auto mb-4">
+                        <RefreshCw size={32} />
+                      </div>
+                      <p className="text-sm font-bold text-slate-400">No pending refund requests</p>
+                    </td>
+                  </tr>
+                ) : (
+                  refundRequests.map((req) => (
+                    <tr key={req.id} className="border-b border-slate-50 last:border-0 group hover:bg-slate-50/50 transition-colors">
+                      <td className="px-8 py-6 font-black text-slate-900">{req.id}</td>
+                      <td className="px-8 py-6 text-sm font-bold text-indigo-600">{req.orderId}</td>
+                      <td className="px-8 py-6 font-black text-slate-900 tracking-tight">₹{req.amount.toLocaleString()}</td>
+                      <td className="px-8 py-6 text-xs font-semibold text-slate-500 leading-relaxed max-w-xs">{req.reason}</td>
+                      <td className="px-8 py-6 text-right">
+                        {req.status === 'Pending Approval' ? (
+                          <div className="flex items-center justify-end gap-3">
+                            <button 
+                              onClick={() => {
+                                setRefundRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'Approved' } : r));
+                                toast.success(`Refund ${req.id} approved.`);
+                              }}
+                              className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-lg shadow-emerald-100 hover:shadow-none"
+                            >
+                              Approve
+                            </button>
+                            <button 
+                              onClick={() => {
+                                setRefundRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'Rejected' } : r));
+                                toast.error(`Refund ${req.id} rejected.`);
+                              }}
+                              className="px-5 py-2.5 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-100 transition-all"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <div className={`inline-flex px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                            req.status === 'Approved' ? 'bg-emerald-50 text-emerald-700' : 
+                            req.status === 'Refunded' ? 'bg-indigo-50 text-indigo-700' : 'bg-red-50 text-red-700'
+                          }`}>
+                            {req.status}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : adminTab === 'Agents' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-4 bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm h-fit sticky top-24">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                <PlusCircle size={20} />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">Onboard Agent</h3>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Full Identity</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all"
+                    placeholder="Enter full name"
+                    value={newAgent.name}
+                    onChange={e => setNewAgent({...newAgent, name: e.target.value})}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Contact</label>
+                    <input 
+                      type="tel" 
+                      className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all"
+                      placeholder="Phone"
+                      value={newAgent.phone}
+                      onChange={e => setNewAgent({...newAgent, phone: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Plate #</label>
+                    <input 
+                      type="text" 
+                      className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all"
+                      placeholder="KA-01-..."
+                      value={newAgent.vehicleNumber}
+                      onChange={e => setNewAgent({...newAgent, vehicleNumber: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Work Email</label>
+                  <input 
+                    type="email" 
+                    className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all"
+                    placeholder="agent@jiffex.com"
+                    value={newAgent.email}
+                    onChange={e => setNewAgent({...newAgent, email: e.target.value})}
+                  />
+                </div>
+              </div>
+              <button 
+                onClick={handleAddAgent}
+                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2 group"
+              >
+                Register Field Agent <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+          </div>
+
+          <div className="lg:col-span-8 space-y-6">
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">Agent Network</h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{agents.length} active operators deployed</p>
+                </div>
+                <div className="flex gap-2">
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-400">
+                    <Search size={18} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {agents.map(agent => (
+                  <div key={agent.id} className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-200 flex items-start gap-4 hover:border-indigo-200 transition-colors group">
+                    <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0 border border-slate-100">
+                      <UserIcon size={28} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="font-black text-slate-900 text-lg tracking-tight truncate mb-0.5">{agent.name}</div>
+                          <div className="text-xs font-bold text-indigo-600">{agent.phone}</div>
+                        </div>
+                        <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[9px] font-black uppercase tracking-wider">
+                          {agent.status}
+                        </span>
+                      </div>
+                      
+                      <div className="mt-4 flex items-center gap-3">
+                        <div className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[10px] font-bold text-slate-500 flex items-center gap-2">
+                          <Car size={12} /> {agent.vehicleNumber || 'No Vehicle'}
+                        </div>
+                        <button 
+                          onClick={() => setAgents(agents.filter(a => a.id !== agent.id))}
+                          className="ml-auto p-2 text-slate-300 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : adminTab === 'Reports' ? (
+        <div className="space-y-8 pb-10">
+          {/* Executive Insights */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-indigo-600 p-8 rounded-[3rem] text-white shadow-xl shadow-indigo-100 relative overflow-hidden group">
+              <TrendingUp className="absolute -right-4 -bottom-4 w-32 h-32 text-white/10 group-hover:scale-110 transition-transform" />
+              <div className="relative z-10">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-md">
+                  <Package size={20} />
+                </div>
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200 mb-1">Logistics Efficiency</h4>
+                <p className="text-2xl font-black mb-4">+14% Growth</p>
+                <p className="text-xs text-indigo-100/80 leading-relaxed font-medium">
+                  Pickup times are optimizing. Current average: <span className="font-bold text-white">4.2h</span>
+                </p>
+              </div>
+            </div>
+            
+            <div className="bg-emerald-600 p-8 rounded-[3rem] text-white shadow-xl shadow-emerald-100 relative overflow-hidden group">
+              <CheckCircle size={24} className="absolute -right-4 -bottom-4 w-32 h-32 text-white/10 group-hover:scale-110 transition-transform" />
+              <div className="relative z-10">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-md">
+                  <ShieldCheck size={20} />
+                </div>
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-200 mb-1">Quality Assurance</h4>
+                <p className="text-2xl font-black mb-4">98.2% Perfect</p>
+                <p className="text-xs text-emerald-100/80 leading-relaxed font-medium">
+                  Customer satisfaction rating is at an all-time high for international transit.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 p-8 rounded-[3rem] text-white shadow-xl shadow-slate-100 relative overflow-hidden group">
+              <BarChart3 size={24} className="absolute -right-4 -bottom-4 w-32 h-32 text-white/10 group-hover:scale-110 transition-transform" />
+              <div className="relative z-10">
+                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center mb-4 backdrop-blur-md text-slate-400">
+                  <Database size={20} />
+                </div>
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-1">Data Storage</h4>
+                <p className="text-2xl font-black mb-4">Optimization</p>
+                <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                  Cloud resources are operating within nominal parameters. Response time: <span className="text-white">12ms</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between mb-10">
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">Revenue & Volume Distribution</h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Last 7 Days Portfolio</p>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                    <span className="text-[10px] font-black text-slate-400 uppercase">Revenue</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] font-black text-slate-400 uppercase">Load</span>
+                  </div>
+                </div>
+              </div>
+              <div className="h-80 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={[
+                      { day: 'Mon', revenue: 4500, volume: 1200 },
+                      { day: 'Tue', revenue: 7800, volume: 1800 },
+                      { day: 'Wed', revenue: 5200, volume: 1500 },
+                      { day: 'Thu', revenue: 9100, volume: 2200 },
+                      { day: 'Fri', revenue: 6400, volume: 1700 },
+                      { day: 'Sat', revenue: 10500, volume: 2800 },
+                      { day: 'Sun', revenue: 8200, volume: 2000 },
+                    ]}
+                  >
+                    <defs>
+                      <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 800, fill: '#64748b'}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 800, fill: '#64748b'}} />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '1rem' }}
+                      itemStyle={{ fontWeight: 800, fontSize: '12px' }}
+                      labelStyle={{ fontWeight: 900, color: '#1e293b', marginBottom: '0.5rem' }}
+                    />
+                    <Area type="monotone" dataKey="revenue" stroke="#4f46e5" fillOpacity={1} fill="url(#colorRev)" strokeWidth={4} />
+                    <Area type="monotone" dataKey="volume" stroke="#10b981" strokeWidth={4} fill="transparent" strokeDasharray="5 5" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col">
+              <h3 className="text-xl font-black text-slate-900 mb-2">Transit Status</h3>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-10">Real-time split</p>
+              
+              <div className="flex-1 flex flex-col justify-center">
+                <div className="h-64 w-full relative">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Delivered', value: 45, color: '#10b981' },
+                          { name: 'Transit', value: 30, color: '#4f46e5' },
+                          { name: 'Pending', value: 25, color: '#f59e0b' },
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={70}
+                        outerRadius={90}
+                        paddingAngle={8}
+                        dataKey="value"
+                      >
+                        {[
+                          { name: 'Delivered', value: 45, color: '#10b981' },
+                          { name: 'Transit', value: 30, color: '#4f46e5' },
+                          { name: 'Pending', value: 25, color: '#f59e0b' },
+                        ].map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-3xl font-black text-slate-900">100%</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Full Sync</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 mt-8">
+                  {[
+                    { label: 'Done', color: 'bg-emerald-500' },
+                    { label: 'Moving', color: 'bg-indigo-500' },
+                    { label: 'Wait', color: 'bg-amber-500' },
+                  ].map(status => (
+                    <div key={status.label} className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex flex-col items-center gap-1">
+                      <div className={`w-1.5 h-1.5 rounded-full ${status.color}`} />
+                      <span className="text-[9px] font-black text-slate-400 uppercase">{status.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Destination Pulse */}
+            <div className="lg:col-span-3 bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between mb-10">
+                 <div>
+                  <h3 className="text-xl font-black text-slate-900">Destination Pulse</h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Market Dominance by Region</p>
+                </div>
+                <Globe className="text-slate-200 w-12 h-12" />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[
+                  { country: 'North America', volume: '48%', trend: '+8.2%', color: 'indigo', icon: Globe },
+                  { country: 'Europe', volume: '22%', trend: '+4.1%', color: 'emerald', icon: MapPin },
+                  { country: 'Middle East', volume: '15%', trend: '-2.4%', color: 'amber', icon: Search },
+                  { country: 'APAC', volume: '10%', trend: '+12.5%', color: 'blue', icon: TrendingUp },
+                ].map((market) => (
+                  <div key={market.country} className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 hover:border-indigo-200 transition-colors group">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className={`p-3 bg-white rounded-2xl shadow-sm text-${market.color}-600`}>
+                        <market.icon size={20} />
+                      </div>
+                      <span className={`text-[10px] font-black ${market.trend.startsWith('+') ? 'text-emerald-500' : 'text-red-500'}`}>
+                        {market.trend}
+                      </span>
+                    </div>
+                    <div className="text-sm font-black text-slate-400 uppercase tracking-widest mb-1">{market.country}</div>
+                    <div className="text-3xl font-black text-slate-900 mb-4">{market.volume}</div>
+                    <div className="w-full h-2 bg-white rounded-full overflow-hidden border border-slate-200">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: market.volume }}
+                        transition={{ duration: 1, delay: 0.5 }}
+                        className={`h-full bg-${market.color}-600 rounded-full`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : adminTab === 'Inventory' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-4 space-y-8">
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm h-fit">
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                  <Box size={20} />
+                </div>
+                <h3 className="text-xl font-black text-slate-900">New Product</h3>
+              </div>
+              
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Title</label>
+                    <input 
+                      type="text" 
+                      className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all"
+                      placeholder="e.g. Traditional Brass Diya"
+                      value={newProduct.name}
+                      onChange={e => setNewProduct({...newProduct, name: e.target.value})}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Unit Price (₹)</label>
+                      <input 
+                        type="number" 
+                        className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all"
+                        value={newProduct.price || ''}
+                        onChange={e => setNewProduct({...newProduct, price: Number(e.target.value)})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Payload (kg)</label>
+                      <input 
+                        type="number" 
+                        step="0.1"
+                        className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all"
+                        value={newProduct.weight || ''}
+                        onChange={e => setNewProduct({...newProduct, weight: Number(e.target.value)})}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Classification</label>
+                    <div className="relative">
+                      <select 
+                        className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all appearance-none cursor-pointer"
+                        value={newProduct.category}
+                        onChange={e => setNewProduct({...newProduct, category: e.target.value as any})}
+                      >
+                        {categories.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Visual Asset</label>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        className="flex-1 p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all"
+                        placeholder="Image URL"
+                        value={newProduct.image || ''}
+                        onChange={e => setNewProduct({...newProduct, image: e.target.value})}
+                      />
+                      <label className="p-4 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 cursor-pointer flex items-center justify-center transition-colors shadow-sm" title="Upload Local Asset">
+                        <Upload size={18} className="text-slate-400" />
+                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                    if (!newProduct.name || !newProduct.price) return;
+                    const prod: StoreProduct = {
+                      id: 'p' + (storeProducts.length + 1),
+                      name: newProduct.name,
+                      price: newProduct.price,
+                      category: newProduct.category as any,
+                      image: newProduct.image || 'https://picsum.photos/seed/product/400/400',
+                      weight: newProduct.weight || 0.5,
+                      estimatedDelivery: newProduct.estimatedDelivery
+                    };
+                    setStoreProducts([...storeProducts, prod]);
+                    setNewProduct({ name: '', price: 0, category: categories[0], image: '', weight: 0, estimatedDelivery: '' });
+                  }}
+                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100"
+                >
+                  Publish to Catalog
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm h-fit">
+              <div className="flex items-center gap-3 mb-8">
+                 <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                  <Boxes size={20} />
+                </div>
+                <h3 className="text-xl font-black text-slate-900">Categories</h3>
+              </div>
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    className="flex-1 p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold"
+                    placeholder="New Key..."
+                    value={categoryInput}
+                    onChange={e => setCategoryInput(e.target.value)}
+                  />
+                  <button 
+                    onClick={handleAddCategory}
+                    className="px-4 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all text-xs"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {categories.map(cat => (
+                    <div key={cat} className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-full border border-slate-100 group">
+                      <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{cat}</span>
+                      <button 
+                        onClick={() => handleDeleteCategory(cat)}
+                        className="text-slate-300 hover:text-red-500 transition-colors"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-8 space-y-6">
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">Store Catalog</h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Global Inventory Persistence</p>
+                </div>
+                <div className="flex gap-4">
+                   <div className="relative group">
+                    <input 
+                      type="text" 
+                      placeholder="Filter items..."
+                      className="pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none w-64 transition-all"
+                    />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={16} />
+                   </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {storeProducts.map(product => (
+                  <div key={product.id} className="p-5 bg-white rounded-[2.5rem] border border-slate-100 flex items-start gap-5 hover:border-indigo-200 transition-colors shadow-sm group">
+                    <div className="w-20 h-20 rounded-2xl overflow-hidden border border-slate-100 shrink-0">
+                      <img src={product.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt={product.name} referrerPolicy="no-referrer" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between mb-1">
+                        <div className="font-black text-slate-900 text-lg tracking-tight truncate leading-tight">{product.name}</div>
+                        <button 
+                          onClick={() => setStoreProducts(storeProducts.filter(p => p.id !== product.id))}
+                          className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[9px] font-black uppercase tracking-wider">{product.category}</span>
+                        <span className="text-[9px] font-black text-slate-400 uppercase">{product.weight}kg</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="text-xl font-black text-slate-900 leading-none">₹{product.price.toLocaleString()}</div>
+                        <button 
+                          onClick={() => {
+                            setEditingProductId(product.id);
+                            setEditPriceValue(product.price.toString());
+                            setEditDeliveryValue(product.estimatedDelivery || '');
+                          }}
+                          className="px-3 py-1.5 bg-slate-50 text-slate-600 hover:bg-slate-900 hover:text-white rounded-xl text-[10px] font-black transition-all"
+                        >
+                          Edit Item
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : adminTab === 'Settings' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                <Shield size={20} />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">Security Gate</h3>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div>
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">2FA Authorization</div>
+                  <div className="text-sm font-bold text-slate-900">Status: Active</div>
+                </div>
+                <div className="w-10 h-5 bg-indigo-600 rounded-full relative">
+                  <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div>
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Agent Login</div>
+                  <div className="text-sm font-bold text-slate-900">Restricted Mode</div>
+                </div>
+                <div className="w-10 h-5 bg-slate-200 rounded-full relative">
+                  <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
+                <Database size={20} />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">Data Pipeline</h3>
+            </div>
+            <div className="space-y-4">
+               <button className="w-full text-left p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-colors group">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Backup Sync</div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-sm font-bold text-slate-900">Last: 2h ago</span>
+                  <RefreshCw size={14} className="text-slate-300 group-hover:rotate-180 transition-transform duration-500" />
+                </div>
+              </button>
+              <button className="w-full text-left p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-colors">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Transaction Logs</div>
+                <div className="text-sm font-bold text-slate-900">Download .CSV</div>
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 bg-indigo-900 rounded-2xl flex items-center justify-center text-white">
+                <Cpu size={20} />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">System Health</h3>
+            </div>
+            <div className="space-y-6">
+              <div>
+                <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                  <span>Server Load</span>
+                  <span className="text-slate-900">42%</span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="w-[42%] h-full bg-indigo-600 rounded-full" />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                  <span>API Latency</span>
+                  <span className="text-slate-900">24ms</span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="w-[12%] h-full bg-emerald-500 rounded-full" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center p-20 bg-slate-50 rounded-[3rem] border border-dashed border-slate-200">
+          <LayoutDashboard className="w-12 h-12 text-slate-300 mb-4" />
+          <p className="text-slate-500 font-medium tracking-tight">Select an action from the command center</p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            {availableTabs.map(t => (
+              <button 
+                key={t}
+                onClick={() => setAdminTab(t)}
+                className="px-6 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-black text-slate-600 hover:border-indigo-500 hover:text-indigo-600 transition-all shadow-sm flex items-center gap-2"
+              >
+                Explore {t} <ArrowRight size={14} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('home');
+  const [tabHistory, setTabHistory] = useState<Tab[]>(['home']);
+  const [showSendDropdown, setShowSendDropdown] = useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [navbarTrackingId, setNavbarTrackingId] = useState('');
+
+  const navigateTo = (tab: Tab) => {
+    if (tab === 'pickup' && appointments.some(a => a.status === 'Scheduled') && !isSchedulingNewPickup) {
+      setActivePickupStep(5);
+    }
+    if (tab !== activeTab) {
+      setTabHistory(prev => [...prev, tab]);
+      setActiveTab(tab);
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
+    }
+  };
+
+  const goBack = () => {
+    if (tabHistory.length > 1) {
+      const newHistory = [...tabHistory];
+      newHistory.pop(); // remove current
+      const prevTab = newHistory[newHistory.length - 1];
+      setTabHistory(newHistory);
+      setActiveTab(prevTab);
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
+    } else {
+      setActiveTab('home');
+      setTabHistory(['home']);
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
+    }
+  };
+
+  const [shippingPreference, setShippingPreference] = useState<'International' | 'LocalPickup' | null>(null);
   const [isPaid, setIsPaid] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -267,6 +1933,7 @@ const StaticShipmentTracker = () => {
   const [selectedPickupDate, setSelectedPickupDate] = useState(initialSlot.date);
   const [selectedPickupTime, setSelectedPickupTime] = useState(initialSlot.time);
   const [pickupName, setPickupName] = useState('');
+  const [pickupEmail, setPickupEmail] = useState('');
   const [pickupPhone, setPickupPhone] = useState('');
   const [pickupAddress, setPickupAddress] = useState({
     street: '',
@@ -355,6 +2022,44 @@ const StaticShipmentTracker = () => {
   const [isSchedulingNewPickup, setIsSchedulingNewPickup] = useState(false);
   const [lastBookingRef, setLastBookingRef] = useState<string | null>(null);
   const [categories, setCategories] = useState(['Pooja', 'Return Gifts', 'Decorative']);
+  const [tickets, setTickets] = useState<Ticket[]>([
+    {
+      id: 'TKT-8821',
+      orderId: 'JF-9901',
+      customerEmail: 'amit.sharma@gmail.com',
+      subject: 'Shipment Delayed',
+      description: 'The package was supposed to arrive yesterday but status is still "In Transit".',
+      priority: 'High',
+      status: 'Open',
+      createdAt: '2 hrs ago',
+      comments: [
+        { id: 'C1', author: 'System', content: 'Automatically flagged for delay.', createdAt: '2 hrs ago' }
+      ]
+    },
+    {
+      id: 'TKT-8822',
+      orderId: 'JF-9905',
+      customerEmail: 'priya.v@outlook.com',
+      subject: 'Damaged Item Received',
+      description: 'The brass lamp has a dent on the base. Requesting replacement or refund.',
+      priority: 'Medium',
+      status: 'In Progress',
+      createdAt: '5 hrs ago',
+      comments: [
+        { id: 'C2', author: 'CSR Support', content: 'Checking with logistics partners.', createdAt: '4 hrs ago' }
+      ]
+    }
+  ]);
+  const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([
+    {
+      id: 'REF-1001',
+      orderId: 'JF-9905',
+      amount: 4500,
+      reason: 'Damaged item reported in TKT-8822',
+      status: 'Pending Approval',
+      requestedAt: '1 day ago'
+    }
+  ]);
 
   // Home Section States
   const [qCountry, setQCountry] = useState(COUNTRIES[0]);
@@ -426,9 +2131,7 @@ const StaticShipmentTracker = () => {
   };
 
   // Admin Section States
-  const [adminTab, setAdminTab] = useState<'Overview' | 'Agents' | 'Inventory'>('Overview');
-  const [newAgent, setNewAgent] = useState({ name: '', phone: '', email: '', vehicleNumber: '' });
-  const [newProduct, setNewProduct] = useState<Partial<StoreProduct>>({ name: '', price: 0, category: 'Pooja', image: '', weight: 0 });
+  const [adminTab, setAdminTab] = useState<'Overview' | 'Agents' | 'Inventory' | 'Reports' | 'Settings'>('Overview');
 
   // Store Section States
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -604,7 +2307,7 @@ const StaticShipmentTracker = () => {
       shippingDate: newAppointment.date,
       destination: {
         fullName: newAppointment.customerName || currentUser?.name || 'Guest User',
-        email: currentUser?.email || '',
+        email: pickupEmail || currentUser?.email || '',
         phone: newAppointment.phone,
         addressLine1: newAppointment.address,
         city: pickupAddress.city,
@@ -616,36 +2319,43 @@ const StaticShipmentTracker = () => {
     };
     setOrders([...orders, newOrder]);
 
+    // Send confirmation email
+    const recipientEmail = pickupEmail || currentUser?.email;
+    if (recipientEmail && recipientEmail.includes('@') && recipientEmail !== 'user@example.com') {
+      api.sendOrderConfirmationEmail(recipientEmail, newOrder, COMPANY_DETAILS)
+        .then(() => toast.success(`Confirmation email sent to ${recipientEmail}`))
+        .catch(err => {
+          console.error('Failed to send pickup confirmation email:', err);
+          toast.error(`Pickup scheduled, but ${err.message || 'failed to send email'}`);
+        });
+    }
+
     setLastBookingRef(newAppointment.id);
     setIsSchedulingNewPickup(false);
     setActivePickupStep(5);
     window.scrollTo(0, 0);
     
-    // Sync to DB and trigger notification
+    // Sync to DB if connected
     if (dbStatus.connected && currentUser) {
       try {
-        await api.createOrder({
+        const orderData = {
           ...newAppointment,
           customer_id: currentUser.id,
           total_weight: 0,
           total_cost: 0,
-          destination: { 
-            addressLine1: fullAddress, 
-            city: pickupAddress.city, 
-            country: 'India',
-            email: currentUser.email,
-            phone: pickupPhone,
-            fullName: pickupName || currentUser.name
-          },
+          destination: newOrder.destination,
           payment_status: 'Pending',
           shipping_date: selectedPickupDate
-        } as any);
+        } as any;
+
+        await api.createOrder(orderData);
       } catch (err) {
         console.error('Failed to sync pickup to DB:', err);
       }
     }
 
     setPickupName('');
+    setPickupEmail('');
     setPickupPhone('');
     setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
     setPickupLanguage('English');
@@ -739,25 +2449,41 @@ const StaticShipmentTracker = () => {
   // Sync currentUser with session or Guest Mode
   useEffect(() => {
     if (session?.user) {
+      const email = session.user.email || '';
+      let role: UserRole = 'customer';
+      
+      // Auto-assign roles based on official emails
+      if (email === 'admin@jiffex.com') role = 'admin';
+      else if (email === 'service@jiffex.com') role = 'customer_service';
+      else if (email === 'agent@jiffex.com') role = 'agent';
+      else if (email === 'webmaster@jiffex.com') role = 'webmaster';
+      else role = (session.user.user_metadata?.role as UserRole) || 'customer';
+
       setCurrentUser({
         id: session.user.id,
-        name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Guest User',
-        email: session.user.email || '',
-        role: (session.user.user_metadata?.role as UserRole) || 'customer'
+        name: session.user.user_metadata?.full_name || email.split('@')[0] || 'User',
+        email: email,
+        role: role
       });
     } else if (isGuestMode) {
-      const isAdmin = guestEmail === 'admin@jiffex.com';
-      const isAgent = guestEmail === 'agent@jiffex.com';
+      const email = guestEmail || '';
+      let role: UserRole = 'customer';
+      
+      if (email === 'admin@jiffex.com') role = 'admin';
+      else if (email === 'service@jiffex.com') role = 'customer_service';
+      else if (email === 'agent@jiffex.com') role = 'agent';
+      else if (email === 'webmaster@jiffex.com') role = 'webmaster';
+
       setCurrentUser({
         id: 'guest-user',
-        name: guestName || (isAdmin ? 'Admin User' : isAgent ? 'Agent User' : 'Guest User'),
-        email: guestEmail || 'guest@example.com',
-        role: isAdmin ? 'Admin' : isAgent ? 'Agent' : 'customer'
+        name: guestName || (role === 'admin' ? 'Admin User' : role === 'agent' ? 'Agent User' : role === 'customer_service' ? 'Support CSR' : role === 'webmaster' ? 'Webmaster' : 'Guest User'),
+        email: email || 'guest@example.com',
+        role: role
       });
     } else {
       setCurrentUser(null);
     }
-  }, [session, isGuestMode, guestEmail]);
+  }, [session, isGuestMode, guestEmail, guestName]);
 
   // Fetch orders when currentUser or activeTab changes
   useEffect(() => {
@@ -790,7 +2516,7 @@ const StaticShipmentTracker = () => {
   }, [items]);
 
   const totalWeight = useMemo(() => {
-    return cartItems.reduce((sum, item) => sum + (item.weight * (item.quantity || 1)), 0);
+    return cartItems.reduce((sum, item) => sum + (item.weight || 0), 0);
   }, [cartItems]);
 
   const hasAllAgentPickup = useMemo(() => {
@@ -851,24 +2577,27 @@ const StaticShipmentTracker = () => {
 
     if (existingItemIndex !== -1) {
       // Increment quantity
+      const quantityToAdd = item.quantity || 1;
       const updatedItems = [...items];
       const existingItem = updatedItems[existingItemIndex];
       updatedItems[existingItemIndex] = {
         ...existingItem,
-        quantity: (existingItem.quantity || 1) + 1,
-        weight: existingItem.weight + item.weight // Also update total weight for this entry
+        quantity: (existingItem.quantity || 0) + quantityToAdd,
+        weight: (existingItem.weight || 0) + (item.weight || 0),
+        price: (existingItem.price || 0) + (item.price || 0)
       };
       setItems(updatedItems);
       setShowConflictModal({ show: false, item: null, source: null });
       return;
     }
 
+    const quantityToAdd = item.quantity || 1;
     const newItem: ShippingItem = {
       ...item,
       id: crypto.randomUUID(),
       status: source === 'Store' ? 'Received at Warehouse' : 'Pending',
       source: source,
-      quantity: item.quantity || 1,
+      quantity: quantityToAdd,
       submitted: source !== 'Warehouse'
     };
     
@@ -905,10 +2634,12 @@ const StaticShipmentTracker = () => {
       const item = updatedItems[index];
       if (item.quantity && item.quantity > 1) {
         const unitWeight = item.weight / item.quantity;
+        const unitPrice = (item.price || 0) / item.quantity;
         updatedItems[index] = {
           ...item,
           quantity: item.quantity - 1,
-          weight: item.weight - unitWeight
+          weight: item.weight - unitWeight,
+          price: (item.price || 0) - unitPrice
         };
       } else {
         updatedItems.splice(index, 1);
@@ -941,12 +2672,15 @@ const StaticShipmentTracker = () => {
 
     setItems(items.map(i => {
       if (i.id === id) {
-        const newQuantity = Math.max(1, (i.quantity || 1) + delta);
-        const unitWeight = i.weight / (i.quantity || 1);
+        const currentQty = i.quantity || 1;
+        const newQuantity = Math.max(1, currentQty + delta);
+        const unitWeight = i.weight / currentQty;
+        const unitPrice = (i.price || 0) / currentQty;
         return {
           ...i,
           quantity: newQuantity,
-          weight: unitWeight * newQuantity
+          weight: unitWeight * newQuantity,
+          price: unitPrice * newQuantity
         };
       }
       return i;
@@ -998,30 +2732,23 @@ const StaticShipmentTracker = () => {
         } as any);
 
         // Automatically send invoice email with PDF
-        const companyDetails = {
-          name: "JiffEX Shipping & Logistics",
-          address: "123 Logistics Hub, Mumbai, India",
-          email: "support@jiffex.com"
-        };
-
         const recipientEmail = address.email || currentUser.email;
         if (isPayAtHome) {
           // Send a special "Pay at Home" confirmation email
-          await api.sendOrderConfirmationEmail(recipientEmail, newOrder, companyDetails);
+          await api.sendOrderConfirmationEmail(recipientEmail, newOrder, COMPANY_DETAILS);
           toast.success(`Order confirmed! Confirmation sent to ${recipientEmail}. Final billing will be done at your home.`);
         } else {
-          await api.sendInvoicePDF(recipientEmail, newOrder, companyDetails);
+          await api.sendInvoicePDF(recipientEmail, newOrder, COMPANY_DETAILS);
           toast.success(`Payment successful! Invoice sent to ${recipientEmail}`);
         }
       } catch (err: any) {
         console.error('Failed to sync order or send email:', err.message);
         const successMsg = isPayAtHome ? 'Order confirmed' : 'Payment successful';
-        if (err.message.includes('Email service not configured')) {
-          toast.error(`${successMsg}, but email service is not configured. Please check your settings.`);
-        } else {
-          toast.error(`${successMsg}, but failed to send confirmation email.`);
-        }
+        toast.error(`${successMsg}, but ${err.message || 'failed to send confirmation email'}.`);
       }
+    } else {
+      const successMsg = isPayAtHome ? 'Order confirmed (Offline Mode)' : 'Payment successful (Offline Mode)';
+      toast.success(successMsg);
     }
   };
 
@@ -1079,26 +2806,16 @@ const StaticShipmentTracker = () => {
     ));
 
     // Automatically send invoice email for Work Order
-    if (currentUser && dbStatus.connected) {
-      const invoiceDetails = `
-Items: ${woItems.map(i => `${i.name} (${i.weight}kg)`).join(', ')}
-Total Weight: ${totalW}kg
-Total Cost: ₹${totalC.toLocaleString()}
-Destination: ${woAddress.city}, ${woAddress.country}
-Date: ${new Date().toLocaleDateString()}
-      `.trim();
-
-      const recipientEmail = woAddress.email || currentUser.email;
-      api.shareInvoice(recipientEmail, newOrderId, invoiceDetails)
+    if (dbStatus.connected) {
+      const recipientEmail = woAddress.email || currentUser?.email || '';
+      api.shareInvoice(newOrder)
         .then(() => toast.success(`Payment successful! Invoice sent to ${recipientEmail}`))
         .catch(err => {
           console.error('Failed to send invoice:', err.message);
-          if (err.message.includes('Email service not configured')) {
-            toast.error('Payment successful, but email service is not configured. Please check your settings.');
-          } else {
-            toast.error('Payment successful, but failed to send invoice email.');
-          }
+          toast.error(`Payment successful, but ${err.message || 'failed to send invoice email'}.`);
         });
+    } else {
+      toast.success('Payment successful!');
     }
   };
 
@@ -1436,7 +3153,7 @@ Date: ${new Date().toLocaleDateString()}
                           Estimated Cost ({qMethod})
                         </span>
                         <div className="text-4xl font-black">
-                          ${(qWeight * SHIPPING_RATES[qCountry] * (qMethod === 'Standard' ? 0.7 : 1.0)).toFixed(2)}
+                          ₹{(qWeight * SHIPPING_RATES[qCountry] * (qMethod === 'Standard' ? 0.7 : 1.0)).toFixed(2)}
                         </div>
                         <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-2 flex items-center gap-1">
                           <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
@@ -1513,7 +3230,7 @@ Date: ${new Date().toLocaleDateString()}
                       <h4 className="font-bold text-slate-900 mb-1 truncate">{product.name}</h4>
                       <div className="flex flex-col gap-3 mt-auto">
                         <div className="flex items-center justify-between">
-                          <span className="text-indigo-600 font-bold">${product.price}</span>
+                          <span className="text-indigo-600 font-bold">₹{product.price}</span>
                           <span className="text-[10px] text-slate-400 font-medium">{product.weight}kg</span>
                         </div>
                         
@@ -1634,803 +3351,6 @@ Date: ${new Date().toLocaleDateString()}
     );
   }, [notifications, loadingNotifications]);
 
-  const SupportSection = useMemo(() => {
-    return (
-        <div className="space-y-12 pb-24">
-          <div className="text-center space-y-4">
-            <h3 className="text-4xl font-black text-slate-900 tracking-tight">Need Help?</h3>
-            <p className="text-slate-500 max-w-2xl mx-auto">Our support team is here to ensure your shipping experience is flawless.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              { 
-                icon: MessageSquare, 
-                title: "Live Chat", 
-                desc: "Chat with our logistics experts for immediate assistance with your shipment.",
-                action: "Start Chat",
-                color: "text-indigo-600",
-                bg: "bg-indigo-50"
-              },
-              { 
-                icon: Mail, 
-                title: "Email Support", 
-                desc: "Send us your queries and we'll get back to you within 24 hours.",
-                action: "support@jiffex.com",
-                color: "text-emerald-600",
-                bg: "bg-emerald-50"
-              },
-              { 
-                icon: HelpCircle, 
-                title: "Help Center", 
-                desc: "Browse our extensive library of FAQs and shipping guides.",
-                action: "Visit FAQ",
-                color: "text-amber-600",
-                bg: "bg-amber-50"
-              }
-            ].map((item, i) => (
-              <motion.div
-                key={item.title}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
-                className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group"
-              >
-                <div className={`w-14 h-14 ${item.bg} ${item.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
-                  <item.icon size={28} />
-                </div>
-                <h4 className="text-xl font-black text-slate-900 mb-2">{item.title}</h4>
-                <p className="text-sm text-slate-500 mb-6 leading-relaxed">{item.desc}</p>
-                <button className={`text-sm font-bold ${item.color} flex items-center gap-2 hover:underline`}>
-                  {item.action} <ArrowRight size={16} />
-                </button>
-              </motion.div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-            {/* Comprehensive FAQ Section */}
-            <div className="bg-slate-50 rounded-[3rem] p-8 md:p-12">
-              <h4 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
-                <HelpCircle className="text-indigo-600" />
-                Frequently Asked Questions
-              </h4>
-              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-4 custom-scrollbar">
-                {[
-                  { q: "How long does shipping to the US take?", a: "Express shipments typically take 5-7 business days. Standard shipping takes 10-14 business days. These times depend on customs clearance and the final destination city." },
-                  { q: "What is the 'Send to Our Warehouse' service?", a: "This service allows you to send items from online stores (Amazon, Flipkart, etc.) or your home to our warehouse. We consolidate all your packages into one shipment to save you money on international shipping." },
-                  { q: "How do I calculate shipping costs?", a: "Shipping is calculated based on the higher of actual weight or volumetric weight. You can use our calculator on the home page for an instant estimate." },
-                  { q: "Can I track my shipment in real-time?", a: "Yes! Once your shipment is dispatched, you'll receive a tracking ID. You can enter this ID in the 'Track Shipment' box on our home page." },
-                  { q: "What happens if my items are fragile?", a: "We offer professional repacking services. If you mark an item as fragile, our warehouse team will add extra protective layers (bubble wrap, corrugated sheets) to ensure safe transit." },
-                  { q: "Are there any hidden charges?", a: "Our quotes include door-to-door delivery. However, customs duties or taxes (if applicable in the destination country) are determined by local authorities and are the recipient's responsibility." },
-                  { q: "What is the 'Pickup from home' service?", a: "If you're in a supported city in India, our agent will come to your doorstep to collect your items. They can even help with basic packing!" },
-                  { q: "How do I pay for my shipment?", a: "We accept all major credit cards, debit cards, and digital payment methods like PhonePe. Payment is required once all your items are received and weighed at our warehouse." },
-                  { q: "Can I ship homemade food items?", a: "Yes, you can ship dry, non-perishable homemade food (like sweets or snacks). However, they must be properly packed and have a reasonable shelf life. Perishables are strictly prohibited." },
-                  { q: "What if my package is lost or damaged?", a: "We take extreme care, but in rare cases of loss or damage, we offer limited liability coverage. For high-value items, we strongly recommend purchasing additional shipping insurance." }
-                ].map((faq, i) => (
-                  <div key={i} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:border-indigo-200 transition-colors">
-                    <div className="font-bold text-slate-900 mb-2 flex items-start gap-3">
-                      <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5">?</div>
-                      {faq.q}
-                    </div>
-                    <p className="text-sm text-slate-500 ml-9 leading-relaxed">{faq.a}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Prohibited Items Section */}
-            <div className="bg-white rounded-[3rem] p-8 md:p-12 border border-slate-100 shadow-sm">
-              <h4 className="text-2xl font-black text-slate-900 mb-2 flex items-center gap-3">
-                <AlertTriangle className="text-amber-500" />
-                Prohibited Items (US Shipping)
-              </h4>
-              <p className="text-sm text-slate-500 mb-8">
-                To comply with international regulations and US Customs, the following items cannot be shipped. Attempting to ship these may result in delays, fines, or seizure.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                {PROHIBITED_ITEMS.map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 group hover:bg-red-50 hover:border-red-100 transition-all">
-                    <div className="w-2 h-2 rounded-full bg-red-400 group-hover:scale-125 transition-transform" />
-                    <span className="text-xs font-medium text-slate-700 group-hover:text-red-700">{item}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-4">
-                <Info className="text-amber-600 shrink-0 mt-1" size={20} />
-                <div className="space-y-2">
-                  <h5 className="text-sm font-black text-amber-900 uppercase tracking-widest">Important Note</h5>
-                  <p className="text-xs text-amber-800 leading-relaxed">
-                    This list is not exhaustive. If you are unsure about an item, please contact our support team before sending it to the warehouse. Certain items like medicines or seeds require specific documentation and prior approval.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }, []);
-
-
-interface AdminDashboardProps {
-  currentUser: User | null;
-  orders: Order[];
-  appointments: Appointment[];
-  setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>;
-  agents: AgentProfile[];
-  setAgents: React.Dispatch<React.SetStateAction<AgentProfile[]>>;
-  newAgent: any;
-  setNewAgent: React.Dispatch<React.SetStateAction<any>>;
-  categories: string[];
-  setCategories: React.Dispatch<React.SetStateAction<string[]>>;
-  adminTab: 'Overview' | 'Agents' | 'Inventory' | 'Settings';
-  setAdminTab: React.Dispatch<React.SetStateAction<'Overview' | 'Agents' | 'Inventory' | 'Settings'>>;
-  newProduct: Partial<StoreProduct>;
-  setNewProduct: React.Dispatch<React.SetStateAction<Partial<StoreProduct>>>;
-  storeProducts: StoreProduct[];
-  setStoreProducts: React.Dispatch<React.SetStateAction<StoreProduct[]>>;
-  setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
-}
-
-const AdminDashboard = ({
-  currentUser,
-  orders,
-  appointments,
-  setAppointments,
-  agents,
-  setAgents,
-  newAgent,
-  setNewAgent,
-  categories,
-  setCategories,
-  adminTab,
-  setAdminTab,
-  newProduct,
-  setNewProduct,
-  storeProducts,
-  setStoreProducts,
-  setOrders
-}: AdminDashboardProps) => {
-  const [categoryInput, setCategoryInput] = useState('');
-  const [editingProductId, setEditingProductId] = useState<string | null>(null);
-  const [editPriceValue, setEditPriceValue] = useState<string>('');
-  const [editDeliveryValue, setEditDeliveryValue] = useState<string>('');
-
-  if (!currentUser) return null;
-  const stats = [
-    { label: 'Total Shipments', value: orders.length + appointments.length, icon: Package, color: 'bg-blue-500' },
-    { label: 'Pending Pickups', value: appointments.filter(a => a.status === 'Scheduled').length, icon: Clock, color: 'bg-amber-500' },
-    { label: 'Active Shipments', value: orders.filter(o => o.status !== 'Delivered').length, icon: Truck, color: 'bg-indigo-500' },
-    { label: 'Total Revenue', value: `$${orders.reduce((sum, o) => sum + o.totalCost, 0).toLocaleString()}`, icon: BarChart3, color: 'bg-emerald-500' },
-  ];
-
-  const handleAddAgent = () => {
-    if (!newAgent.name || !newAgent.phone) return;
-    const agent: AgentProfile = {
-      id: 'AG-' + Math.random().toString(36).substr(2, 4).toUpperCase(),
-      ...newAgent,
-      status: 'Active'
-    };
-    setAgents([...agents, agent]);
-    setNewAgent({ name: '', phone: '', email: '', vehicleNumber: '' });
-  };
-
-  const handleAssignAgent = (aptId: string, agentId: string) => {
-    const agent = agents.find(a => a.id === agentId);
-    if (!agent) return;
-    
-    setAppointments(prev => prev.map(apt => 
-      apt.id === aptId ? { ...apt, assignedAgent: agent, assignedAgentId: agent.id } : apt
-    ));
-  };
-
-  const handleAddCategory = () => {
-    if (categoryInput && !categories.includes(categoryInput)) {
-      setCategories([...categories, categoryInput]);
-      setCategoryInput('');
-    }
-  };
-
-  const handleDeleteCategory = (cat: string) => {
-    setCategories(categories.filter(c => c !== cat));
-  };
-
-  const handleUpdateOrderStatus = async (orderId: string, newStatus: ShippingStatus) => {
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-
-    try {
-      await api.updateOrderStatus(orderId, newStatus, order.customerId, order.destination);
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
-      toast.success(`Order ${orderId} status updated to ${newStatus}. WhatsApp notification sent.`);
-    } catch (err: any) {
-      console.error('Failed to update order status:', err.message);
-      toast.error('Failed to update order status.');
-    }
-  };
-
-  return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-black text-slate-900">Admin Dashboard</h2>
-        <div className="flex gap-2 bg-slate-100 p-1 rounded-xl">
-          <button 
-            onClick={() => setAdminTab('Overview')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${adminTab === 'Overview' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-          >
-            Overview
-          </button>
-          <button 
-            onClick={() => setAdminTab('Agents')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${adminTab === 'Agents' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-          >
-            Manage Agents
-          </button>
-          <button 
-            onClick={() => setAdminTab('Inventory')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${adminTab === 'Inventory' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-          >
-            Inventory
-          </button>
-          <button 
-            onClick={() => setAdminTab('Settings')}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${adminTab === 'Settings' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-          >
-            Settings
-          </button>
-        </div>
-      </div>
-
-      {adminTab === 'Overview' ? (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {stats.map((stat, i) => (
-              <motion.div 
-                key={stat.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
-                className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm"
-              >
-                <div className={`w-12 h-12 ${stat.color} text-white rounded-2xl flex items-center justify-center mb-4 shadow-lg`}>
-                  <stat.icon size={24} />
-                </div>
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{stat.label}</div>
-                <div className="text-2xl font-black text-slate-900">{stat.value}</div>
-              </motion.div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <Clock className="text-amber-500" /> Recent Appointments
-              </h3>
-              <div className="space-y-4">
-                {appointments.length === 0 ? (
-                  <p className="text-center text-slate-400 py-8">No appointments scheduled</p>
-                ) : (
-                  appointments.map(apt => (
-                    <div key={apt.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-bold text-slate-900">{apt.id}</div>
-                          <div className="text-xs font-bold text-indigo-600">{apt.customerName || 'Guest User'}</div>
-                          <div className="text-xs text-slate-500">{apt.date} at {apt.time}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs font-bold text-indigo-600">{apt.phone}</div>
-                          <div className="text-[10px] text-slate-400 uppercase font-bold">{apt.status}</div>
-                        </div>
-                      </div>
-
-                      {apt.assignedAgent ? (
-                        <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-indigo-100">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
-                              <Users size={16} />
-                            </div>
-                            <div>
-                              <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Assigned Agent</div>
-                              <div className="text-xs font-bold text-slate-900">{apt.assignedAgent.name}</div>
-                            </div>
-                          </div>
-                          <button 
-                            onClick={() => setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, assignedAgent: undefined, assignedAgentId: undefined } : a))}
-                            className="text-[10px] text-red-500 font-bold hover:underline"
-                          >
-                            Change
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <select 
-                            className="flex-1 p-2 rounded-lg bg-white border border-slate-200 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                            onChange={(e) => handleAssignAgent(apt.id, e.target.value)}
-                            defaultValue=""
-                          >
-                            <option value="" disabled>Select Agent to Assign</option>
-                            {agents.filter(a => a.status === 'Active').map(agent => (
-                              <option key={agent.id} value={agent.id}>{agent.name}</option>
-                            ))}
-                          </select>
-                          <div className="px-3 py-2 bg-amber-100 text-amber-700 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center gap-1">
-                            <AlertTriangle size={12} /> Unassigned
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <Truck className="text-indigo-500" /> Recent Shipments
-              </h3>
-              <div className="space-y-4">
-                {orders.length === 0 ? (
-                  <p className="text-center text-slate-400 py-8">No shipments found</p>
-                ) : (
-                  orders.map(order => (
-                    <div key={order.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-bold text-slate-900">{order.id}</div>
-                          <div className="text-xs text-slate-500">{order.destination.country} • {order.totalWeight}kg</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-black text-slate-900">${order.totalCost.toLocaleString()}</div>
-                          <div className="text-[10px] text-indigo-600 uppercase font-bold">{order.status}</div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <select 
-                          className="flex-1 p-2 rounded-lg bg-white border border-slate-200 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
-                          value={order.status}
-                          onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value as ShippingStatus)}
-                        >
-                          <option value="Request Placed">Request Placed</option>
-                          <option value="Order Confirmed">Order Confirmed</option>
-                          <option value="Processing Order">Processing Order</option>
-                          <option value="Consolidating items">Consolidating items</option>
-                          <option value="Packed">Packed</option>
-                          <option value="Ready to Ship">Ready to Ship</option>
-                          <option value="In Transit">In Transit</option>
-                          <option value="Out for Delivery">Out for Delivery</option>
-                          <option value="Delivered">Delivered</option>
-                          <option value="Cancelled">Cancelled</option>
-                        </select>
-                        <div className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-md text-[8px] font-bold uppercase flex items-center gap-1">
-                          <MessageSquare size={10} /> WhatsApp
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        </>
-      ) : adminTab === 'Agents' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm h-fit">
-            <h3 className="text-xl font-bold mb-6">Add New Agent</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Full Name</label>
-                <input 
-                  type="text" 
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                  placeholder="Agent Name"
-                  value={newAgent.name}
-                  onChange={e => setNewAgent({...newAgent, name: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Phone Number</label>
-                <input 
-                  type="tel" 
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                  placeholder="+91 XXXXX XXXXX"
-                  value={newAgent.phone}
-                  onChange={e => setNewAgent({...newAgent, phone: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Email Address</label>
-                <input 
-                  type="email" 
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                  placeholder="agent@jiffex.com"
-                  value={newAgent.email}
-                  onChange={e => setNewAgent({...newAgent, email: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Vehicle Number</label>
-                <input 
-                  type="text" 
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                  placeholder="KA-01-XX-XXXX"
-                  value={newAgent.vehicleNumber}
-                  onChange={e => setNewAgent({...newAgent, vehicleNumber: e.target.value})}
-                />
-              </div>
-              <button 
-                onClick={handleAddAgent}
-                className="w-full btn-cta"
-              >
-                Create Agent Profile
-              </button>
-            </div>
-          </div>
-
-          <div className="lg:col-span-2 space-y-4">
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <h3 className="text-xl font-bold mb-6">Active Agents ({agents.length})</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {agents.map(agent => (
-                  <div key={agent.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-start gap-4">
-                    <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-                      <UserIcon size={24} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-slate-900 truncate">{agent.name}</div>
-                      <div className="text-xs text-slate-500">{agent.phone}</div>
-                      <div className="text-[10px] text-slate-400 mt-1">{agent.vehicleNumber || 'No Vehicle'}</div>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase">
-                          {agent.status}
-                        </span>
-                        <button 
-                          onClick={() => setAgents(agents.filter(a => a.id !== agent.id))}
-                          className="text-[10px] text-red-500 font-bold hover:underline"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : adminTab === 'Inventory' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1 space-y-8">
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm h-fit">
-              <h3 className="text-xl font-bold mb-6">Add New Product</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Product Name</label>
-                  <input 
-                    type="text" 
-                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    placeholder="e.g. Brass Diya"
-                    value={newProduct.name}
-                    onChange={e => setNewProduct({...newProduct, name: e.target.value})}
-                  />
-                </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Price ($)</label>
-                        <input 
-                          type="number" 
-                          className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                          value={newProduct.price || ''}
-                          onChange={e => setNewProduct({...newProduct, price: Number(e.target.value)})}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Weight (kg)</label>
-                        <input 
-                          type="number" 
-                          step="0.1"
-                          className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                          value={newProduct.weight || ''}
-                          onChange={e => setNewProduct({...newProduct, weight: Number(e.target.value)})}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Estimated Delivery</label>
-                      <input 
-                        type="date" 
-                        className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                        value={newProduct.estimatedDelivery || ''}
-                        onChange={e => setNewProduct({...newProduct, estimatedDelivery: e.target.value})}
-                      />
-                    </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Category</label>
-                  <select 
-                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    value={newProduct.category}
-                    onChange={e => setNewProduct({...newProduct, category: e.target.value as any})}
-                  >
-                    {categories.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Product Image</label>
-                  <div className="space-y-3">
-                    <div className="flex gap-2">
-                      <input 
-                        type="text" 
-                        className="flex-1 p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                        placeholder="Image URL (https://...)"
-                        value={newProduct.image}
-                        onChange={e => setNewProduct({...newProduct, image: e.target.value})}
-                      />
-                    </div>
-                    {newProduct.image && (
-                      <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200">
-                        <img src={newProduct.image} className="w-full h-full object-cover" alt="Preview" referrerPolicy="no-referrer" />
-                        <button 
-                          onClick={() => setNewProduct({...newProduct, image: ''})}
-                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
-                        >
-                          <X size={10} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <button 
-                  onClick={() => {
-                    if (!newProduct.name || !newProduct.price) return;
-                    const prod: StoreProduct = {
-                      id: 'p' + (storeProducts.length + 1),
-                      name: newProduct.name,
-                      price: newProduct.price,
-                      category: newProduct.category as any,
-                      image: newProduct.image || 'https://picsum.photos/seed/product/400/400',
-                      weight: newProduct.weight || 0.5,
-                      estimatedDelivery: newProduct.estimatedDelivery
-                    };
-                    setStoreProducts([...storeProducts, prod]);
-                    setNewProduct({ name: '', price: 0, category: categories[0], image: '', weight: 0, estimatedDelivery: '' });
-                  }}
-                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
-                >
-                  Add to Store
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm h-fit">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold">Manage Categories</h3>
-              </div>
-              <div className="space-y-4">
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    className="flex-1 p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    placeholder="New Category Name"
-                    value={categoryInput}
-                    onChange={e => setCategoryInput(e.target.value)}
-                  />
-                  <button 
-                    onClick={handleAddCategory}
-                    className="px-4 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all"
-                  >
-                    Add
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {categories.map(cat => (
-                    <div key={cat} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                      <span className="text-sm font-bold text-slate-700">{cat}</span>
-                      <button 
-                        onClick={() => handleDeleteCategory(cat)}
-                        className="text-red-500 hover:text-red-700 transition-colors"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="lg:col-span-2 space-y-4">
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <h3 className="text-xl font-bold mb-6">Store Inventory ({storeProducts.length})</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {storeProducts.map(product => (
-                  <div key={product.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-start gap-4">
-                    <div className="w-16 h-16 rounded-xl overflow-hidden border border-slate-200 shrink-0">
-                      <img src={product.image} className="w-full h-full object-cover" alt={product.name} referrerPolicy="no-referrer" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-slate-900 truncate">{product.name}</div>
-                      <div className="text-xs text-slate-500">{product.category} • {product.weight}kg</div>
-                      {product.estimatedDelivery && (
-                        <div className="text-[10px] font-bold text-emerald-600 mt-1 flex items-center gap-1">
-                          <Calendar size={10} /> Delivery: {product.estimatedDelivery}
-                        </div>
-                      )}
-                      <div className="mt-2 flex items-center justify-between">
-                        <div className="text-sm font-black text-slate-900">${product.price}</div>
-                          <div className="flex gap-2">
-                            <div className="flex flex-col gap-1">
-                              {editingProductId === product.id ? (
-                                <div className="flex flex-col gap-2 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-                                  <div className="flex items-center gap-2">
-                                    <label className="text-[9px] font-bold text-slate-400 uppercase w-12">Price</label>
-                                    <input 
-                                      type="number" 
-                                      className="flex-1 p-1 text-xs border rounded outline-none focus:ring-1 focus:ring-indigo-500"
-                                      value={editPriceValue}
-                                      onChange={e => setEditPriceValue(e.target.value)}
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <label className="text-[9px] font-bold text-slate-400 uppercase w-12">Delivery</label>
-                                    <input 
-                                      type="date" 
-                                      className="flex-1 p-1 text-xs border rounded outline-none focus:ring-1 focus:ring-indigo-500"
-                                      value={editDeliveryValue}
-                                      onChange={e => setEditDeliveryValue(e.target.value)}
-                                    />
-                                  </div>
-                                  <div className="flex gap-2 justify-end">
-                                    <button 
-                                      onClick={() => {
-                                        setStoreProducts(storeProducts.map(p => p.id === product.id ? {
-                                          ...p, 
-                                          price: Number(editPriceValue),
-                                          estimatedDelivery: editDeliveryValue
-                                        } : p));
-                                        setEditingProductId(null);
-                                      }}
-                                      className="text-[10px] text-emerald-600 font-bold hover:underline"
-                                    >
-                                      Save
-                                    </button>
-                                    <button 
-                                      onClick={() => setEditingProductId(null)}
-                                      className="text-[10px] text-slate-400 font-bold hover:underline"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <button 
-                                  onClick={() => {
-                                    setEditingProductId(product.id);
-                                    setEditPriceValue(product.price.toString());
-                                    setEditDeliveryValue(product.estimatedDelivery || '');
-                                  }}
-                                  className="text-[10px] text-indigo-600 font-bold hover:underline"
-                                >
-                                  Edit Product
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          <button 
-                            onClick={() => setStoreProducts(storeProducts.filter(p => p.id !== product.id))}
-                            className="text-[10px] text-red-500 font-bold hover:underline"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : adminTab === 'Settings' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
-            <h3 className="text-xl font-bold flex items-center gap-2">
-              <ShieldCheck className="text-indigo-600" /> System Configuration
-            </h3>
-            
-            <div className="space-y-4">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare size={18} className="text-indigo-600" />
-                    <span className="font-bold text-slate-900">Twilio SMS/WhatsApp</span>
-                  </div>
-                  <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase">Configured</span>
-                </div>
-                <p className="text-xs text-slate-500">Handles automated shipping alerts and agent pickup confirmations.</p>
-                
-                <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl">
-                  <div className="flex items-center gap-2 text-amber-700 mb-1">
-                    <AlertTriangle size={14} />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">Troubleshooting: SMS Permissions</span>
-                  </div>
-                  <p className="text-[10px] text-amber-600 leading-relaxed">
-                    If you see errors like <strong>"Permission to send an SMS has not been enabled for the region"</strong>, you must enable <strong>Geo-Permissions</strong> for the destination country in your Twilio Console.
-                  </p>
-                  <a 
-                    href="https://console.twilio.com/us1/develop/sms/settings/geo-permissions" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="mt-2 inline-block text-[10px] font-bold text-indigo-600 hover:underline"
-                  >
-                    Open Twilio Geo-Permissions →
-                  </a>
-                </div>
-              </div>
-
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Mail size={18} className="text-indigo-600" />
-                    <span className="font-bold text-slate-900">SMTP Email Service</span>
-                  </div>
-                  <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase">Active</span>
-                </div>
-                <p className="text-xs text-slate-500">Sends digital invoices and detailed order summaries to customers.</p>
-              </div>
-
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Database size={18} className="text-indigo-600" />
-                    <span className="font-bold text-slate-900">Supabase Database</span>
-                  </div>
-                  <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase">Connected</span>
-                </div>
-                <p className="text-xs text-slate-500">Persistent storage for orders, inventory, and notification history.</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
-            <h3 className="text-xl font-bold flex items-center gap-2">
-              <Bell className="text-indigo-600" /> Test Notifications
-            </h3>
-            <p className="text-sm text-slate-500">Send a test alert to verify your configuration is working correctly.</p>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Test Phone Number</label>
-                <input 
-                  type="tel" 
-                  placeholder="+91 XXXXX XXXXX"
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <button className="p-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
-                  <MessageSquare size={14} /> Test SMS
-                </button>
-                <button className="p-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
-                  <Mail size={14} /> Test Email
-                </button>
-              </div>
-              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                <p className="text-[10px] text-indigo-600 leading-relaxed">
-                  <strong>Note:</strong> Test notifications will use the credentials defined in your environment variables. Ensure your Twilio balance is sufficient.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-};
-
-
-
   const CustomerHistory = useMemo(() => {
     if (!currentUser) return null;
     
@@ -2515,7 +3435,7 @@ const AdminDashboard = ({
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-slate-400 uppercase">Total Paid</div>
-                      <div className="text-sm font-bold">${order.totalCost || order.total_cost || 0}</div>
+                      <div className="text-sm font-bold">₹{order.totalCost || order.total_cost || 0}</div>
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
@@ -2616,7 +3536,7 @@ const AdminDashboard = ({
                           </div>
                         </div>
                         <div className="text-sm font-bold text-slate-900">
-                          {item.price ? `$${item.price}` : '-'}
+                          {item.price ? `₹${item.price}` : '-'}
                         </div>
                       </div>
                     ))}
@@ -2631,7 +3551,7 @@ const AdminDashboard = ({
                   <div className="flex justify-between items-center">
                     <div>
                       <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Grand Total</span>
-                      <div className="text-3xl font-black">${selectedOrderForInvoice.totalCost}</div>
+                      <div className="text-3xl font-black">₹{selectedOrderForInvoice.totalCost}</div>
                     </div>
                     <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
                       {selectedOrderForInvoice.paymentStatus}
@@ -2744,13 +3664,13 @@ const AdminDashboard = ({
                 <div className="p-4 bg-slate-900 text-white rounded-2xl">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-bold">Total Amount Paid</span>
-                    <span className="text-2xl font-black text-indigo-400">${(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 10)).toFixed(2)}</span>
+                    <span className="text-2xl font-black text-indigo-400">₹{(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 10)).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-4 pt-4">
+            <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <button 
                 onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
                 className="flex-1 py-4 bg-slate-100 text-slate-900 rounded-2xl font-bold hover:bg-slate-200 transition-all"
@@ -2759,7 +3679,18 @@ const AdminDashboard = ({
               </button>
               <button 
                 onClick={() => {
-                  const summary = `JiffEX Invoice\nOrder ID: ${woOrderId}\nDestination: ${woAddress.fullName}, ${woAddress.country}\nTotal: $${(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 10)).toFixed(2)}`;
+                  const totalW = woItems.reduce((s, i) => s + i.weight, 0);
+                  const totalC = totalW * (SHIPPING_RATES[woAddress.country] || 10);
+                  const message = `*JiffEX Work Order Invoice*\n\nOrder ID: ${woOrderId}\nCustomer: ${woAddress.fullName}\nTotal Amount: ₹${totalC.toFixed(2)}\nDestination: ${woAddress.country}\nStatus: Processed & Paid\n\nThank you for choosing JiffEX!`;
+                  sendWhatsApp(woAddress.phone, message);
+                }}
+                className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
+              >
+                <MessageCircle size={20} /> WhatsApp Invoice
+              </button>
+              <button 
+                onClick={() => {
+                  const summary = `JiffEX Invoice\nOrder ID: ${woOrderId}\nDestination: ${woAddress.fullName}, ${woAddress.country}\nTotal: ₹${(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 10)).toFixed(2)}`;
                   if (navigator.share) {
                     navigator.share({
                       title: 'JiffEX Invoice',
@@ -3000,12 +3931,12 @@ const AdminDashboard = ({
               </div>
               <div className="flex justify-between items-center text-xs text-slate-400">
                 <span>Shipping Rate</span>
-                <span className="text-white font-bold">${SHIPPING_RATES[woAddress.country] || 10}/kg</span>
+                <span className="text-white font-bold">₹{SHIPPING_RATES[woAddress.country] || 10}/kg</span>
               </div>
               <div className="h-px bg-slate-800 my-2" />
               <div className="flex justify-between items-center">
                 <span className="text-sm font-bold">Total Amount</span>
-                <span className="text-xl font-black text-indigo-400">${(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 10)).toFixed(2)}</span>
+                <span className="text-xl font-black text-indigo-400">₹{(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 10)).toFixed(2)}</span>
               </div>
             </div>
 
@@ -3031,7 +3962,7 @@ const AdminDashboard = ({
     }
 
     return (
-      <div className="space-y-8">
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-3xl font-black text-slate-900">Agent Portal</h2>
@@ -3375,7 +4306,7 @@ const AdminDashboard = ({
                 <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
                   <div>
                     <h5 className="text-sm font-bold text-slate-900 truncate">{product.name}</h5>
-                    <p className="text-[10px] text-slate-500">${product.price} • {product.weight} kg</p>
+                    <p className="text-[10px] text-slate-500">₹{product.price} • {product.weight} kg</p>
                   </div>
                   <div className="flex justify-center mt-2">
                     <motion.button 
@@ -3473,286 +4404,61 @@ const AdminDashboard = ({
           : items.filter(i => i.source === mode))
       : items.filter(i => i.source !== 'Warehouse' || i.submitted);
 
-    const displayWeight = displayItems.reduce((sum, item) => sum + (item.weight * (item.quantity || 1)), 0);
+    const displayWeight = displayItems.reduce((sum, item) => sum + (item.weight || 0), 0);
     const hasTBDWeight = displayItems.some(i => i.weight === 0);
 
     return (
       <div className="space-y-6">
-        {!mode && hasActivePickup && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-indigo-50 border border-indigo-100 p-6 rounded-[2rem] flex items-start gap-4 shadow-sm"
-          >
-            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
-              <Truck size={24} />
-            </div>
-            <div className="space-y-1">
-              <h4 className="text-lg font-black text-slate-900">Home Pickup Scheduled</h4>
-              <p className="text-sm text-slate-600 font-medium leading-relaxed">
-                Your pickup is confirmed for <span className="text-indigo-600 font-bold">{appointments.find(a => a.status === 'Scheduled')?.date}</span> at <span className="text-indigo-600 font-bold">{appointments.find(a => a.status === 'Scheduled')?.time}</span>. 
-                Since you have opted for Home Pickup, item collection, weighing, and payment processing will be handled by our agent at your doorstep. <span className="font-bold">Final billing will be done at your home during pickup.</span> Once processed at our warehouse, you can track the full details in <span className="text-indigo-600 font-bold">My Orders</span>.
-              </p>
-            </div>
-          </motion.div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className={`${mode ? 'lg:col-span-3' : 'lg:col-span-2'} space-y-6`}>
-            {/* Heart-touching Warehouse Message */}
-          {mode === 'Warehouse' && (
-            <div className="space-y-8">
+        {activeTab === 'warehouse' ? (
+          <div className="min-h-[60vh] flex flex-col items-center justify-center text-center space-y-8 bg-white rounded-[3rem] border border-slate-100 p-12 shadow-sm">
+             <div className="w-24 h-24 bg-indigo-50 rounded-3xl flex items-center justify-center text-indigo-600 shadow-inner">
+               <Package size={48} className="animate-pulse" />
+             </div>
+             <div className="max-w-md space-y-4">
+               <h2 className="text-3xl font-black text-slate-900 tracking-tight">Warehouse Redesign in Progress</h2>
+               <p className="text-slate-500 font-medium leading-relaxed">
+                 We are creating a more intuitive experience for sending your items to our facility. 
+                 Please provide the step-by-step points for the new design.
+               </p>
+             </div>
+             <div className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-sm font-black uppercase tracking-widest">
+               <Zap size={16} className="text-yellow-400" /> Awaiting Instructions
+             </div>
+          </div>
+        ) : (
+          <>
+            {!mode && hasActivePickup && (
               <motion.div 
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-10 rounded-[2.5rem] text-white shadow-2xl shadow-emerald-200/50 relative overflow-hidden"
+                className="bg-indigo-50 border border-indigo-100 p-6 rounded-[2rem] flex items-start gap-4 shadow-sm mb-6"
               >
-                <div className="absolute -top-10 -right-10 opacity-10 rotate-12">
-                  <Heart size={240} fill="currentColor" />
+                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                  <Truck size={24} />
                 </div>
-                <div className="relative z-10 max-w-2xl">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center">
-                      <Heart size={20} className="fill-white" />
-                    </div>
-                    <span className="text-xs font-black uppercase tracking-[0.2em] text-emerald-100">Connecting Hearts Across Borders</span>
-                  </div>
-                  <h2 className="text-3xl font-black mb-4 leading-tight">Distance shouldn't keep you from the things you love.</h2>
-                  <p className="text-lg text-emerald-50/90 leading-relaxed font-medium">
-                    Whether it's a mother's handmade sweets, a piece of home, or something special from India, 
-                    you don't need to worry about how to get it to the US. We are here, ready to gather, 
-                    consolidate, and safely deliver your world to you.
+                <div className="space-y-1">
+                  <h4 className="text-lg font-black text-slate-900">Home Pickup Scheduled</h4>
+                  <p className="text-sm text-slate-600 font-medium leading-relaxed">
+                    Your pickup is confirmed for <span className="text-indigo-600 font-bold">{appointments.find(a => a.status === 'Scheduled')?.date}</span> at <span className="text-indigo-600 font-bold">{appointments.find(a => a.status === 'Scheduled')?.time}</span>. 
+                    Since you have opted for Home Pickup, item collection, weighing, and payment processing will be handled by our agent at your doorstep. <span className="font-bold">Final billing will be done at your home during pickup.</span> Once processed at our warehouse, you can track the full details in <span className="text-indigo-600 font-bold">My Orders</span>.
                   </p>
                 </div>
               </motion.div>
-            </div>
-          )}
+            )}
 
-
-          {/* Add Items / Schedule Pickup Card */}
-          {mode && (
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
-              {mode === 'Warehouse' ? (
-                <div className="space-y-8">
-                  {/* Header Section */}
-                  <div className="flex items-center gap-4 border-b border-slate-50 pb-8">
-                    <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-xl shadow-indigo-200">
-                      <Database size={28} />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className={`${mode ? 'lg:col-span-3' : 'lg:col-span-2'} space-y-6`}>
+                {mode === 'Warehouse' ? (
+                  <div className="bg-white p-12 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center space-y-6">
+                    <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center text-indigo-600">
+                      <Package size={40} className="animate-pulse" />
                     </div>
                     <div>
-                      <h2 className="text-2xl font-black text-slate-900 tracking-tight">Warehouse Shipment</h2>
-                      <p className="text-sm text-slate-500 font-medium">Register items you're sending to our facility</p>
+                      <h3 className="text-2xl font-black text-slate-900">Warehouse Redesign in Progress</h3>
+                      <p className="text-slate-500 mt-2">New interface for shipments is being developed based on updated requirements.</p>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                    {/* Left Column: Sticky Inputs & Address */}
-                    <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
-                      {/* Step 1: Warehouse Address Card */}
-                      <div className="p-6 bg-indigo-600 rounded-[2rem] text-white shadow-xl shadow-indigo-200/50 relative overflow-hidden group">
-                        <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                          <MapPin size={120} />
-                        </div>
-                        <div className="relative z-10 space-y-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <MapPin size={18} />
-                              <span className="text-xs font-black uppercase tracking-widest text-indigo-100">Shipping Address</span>
-                            </div>
-                            <button 
-                              onClick={handleCopyAddress}
-                              className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-all"
-                              title="Copy Address"
-                            >
-                              <Copy size={14} />
-                            </button>
-                          </div>
-                          <div className="space-y-3">
-                            <div>
-                              <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest">Recipient</p>
-                              <p className="text-sm font-black">{WAREHOUSE_ADDRESS.name} (ID: {customerWarehouseId})</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest">Address</p>
-                              <p className="text-sm font-medium leading-relaxed">
-                                {WAREHOUSE_ADDRESS.street}, {WAREHOUSE_ADDRESS.city}<br />
-                                {WAREHOUSE_ADDRESS.state} {WAREHOUSE_ADDRESS.zip}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Step 2: Register Package Form */}
-                      <div className="p-8 bg-white rounded-[2rem] border border-slate-200 shadow-sm space-y-6">
-                        <div className="flex items-center gap-3 text-indigo-600">
-                          <Package size={24} />
-                          <h4 className="text-xl font-black">Register Item</h4>
-                        </div>
-                        
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Item Description</label>
-                            <input 
-                              type="text" 
-                              className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-medium"
-                              placeholder="e.g. iPhone 15 Pro, Winter Jacket..."
-                              value={cartItemName}
-                              onChange={(e) => setCartItemName(e.target.value)}
-                            />
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Quantity</label>
-                              <input 
-                                type="number" 
-                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-bold"
-                                placeholder="1"
-                                min="1"
-                                value={cartItemQuantity}
-                                onChange={(e) => setCartItemQuantity(Number(e.target.value))}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Weight (kg)</label>
-                              <input 
-                                type="number" 
-                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-bold"
-                                placeholder="0.5"
-                                step="0.1"
-                                value={cartItemWeight}
-                                onChange={(e) => setCartItemWeight(Number(e.target.value))}
-                              />
-                            </div>
-                          </div>
-
-                          <button 
-                            onClick={handleAdd}
-                            disabled={!cartItemName}
-                            className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all ${
-                              cartItemName 
-                                ? 'bg-deep-blue text-white hover:bg-slate-800 shadow-xl shadow-deep-blue/20' 
-                                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                            }`}
-                          >
-                            <Plus size={20} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Middle Column: How it Works & Review */}
-                    <div className="lg:col-span-5 space-y-6">
-                      {/* How it Works Bento Cards */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-3">
-                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
-                            <Package size={20} />
-                          </div>
-                          <h5 className="font-black text-slate-900">Send Items</h5>
-                          <p className="text-xs text-slate-500 leading-relaxed">
-                            Pack your items and send them to our warehouse address.
-                          </p>
-                        </div>
-                        <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-3">
-                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-600 shadow-sm">
-                            <ShoppingBag size={20} />
-                          </div>
-                          <h5 className="font-black text-slate-900">Shop Online</h5>
-                          <p className="text-xs text-slate-500 leading-relaxed">
-                            Use our address at checkout on Amazon, Flipkart, etc.
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Review & Finalize Card */}
-                      <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm min-h-[400px] flex flex-col">
-                        <div className="flex items-center justify-between mb-8">
-                          <div className="flex items-center gap-3 text-indigo-600">
-                            <CheckCircle2 size={24} />
-                            <h4 className="text-xl font-black">Review Shipment</h4>
-                          </div>
-                          <div className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-black text-indigo-600 border border-indigo-100">
-                            {displayItems.filter(i => i.source === 'Warehouse' && !i.submitted).length} Items
-                          </div>
-                        </div>
-
-                        {displayItems.filter(i => i.source === 'Warehouse' && !i.submitted).length === 0 ? (
-                          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 space-y-4">
-                            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center">
-                              <Package size={40} strokeWidth={1} />
-                            </div>
-                            <p className="font-medium text-center max-w-[200px]">No items registered yet.</p>
-                          </div>
-                        ) : (
-                          <div className="flex-1 flex flex-col">
-                            <div className="space-y-3 mb-8">
-                              {displayItems.filter(i => i.source === 'Warehouse' && !i.submitted).map((item) => (
-                                <motion.div 
-                                  layout
-                                  initial={{ opacity: 0, x: 20 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  key={item.id}
-                                  className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group"
-                                >
-                                  <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
-                                      <Package size={20} />
-                                    </div>
-                                    <div>
-                                      <h5 className="text-sm font-bold text-slate-900">{item.name}</h5>
-                                      <p className="text-[10px] text-slate-500 font-medium">
-                                        {item.quantity} units • {item.weight} kg
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <button 
-                                    onClick={() => removeItem(item.id)}
-                                    className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                </motion.div>
-                              ))}
-                            </div>
-
-                            <div className="mt-auto pt-8 border-t border-slate-100">
-                              <div className="grid grid-cols-2 gap-4">
-                                <button 
-                                  onClick={() => setActiveTab('cart')}
-                                  className="py-4 px-6 bg-slate-50 text-slate-600 rounded-2xl text-sm font-black hover:bg-slate-100 transition-all flex items-center justify-center gap-2"
-                                >
-                                  <RefreshCw size={18} /> Save
-                                </button>
-                                <button 
-                                  onClick={() => {
-                                    setItems(prev => prev.map(i => 
-                                      i.source === 'Warehouse' && !i.submitted 
-                                        ? { ...i, submitted: true } 
-                                        : i
-                                    ));
-                                    setActiveTab('cart');
-                                    toast.success('Shipment submitted!');
-                                  }}
-                                  className="py-4 bg-indigo-600 text-white rounded-2xl text-sm font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 flex items-center justify-center gap-2"
-                                >
-                                  <CheckCircle2 size={20} /> Submit
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Right Column: Shop Sidebar */}
-                      <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-8">
-                        {renderShopSidebar()}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
+                ) : (
                 <div className="space-y-4">
                   {/* Header Section with Progress for Pickup */}
                   {mode === 'Pickup' && (
@@ -4272,6 +4978,20 @@ const AdminDashboard = ({
                                 </div>
 
                                 <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+                                  <div className="relative">
+                                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                    <input 
+                                      type="email" 
+                                      className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium"
+                                      placeholder="Enter your email for confirmation"
+                                      value={pickupEmail}
+                                      onChange={(e) => setPickupEmail(e.target.value)}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
                                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Pick up address</label>
                                   <input 
                                     type="text" 
@@ -4511,6 +5231,19 @@ const AdminDashboard = ({
                               >
                                 <Share size={14} /> Track this booking
                               </button>
+                              
+                              <button 
+                                onClick={() => {
+                                  const ref = lastBookingRef || appointments.find(a => a.status === 'Scheduled')?.id;
+                                  if (ref) {
+                                    const message = `*JiffEX Pickup Confirmation*\n\nBooking Reference: ${ref}\nDestination: India\nStatus: Confirmed\n\nTrack your shipment at: ${window.location.origin}?tab=track&id=${ref}\n\nThank you for choosing JiffEX!`;
+                                    sendWhatsApp(pickupPhone, message);
+                                  }
+                                }}
+                                className="flex items-center gap-2 text-xs font-black text-emerald-600 hover:text-emerald-700 transition-colors mt-1"
+                              >
+                                <MessageCircle size={14} /> Send Confirmation via WhatsApp
+                              </button>
 
                             </div>
                           </div>
@@ -4689,32 +5422,28 @@ const AdminDashboard = ({
                     </div>
                   </div>
                 )}
+
+        {/* Item List Card - Visible in all tabs, but specific parts are conditional */}
+        {!((mode === 'Pickup') && (isCartEmpty || activePickupStep === 5)) && (
+          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 min-h-[400px]">
+            {!mode && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+              <div>
+                <h3 className="text-2xl font-black text-slate-900">Your Shipment Items</h3>
+                <p className="text-sm text-slate-500">Manage items collected or received at our warehouse.</p>
               </div>
-            )}
+              <div className="flex items-center gap-2">
+                <div className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-bold text-indigo-600 border border-indigo-100">
+                  {displayItems.length} Items
+                </div>
+                <div className="px-4 py-2 bg-emerald-50 rounded-2xl text-xs font-bold text-emerald-600 border border-emerald-100">
+                  {hasTBDWeight ? 'Est. ' : ''}{displayWeight.toFixed(2)} kg Total
+                </div>
+              </div>
             </div>
           )}
-
-          {/* Item List Card - Visible in all tabs, but specific parts are conditional */}
-          {mode !== 'Warehouse' && !((mode === 'Pickup') && (isCartEmpty || activePickupStep === 5)) && (
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 min-h-[400px]">
-              {!mode && (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-                <div>
-                  <h3 className="text-2xl font-black text-slate-900">Your Shipment Items</h3>
-                  <p className="text-sm text-slate-500">Manage items collected or received at our warehouse.</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-bold text-indigo-600 border border-indigo-100">
-                    {displayItems.length} Items
-                  </div>
-                  <div className="px-4 py-2 bg-emerald-50 rounded-2xl text-xs font-bold text-emerald-600 border border-emerald-100">
-                    {hasTBDWeight ? 'Est. ' : ''}{displayWeight.toFixed(2)} kg Total
-                  </div>
-                </div>
-              </div>
-            )}
-              
-              {isCartEmpty ? (
+            
+            {isCartEmpty ? (
                 <div className="flex flex-col items-center justify-center h-80 text-slate-400">
                   <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
                     <Package size={40} strokeWidth={1} />
@@ -4904,15 +5633,9 @@ const AdminDashboard = ({
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               key={item.id} 
-                              className="grid grid-cols-1 md:grid-cols-12 gap-4 p-5 rounded-2xl border border-slate-100 bg-white hover:shadow-xl hover:shadow-indigo-500/5 transition-all group items-center"
+                              className="grid grid-cols-1 md:grid-cols-12 gap-6 p-5 rounded-2xl border border-slate-100 bg-white hover:shadow-xl hover:shadow-indigo-500/5 transition-all group items-center"
                             >
-                              <div className="md:col-span-1">
-                                <div className="w-14 h-14 bg-slate-50 rounded-xl flex items-center justify-center text-slate-300 overflow-hidden border border-slate-100">
-                                  {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <ImageIcon size={20} />}
-                                </div>
-                              </div>
-                              
-                              <div className={item.source === 'Store' ? "md:col-span-6" : "md:col-span-4"}>
+                              <div className={item.source === 'Store' ? "md:col-span-3" : "md:col-span-2"}>
                                 <h4 className="font-bold text-slate-900 truncate">{item.name}</h4>
                                 <div className="flex flex-wrap gap-2 mt-1">
                                   {item.fragile && (
@@ -4928,6 +5651,17 @@ const AdminDashboard = ({
                                 </div>
                               </div>
 
+                              <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-1"}>
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 whitespace-nowrap">Unit Price</div>
+                                <div className="text-xs font-bold text-emerald-600">
+                                  {item.price ? (
+                                    <span>₹{(item.price / (item.quantity || 1)).toFixed(2)}</span>
+                                  ) : (
+                                    <span className="text-slate-400">N/A</span>
+                                  )}
+                                </div>
+                              </div>
+
                               <div className="md:col-span-2">
                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Weight</div>
                                 <div className="text-xs font-bold text-indigo-600">
@@ -4935,7 +5669,7 @@ const AdminDashboard = ({
                                     <div className="flex flex-col">
                                       <span>{(item.weight / (item.quantity || 1)).toFixed(2)} kg</span>
                                       {(item.quantity || 1) > 1 && (
-                                        <span className="text-[9px] text-slate-400 font-medium">
+                                        <span className="text-[9px] text-slate-400 font-medium whitespace-nowrap">
                                           Total: {item.weight.toFixed(2)} kg
                                         </span>
                                       )}
@@ -4944,8 +5678,8 @@ const AdminDashboard = ({
                                 </div>
                               </div>
 
-                              <div className="md:col-span-2">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Quantity</div>
+                              <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-1"}>
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Qty</div>
                                 <div className="flex items-center gap-2">
                                   {!mode && !hasCompletedPickup ? (
                                     <>
@@ -4988,6 +5722,17 @@ const AdminDashboard = ({
                                   </div>
                                 </div>
                               )}
+
+                              <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-3"}>
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 whitespace-nowrap">Total Amount</div>
+                                <div className="text-xs font-black text-slate-900">
+                                  {item.price ? (
+                                    <span>₹{item.price.toFixed(2)}</span>
+                                  ) : (
+                                    <span className="text-slate-400">N/A</span>
+                                  )}
+                                </div>
+                              </div>
 
                               <div className="md:col-span-1 flex justify-end">
                                 {!mode && !hasCompletedPickup && (
@@ -5046,86 +5791,9 @@ const AdminDashboard = ({
               )}
             </div>
           )}
-
-          {/* Shop Items for Pickup and Warehouse Pages */}
-          {(mode === 'Warehouse') && (
-            <div className="mt-12">
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-deep-blue flex items-center justify-center shadow-lg shadow-deep-blue/20">
-                    <ShoppingBag className="text-jiffex-orange" size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-deep-blue">Shop Items</h3>
-                    <p className="text-xs text-slate-500 font-medium tracking-tight">
-                      Add essentials to your shipment
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {storeProducts.map((product) => {
-                  const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
-                  const itemCount = cartItem?.quantity || 0;
-                  
-                  return (
-                    <motion.div
-                      key={product.id}
-                      whileHover={{ y: -5 }}
-                      className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative"
-                    >
-                      <AnimatePresence>
-                        {itemCount > 0 && (
-                          <motion.div 
-                            initial={{ scale: 0, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0, opacity: 0 }}
-                            className="absolute top-3 right-3 z-10 w-7 h-7 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg border-2 border-white"
-                          >
-                            {itemCount}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                      <div className="relative aspect-square rounded-2xl overflow-hidden mb-4 bg-slate-50">
-                        <img 
-                          src={product.image} 
-                          alt={product.name}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="absolute top-3 left-3">
-                          <div className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-full shadow-sm border border-white/20">
-                            <span className="text-xs font-bold text-deep-blue">₹{product.price}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <h4 className="font-bold text-deep-blue mb-1">{product.name}</h4>
-                      <p className="text-[10px] text-slate-500 mb-4 line-clamp-2 leading-relaxed">Premium quality {product.category.toLowerCase()} item for your home.</p>
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Weight</span>
-                          <span className="text-xs font-bold text-slate-900">{product.weight} kg</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <motion.button 
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                            className="w-10 h-10 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/20"
-                            title="Add to shipment"
-                          >
-                            <Plus size={18} />
-                          </motion.button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
+      )}
+    </div>
 
         {!mode && (
           <div className="lg:col-span-1 space-y-6">
@@ -5137,7 +5805,7 @@ const AdminDashboard = ({
               <div className="space-y-4">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500 font-medium">Total Items</span>
-                  <span className="font-bold text-slate-900">{displayItems.length}</span>
+                  <span className="font-bold text-slate-900">{displayItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500 font-medium">Total Weight</span>
@@ -5149,7 +5817,7 @@ const AdminDashboard = ({
                 <div className="pt-4 border-t border-slate-100">
                   <div className="flex justify-between items-center">
                     <span className="text-base font-bold text-slate-900">Estimated Total</span>
-                    <span className="text-xl font-black text-indigo-600">${displayItems.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 1), 0)}</span>
+                    <span className="text-xl font-black text-indigo-600">₹{displayItems.reduce((acc, item) => acc + (item.price || 0), 0).toLocaleString()}</span>
                   </div>
                 </div>
               </div>
@@ -5172,8 +5840,10 @@ const AdminDashboard = ({
           </div>
         )}
       </div>
-    </div>
-  );
+    </>
+  )}
+</div>
+);
 };
 
   const StoreSection = useMemo(() => {
@@ -5469,7 +6139,7 @@ const AdminDashboard = ({
               >
                 <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Price Range ($)</label>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Price Range (₹)</label>
                     <div className="flex items-center gap-3">
                       <input 
                         type="number" 
@@ -5645,7 +6315,7 @@ const AdminDashboard = ({
       const isPayAtHome = hasScheduledPickup && shippingPreference === 'International';
       
       return (
-        <div className="max-w-2xl mx-auto text-center space-y-8 py-12">
+        <div className="max-w-2xl mx-auto text-center space-y-8 pb-12">
           <CheckoutProgressTracker />
           <motion.div 
             initial={{ scale: 0 }}
@@ -5674,18 +6344,12 @@ const AdminDashboard = ({
               }
             </p>
           </div>
-          <div className="flex gap-4">
+          <div className="flex justify-center">
             <button 
               onClick={() => { navigateTo('history'); setIsPaid(false); setOrderId(null); }}
-              className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition-all"
+              className="w-full md:w-2/3 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition-all"
             >
               View Order History
-            </button>
-            <button 
-              onClick={() => { navigateTo('home'); setIsPaid(false); setOrderId(null); }}
-              className="flex-1 py-4 bg-slate-100 text-slate-900 rounded-2xl font-bold hover:bg-slate-200 transition-all"
-            >
-              Back to Home
             </button>
           </div>
         </div>
@@ -5701,7 +6365,7 @@ const AdminDashboard = ({
           {appointments.some(a => a.status === 'Scheduled') && cartItems.length > 0 && (
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <Truck className="text-indigo-600" /> Shipping Preference
+                <Truck className="text-indigo-600" /> How should we deliver your shop items?
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div 
@@ -5774,7 +6438,7 @@ const AdminDashboard = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Full Name</label>
                 <input 
                   type="text" 
-                  disabled={!!shippingPreference}
+                  disabled={shippingPreference === 'LocalPickup'}
                   className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   value={address.fullName}
                   onChange={e => setAddress({...address, fullName: e.target.value})}
@@ -5784,7 +6448,7 @@ const AdminDashboard = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Email</label>
                 <input 
                   type="email" 
-                  disabled={!!shippingPreference}
+                  disabled={shippingPreference === 'LocalPickup'}
                   className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   value={address.email}
                   onChange={e => setAddress({...address, email: e.target.value})}
@@ -5794,7 +6458,7 @@ const AdminDashboard = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Phone</label>
                 <input 
                   type="tel" 
-                  disabled={!!shippingPreference}
+                  disabled={shippingPreference === 'LocalPickup'}
                   className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   value={address.phone}
                   onChange={e => setAddress({...address, phone: e.target.value})}
@@ -5804,7 +6468,7 @@ const AdminDashboard = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Address Line 1</label>
                 <input 
                   type="text" 
-                  disabled={!!shippingPreference}
+                  disabled={shippingPreference === 'LocalPickup'}
                   className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   value={address.addressLine1}
                   onChange={e => setAddress({...address, addressLine1: e.target.value})}
@@ -5814,7 +6478,7 @@ const AdminDashboard = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">City</label>
                 <input 
                   type="text" 
-                  disabled={!!shippingPreference}
+                  disabled={shippingPreference === 'LocalPickup'}
                   className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   value={address.city}
                   onChange={e => setAddress({...address, city: e.target.value})}
@@ -5824,7 +6488,7 @@ const AdminDashboard = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Zip Code</label>
                 <input 
                   type="text" 
-                  disabled={!!shippingPreference}
+                  disabled={shippingPreference === 'LocalPickup'}
                   className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   placeholder="e.g. 123456"
                   value={address.zipCode}
@@ -5834,7 +6498,7 @@ const AdminDashboard = ({
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Country</label>
                 <select 
-                  disabled={!!shippingPreference}
+                  disabled={shippingPreference === 'LocalPickup'}
                   className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   value={address.country}
                   onChange={e => setAddress({...address, country: e.target.value})}
@@ -5849,7 +6513,7 @@ const AdminDashboard = ({
                 <span>
                   {shippingPreference === 'LocalPickup' 
                     ? 'Warehouse address is used for local pickup items.' 
-                    : 'Destination address is locked to your scheduled pickup location.'}
+                    : 'Address pre-filled from your pickup location. You can modify it if needed.'}
                 </span>
               </div>
             )}
@@ -5938,16 +6602,22 @@ const AdminDashboard = ({
               </div>
               <div className="flex justify-between text-slate-400 text-sm">
                 <span>Shipping ({address.country})</span>
-                <span className="text-white font-medium">${(totalWeight * (SHIPPING_RATES[address.country] || 10)).toFixed(2)}</span>
+                <span className="text-white font-medium">₹{(totalWeight * (SHIPPING_RATES[address.country] || 10)).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-slate-400 text-sm">
                 <span>Items Cost</span>
-                <span className="text-white font-medium">${cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
+                <span className="text-white font-medium">₹{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
               </div>
+              {appointments.some(a => a.status === 'Scheduled') && (
+                <div className="flex justify-between text-slate-400 text-sm">
+                  <span>Shop Item Delivery</span>
+                  <span className="text-emerald-400 font-medium">{shippingPreference === 'LocalPickup' ? 'During Home Pickup' : 'To my Home'}</span>
+                </div>
+              )}
               <div className="h-px bg-slate-800 my-4" />
               <div className="flex justify-between items-center">
                 <span className="text-lg font-bold">Total Amount</span>
-                <span className="text-2xl font-black text-indigo-400">${totalCost.toFixed(2)}</span>
+                <span className="text-2xl font-black text-indigo-400">₹{totalCost.toFixed(2)}</span>
               </div>
             </div>
 
@@ -6077,6 +6747,17 @@ const AdminDashboard = ({
           <div className="flex items-center gap-2">
             <Database size={12} />
             Database Not Connected. Using Local Storage Mode.
+            <button 
+              onClick={() => {
+                setDbStatus(prev => ({ ...prev, checked: false }));
+                api.checkHealth()
+                  .then(res => setDbStatus({ connected: res.supabaseConnected, checked: true }))
+                  .catch(() => setDbStatus({ connected: false, checked: true }));
+              }}
+              className="ml-2 px-2 py-0.5 bg-amber-200 hover:bg-amber-300 transition-colors rounded text-[8px]"
+            >
+              Retry
+            </button>
           </div>
           <p className="text-[8px] opacity-70 normal-case font-medium">
             Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Settings {'>'} Environment Variables.
@@ -6204,12 +6885,47 @@ const AdminDashboard = ({
                   </button>
                 </div>
 
-                <button 
-                  onClick={() => navigateTo('support')}
-                  className={`text-sm lg:text-base font-medium transition-all ${activeTab === 'support' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                  Support
-                </button>
+                {currentUser?.role === 'admin' && (
+                  <button 
+                    onClick={() => navigateTo('admin')}
+                    className={`text-sm lg:text-base font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'admin' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                  >
+                    Admin
+                  </button>
+                )}
+                {currentUser?.role === 'webmaster' && (
+                  <button 
+                    onClick={() => navigateTo('admin')}
+                    className={`text-sm lg:text-base font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'admin' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                  >
+                    Catalog
+                  </button>
+                )}
+                {currentUser?.role === 'agent' && (
+                  <button 
+                    onClick={() => navigateTo('agent')}
+                    className={`text-sm lg:text-base font-bold transition-all px-3 py-1.5 rounded-xl border border-emerald-100 ${activeTab === 'agent' ? 'text-white bg-emerald-600' : 'text-emerald-600 hover:bg-emerald-50'}`}
+                  >
+                    Work Portal
+                  </button>
+                )}
+                {currentUser?.role === 'customer_service' && (
+                  <button 
+                    onClick={() => navigateTo('support')}
+                    className={`text-sm lg:text-base font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'support' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                  >
+                    Support Desk
+                  </button>
+                )}
+
+                {currentUser?.role !== 'customer_service' && (
+                  <button 
+                    onClick={() => navigateTo('support')}
+                    className={`text-sm lg:text-base font-medium transition-all ${activeTab === 'support' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                  >
+                    Support
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center gap-4 lg:gap-6">
@@ -6352,8 +7068,33 @@ const AdminDashboard = ({
                     onClick={() => { navigateTo('support'); setIsMobileMenuOpen(false); }}
                     className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'support' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
                   >
-                    Support
+                    {currentUser?.role === 'customer_service' ? 'Support Desk' : 'Support'}
                   </button>
+
+                  {currentUser?.role === 'admin' && (
+                    <button 
+                      onClick={() => { navigateTo('admin'); setIsMobileMenuOpen(false); }}
+                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'admin' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      Admin Dashboard
+                    </button>
+                  )}
+                  {currentUser?.role === 'webmaster' && (
+                    <button 
+                      onClick={() => { navigateTo('admin'); setIsMobileMenuOpen(false); }}
+                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'admin' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      Catalog Manager
+                    </button>
+                  )}
+                  {currentUser?.role === 'agent' && (
+                    <button 
+                      onClick={() => { navigateTo('agent'); setIsMobileMenuOpen(false); }}
+                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'agent' ? 'text-emerald-600 bg-emerald-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      Work Portal
+                    </button>
+                  )}
                   <button 
                     onClick={handleQuickQuoteClick}
                     className="text-lg font-bold p-3 rounded-xl text-left text-indigo-600 hover:bg-indigo-50 transition-all"
@@ -6431,7 +7172,10 @@ const AdminDashboard = ({
       </header>
 
       {/* Main Content */}
-      <main className={`max-w-7xl mx-auto px-4 pb-20 ${activeTab === 'pickup' ? 'pt-0' : (activeTab === 'warehouse' ? 'pt-0' : (activeTab === 'store' ? 'pt-8' : (activeTab === 'cart' ? 'pt-8' : (activeTab === 'history' ? 'pt-6' : 'pt-20'))))}`}>
+      <main className={`relative max-w-7xl mx-auto px-4 pb-20 ${activeTab === 'pickup' ? 'pt-0' : (activeTab === 'warehouse' ? 'pt-0' : (activeTab === 'store' ? 'pt-8' : (activeTab === 'cart' ? 'pt-8' : (activeTab === 'history' ? 'pt-6' : (activeTab === 'finalize' ? 'pt-8' : (activeTab === 'admin' ? 'pt-4' : (activeTab === 'support' ? 'pt-4' : (activeTab === 'pickup' || activeTab === 'warehouse' ? 'pt-0' : (currentUser?.role === 'agent' ? 'pt-4' : 'pt-20')))))))))}`}>
+        <AnimatePresence>
+          {activeTab !== 'home' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'finalize' && <BackButton onClick={goBack} />}
+        </AnimatePresence>
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -6441,13 +7185,21 @@ const AdminDashboard = ({
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'home' && HomeSection}
-            {activeTab !== 'home' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'cart' && activeTab !== 'history' && <BackButton onClick={goBack} />}
             {activeTab === 'track' && TrackSection}
             {activeTab === 'pickup' && renderUnifiedCartSection('Pickup')}
             {activeTab === 'warehouse' && renderUnifiedCartSection('Warehouse')}
             {activeTab === 'cart' && renderUnifiedCartSection()}
             {activeTab === 'notifications' && NotificationCenter}
-            {activeTab === 'support' && SupportSection}
+            {activeTab === 'support' && (
+              <SupportSection 
+                currentUser={currentUser} 
+                orders={orders}
+                tickets={tickets}
+                setTickets={setTickets}
+                refundRequests={refundRequests}
+                setRefundRequests={setRefundRequests}
+              />
+            )}
             {activeTab === 'store' && StoreSection}
             {activeTab === 'finalize' && FinalizeSection}
             {activeTab === 'history' && CustomerHistory}
@@ -6460,17 +7212,16 @@ const AdminDashboard = ({
                 setAppointments={setAppointments}
                 agents={agents}
                 setAgents={setAgents}
-                newAgent={newAgent}
-                setNewAgent={setNewAgent}
                 categories={categories}
                 setCategories={setCategories}
-                adminTab={adminTab}
-                setAdminTab={setAdminTab}
-                newProduct={newProduct}
-                setNewProduct={setNewProduct}
+                adminTab={adminTab as 'Overview' | 'Agents' | 'Inventory' | 'Reports' | 'Settings'}
+                setAdminTab={setAdminTab as React.Dispatch<React.SetStateAction<'Overview' | 'Agents' | 'Inventory' | 'Reports' | 'Settings'>>}
                 storeProducts={storeProducts}
                 setStoreProducts={setStoreProducts}
                 setOrders={setOrders}
+                refundRequests={refundRequests}
+                setRefundRequests={setRefundRequests}
+                isWebmaster={currentUser?.role === 'webmaster'}
               />
             )}
             {activeTab === 'agent' && AgentSection}

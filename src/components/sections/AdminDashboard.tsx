@@ -70,7 +70,7 @@ const AdminDashboard = ({
     { label: 'Total Shipments', value: orders.length + appointments.length, icon: Package, color: 'bg-blue-500' },
     { label: 'Pending Pickups', value: appointments.filter(a => a.status === 'Scheduled').length, icon: Clock, color: 'bg-amber-500' },
     { label: 'Active Shipments', value: orders.filter(o => o.status !== 'Delivered').length, icon: Truck, color: 'bg-indigo-500' },
-    { label: 'Total Revenue', value: `$${orders.reduce((sum, o) => sum + o.totalCost, 0).toLocaleString()}`, icon: BarChart3, color: 'bg-emerald-500' },
+    { label: 'Total Revenue', value: `₹${orders.reduce((sum, o) => sum + o.totalCost, 0).toLocaleString()}`, icon: BarChart3, color: 'bg-emerald-500' },
   ];
 
   const handleAddAgent = () => {
@@ -248,7 +248,7 @@ const AdminDashboard = ({
                             <button 
                               onClick={() => {
                                 const subject = `Invoice for Order ${order.id}`;
-                                const body = `Hello ${order.destination.fullName},\n\nYour order ${order.id} has been processed.\nTotal Amount: $${order.totalCost}\nStatus: ${order.status}\n\nThank you for choosing Jiffex!`;
+                                const body = `Hello ${order.destination.fullName},\n\nYour order ${order.id} has been processed.\nTotal Amount: ₹${order.totalCost}\nStatus: ${order.status}\n\nThank you for choosing Jiffex!`;
                                 window.location.href = `mailto:${order.destination.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                               }}
                               className="p-1.5 bg-white text-indigo-600 rounded-lg border border-indigo-100 hover:bg-indigo-50 transition-colors"
@@ -259,7 +259,7 @@ const AdminDashboard = ({
                             <button 
                               onClick={() => {
                                 const cleanPhone = order.destination.phone.replace(/\D/g, '');
-                                const message = `Hello ${order.destination.fullName}, your Jiffex order ${order.id} is ${order.status}. Total: $${order.totalCost}. Track here: ${window.location.origin}`;
+                                const message = `Hello ${order.destination.fullName}, your Jiffex order ${order.id} is ${order.status}. Total: ₹${order.totalCost}. Track here: ${window.location.origin}`;
                                 window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
                               }}
                               className="p-1.5 bg-white text-emerald-600 rounded-lg border border-emerald-100 hover:bg-emerald-50 transition-colors"
@@ -270,7 +270,7 @@ const AdminDashboard = ({
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-sm font-black text-slate-900">${order.totalCost}</div>
+                          <div className="text-sm font-black text-slate-900">₹{order.totalCost}</div>
                           <div className="text-[10px] text-indigo-600 uppercase font-bold">{order.status}</div>
                         </div>
                       </div>
@@ -452,7 +452,7 @@ const AdminDashboard = ({
                 </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Price ($)</label>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Price (₹)</label>
                         <input 
                           type="number" 
                           className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
@@ -598,7 +598,7 @@ const AdminDashboard = ({
                         </div>
                       )}
                       <div className="mt-2 flex items-center justify-between">
-                        <div className="text-sm font-black text-slate-900">${product.price}</div>
+                        <div className="text-sm font-black text-slate-900">₹{product.price}</div>
                           <div className="flex gap-2">
                             <div className="flex flex-col gap-1">
                               {editingProductId === product.id ? (

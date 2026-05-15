@@ -1,4 +1,5 @@
-import { ShippingItem, Order, Appointment } from '../types';
+import { ShippingItem, Order, Appointment, StoreProduct } from '../types';
+import { COMPANY_DETAILS } from '../constants';
 
 const API_URL = window.location.origin;
 
@@ -10,6 +11,22 @@ export const api = {
     } catch (error) {
       return { status: 'error', error: (error as Error).message };
     }
+  },
+
+  async fetchProducts(): Promise<StoreProduct[]> {
+    const response = await fetch(`${API_URL}/api/products`);
+    if (!response.ok) throw new Error('Failed to fetch products');
+    return await response.json();
+  },
+
+  async createProduct(product: Partial<StoreProduct>): Promise<StoreProduct> {
+    const response = await fetch(`${API_URL}/api/products`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(product),
+    });
+    if (!response.ok) throw new Error('Failed to create product');
+    return await response.json();
   },
 
   async fetchItems(userId: string): Promise<ShippingItem[]> {
@@ -74,7 +91,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, order, companyDetails }),
     });
-    if (!response.ok) throw new Error('Failed to send invoice');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to send invoice');
+    }
     return await response.json();
   },
 
@@ -84,11 +104,14 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, order, companyDetails }),
     });
-    if (!response.ok) throw new Error('Failed to send order confirmation');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to send order confirmation');
+    }
     return await response.json();
   },
 
-  async shareInvoice(order: Order, ...args: any[]) {
-    return this.sendInvoicePDF(order, ...args);
+  async shareInvoice(order: Order) {
+    return this.sendInvoicePDF(order.destination.email || '', order, COMPANY_DETAILS);
   }
 };

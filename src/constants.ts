@@ -28,6 +28,10 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Pooja',
     image: 'https://picsum.photos/seed/diya/400/400',
     weight: 0.5,
+    description: 'This exquisite handcrafted Brass Diya (Oil Lamp) set is a perfect addition to your spiritual space. Made from high-quality solid brass, it features intricate traditional engravings that reflect elegance and devotion.',
+    dimensions: { length: 12, width: 8, height: 6, unit: 'cm' },
+    material: 'Solid Brass',
+    origin: 'Moradabad, India',
     estimatedDelivery: getFutureDate(2),
   },
   {
@@ -37,6 +41,10 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Pooja',
     image: 'https://picsum.photos/seed/incense/400/400',
     weight: 0.2,
+    description: 'Immerse yourself in the calming aroma of pure Sandalwood. These premium incense sticks are hand-rolled using natural resins and essential oils. Perfect for meditation, yoga, or creating a peaceful home environment.',
+    dimensions: { length: 20, width: 2, height: 2, unit: 'cm' },
+    material: 'Natural Resins & Sandalwood Oil',
+    origin: 'Mysore, India',
     estimatedDelivery: getFutureDate(1),
   },
   {
@@ -55,6 +63,10 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Decorative',
     image: 'https://picsum.photos/seed/elephant/400/400',
     weight: 1.2,
+    description: 'A majestic statement piece for your home decor. This elephant statue is meticulously hand-carved by skilled artisans using premium sustainable wood. The intricate details capture the grandeur of the Indian elephant.',
+    dimensions: { length: 25, width: 12, height: 20, unit: 'cm' },
+    material: 'Sheesham Wood',
+    origin: 'Saharanpur, India',
     estimatedDelivery: getFutureDate(5),
   },
   {
@@ -64,6 +76,10 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Pooja',
     image: 'https://picsum.photos/seed/kalash/400/400',
     weight: 0.8,
+    description: 'A traditional Copper Kalash, essential for Vedic rituals and pooja ceremonies. Crafted from high-purity hammered copper, it retains water purity and adds a spiritual touch to your altar.',
+    dimensions: { length: 15, width: 15, height: 18, unit: 'cm' },
+    material: '100% Pure Copper',
+    origin: 'Pune, India',
     estimatedDelivery: getFutureDate(2),
   },
   {
@@ -82,6 +98,10 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Pooja',
     image: 'https://picsum.photos/seed/thali/400/400',
     weight: 1.5,
+    description: 'A luxurious silver-plated Thali set for special occasions and weddings. The set includes a beautiful large plate, intricate bowls, and a traditional diya. Finished with a tarnish-resistant coating for long-lasting shine.',
+    dimensions: { length: 32, width: 32, height: 4, unit: 'cm' },
+    material: 'Silver Plated Steel',
+    origin: 'Delhi, India',
     estimatedDelivery: getFutureDate(3),
   },
   {
@@ -91,6 +111,10 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Pooja',
     image: 'https://picsum.photos/seed/ganesh/400/400',
     weight: 0.4,
+    description: 'Bring home the remover of obstacles. This eco-friendly Ganesh idol is handcrafted from natural clay and painted with non-toxic, organic pigments. It dissolves harmlessly in water, making it perfect for rituals.',
+    dimensions: { length: 10, width: 8, height: 15, unit: 'cm' },
+    material: 'Natural Clay',
+    origin: 'Maharashtra, India',
     estimatedDelivery: getFutureDate(2),
   },
   {
@@ -109,6 +133,10 @@ export const STORE_PRODUCTS: StoreProduct[] = [
     category: 'Decorative',
     image: 'https://picsum.photos/seed/toran/400/400',
     weight: 0.2,
+    description: 'A vibrant floral door hanging that signifies a warm welcome. Handcrafted with traditional beadwork and embroidery, it adds a festive touch to any entrance while celebrating Indian heritage.',
+    dimensions: { length: 90, width: 10, height: 2, unit: 'cm' },
+    material: 'Fabric & Beads',
+    origin: 'Gujarat, India',
     estimatedDelivery: getFutureDate(2),
   },
   {
@@ -177,4 +205,21 @@ export const WAREHOUSE_ADDRESS = {
   zipCode: '122015',
   country: 'India',
   phone: '+91 124 4567890'
+};
+
+export const INDIAN_STORES = [
+  { name: 'Amazon India', url: 'https://www.amazon.in', logo: 'https://www.vectorlogo.zone/logos/amazon/amazon-icon.svg' },
+  { name: 'Flipkart', url: 'https://www.flipkart.com', logo: 'https://www.vectorlogo.zone/logos/flipkart/flipkart-icon.svg' },
+  { name: 'Myntra', url: 'https://www.myntra.com', logo: 'https://www.vectorlogo.zone/logos/myntra/myntra-icon.svg' },
+  { name: 'Ajio', url: 'https://www.ajio.com', logo: 'https://www.vectorlogo.zone/logos/ajio/ajio-icon.svg' },
+  { name: 'Nykaa', url: 'https://www.nykaa.com', logo: 'https://www.vectorlogo.zone/logos/nykaa/nykaa-icon.svg' },
+  { name: 'FirstCry', url: 'https://www.firstcry.com', logo: 'https://www.vectorlogo.zone/logos/firstcry/firstcry-icon.svg' },
+];
+
+export const COMPANY_DETAILS = {
+  name: "JiffEX Shipping & Logistics",
+  address: "123 Logistics Hub, Gurugram, Haryana, India",
+  email: "support@jiffex.com",
+  phone: "+91 99999 00000",
+  website: "www.jiffex.com"
 };

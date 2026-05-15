@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'agent' | 'customer';
+export type UserRole = 'admin' | 'agent' | 'customer' | 'customer_service' | 'webmaster';
 
 export interface User {
   id: string;
@@ -109,5 +109,41 @@ export interface StoreProduct {
   image: string;
   weight: number;
   description?: string;
+  dimensions?: {
+    length: number;
+    width: number;
+    height: number;
+    unit: string;
+  };
+  material?: string;
+  origin?: string;
   estimatedDelivery?: string;
+}
+
+export interface TicketComment {
+  id: string;
+  author: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface Ticket {
+  id: string;
+  orderId: string;
+  customerEmail: string;
+  subject: string;
+  description: string;
+  priority: 'Low' | 'Medium' | 'High';
+  status: 'Open' | 'In Progress' | 'Resolved';
+  createdAt: string;
+  comments?: TicketComment[];
+}
+
+export interface RefundRequest {
+  id: string;
+  orderId: string;
+  amount: number;
+  reason: string;
+  status: 'Pending Approval' | 'Approved' | 'Refunded' | 'Rejected';
+  requestedAt: string;
 }

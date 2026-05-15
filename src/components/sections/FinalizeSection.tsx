@@ -8,10 +8,13 @@ import {
   Info, 
   AlertTriangle,
   Mail,
-  MessageCircle
+  MessageCircle,
+  Loader2
 } from 'lucide-react';
-import { ShippingItem, User, DestinationAddress } from '../../types';
-import { COUNTRIES, SHIPPING_DATES, SHIPPING_RATES, PROHIBITED_ITEMS } from '../../constants';
+import { ShippingItem, User, DestinationAddress, Order } from '../../types';
+import { COUNTRIES, SHIPPING_DATES, SHIPPING_RATES, PROHIBITED_ITEMS, COMPANY_DETAILS } from '../../constants';
+import { api } from '../../services/api';
+import { toast } from 'sonner';
 
 interface FinalizeSectionProps {
   currentUser: User | null;
@@ -52,6 +55,7 @@ const FinalizeSection = ({
   navigateTo,
   CheckoutProgressTracker
 }: FinalizeSectionProps) => {
+  const [isSendingInvoice, setIsSendingInvoice] = React.useState(false);
   if (!currentUser) return null;
   const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
 
@@ -81,18 +85,48 @@ const FinalizeSection = ({
         </div>
         <div className="grid grid-cols-2 gap-4">
           <button 
-            onClick={() => {
-              const subject = `Invoice for Order ${orderId}`;
-              const body = `Hi ${address.fullName},\n\nYour payment for order ${orderId} was successful.\nTotal Amount: $${totalCost.toFixed(2)}\nDestination: ${address.country}\n\nThank you for choosing JiffEX!`;
-              window.location.href = `mailto:${address.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            disabled={isSendingInvoice}
+            onClick={async () => {
+              if (!orderId) return;
+              setIsSendingInvoice(true);
+              
+              // We need an Order object here. We can reconstruct it or pass it.
+              const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
+              const currentOrder: Order = {
+                id: orderId,
+                customerId: currentUser.id,
+                items: cartItems,
+                totalWeight,
+                totalCost,
+                status: 'Order Confirmed',
+                createdAt: new Date().toISOString(),
+                shippingDate: selectedDate,
+                destination: address,
+                paymentStatus: 'Paid'
+              };
+
+              try {
+                await api.sendInvoicePDF(address.email, currentOrder, COMPANY_DETAILS);
+                toast.success('Invoice sent to email successfully!');
+              } catch (err: any) {
+                console.error(err);
+                toast.error(err.message || 'Failed to send invoice email.');
+                
+                // Fallback to mailto
+                const subject = `Invoice for Order ${orderId}`;
+                const body = `Hi ${address.fullName},\n\nYour payment for order ${orderId} was successful.\nTotal Amount: ₹${totalCost.toFixed(2)}\nDestination: ${address.country}\n\nThank you for choosing JiffEX!`;
+                window.location.href = `mailto:${address.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+              } finally {
+                setIsSendingInvoice(false);
+              }
             }}
-            className="flex-1 py-4 bg-slate-100 text-slate-900 rounded-2xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
+            className="flex-1 py-4 bg-slate-100 text-slate-900 rounded-2xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
           >
-            <Mail size={18} /> Email Invoice
+            {isSendingInvoice ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />} Email Invoice
           </button>
           <button 
             onClick={() => {
-              const message = `*JiffEX Invoice*\n\nOrder ID: ${orderId}\nCustomer: ${address.fullName}\nTotal Amount: $${totalCost.toFixed(2)}\nDestination: ${address.country}\nStatus: Paid\n\nThank you for choosing JiffEX!`;
+              const message = `*JiffEX Invoice*\n\nOrder ID: ${orderId}\nCustomer: ${address.fullName}\nTotal Amount: ₹${totalCost.toFixed(2)}\nDestination: ${address.country}\nStatus: Paid\n\nThank you for choosing JiffEX!`;
               const cleanPhone = address.phone.replace(/\D/g, '');
               window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
             }}
@@ -276,16 +310,16 @@ const FinalizeSection = ({
             </div>
             <div className="flex justify-between text-slate-400 text-sm">
               <span>Shipping ({address.country})</span>
-              <span className="text-white font-medium">${(totalWeight * (SHIPPING_RATES[address.country] || 10)).toFixed(2)}</span>
+              <span className="text-white font-medium">₹{(totalWeight * (SHIPPING_RATES[address.country] || 10)).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-slate-400 text-sm">
               <span>Items Cost</span>
-              <span className="text-white font-medium">${cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
+              <span className="text-white font-medium">₹{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
             </div>
             <div className="h-px bg-slate-800 my-4" />
             <div className="flex justify-between items-center">
               <span className="text-lg font-bold">Total Amount</span>
-              <span className="text-2xl font-black text-indigo-400">${totalCost.toFixed(2)}</span>
+              <span className="text-2xl font-black text-indigo-400">₹{totalCost.toFixed(2)}</span>
             </div>
           </div>
 

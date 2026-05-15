@@ -144,7 +144,7 @@ const CartSection = ({
         : items.filter(i => i.source === mode))
     : items.filter(i => i.source !== 'Warehouse' || i.submitted);
 
-  const displayWeight = displayItems.reduce((sum, item) => sum + (item.weight * (item.quantity || 1)), 0);
+  const displayWeight = displayItems.reduce((sum, item) => sum + (item.weight || 0), 0);
   const hasTBDWeight = displayItems.some(i => i.weight === 0);
 
   return (
@@ -526,7 +526,7 @@ const CartSection = ({
                         </div>
                       )}
                       <div className="text-right min-w-[80px]">
-                        <div className="text-sm font-black text-slate-900">${(item.price || 0) * (item.quantity || 1)}</div>
+                        <div className="text-sm font-black text-slate-900">₹{(item.price || 0).toLocaleString()}</div>
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total</div>
                       </div>
                       <button 
@@ -624,7 +624,7 @@ const CartSection = ({
                       />
                       <div className="absolute top-3 left-3">
                         <div className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-full shadow-sm border border-white/20">
-                          <span className="text-xs font-bold text-slate-900">${product.price}</span>
+                          <span className="text-xs font-bold text-slate-900">₹{product.price}</span>
                         </div>
                       </div>
                     </div>
@@ -675,7 +675,7 @@ const CartSection = ({
             <div className="space-y-4">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500 font-medium">Total Items</span>
-                <span className="font-bold text-slate-900">{displayItems.length}</span>
+                <span className="font-bold text-slate-900">{displayItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500 font-medium">Total Weight</span>
@@ -687,7 +687,7 @@ const CartSection = ({
               <div className="pt-4 border-t border-slate-100">
                 <div className="flex justify-between items-center">
                   <span className="text-base font-bold text-slate-900">Estimated Total</span>
-                  <span className="text-xl font-black text-indigo-600">${displayItems.reduce((acc, item) => acc + (item.price || 0) * (item.quantity || 1), 0)}</span>
+                  <span className="text-xl font-black text-indigo-600">₹{displayItems.reduce((acc, item) => acc + (item.price || 0), 0).toLocaleString()}</span>
                 </div>
               </div>
             </div>

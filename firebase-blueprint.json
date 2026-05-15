@@ -133,6 +133,19 @@
       "schema": "StoreProduct",
       "description": "Products available for purchase in the store."
     },
+    "notifications/{notificationId}": {
+      "schema": {
+        "title": "Notification",
+        "type": "object",
+        "properties": {
+          "userId": { "type": "string" },
+          "title": { "type": "string" },
+          "message": { "type": "string" },
+          "createdAt": { "type": "string" }
+        }
+      },
+      "description": "User notifications history."
+    },
     "/agents/{agentId}": {
       "schema": "AgentProfile",
       "description": "Shipping agent profiles."

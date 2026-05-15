@@ -1,9 +1,11 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Logo } from '../Logo';
-import { Truck, Package, Clock, ChevronRight, XCircle, Printer, Share, Mail, MessageCircle } from 'lucide-react';
+import { Truck, Package, Clock, ChevronRight, XCircle, Printer, Share, Mail, MessageCircle, Loader2 } from 'lucide-react';
 import { User, Order } from '../../types';
-import { WAREHOUSE_ADDRESS } from '../../constants';
+import { WAREHOUSE_ADDRESS, COMPANY_DETAILS } from '../../constants';
+import { api } from '../../services/api';
+import { toast } from 'sonner';
 
 interface CustomerHistoryProps {
   currentUser: User | null;
@@ -24,6 +26,8 @@ const CustomerHistory = ({
   simulateNotification,
   StaticShipmentTracker
 }: CustomerHistoryProps) => {
+  const [isSendingInvoice, setIsSendingInvoice] = React.useState<string | null>(null);
+
   if (!currentUser) return null;
   const customerOrders = orders.filter(o => o.customerId === currentUser.id);
 
@@ -69,7 +73,7 @@ const CustomerHistory = ({
                   </div>
                   <div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase">Total Paid</div>
-                    <div className="text-sm font-bold">${order.totalCost}</div>
+                    <div className="text-sm font-bold">₹{order.totalCost}</div>
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
@@ -98,18 +102,31 @@ const CustomerHistory = ({
                 {/* Quick Share Buttons */}
                 <div className="mt-4 pt-4 border-t border-slate-100 flex gap-2">
                   <button 
-                    onClick={() => {
-                      const subject = `Invoice for Order ${order.id}`;
-                      const body = `Hi ${order.destination.fullName},\n\nHere is your invoice for order ${order.id}.\nTotal Amount: $${order.totalCost}\nDestination: ${order.destination.country}\n\nThank you for choosing JiffEX!`;
-                      window.location.href = `mailto:${order.destination.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                    disabled={isSendingInvoice === order.id}
+                    onClick={async () => {
+                      setIsSendingInvoice(order.id);
+                      try {
+                        await api.sendInvoicePDF(order.destination.email, order, COMPANY_DETAILS);
+                        toast.success('Invoice sent to email successfully!');
+                      } catch (err: any) {
+                        console.error(err);
+                        toast.error(err.message || 'Failed to send invoice email.');
+                        
+                        // Fallback to mailto if server send fails
+                        const subject = `Invoice for Order ${order.id}`;
+                        const body = `Hi ${order.destination.fullName},\n\nHere is your invoice for order ${order.id}.\nTotal Amount: ₹${order.totalCost}\nDestination: ${order.destination.country}\n\nThank you for choosing JiffEX!`;
+                        window.location.href = `mailto:${order.destination.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                      } finally {
+                        setIsSendingInvoice(null);
+                      }
                     }}
-                    className="flex-1 py-2 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-1"
+                    className="flex-1 py-2 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-1 disabled:opacity-50"
                   >
-                    <Mail size={12} /> Email
+                    {isSendingInvoice === order.id ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} />} Email
                   </button>
                   <button 
                     onClick={() => {
-                      const message = `*JiffEX Invoice*\n\nOrder ID: ${order.id}\nCustomer: ${order.destination.fullName}\nTotal Amount: $${order.totalCost}\nDestination: ${order.destination.country}\nStatus: ${order.status}\n\nThank you for choosing JiffEX!`;
+                      const message = `*JiffEX Invoice*\n\nOrder ID: ${order.id}\nCustomer: ${order.destination.fullName}\nTotal Amount: ₹${order.totalCost}\nDestination: ${order.destination.country}\nStatus: ${order.status}\n\nThank you for choosing JiffEX!`;
                       const cleanPhone = order.destination.phone.replace(/\D/g, '');
                       window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
                     }}
@@ -186,7 +203,7 @@ const CustomerHistory = ({
                         </div>
                       </div>
                       <div className="text-sm font-bold text-slate-900">
-                        {item.price ? `$${item.price}` : '-'}
+                        {item.price ? `₹${item.price}` : '-'}
                       </div>
                     </div>
                   ))}
@@ -201,7 +218,7 @@ const CustomerHistory = ({
                 <div className="flex justify-between items-center">
                   <div>
                     <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Grand Total</span>
-                    <div className="text-3xl font-black">${selectedOrderForInvoice.totalCost}</div>
+                    <div className="text-3xl font-black">₹{selectedOrderForInvoice.totalCost}</div>
                   </div>
                   <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
                     {selectedOrderForInvoice.paymentStatus}
@@ -217,18 +234,31 @@ const CustomerHistory = ({
                     <Printer size={18} /> Print
                   </button>
                   <button 
-                    onClick={() => {
-                      const subject = `Invoice for Order ${selectedOrderForInvoice.id}`;
-                      const body = `Hi ${selectedOrderForInvoice.destination.fullName},\n\nHere is your invoice for order ${selectedOrderForInvoice.id}.\nTotal Amount: $${selectedOrderForInvoice.totalCost}\nDestination: ${selectedOrderForInvoice.destination.country}\n\nThank you for choosing JiffEX!`;
-                      window.location.href = `mailto:${selectedOrderForInvoice.destination.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                    disabled={isSendingInvoice === selectedOrderForInvoice.id}
+                    onClick={async () => {
+                      setIsSendingInvoice(selectedOrderForInvoice.id);
+                      try {
+                        await api.sendInvoicePDF(selectedOrderForInvoice.destination.email, selectedOrderForInvoice, COMPANY_DETAILS);
+                        toast.success('Invoice sent to email successfully!');
+                      } catch (err: any) {
+                        console.error(err);
+                        toast.error(err.message || 'Failed to send invoice email.');
+
+                        // Fallback to mailto
+                        const subject = `Invoice for Order ${selectedOrderForInvoice.id}`;
+                        const body = `Hi ${selectedOrderForInvoice.destination.fullName},\n\nHere is your invoice for order ${selectedOrderForInvoice.id}.\nTotal Amount: ₹${selectedOrderForInvoice.totalCost}\nDestination: ${selectedOrderForInvoice.destination.country}\n\nThank you for choosing JiffEX!`;
+                        window.location.href = `mailto:${selectedOrderForInvoice.destination.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                      } finally {
+                        setIsSendingInvoice(null);
+                      }
                     }}
-                    className="py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
+                    className="py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <Mail size={18} /> Email
+                    {isSendingInvoice === selectedOrderForInvoice.id ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />} Email
                   </button>
                   <button 
                     onClick={() => {
-                      const message = `*JiffEX Invoice*\n\nOrder ID: ${selectedOrderForInvoice.id}\nCustomer: ${selectedOrderForInvoice.destination.fullName}\nTotal Amount: $${selectedOrderForInvoice.totalCost}\nDestination: ${selectedOrderForInvoice.destination.country}\nStatus: ${selectedOrderForInvoice.status}\n\nThank you for choosing JiffEX!`;
+                      const message = `*JiffEX Invoice*\n\nOrder ID: ${selectedOrderForInvoice.id}\nCustomer: ${selectedOrderForInvoice.destination.fullName}\nTotal Amount: ₹${selectedOrderForInvoice.totalCost}\nDestination: ${selectedOrderForInvoice.destination.country}\nStatus: ${selectedOrderForInvoice.status}\n\nThank you for choosing JiffEX!`;
                       const cleanPhone = selectedOrderForInvoice.destination.phone.replace(/\D/g, '');
                       window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
                     }}
@@ -241,7 +271,7 @@ const CustomerHistory = ({
                       if (navigator.share) {
                         navigator.share({
                           title: `JiffEX Invoice - ${selectedOrderForInvoice.id}`,
-                          text: `Invoice for order ${selectedOrderForInvoice.id} to ${selectedOrderForInvoice.destination.country}. Total: $${selectedOrderForInvoice.totalCost}`,
+                          text: `Invoice for order ${selectedOrderForInvoice.id} to ${selectedOrderForInvoice.destination.country}. Total: ₹${selectedOrderForInvoice.totalCost}`,
                           url: window.location.href
                         }).catch(console.error);
                       }

@@ -218,7 +218,7 @@ const PickupSection = ({
               <div className="flex justify-between items-end">
                 <div>
                   <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Cost</span>
-                  <div className="text-4xl font-black mt-1">${totalCost.toLocaleString()}</div>
+                  <div className="text-4xl font-black mt-1">₹{totalCost.toLocaleString()}</div>
                 </div>
                 <div className="text-indigo-400 text-[10px] font-bold uppercase tracking-widest mb-1">Inc. Taxes</div>
               </div>

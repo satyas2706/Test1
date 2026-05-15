@@ -41,3 +41,28 @@ CREATE POLICY "Allow public update items" ON items FOR UPDATE USING (true);
 CREATE POLICY "Allow public read orders" ON orders FOR SELECT USING (true);
 CREATE POLICY "Allow public insert orders" ON orders FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update orders" ON orders FOR UPDATE USING (true);
+
+-- Create the 'products' table for the store
+CREATE TABLE IF NOT EXISTS products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  price DECIMAL NOT NULL,
+  category TEXT NOT NULL,
+  image TEXT NOT NULL,
+  weight DECIMAL NOT NULL,
+  description TEXT,
+  dimensions JSONB,
+  material TEXT,
+  origin TEXT,
+  estimated_delivery TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS for products
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for products
+CREATE POLICY "Allow public read products" ON products FOR SELECT USING (true);
+CREATE POLICY "Allow public insert products" ON products FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update products" ON products FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete products" ON products FOR DELETE USING (true);
