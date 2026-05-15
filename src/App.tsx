@@ -53,6 +53,9 @@ import {
   LogOut,
   Zap,
   Database,
+  Plane,
+  PackagePlus,
+  Send,
   Loader2,
   Check,
   Phone,
@@ -4410,20 +4413,260 @@ export default function App() {
     return (
       <div className="space-y-6">
         {activeTab === 'warehouse' ? (
-          <div className="min-h-[60vh] flex flex-col items-center justify-center text-center space-y-8 bg-white rounded-[3rem] border border-slate-100 p-12 shadow-sm">
-             <div className="w-24 h-24 bg-indigo-50 rounded-3xl flex items-center justify-center text-indigo-600 shadow-inner">
-               <Package size={48} className="animate-pulse" />
-             </div>
-             <div className="max-w-md space-y-4">
-               <h2 className="text-3xl font-black text-slate-900 tracking-tight">Warehouse Redesign in Progress</h2>
-               <p className="text-slate-500 font-medium leading-relaxed">
-                 We are creating a more intuitive experience for sending your items to our facility. 
-                 Please provide the step-by-step points for the new design.
-               </p>
-             </div>
-             <div className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-2xl text-sm font-black uppercase tracking-widest">
-               <Zap size={16} className="text-yellow-400" /> Awaiting Instructions
-             </div>
+          <div className="space-y-8">
+            {/* Value Prop Banner */}
+            <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-8 md:p-12 rounded-[2.5rem] shadow-xl relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
+               <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                 <div className="space-y-6">
+                   <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full backdrop-blur-md border border-white/10 text-xs font-black uppercase tracking-widest text-indigo-200">
+                     <Globe size={14} /> Global Shipping Solutions
+                   </div>
+                   <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
+                     Ship from <span className="text-indigo-400">Anywhere</span>,<br />
+                     Deliver to the <span className="text-indigo-400">USA</span>.
+                   </h2>
+                   <p className="text-slate-300 font-medium text-lg leading-relaxed max-w-md">
+                     Use our secure warehouse as your domestic shipping hub. We'll receive, verify, and forward your items globally.
+                   </p>
+                 </div>
+                 <div className="hidden lg:grid grid-cols-2 gap-4">
+                   {[
+                     { icon: ShoppingBag, label: 'Shop Online', desc: 'Amazon, eBay, Flipkart' },
+                     { icon: Box, label: 'Offline Goods', desc: 'Sent via local couriers' },
+                     { icon: ShieldCheck, label: 'Secure Storage', desc: 'Climate controlled' },
+                     { icon: Plane, label: 'Swift Forwarding', desc: 'Direct to your door' }
+                   ].map((item, i) => (
+                     <div key={i} className="p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors">
+                       <item.icon size={20} className="mb-2 text-indigo-400" />
+                       <h4 className="text-sm font-black">{item.label}</h4>
+                       <p className="text-[10px] text-slate-400">{item.desc}</p>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Left Column: Address & Registration */}
+              <div className="lg:col-span-12 space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Step 1: Warehouse Address Card */}
+                  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
+                    <div className="flex items-center gap-4">
+                       <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+                         <MapPin size={24} />
+                       </div>
+                       <div>
+                         <h3 className="text-xl font-black text-slate-900 leading-tight">Step 1: Use Our Address</h3>
+                         <p className="text-xs text-slate-500 font-medium">Use this at checkout or hand to your courier</p>
+                       </div>
+                    </div>
+                    
+                    <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-200 relative group">
+                      <button 
+                        onClick={handleCopyAddress}
+                        className="absolute top-4 right-4 p-3 bg-white hover:bg-indigo-600 hover:text-white rounded-xl shadow-sm transition-all border border-slate-200"
+                        title="Copy Address"
+                      >
+                        <Copy size={16} />
+                      </button>
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Recipient Name / ID</p>
+                          <p className="text-lg font-black text-slate-900">{WAREHOUSE_ADDRESS.name} - {customerWarehouseId}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Street Address</p>
+                            <p className="text-sm font-bold text-slate-700">{WAREHOUSE_ADDRESS.street}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">City/State/Zip</p>
+                            <p className="text-sm font-bold text-slate-700">{WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state} {WAREHOUSE_ADDRESS.zip}</p>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Country</p>
+                          <p className="text-sm font-bold text-slate-700">{WAREHOUSE_ADDRESS.country}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 text-emerald-700">
+                      <Info size={18} className="shrink-0 mt-0.5" />
+                      <p className="text-xs leading-relaxed font-medium">
+                        <span className="font-bold">Pro Tip:</span> Always include your ID (<span className="font-bold">{customerWarehouseId}</span>) in the "Building/Suite" line to avoid processing delays.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Step 2: Register Incoming Package */}
+                  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
+                    <div className="flex items-center gap-4">
+                       <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-slate-200">
+                         <PackagePlus size={24} />
+                       </div>
+                       <div>
+                         <h3 className="text-xl font-black text-slate-900 leading-tight">Step 2: Register Package</h3>
+                         <p className="text-xs text-slate-500 font-medium">Pre-alert us about your shipment for faster sorting</p>
+                       </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Item Description</label>
+                        <input 
+                          type="text" 
+                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-medium"
+                          placeholder="e.g. 5x Cotton T-Shirts, Laptop..."
+                          value={cartItemName}
+                          onChange={(e) => setCartItemName(e.target.value)}
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tracking ID (if available)</label>
+                          <input 
+                            type="text" 
+                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-mono text-sm"
+                            placeholder="Courier tracking #"
+                            value={cartItemInvoiceNumber}
+                            onChange={(e) => setCartItemInvoiceNumber(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Quantity</label>
+                          <div className="flex items-center bg-slate-50 rounded-2xl border border-slate-200 p-1">
+                            <button 
+                              onClick={() => setCartItemQuantity(Math.max(1, cartItemQuantity - 1))}
+                              className="p-3 hover:bg-white rounded-xl transition-colors"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <input 
+                              type="number" 
+                              className="w-full bg-transparent text-center font-black outline-none"
+                              value={cartItemQuantity}
+                              onChange={(e) => setCartItemQuantity(Number(e.target.value))}
+                            />
+                            <button 
+                              onClick={() => setCartItemQuantity(cartItemQuantity + 1)}
+                              className="p-3 hover:bg-white rounded-xl transition-colors"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={handleAdd}
+                        disabled={!cartItemName}
+                        className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all ${
+                          cartItemName 
+                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-200' 
+                            : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        }`}
+                      >
+                        <Plus size={20} /> Register Item
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 3: Summary & Finalize */}
+                <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm space-y-8" ref={warehouseItemsRef}>
+                  <div className="flex items-center justify-between border-b border-slate-50 pb-6">
+                    <div className="flex items-center gap-4">
+                       <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-100">
+                         <CheckCircle2 size={24} />
+                       </div>
+                       <div>
+                         <h3 className="text-xl font-black text-slate-900 leading-tight">Step 3: Review & Finalize</h3>
+                         <p className="text-xs text-slate-500 font-medium">Confirm expected items for tracking</p>
+                       </div>
+                    </div>
+                    <div className="px-6 py-3 bg-indigo-50 rounded-2xl text-xs font-black text-indigo-600 border border-indigo-100">
+                      {displayItems.length} Registered Items
+                    </div>
+                  </div>
+
+                  {displayItems.length === 0 ? (
+                    <div className="py-20 flex flex-col items-center justify-center text-slate-400 space-y-4">
+                      <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center border-2 border-dashed border-slate-200">
+                        <Package size={40} strokeWidth={1} />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-bold text-slate-900">No items registered yet</p>
+                        <p className="text-sm max-w-[250px]">Items added in Step 2 will appear here for final confirmation.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {displayItems.map((item) => (
+                          <motion.div 
+                            layout
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            key={item.id}
+                            className="bg-slate-50 p-6 rounded-3xl border border-slate-100 hover:border-indigo-200 transition-all group relative"
+                          >
+                            <button 
+                              onClick={() => removeItem(item.id)}
+                              className="absolute top-4 right-4 p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                            <div className="flex items-start gap-4">
+                              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                                <Package size={24} />
+                              </div>
+                              <div className="space-y-1">
+                                <h4 className="font-black text-slate-900 line-clamp-1">{item.name}</h4>
+                                <div className="flex flex-wrap gap-2">
+                                  <span className="px-2 py-0.5 bg-white rounded-lg text-[10px] font-bold text-slate-500 border border-slate-100">
+                                    {item.quantity} Qty
+                                  </span>
+                                  {item.invoiceNumber && (
+                                    <span className="px-2 py-0.5 bg-indigo-50 rounded-lg text-[10px] font-bold text-indigo-600 border border-indigo-100">
+                                      Track: {item.invoiceNumber}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+
+                      <div className="bg-indigo-600 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl shadow-indigo-200">
+                         <div className="space-y-2 text-center md:text-left">
+                           <h4 className="text-2xl font-black text-white leading-tight">Ready to send?</h4>
+                           <p className="text-indigo-100 text-sm font-medium">Confirming this pre-alert helps us identify your package instantly on arrival.</p>
+                         </div>
+                         <button 
+                           onClick={() => {
+                             setItems(prev => prev.map(i => 
+                               i.source === 'Warehouse' && !i.submitted 
+                                 ? { ...i, submitted: true } 
+                                 : i
+                             ));
+                             setActiveTab('cart');
+                             toast.success('Pre-alert submitted successfully!');
+                           }}
+                           className="px-10 py-5 bg-white text-indigo-600 rounded-2xl font-black shadow-lg hover:bg-slate-50 transition-all flex items-center gap-3 active:scale-95"
+                         >
+                           <Send size={24} /> Finalize Shipment
+                         </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
           <>
@@ -4458,56 +4701,59 @@ export default function App() {
                       <p className="text-slate-500 mt-2">New interface for shipments is being developed based on updated requirements.</p>
                     </div>
                   </div>
-                ) : (
-                <div className="space-y-4">
-                  {/* Header Section with Progress for Pickup */}
+                ) : mode === 'Pickup' ? (
+                  <>
+                    <div className="space-y-4">
                   {mode === 'Pickup' && (
-                    <div 
-                      ref={pickupHeaderRef} 
-                      className="sticky top-[80px] z-30 bg-white pt-4 pb-3 border-b border-slate-100 -mx-8 px-8 flex flex-col md:flex-row md:items-center justify-between gap-6 scroll-mt-[100px]"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl bg-deep-blue flex items-center justify-center text-jiffex-orange shadow-xl shadow-deep-blue/20">
-                          <Truck size={28} />
-                        </div>
-                        <div>
-                          <h2 className="text-2xl font-black text-deep-blue tracking-tight">Home Pickup</h2>
-                          <p className="text-sm text-slate-500 font-medium">
-                            {activePickupStep === 5 ? 'Booking Confirmed' : hasActivePickup ? 'Add items to your scheduled pickup' : 'Schedule an agent to collect from your home'}
-                          </p>
-                        </div>
+                    <>
+                      {/* Header Section with Progress for Pickup */}
+                      <div 
+                        ref={pickupHeaderRef} 
+                        className="sticky top-[80px] z-30 bg-white pt-4 pb-3 border-b border-slate-100 -mx-8 px-8 flex flex-col md:flex-row md:items-center justify-between gap-6 scroll-mt-[100px]"
+                      >
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-deep-blue flex items-center justify-center text-jiffex-orange shadow-xl shadow-deep-blue/20">
+                        <Truck size={28} />
                       </div>
-                      
-                      {/* Progress Indicator for Pickup */}
-                      <div className="flex items-center gap-2 w-full md:w-[450px]">
-                        {[
-                          { step: 1, label: 'Items' },
-                          { step: 2, label: 'Schedule' },
-                          { step: 3, label: 'Address' },
-                          { step: 4, label: 'Review' },
-                          { step: 5, label: 'Done' }
-                        ].map((s, idx) => (
-                          <div key={s.step} className="flex-1 flex flex-col gap-2">
-                            <div 
-                              className={`h-1.5 rounded-full transition-all duration-500 ${
-                                activePickupStep === 5 && s.step === 5 ? 'bg-emerald-500 shadow-sm shadow-emerald-100' :
-                                activePickupStep === s.step ? 'bg-jiffex-orange shadow-sm shadow-jiffex-orange/20' :
-                                activePickupStep > s.step ? 'bg-deep-blue' : 'bg-slate-100'
-                              }`}
-                            />
-                            <span className={`text-[9px] font-black uppercase tracking-tighter text-center transition-colors duration-500 ${
-                              activePickupStep === s.step ? 'text-jiffex-orange' : 
-                              activePickupStep > s.step ? 'text-deep-blue' : 'text-slate-400'
-                            }`}>
-                              {s.label}
-                            </span>
-                          </div>
-                        ))}
+                      <div>
+                        <h2 className="text-2xl font-black text-deep-blue tracking-tight">Home Pickup</h2>
+                        <p className="text-sm text-slate-500 font-medium">
+                          {activePickupStep === 5 ? 'Booking Confirmed' : hasActivePickup ? 'Add items to your scheduled pickup' : 'Schedule an agent to collect from your home'}
+                        </p>
                       </div>
                     </div>
-                  )}
+                    
+                    {/* Progress Indicator for Pickup */}
+                    <div className="flex items-center gap-2 w-full md:w-[450px]">
+                      {[
+                        { step: 1, label: 'Items' },
+                        { step: 2, label: 'Schedule' },
+                        { step: 3, label: 'Address' },
+                        { step: 4, label: 'Review' },
+                        { step: 5, label: 'Done' }
+                      ].map((s, idx) => (
+                        <div key={s.step} className="flex-1 flex flex-col gap-2">
+                          <div 
+                            className={`h-1.5 rounded-full transition-all duration-500 ${
+                              activePickupStep === 5 && s.step === 5 ? 'bg-emerald-500 shadow-sm shadow-emerald-100' :
+                              activePickupStep === s.step ? 'bg-jiffex-orange shadow-sm shadow-jiffex-orange/20' :
+                              activePickupStep > s.step ? 'bg-deep-blue' : 'bg-slate-100'
+                            }`}
+                          />
+                          <span className={`text-[9px] font-black uppercase tracking-tighter text-center transition-colors duration-500 ${
+                            activePickupStep === s.step ? 'text-jiffex-orange' : 
+                            activePickupStep > s.step ? 'text-deep-blue' : 'text-slate-400'
+                          }`}>
+                            {s.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
 
-                  {(hasActivePickup && activePickupStep !== 5 && !isSchedulingNewPickup) ? (
+              {(hasActivePickup && activePickupStep !== 5 && !isSchedulingNewPickup) ? (
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                       {/* Left Column: Sticky Add Item Form */}
                       <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
@@ -5422,6 +5668,9 @@ export default function App() {
                     </div>
                   </div>
                 )}
+              </div>
+            </>
+          ) : null}
 
         {/* Item List Card - Visible in all tabs, but specific parts are conditional */}
         {!((mode === 'Pickup') && (isCartEmpty || activePickupStep === 5)) && (
@@ -5754,10 +6003,10 @@ export default function App() {
                     );
                   })}
                   </div>
-
-                  {/* Add More Items section removed as per user request */}
                 </div>
               )}
+            </div>
+          )}
               
               {/* Action Buttons - Only show in My Cart tab (!mode) */}
               {!mode && (displayItems.length > 0 || appointments.length > 0) && !hasCompletedPickup && (
@@ -5790,61 +6039,57 @@ export default function App() {
                 </div>
               )}
             </div>
-          )}
-        </div>
-      )}
-    </div>
 
-        {!mode && (
-          <div className="lg:col-span-1 space-y-6">
-            {/* Order Summary Card */}
-            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm sticky top-8">
-              <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
-                <Package size={20} className="text-indigo-600" /> Order Summary
-              </h3>
-              <div className="space-y-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500 font-medium">Total Items</span>
-                  <span className="font-bold text-slate-900">{displayItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}</span>
+          {!mode && (
+            <div className="lg:col-span-1 space-y-6">
+              {/* Order Summary Card */}
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm sticky top-8">
+                <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
+                  <Package size={20} className="text-indigo-600" /> Order Summary
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500 font-medium">Total Items</span>
+                    <span className="font-bold text-slate-900">{displayItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500 font-medium">Total Weight</span>
+                    <span className="font-bold text-slate-900">
+                      {hasTBDWeight ? 'Est. ' : ''}
+                      {displayWeight.toFixed(2)} kg
+                    </span>
+                  </div>
+                  <div className="pt-4 border-t border-slate-100">
+                    <div className="flex justify-between items-center">
+                      <span className="text-base font-bold text-slate-900">Estimated Total</span>
+                      <span className="text-xl font-black text-indigo-600">₹{displayItems.reduce((acc, item) => acc + (item.price || 0), 0).toLocaleString()}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500 font-medium">Total Weight</span>
-                  <span className="font-bold text-slate-900">
-                    {hasTBDWeight ? 'Est. ' : ''}
-                    {displayWeight.toFixed(2)} kg
-                  </span>
-                </div>
-                <div className="pt-4 border-t border-slate-100">
-                  <div className="flex justify-between items-center">
-                    <span className="text-base font-bold text-slate-900">Estimated Total</span>
-                    <span className="text-xl font-black text-indigo-600">₹{displayItems.reduce((acc, item) => acc + (item.price || 0), 0).toLocaleString()}</span>
+
+                {/* Apply Coupons Box */}
+                <div className="mt-8 pt-8 border-t border-slate-100">
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Apply Coupons</h4>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Enter code" 
+                      className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold"
+                    />
+                    <button className="px-4 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-black transition-all">
+                      Apply
+                    </button>
                   </div>
                 </div>
               </div>
-
-              {/* Apply Coupons Box */}
-              <div className="mt-8 pt-8 border-t border-slate-100">
-                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Apply Coupons</h4>
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="Enter code" 
-                    className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold"
-                  />
-                  <button className="px-4 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-black transition-all">
-                    Apply
-                  </button>
-                </div>
-              </div>
             </div>
+          )}
           </div>
-        )}
-      </div>
-    </>
-  )}
-</div>
-);
-};
+        </>
+      )}
+    </div>
+    );
+  };
 
   const StoreSection = useMemo(() => {
     let filteredProducts = storeProducts.filter(p => {
@@ -7172,7 +7417,15 @@ export default function App() {
       </header>
 
       {/* Main Content */}
-      <main className={`relative max-w-7xl mx-auto px-4 pb-20 ${activeTab === 'pickup' ? 'pt-0' : (activeTab === 'warehouse' ? 'pt-0' : (activeTab === 'store' ? 'pt-8' : (activeTab === 'cart' ? 'pt-8' : (activeTab === 'history' ? 'pt-6' : (activeTab === 'finalize' ? 'pt-8' : (activeTab === 'admin' ? 'pt-4' : (activeTab === 'support' ? 'pt-4' : (activeTab === 'pickup' || activeTab === 'warehouse' ? 'pt-0' : (currentUser?.role === 'agent' ? 'pt-4' : 'pt-20')))))))))}`}>
+      <main className={`relative max-w-7xl mx-auto px-4 pb-20 ${
+        activeTab === 'home' || activeTab === 'store' || activeTab === 'warehouse' || activeTab === 'pickup' || activeTab === 'cart' || activeTab === 'finalize' 
+          ? 'pt-8' 
+          : activeTab === 'history' 
+            ? 'pt-6' 
+            : activeTab === 'admin' || activeTab === 'support' || currentUser?.role === 'agent'
+              ? 'pt-4' 
+              : 'pt-20'
+      }`}>
         <AnimatePresence>
           {activeTab !== 'home' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'finalize' && <BackButton onClick={goBack} />}
         </AnimatePresence>
