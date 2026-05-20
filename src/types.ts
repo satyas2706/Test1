@@ -21,9 +21,11 @@ export type ShippingStatus =
   | 'Picked Up' 
   | 'In Warehouse' 
   | 'Received at Warehouse'
+  | 'Awaiting Warehouse Arrival'
   | 'In Transit' 
   | 'Out for Delivery' 
   | 'Delivered' 
+  | 'Pending Pickup'
   | 'Cancelled';
 
 export interface ShippingItem {
@@ -40,6 +42,7 @@ export interface ShippingItem {
   submitted?: boolean;
   price?: number;
   image?: string;
+  purchaseSource?: string;
 }
 
 export interface DestinationAddress {
@@ -70,6 +73,9 @@ export interface Order {
   shippingDate?: string;
   created_at?: string;
   createdAt?: string;
+  updatedAt?: string;
+  assignedAgent?: AgentProfile;
+  assignedAgentId?: string;
 }
 
 export interface Appointment {

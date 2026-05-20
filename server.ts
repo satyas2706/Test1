@@ -288,13 +288,12 @@ app.post("/api/auth/verify-otp", async (req, res) => {
   try {
     const otpData = otps.get(identifier);
 
-    // For testing: allow any 6-digit code if the OTP store doesn't have a match
-    // This handles the "OTP not received" issue by letting users type anything like 123456
-    const isTestCode = code.length === 6;
+  // For testing: allow 123456 as a universal test code
+  const isTestCode = code === "123456";
 
-    if (!isTestCode && (!otpData || otpData.code !== code || Date.now() > otpData.expiresAt)) {
-      return res.status(400).json({ error: "Invalid or expired OTP" });
-    }
+  if (!isTestCode && (!otpData || otpData.code !== code || Date.now() > otpData.expiresAt)) {
+    return res.status(400).json({ error: "Invalid or expired OTP" });
+  }
 
     // Success - Clear OTP if it existed
     if (otpData) otps.delete(identifier);
@@ -390,22 +389,40 @@ app.post("/api/items", async (req, res) => {
 
 // Example API: Create an order/appointment
 app.post("/api/orders", async (req, res) => {
-  if (!supabase) return res.json({ ...req.body, id: crypto.randomUUID() });
+  const providedId = req.body.id || req.body.orderId || req.body.appointmentId;
+  const finalId = providedId && String(providedId).trim() !== "" ? providedId : crypto.randomUUID();
+  
+  if (!supabase) {
+    console.log(`[SQLITE] Creating order with ID: ${finalId}`);
+    return res.json({ ...req.body, id: finalId });
+  }
 
   try {
     // Transform keys to match SQL schema (camelCase to snake_case if necessary)
     const orderData = {
-      id: req.body.id || crypto.randomUUID(),
-      customer_id: req.body.customerId,
+      id: finalId,
+      customer_id: req.body.customer_id || req.body.customerId,
       items: req.body.items,
-      total_weight: req.body.totalWeight,
-      total_cost: req.body.totalCost,
+      total_weight: req.body.total_weight || req.body.totalWeight,
+      total_cost: req.body.total_cost || req.body.totalCost,
       status: req.body.status,
       destination: req.body.destination,
-      payment_status: req.body.paymentStatus,
-      shipping_date: req.body.shippingDate,
+      payment_status: req.body.payment_status || req.body.paymentStatus,
+      shipping_date: req.body.shipping_date || req.body.shippingDate,
+      pickup_type: req.body.pickup_type || req.body.pickupType,
+      assigned_agent: req.body.assigned_agent || req.body.assignedAgent,
+      assigned_agent_id: req.body.assigned_agent_id || req.body.assignedAgentId,
+      language_preference: req.body.language_preference || req.body.languagePreference,
+      item_type: req.body.item_type || req.body.itemType,
+      vehicle_type: req.body.vehicle_type || req.body.vehicleType,
+      phone: req.body.phone,
+      customer_name: req.body.customer_name || req.body.customerName,
+      date: req.body.date,
+      time: req.body.time,
+      address: req.body.address
     };
 
+    console.log(`[SUPABASE] Inserting order with ID: ${finalId}`);
     const { data, error } = await supabase.from('orders').insert(orderData).select().single();
     if (error) throw error;
     res.json(data);
@@ -416,7 +433,7 @@ app.post("/api/orders", async (req, res) => {
 });
 
 // API: Update item status
-app.patch("/api/items/:itemId", async (req, res) => {
+app.patch("/api/items/:itemId/status", async (req, res) => {
   if (!supabase) return res.json({ success: true });
 
   try {
@@ -432,16 +449,114 @@ app.patch("/api/items/:itemId", async (req, res) => {
   }
 });
 
-// API: Update order status
-app.patch("/api/orders/:orderId", async (req, res) => {
+// API: Update item weight
+app.patch("/api/items/:itemId/weight", async (req, res) => {
   if (!supabase) return res.json({ success: true });
 
   try {
     const { error } = await supabase
-      .from('orders')
-      .update({ status: req.body.status })
-      .eq('id', req.params.orderId);
+      .from('items')
+      .update({ weight: req.body.weight })
+      .eq('id', req.params.itemId);
     if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Update Item Weight Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: Update order details (Partial)
+app.patch("/api/orders/:orderId", async (req, res) => {
+  if (!supabase) return res.json({ success: true });
+
+  const { orderId } = req.params;
+  const updates = req.body;
+
+  // Map camelCase to snake_case for DB
+  const dbUpdates: any = { ...updates };
+  if (updates.customerId) dbUpdates.customer_id = updates.customerId;
+  if (updates.totalWeight) dbUpdates.total_weight = updates.totalWeight;
+  if (updates.totalCost) dbUpdates.total_cost = updates.totalCost;
+  if (updates.paymentStatus) dbUpdates.payment_status = updates.paymentStatus;
+  if (updates.shippingDate) dbUpdates.shipping_date = updates.shippingDate;
+  if (updates.pickupType) dbUpdates.pickup_type = updates.pickupType;
+  if (updates.assignedAgent) dbUpdates.assigned_agent = updates.assignedAgent;
+  if (updates.assignedAgentId) dbUpdates.assigned_agent_id = updates.assignedAgentId;
+  if (updates.languagePreference) dbUpdates.language_preference = updates.languagePreference;
+  if (updates.itemType) dbUpdates.item_type = updates.itemType;
+  if (updates.vehicleType) dbUpdates.vehicle_type = updates.vehicleType;
+  if (updates.customerName) dbUpdates.customer_name = updates.customerName;
+
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .update(dbUpdates)
+      .eq('id', orderId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    console.error("Update Order Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: Update order status
+// Fix: Update order status AND send notification
+app.patch("/api/orders/:orderId/status", async (req, res) => {
+  if (!supabase) return res.json({ success: true });
+
+  const { orderId } = req.params;
+  const { status } = req.body;
+
+  console.log(`[Order] Updating status for ${orderId} to ${status}`);
+
+  try {
+    // 1. Get current order info for notification
+    const { data: order, error: fetchError } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+    
+    if (fetchError || !order) {
+      console.warn(`[Order] Could not find order ${orderId} for notification`);
+      // Proceed anyway with update if row exists but skip notification
+    }
+
+    // 2. Update status
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({ status })
+      .eq('id', orderId);
+
+    if (updateError) throw updateError;
+    
+    // 3. Send notification if order was found
+    if (order) {
+      try {
+        const message = `*JiffEX Shipment Update*\n\nYour order #${orderId.slice(0, 8)} status has changed to: *${status}*\n\nTrack here: ${process.env.APP_URL || 'https://jiffex.com'}/track?id=${orderId}`;
+        
+        await sendNotification(
+          order.customer_id,
+          "Order Status Updated",
+          message,
+          ['whatsapp', 'Email'],
+          { 
+            phone: (order.destination as any)?.phone,
+            email: (order.destination as any)?.email,
+            fullName: (order.destination as any)?.fullName
+          }
+        );
+      } catch (notifyErr: any) {
+        console.error("[Order] Notification failed but status update succeeded:", notifyErr.message);
+        // Do not throw here, we want the status update to be considered a success
+      }
+    }
+
     res.json({ success: true });
   } catch (err: any) {
     console.error("Update Order Error:", err.message);
@@ -476,7 +591,8 @@ app.post("/api/invoice/send-pdf", async (req, res) => {
     const pdfBuffer = await generateInvoicePDF(order, companyDetails);
 
     const orderIdStr = String(order.id || '');
-    const trackingId = orderIdStr.startsWith('BB-') ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
+    const isPrefixed = ['SH-', 'SW-', 'PH-', 'BB-'].some(p => orderIdStr.startsWith(p));
+    const trackingId = isPrefixed ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
     const appUrl = process.env.APP_URL || "https://www.jiffex.com";
     const trackingUrl = `${appUrl}?tab=track&id=${trackingId}`;
     
@@ -572,7 +688,8 @@ app.post("/api/order-confirmation", async (req, res) => {
 
   try {
     const orderIdStr = String(order.id || '');
-    const trackingId = orderIdStr.startsWith('BB-') ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
+    const isPrefixed = ['SH-', 'SW-', 'PH-', 'BB-'].some(p => orderIdStr.startsWith(p));
+    const trackingId = isPrefixed ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
     const appUrl = process.env.APP_URL || "https://www.jiffex.com";
     const trackingUrl = `${appUrl}?tab=track&id=${trackingId}`;
     
@@ -802,7 +919,8 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
     doc.text(`Service Type: ${(order.items && order.items[0]) ? order.items[0].source : 'Standard Shipping'}`, 50, shippingTop + 20);
     doc.text(`Origin: India`, 50, shippingTop + 35);
     doc.text(`Destination: ${order.destination.country}`, 50, shippingTop + 50);
-    const trackingId = orderIdStr.startsWith('BB-') ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
+    const isPrefixed = ['SH-', 'SW-', 'PH-', 'BB-'].some(p => orderIdStr.startsWith(p));
+    const trackingId = isPrefixed ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
     doc.text(`Tracking ID: ${trackingId}`, 50, shippingTop + 65);
 
     // Cost Breakdown
@@ -842,6 +960,108 @@ app.get("/api/notifications/:userId", async (req, res) => {
   res.json([]);
 });
 
+// API: Delete all orders and items (Debug/Admin only)
+app.delete("/api/orders", async (req, res) => {
+  if (!supabase) {
+    // If no supabase, just clear local state (not applicable here as we want to clear DB)
+    return res.status(503).json({ error: "Supabase not connected" });
+  }
+
+  try {
+    // Delete all items first (foreign key dependency)
+    // We use a filter that matches everything to satisfy Supabase's requirement for a filter on DELETE
+    const { error: itemsError } = await supabase.from('items').delete().neq('id', 'placeholder-non-existent-id');
+    if (itemsError) throw itemsError;
+
+    // Delete all orders
+    const { error: ordersError } = await supabase.from('orders').delete().neq('id', 'placeholder-non-existent-id');
+    if (ordersError) throw ordersError;
+
+    res.json({ success: true, message: "Successfully cleared all orders and items." });
+  } catch (err: any) {
+    console.error("Clear All Data Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: Get all orders (Admin only)
+app.get("/api/orders", async (req, res) => {
+  if (!supabase) return res.json([]);
+
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    
+    // Transform snake_case back to camelCase for frontend
+    const transformed = (data || []).map(o => ({
+      ...o,
+      customerId: o.customer_id,
+      totalWeight: o.total_weight,
+      totalCost: o.total_cost,
+      paymentStatus: o.payment_status,
+      shippingDate: o.shipping_date,
+      createdAt: o.created_at,
+      pickupType: o.pickup_type,
+      assignedAgent: o.assigned_agent,
+      assignedAgentId: o.assigned_agent_id,
+      languagePreference: o.language_preference,
+      itemType: o.item_type,
+      vehicleType: o.vehicle_type,
+      customerName: o.customer_name
+    }));
+
+    res.json(transformed);
+  } catch (err: any) {
+    console.error("Fetch All Orders Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: Public Tracking (No Auth required)
+app.get("/api/orders/track/:orderId", async (req, res) => {
+  if (!supabase) return res.status(404).json({ error: "Database not connected" });
+
+  const { orderId } = req.params;
+  
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+    
+    if (error || !data) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    // Transform for frontend
+    const transformed = {
+      ...data,
+      customerId: data.customer_id,
+      totalWeight: data.total_weight,
+      totalCost: data.total_cost,
+      paymentStatus: data.payment_status,
+      shippingDate: data.shipping_date,
+      createdAt: data.created_at,
+      pickupType: data.pickup_type,
+      assignedAgent: data.assigned_agent,
+      assignedAgentId: data.assigned_agent_id,
+      languagePreference: data.language_preference,
+      itemType: data.item_type,
+      vehicleType: data.vehicle_type,
+      customerName: data.customer_name
+    };
+
+    res.json(transformed);
+  } catch (err: any) {
+    console.error("Tracking Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Example API: Get all orders for a user
 app.get("/api/orders/:customerId", async (req, res) => {
   if (!supabase) return res.json([]);
@@ -862,7 +1082,14 @@ app.get("/api/orders/:customerId", async (req, res) => {
       totalCost: o.total_cost,
       paymentStatus: o.payment_status,
       shippingDate: o.shipping_date,
-      createdAt: o.created_at
+      createdAt: o.created_at,
+      pickupType: o.pickup_type,
+      assignedAgent: o.assigned_agent,
+      assignedAgentId: o.assigned_agent_id,
+      languagePreference: o.language_preference,
+      itemType: o.item_type,
+      vehicleType: o.vehicle_type,
+      customerName: o.customer_name
     }));
 
     res.json(transformed);

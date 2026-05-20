@@ -48,6 +48,12 @@ import {
   BarChart3,
   Search,
   ArrowRight,
+  Download,
+  Mail,
+  Phone,
+  Settings2,
+  ChevronDown,
+  X,
   ArrowLeft,
   ArrowDown,
   LogOut,
@@ -58,19 +64,15 @@ import {
   Send,
   Loader2,
   Check,
-  Phone,
   Upload,
-  X,
   XCircle,
   Cpu,
   Shield,
-  ChevronDown,
   Bell,
   Heart,
   Lock,
   MessageSquare,
   MessageCircle,
-  Mail,
   SlidersHorizontal,
   ArrowUpDown,
   HelpCircle,
@@ -153,48 +155,103 @@ const BackButton = ({ onClick }: { onClick: () => void }) => (
   </motion.button>
 );
 
-const StaticShipmentTracker = () => {
-  const steps = [
-    { label: 'Order Placed', status: 'completed', date: 'Oct 24', icon: CheckCircle2 },
-    { label: 'In Transit', status: 'current', date: 'Oct 26', icon: Truck },
-    { label: 'Out for Delivery', status: 'upcoming', date: 'Oct 28', icon: Package },
-    { label: 'Delivered', status: 'upcoming', date: 'Oct 30', icon: CheckCircle2 },
+const StaticShipmentTracker = ({ order }: { order?: Order }) => {
+  const statusSteps: ShippingStatus[] = [
+    'Scheduled',
+    'Pending Pickup',
+    'Order Confirmed',
+    'Processing Order',
+    'In Transit',
+    'Out for Delivery',
+    'Delivered'
   ];
+
+  const rawStatus = order?.status || 'In Transit';
+  // Map some alternative names to the steps
+  const statusMap: Record<string, ShippingStatus> = {
+    'Request Placed': 'Scheduled',
+    'Pending': 'Scheduled',
+    'Received at Warehouse': 'Processing Order',
+    'In Warehouse': 'Processing Order',
+    'Consolidating items': 'Processing Order',
+    'Packed': 'Processing Order',
+    'Ready to Ship': 'Processing Order'
+  };
+  
+  const currentStatus = statusMap[rawStatus] || rawStatus;
+  const currentIndex = statusSteps.indexOf(currentStatus as ShippingStatus);
+  
+  const steps = statusSteps.map((label, index) => ({
+    label,
+    status: index < currentIndex ? 'completed' : index === currentIndex ? 'current' : 'upcoming',
+    date: index <= currentIndex ? (order?.updatedAt || order?.createdAt || 'Today').split('T')[0] : 'TBD',
+    icon: label === 'Delivered' ? CheckCircle2 : (label === 'In Transit' ? Truck : label === 'Scheduled' ? Calendar : Package)
+  }));
+
+  if (!order) {
+    return (
+      <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-dashed border-slate-200 text-center">
+        <Search className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+        <h3 className="text-xl font-bold text-slate-400">Enter a Tracking ID to search</h3>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
         <div>
-          <h3 className="text-xl font-black text-slate-900">Track Shipment</h3>
+          <h3 className="text-xl font-black text-slate-900">Shipment Status</h3>
           <p className="text-sm text-slate-500">Real-time updates for your package</p>
         </div>
-        <div className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-bold text-indigo-600 border border-indigo-100">
-          ID: JFX-99283-IN
+        <div className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-bold text-indigo-600 border border-indigo-100 flex items-center gap-2">
+          <Package size={14} /> ID: {order.id}
         </div>
       </div>
 
-      <div className="relative">
-        <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 -translate-y-1/2 rounded-full" />
-        <div className="absolute top-1/2 left-0 w-1/3 h-1 bg-indigo-600 -translate-y-1/2 rounded-full" />
-        
-        <div className="relative flex justify-between">
-          {steps.map((step, i) => (
-            <div key={i} className="flex flex-col items-center gap-3 relative z-10">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${
-                step.status === 'completed' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100' :
-                step.status === 'current' ? 'bg-white border border-indigo-600 text-indigo-600 shadow-md shadow-indigo-50' :
-                'bg-white border border-slate-100 text-slate-300'
-              }`}>
-                <step.icon size={20} />
-              </div>
-              <div className="text-center">
-                <div className={`text-[10px] font-black uppercase tracking-widest ${step.status !== 'upcoming' ? 'text-slate-900' : 'text-slate-400'}`}>
-                  {step.label}
+      <div className="relative pt-4 pb-8 overflow-x-auto no-scrollbar">
+        <div className="min-w-[600px] relative px-4">
+          <div className="absolute top-[24px] left-8 right-8 h-1 bg-slate-100 rounded-full" />
+          <div 
+            className="absolute top-[24px] left-8 h-1 bg-indigo-600 transition-all duration-1000 ease-out rounded-full" 
+            style={{ width: `${(currentIndex / (statusSteps.length - 1)) * 100}%`, maxWidth: 'calc(100% - 64px)' }}
+          />
+          
+          <div className="relative flex justify-between">
+            {steps.map((step, i) => (
+              <div key={i} className="flex flex-col items-center gap-3 relative z-10 w-24">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${
+                  step.status === 'completed' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100' :
+                  step.status === 'current' ? 'bg-white border-2 border-indigo-600 text-indigo-600 shadow-lg shadow-indigo-50' :
+                  'bg-white border border-slate-200 text-slate-300'
+                }`}>
+                  <step.icon size={20} />
                 </div>
-                <div className="text-[9px] font-bold text-slate-400 mt-0.5">{step.date}</div>
+                <div className="text-center">
+                  <div className={`text-[10px] font-black uppercase tracking-tight leading-tight mb-1 ${step.status !== 'upcoming' ? 'text-slate-900' : 'text-slate-400'}`}>
+                    {step.label}
+                  </div>
+                  <div className="text-[9px] font-bold text-slate-400">{step.date}</div>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-8 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400">
+            <MapPin size={18} />
+          </div>
+          <div>
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Destination</div>
+            <div className="text-xs font-black text-slate-900">{order.destination.city}, {order.destination.country}</div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Service</div>
+          <div className="text-xs font-black text-indigo-600">JiffEX Global Express</div>
         </div>
       </div>
     </div>
@@ -205,19 +262,22 @@ interface AdminDashboardProps {
   currentUser: User | null;
   orders: Order[];
   appointments: Appointment[];
-  setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>;
+  onAssignAgent: (aptId: string, agent: AgentProfile) => Promise<void>;
   agents: AgentProfile[];
   setAgents: React.Dispatch<React.SetStateAction<AgentProfile[]>>;
   categories: string[];
   setCategories: React.Dispatch<React.SetStateAction<string[]>>;
-  adminTab: 'Overview' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds';
-  setAdminTab: React.Dispatch<React.SetStateAction<'Overview' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds'>>;
+  adminTab: 'Overview' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds';
+  setAdminTab: React.Dispatch<React.SetStateAction<'Overview' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds'>>;
   storeProducts: StoreProduct[];
   setStoreProducts: React.Dispatch<React.SetStateAction<StoreProduct[]>>;
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
+  setItems: React.Dispatch<React.SetStateAction<ShippingItem[]>>;
   refundRequests: RefundRequest[];
   setRefundRequests: React.Dispatch<React.SetStateAction<RefundRequest[]>>;
   isWebmaster: boolean;
+  onUpdateOrderItemStatus: (orderId: string, itemId: string, status: ShippingStatus) => Promise<void>;
+  onUpdateOrderItemWeight: (orderId: string, itemId: string, weight: number) => Promise<void>;
 }
 
 interface SupportDeskDashboardProps {
@@ -752,23 +812,26 @@ const SupportSection = ({ currentUser, orders, tickets, setTickets, refundReques
   );
 };
 
-const AdminDashboard = ({
-  currentUser,
-  orders,
-  appointments,
-  setAppointments,
-  agents,
-  setAgents,
-  categories,
-  setCategories,
-  adminTab,
+const AdminDashboard = ({ 
+  currentUser, 
+  orders, 
+  appointments, 
+  onAssignAgent, 
+  agents, 
+  setAgents, 
+  categories, 
+  setCategories, 
+  adminTab, 
   setAdminTab,
   storeProducts,
   setStoreProducts,
   setOrders,
+  setItems,
   refundRequests,
   setRefundRequests,
-  isWebmaster: isWebmasterProp
+  isWebmaster: isWebmasterProp,
+  onUpdateOrderItemStatus,
+  onUpdateOrderItemWeight
 }: AdminDashboardProps) => {
   const [categoryInput, setCategoryInput] = useState('');
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -794,20 +857,20 @@ const AdminDashboard = ({
   const isWebmaster = isWebmasterProp ?? (currentUser?.role === 'webmaster');
 
   const stats = [
-    { label: 'Total Shipments', value: orders.length + appointments.length, icon: Package, color: 'bg-blue-500' },
-    { label: 'Pending Pickups', value: appointments.filter(a => a.status === 'Scheduled').length, icon: Clock, color: 'bg-amber-500' },
-    { label: 'Active Shipments', value: orders.filter(o => o.status !== 'Delivered').length, icon: Truck, color: 'bg-indigo-500' },
-    { label: 'Pending Refunds', value: refundRequests.filter(r => r.status === 'Pending Approval').length, icon: RefreshCw, color: 'bg-red-500' },
-  ].filter((_, i) => !isWebmaster || i !== 3);
+    { label: 'Total Shipments', value: orders.length, icon: Package, color: 'bg-blue-500', tab: 'Logistics' },
+    { label: 'Pending Pickups', value: orders.filter(o => o.status === 'Scheduled' || o.status === 'Pending Pickup').length, icon: Clock, color: 'bg-amber-500', tab: 'Pickups' },
+    { label: 'Active Shipments', value: orders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled').length, icon: Truck, color: 'bg-indigo-500', tab: 'Logistics' },
+    { label: 'Total Revenue', value: `₹${orders.reduce((acc, o) => acc + (o.totalCost || 0), 0).toLocaleString()}`, icon: TrendingUp, color: 'bg-emerald-500', tab: 'Reports' },
+  ].filter((_, i) => !isWebmaster || i >= 0);
 
   const availableTabs = (isWebmaster 
-    ? ['Inventory', 'Settings'] 
-    : ['Overview', 'Agents', 'Inventory', 'Reports', 'Refunds', 'Settings']) as any[];
+    ? ['Overview', 'Inventory', 'Reports', 'Settings'] 
+    : ['Overview', 'Pickups', 'Logistics', 'Agents', 'Inventory', 'Reports', 'Refunds', 'Settings']) as any[];
 
   // Force tab if webmaster is on restricted tab
   useEffect(() => {
-    if (isWebmaster && !['Inventory', 'Reports', 'Settings'].includes(adminTab)) {
-      setAdminTab('Inventory');
+    if (isWebmaster && !['Overview', 'Inventory', 'Reports', 'Settings'].includes(adminTab)) {
+      setAdminTab('Overview');
     }
   }, [isWebmaster, adminTab, setAdminTab]);
 
@@ -822,13 +885,17 @@ const AdminDashboard = ({
     setNewAgent({ name: '', phone: '', email: '', vehicleNumber: '' });
   };
 
-  const handleAssignAgent = (aptId: string, agentId: string) => {
+  const handleAssignAgent = async (aptId: string, agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
     if (!agent) return;
     
-    setAppointments(prev => prev.map(apt => 
-      apt.id === aptId ? { ...apt, assignedAgent: agent, assignedAgentId: agent.id } : apt
-    ));
+    try {
+      await onAssignAgent(aptId, agent);
+      toast.success(`Agent ${agent.name} assigned successfully.`);
+    } catch (err: any) {
+      console.error('Assign Agent Error:', err);
+      toast.error('Failed to assign agent.');
+    }
   };
 
   const handleAddCategory = () => {
@@ -873,6 +940,8 @@ const AdminDashboard = ({
         <nav className="flex flex-col gap-2">
           {availableTabs.map((tab: any) => {
             const Icon = tab === 'Overview' ? LayoutDashboard : 
+                         tab === 'Pickups' ? Clock :
+                         tab === 'Logistics' ? Truck :
                          tab === 'Agents' ? Users : 
                          tab === 'Inventory' ? Package : 
                          tab === 'Reports' ? BarChart3 : 
@@ -938,6 +1007,8 @@ const AdminDashboard = ({
           <div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">
               {adminTab === 'Overview' && 'Dashboard Overview'}
+              {adminTab === 'Pickups' && 'Pickup Requests'}
+              {adminTab === 'Logistics' && 'Active Logistics Pipeline'}
               {adminTab === 'Agents' && 'Logistics & Agent Network'}
               {adminTab === 'Inventory' && (isWebmaster ? 'Product Catalog' : 'Inventory Management')}
               {adminTab === 'Reports' && 'Business Intelligence'}
@@ -963,7 +1034,7 @@ const AdminDashboard = ({
 
         <div className="space-y-4 pb-20">
           {adminTab === 'Overview' ? (
-            <>
+            <div className="space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {stats.map((stat, i) => (
                   <motion.div 
@@ -971,7 +1042,8 @@ const AdminDashboard = ({
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.1 }}
-                    className="group bg-white p-6 rounded-[2rem] border border-slate-200 hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-500/5 transition-all"
+                    onClick={() => setAdminTab(stat.tab as any)}
+                    className="group bg-white p-6 rounded-[2rem] border border-slate-200 hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-500/5 transition-all cursor-pointer"
                   >
                     <div className="flex items-center justify-between mb-4">
                       <div className={`w-12 h-12 ${stat.color} text-white rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
@@ -985,164 +1057,478 @@ const AdminDashboard = ({
                 ))}
               </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                  <Clock className="text-amber-500" /> Pending Pickups
-                </h3>
-                <span className="px-3 py-1 bg-amber-50 text-amber-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-amber-100">
-                  Action Required
-                </span>
-              </div>
-              <div className="space-y-4">
-                {appointments.length === 0 ? (
-                  <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                    <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                    <p className="text-slate-400 font-medium">No appointments scheduled</p>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-amber-500/10 transition-colors" />
+                  <div className="flex items-center justify-between mb-8 relative z-10">
+                    <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
+                       <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center">
+                         <Clock size={20} />
+                       </div>
+                       Recent Pickups
+                    </h3>
+                    <button onClick={() => setAdminTab('Pickups')} className="px-4 py-2 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-500 hover:text-white transition-all">View All</button>
                   </div>
-                ) : (
-                  appointments.map(apt => (
-                    <div key={apt.id} className="p-5 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 transition-colors group">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:text-indigo-600 transition-colors">
-                            <UserIcon size={18} />
-                          </div>
-                          <div>
-                            <div className="font-black text-slate-900 text-sm tracking-tight">{apt.id}</div>
-                            <div className="text-xs font-bold text-indigo-600 truncate max-w-[120px]">{apt.customerName || 'Guest User'}</div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs font-black text-slate-900">{apt.date}</div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{apt.time}</div>
-                        </div>
+                  <div className="space-y-4 relative z-10">
+                    {appointments.length === 0 ? (
+                      <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                        <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                        <p className="text-slate-400 font-medium">No appointments scheduled</p>
                       </div>
-
-                      {apt.assignedAgent ? (
-                        <div className="flex items-center justify-between p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
+                    ) : (
+                      appointments.slice(0, 3).map(apt => (
+                        <div key={apt.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group/apt hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all">
                           <div className="flex items-center gap-3">
-                             <div className="w-8 h-8 bg-white text-indigo-600 rounded-lg flex items-center justify-center shadow-sm">
-                              <Car size={14} />
+                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 group-hover/apt:text-amber-500 shadow-sm transition-colors border border-slate-100">
+                               <UserIcon size={18} />
                             </div>
                             <div>
-                              <div className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Assigned Agent</div>
-                              <div className="text-xs font-black text-slate-900">{apt.assignedAgent.name}</div>
+                              <div className="font-black text-slate-900 text-sm">{apt.customerName}</div>
+                              <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{apt.date} • {apt.time}</div>
                             </div>
                           </div>
-                          <button 
-                            onClick={() => setAppointments(prev => prev.map(a => a.id === apt.id ? { ...a, assignedAgent: undefined, assignedAgentId: undefined } : a))}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Unassign Agent"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <div className="relative flex-1">
-                            <select 
-                              className="w-full p-2.5 pl-3 pr-8 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 appearance-none transition-all cursor-pointer"
-                              onChange={(e) => handleAssignAgent(apt.id, e.target.value)}
-                              defaultValue=""
-                            >
-                              <option value="" disabled>Dispatch Agent...</option>
-                              {agents.filter(a => a.status === 'Active').map(agent => (
-                                <option key={agent.id} value={agent.id}>{agent.name}</option>
-                              ))}
-                            </select>
-                            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                          </div>
-                          <div className="px-3 py-2.5 bg-amber-50 text-amber-600 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border border-amber-100">
-                            Waiting
+                          <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${apt.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                            {apt.status}
                           </div>
                         </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                  <Truck className="text-indigo-500" /> Active Logistics
-                </h3>
-                <div className="flex gap-2">
-                  <button className="text-[10px] font-black px-3 py-1 bg-slate-50 text-slate-500 rounded-lg hover:bg-slate-100 transition-all uppercase tracking-widest">View All</button>
-                </div>
-              </div>
-              <div className="space-y-4">
-                {orders.length === 0 ? (
-                  <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                    <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                    <p className="text-slate-400 font-medium">No active shipments</p>
+                      ))
+                    )}
                   </div>
-                ) : (
-                  orders.slice(0, 5).map(order => (
-                    <div key={order.id} className="p-5 bg-white rounded-2xl border border-slate-100 hover:border-indigo-200 transition-colors group">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                            <Box size={18} />
+                </div>
+
+                <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-indigo-500/10 transition-colors" />
+                  <div className="flex items-center justify-between mb-8 relative z-10">
+                    <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
+                       <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center">
+                         <Truck size={20} />
+                       </div>
+                       Active Shipments
+                    </h3>
+                    <button onClick={() => setAdminTab('Logistics')} className="px-4 py-2 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all">Full Pipeline</button>
+                  </div>
+                  <div className="space-y-4 relative z-10">
+                    {orders.length === 0 ? (
+                      <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                        <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                        <p className="text-slate-400 font-medium">No active logistics</p>
+                      </div>
+                    ) : (
+                      orders.slice(0, 3).map(order => (
+                        <div key={order.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group/order hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm transition-colors border border-slate-100">
+                               <Package size={18} />
+                            </div>
+                            <div>
+                              <div className="font-black text-slate-900 text-sm">#{order.id.slice(0, 8)}</div>
+                              <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{order.destination.city} • {order.totalWeight}kg</div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-black text-slate-900 text-sm tracking-tight">{order.id}</div>
-                            <div className="text-xs font-bold text-slate-500">{order.destination.country} • {order.totalWeight}kg</div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-black text-slate-900">₹{order.totalCost.toLocaleString()}</div>
-                          <div className="text-[9px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded-full mt-1">
+                          <div className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-[10px] font-black uppercase tracking-wider">
                             {order.status}
                           </div>
                         </div>
-                      </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : adminTab === 'Pickups' ? (
+            <div className="space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+                <div>
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tight">Pickup Operations</h2>
+                  <p className="text-slate-500 font-medium mt-1">Dispatch agents and manage {orders.filter(o => o.status === 'Scheduled' || o.status === 'Pending Pickup').length} pending requests.</p>
+                </div>
+                <div className="flex gap-2">
+                  <div className="px-6 py-3 bg-indigo-50 text-indigo-600 rounded-2xl border border-indigo-100 text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
+                    LIVE OPS
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6">
+                {appointments.length === 0 ? (
+                   <div className="text-center py-24 bg-white rounded-[3rem] border border-dashed border-slate-200">
+                    <Calendar className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-slate-400">No Pickup Requests Found</h3>
+                    <p className="text-sm text-slate-300 mt-2">New schedule requests will appear here automatically.</p>
+                  </div>
+                ) : (
+                  appointments.map((apt, i) => (
+                    <motion.div 
+                      key={apt.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/10 transition-all group overflow-hidden relative"
+                    >
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 group-hover:bg-indigo-50 transition-colors -mr-16 -mt-16 rounded-full blur-3xl opacity-50" />
                       
-                      <div className="flex items-center gap-2 mt-4">
-                        <div className="relative flex-1">
-                          <select 
-                            className="w-full p-2.5 pl-3 pr-8 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 appearance-none transition-all cursor-pointer"
-                            value={order.status}
-                            onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value as ShippingStatus)}
-                          >
-                            <option value="Request Placed">Request Placed</option>
-                            <option value="Order Confirmed">Order Confirmed</option>
-                            <option value="Processing Order">Processing Order</option>
-                            <option value="Consolidating items">Consolidating items</option>
-                            <option value="Packed">Packed</option>
-                            <option value="Ready to Ship">Ready to Ship</option>
-                            <option value="In Transit">In Transit</option>
-                            <option value="Out for Delivery">Out for Delivery</option>
-                            <option value="Delivered">Delivered</option>
-                            <option value="Cancelled">Cancelled</option>
-                          </select>
-                          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 relative z-10">
+                        <div className="flex items-start gap-6">
+                          <div className="w-20 h-20 bg-slate-50 rounded-[2.5rem] flex items-center justify-center text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-700 shrink-0 shadow-inner border border-slate-100">
+                            <UserIcon size={40} />
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3">
+                              <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-xl border border-indigo-100 uppercase tracking-widest">#{apt.id}</span>
+                              {apt.paymentStatus === 'Paid' ? (
+                                <span className="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-xl border border-emerald-100 uppercase tracking-widest">Fully Paid</span>
+                              ) : (
+                                <span className="px-3 py-1 bg-amber-50 text-amber-600 text-[10px] font-black rounded-xl border border-amber-100 uppercase tracking-widest">Pay at Pickup</span>
+                              )}
+                            </div>
+                            <h4 className="text-2xl font-black text-slate-900">{apt.customerName}</h4>
+                            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-4">
+                              <div className="flex items-center gap-2 text-sm font-bold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                                <Calendar size={16} className="text-indigo-500" /> {apt.date}
+                              </div>
+                              <div className="flex items-center gap-2 text-sm font-bold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                                <Clock size={16} className="text-indigo-500" /> {apt.time}
+                              </div>
+                              <div className="flex items-center gap-2 text-sm font-bold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                                <MapPin size={16} className="text-indigo-500" /> {apt.address}
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <button 
-                          onClick={() => {
-                            const message = `*JiffEX Invoice Update*\n\nOrder ID: ${order.id}\nCustomer: ${order.destination.fullName}\nTotal Amount: ₹${order.totalCost.toLocaleString()}\nCurrent Status: ${order.status}\n\nTrack your shipment: ${window.location.origin}?tab=track&id=${order.id}\n\nThank you for choosing JiffEX!`;
-                            sendWhatsApp(order.destination.phone, message);
-                          }}
-                          className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all group/btn" 
-                          title="Send Invoice via WhatsApp"
-                        >
-                          <MessageCircle size={16} />
-                        </button>
-                        <button className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all group/btn" title="Notify Customer via SMS/Email">
-                          <MessageSquare size={16} />
-                        </button>
+
+                        <div className="flex flex-col sm:flex-row items-stretch gap-4 xl:min-w-[450px]">
+                          <div className="flex-1 space-y-3 bg-slate-50/50 p-6 rounded-3xl border border-slate-100 backdrop-blur-sm">
+                            <div className="flex items-center justify-between">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contact Dispatch</p>
+                              <div className="flex gap-2">
+                                <button className="p-2 bg-white text-emerald-600 rounded-xl shadow-sm border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all active:scale-95">
+                                  <Phone size={16} />
+                                </button>
+                                <button className="p-2 bg-white text-indigo-600 rounded-xl shadow-sm border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all active:scale-95">
+                                  <Mail size={16} />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                               <span className="text-sm font-black text-slate-900">{apt.phone}</span>
+                               <span className="text-xs font-medium text-slate-400">Preferred: {apt.languagePreference || 'Any'}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex-1 flex flex-col justify-center gap-3">
+                             {apt.assignedAgent ? (
+                              <div className="bg-indigo-600 p-5 rounded-3xl shadow-xl shadow-indigo-100 flex items-center justify-between group/assigned">
+                                <div className="flex items-center gap-4">
+                                   <div className="w-12 h-12 bg-white/20 text-white rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/20">
+                                    <Car size={24} />
+                                  </div>
+                                  <div>
+                                    <div className="text-[9px] font-black text-indigo-100 uppercase tracking-widest mb-1 opacity-70">En Route</div>
+                                    <div className="text-sm font-black text-white">{apt.assignedAgent.name}</div>
+                                  </div>
+                                </div>
+                                <button 
+                                  onClick={() => handleAssignAgent(apt.id, null as any)}
+                                  className="p-2 bg-white/10 text-white hover:bg-white/20 rounded-xl transition-all"
+                                >
+                                  <X size={20} />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1">Dispatch Agent</p>
+                                <div className="relative">
+                                  <select 
+                                    className="w-full p-4 pl-4 pr-12 rounded-3xl bg-white border border-slate-200 text-sm font-black text-slate-700 outline-none focus:ring-8 focus:ring-indigo-500/5 focus:border-indigo-400 appearance-none transition-all cursor-pointer shadow-lg shadow-slate-100"
+                                    onChange={(e) => handleAssignAgent(apt.id, e.target.value)}
+                                    defaultValue=""
+                                  >
+                                    <option value="" disabled>Select Field Agent...</option>
+                                    {agents.filter(a => a.status === 'Active').map(agent => (
+                                      <option key={agent.id} value={agent.id}>{agent.name} • {agent.vehicleNumber || 'No Vehicle'}</option>
+                                    ))}
+                                  </select>
+                                  <ChevronDown size={20} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+
+                      <div className="mt-8 pt-8 border-t border-slate-100 flex flex-wrap items-center justify-between gap-6">
+                        <div className="flex flex-1 items-center gap-8">
+                          <div className="space-y-2">
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Load Profile</p>
+                             <div className="flex gap-2">
+                               <span className="px-3 py-1.5 bg-slate-50 text-slate-700 rounded-xl text-[10px] font-black border border-slate-100 uppercase">{apt.itemType || 'General Goods'}</span>
+                               <span className="px-3 py-1.5 bg-slate-50 text-slate-700 rounded-xl text-[10px] font-black border border-slate-100 uppercase">{apt.vehicleType || 'Any Vehicle'}</span>
+                             </div>
+                          </div>
+                          <div className="h-10 w-px bg-slate-100" />
+                          <div className="space-y-2 max-w-sm">
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Items Detail</p>
+                             <div className="flex flex-wrap gap-2 mt-2">
+                               {apt.items && apt.items.length > 0 ? apt.items.map((it, idx) => (
+                                 <span key={idx} className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-[9px] font-bold border border-indigo-100">
+                                   {it.name} (x{it.quantity || 1})
+                                 </span>
+                               )) : (
+                                 <span className="text-[10px] text-slate-400 italic">No specific items listed</span>
+                               )}
+                             </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                           <button 
+                            onClick={() => handleUpdateOrderStatus(apt.id, 'Picked Up')}
+                            className="px-6 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 flex items-center gap-2"
+                           >
+                             <CheckCircle size={16} /> Mark Picked Up
+                           </button>
+                           <button 
+                            onClick={() => handleUpdateOrderStatus(apt.id, 'Cancelled')}
+                            className="px-6 py-3 bg-white text-red-600 border border-red-100 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-50 transition-all"
+                           >
+                             Cancel
+                           </button>
+                        </div>
+                      </div>
+                    </motion.div>
                   ))
                 )}
               </div>
             </div>
-          </div>
-        </>
-      ) : adminTab === 'Refunds' ? (
+          ) : adminTab === 'Logistics' ? (
+            <div className="space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+                <div>
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tight">Active Logistics Pipeline</h2>
+                  <p className="text-slate-500 font-medium mt-1">Cross-border logistics management for {orders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled').length} active shipments.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input 
+                      type="text" 
+                      placeholder="Search ID, Country, Customer..." 
+                      className="pl-12 pr-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-8 focus:ring-indigo-500/5 focus:border-indigo-400 transition-all w-80 shadow-inner"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {orders.length === 0 ? (
+                  <div className="text-center py-24 bg-white rounded-[3rem] border border-dashed border-slate-200">
+                    <Box className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                    <p className="text-slate-400 font-bold text-xl uppercase tracking-widest">Pipeline Empty</p>
+                    <p className="text-sm text-slate-300 mt-2">Active shipments will appear here as they move through the network.</p>
+                  </div>
+                ) : (
+                  [...orders].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).map((order, i) => (
+                    <motion.div 
+                      key={order.id}
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden hover:shadow-2xl hover:shadow-indigo-500/10 transition-all group"
+                    >
+                      <div className="p-8">
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-10">
+                          <div className="flex items-start gap-8">
+                            <div className="w-20 h-20 bg-indigo-50 rounded-[2.5rem] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-700 shrink-0 shadow-lg shadow-indigo-100 group-hover:shadow-indigo-500/20">
+                              <Package size={40} />
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-3">
+                                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Global Shipment</span>
+                                <span className="px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest">#{order.id.slice(0, 12)}</span>
+                              </div>
+                              <h3 className="text-3xl font-black text-slate-900 flex items-center gap-4">
+                                {order.destination.city}
+                                <ArrowRight size={24} className="text-indigo-200 group-hover:text-indigo-500 transition-colors" />
+                                <span className="text-indigo-600 uppercase tracking-tight">{order.destination.country}</span>
+                              </h3>
+                              <div className="flex flex-wrap items-center gap-4 mt-4">
+                                <div className="px-4 py-2 bg-amber-50 text-amber-700 rounded-2xl text-[10px] font-black border border-amber-200 flex items-center gap-2 uppercase tracking-widest">
+                                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                                  {order.status}
+                                </div>
+                                <div className="h-4 w-px bg-slate-200" />
+                                <div className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                                  {order.items.length} Units • {order.totalWeight}kg Payload
+                                </div>
+                                <div className="text-sm font-black text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100">
+                                  ₹{order.totalCost.toLocaleString()} Cost
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row items-center gap-6 lg:min-w-[500px]">
+                             <div className="w-full bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100 group-hover:bg-white transition-colors">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Consignee Intelligence</p>
+                              <div className="space-y-2.5">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-bold text-slate-400 uppercase tracking-tighter text-[9px]">Full Name</span>
+                                  <span className="font-black text-slate-900">{order.destination.fullName}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-bold text-slate-400 uppercase tracking-tighter text-[9px]">Phone (IN/US)</span>
+                                  <span className="font-black text-indigo-600">{order.destination.phone}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-bold text-slate-400 uppercase tracking-tighter text-[9px]">Ledger Status</span>
+                                  <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase ${order.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                                    {order.paymentStatus || 'Pending'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="w-full space-y-3">
+                              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1">Lifecycle Management</p>
+                              <div className="relative">
+                                <select 
+                                  className="w-full p-4 pl-4 pr-12 rounded-[1.5rem] bg-white border-2 border-slate-100 text-sm font-black text-slate-700 outline-none focus:ring-8 focus:ring-indigo-500/5 focus:border-indigo-500 appearance-none transition-all cursor-pointer shadow-lg shadow-slate-100 hover:border-indigo-200"
+                                  value={order.status}
+                                  onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value as ShippingStatus)}
+                                >
+                                  <optgroup label="Transit Phase 1: India Operations">
+                                    <option value="Scheduled">Scheduled (Pickup Confirmed)</option>
+                                    <option value="Pending Pickup">Pending Pickup</option>
+                                    <option value="Picked Up">Picked Up (In Transit to Hub)</option>
+                                    <option value="In Warehouse">In Warehouse (In Hub)</option>
+                                    <option value="Order Confirmed">Order Confirmed</option>
+                                    <option value="Processing Order">Processing Order</option>
+                                    <option value="Consolidating items">Consolidating items</option>
+                                    <option value="Packed">Packed</option>
+                                    <option value="Ready to Ship">Ready to Ship</option>
+                                  </optgroup>
+                                  <optgroup label="Transit Phase 2: International">
+                                    <option value="In Transit">In Transit (Air Cargo)</option>
+                                    <option value="Out for Delivery">Final Mile Delivery</option>
+                                    <option value="Delivered">Successfully Delivered</option>
+                                  </optgroup>
+                                  <option value="Cancelled" className="text-red-600 font-bold">Void/Cancel Shipment</option>
+                                </select>
+                                <ChevronDown size={20} className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Deep Inventory Breakdown UI */}
+                      <div className="bg-slate-50/50 p-8 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
+                        <div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                             <Boxes size={14} className="text-indigo-500" /> Itemized Cargo
+                          </p>
+                          <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                            {order.items.map((item, idx) => (
+                              <div key={idx} className="flex flex-col gap-2 p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                <div className="flex items-center justify-between text-xs font-black">
+                                  <span className="text-slate-900 truncate max-w-[120px]">{item.name}</span>
+                                  <div className="flex items-center gap-2">
+                                     <span className="text-slate-400 text-[10px]">x{item.quantity || 1}</span>
+                                     <span className="text-indigo-600">{item.weight}kg</span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 mt-1 pt-2 border-t border-slate-50">
+                                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider ${
+                                    item.status === 'Received at Warehouse' ? 'bg-emerald-100 text-emerald-700' :
+                                    item.status === 'Awaiting Warehouse Arrival' ? 'bg-amber-100 text-amber-700' :
+                                    'bg-slate-100 text-slate-600'
+                                  }`}>
+                                    {item.status}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
+                                      <span className="text-[9px] text-slate-400 font-black uppercase">Weight:</span>
+                                      <input 
+                                        type="number" 
+                                        step="0.01"
+                                        className="w-12 bg-transparent text-[10px] font-bold text-indigo-600 outline-none"
+                                        defaultValue={item.weight}
+                                        onBlur={(e) => {
+                                          const val = parseFloat(e.target.value);
+                                          if (!isNaN(val) && val !== item.weight) {
+                                            onUpdateOrderItemWeight(order.id, item.id, val);
+                                          }
+                                        }}
+                                      />
+                                      <span className="text-[9px] text-slate-400 font-bold">kg</span>
+                                    </div>
+                                    {item.status !== 'Received at Warehouse' && (
+                                      <button 
+                                        onClick={() => onUpdateOrderItemStatus(order.id, item.id, 'Received at Warehouse')}
+                                        className="text-[9px] font-black text-indigo-600 hover:text-indigo-800 underline uppercase tracking-widest"
+                                      >
+                                        Receive
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <FileText size={14} className="text-indigo-500" /> Export Compliance
+                          </p>
+                          <div className="space-y-3">
+                            <button className="w-full flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-200 text-[10px] font-black text-slate-700 uppercase tracking-wider hover:border-indigo-500 hover:text-indigo-600 transition-all group/btn shadow-sm">
+                              Air Waybill (AWB)
+                              <Download size={16} className="text-slate-300 group-hover/btn:text-indigo-600 group-hover/btn:translate-y-0.5 transition-all" />
+                            </button>
+                            <button className="w-full flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-200 text-[10px] font-black text-slate-700 uppercase tracking-wider hover:border-indigo-500 hover:text-indigo-600 transition-all group/btn shadow-sm">
+                              Packing List
+                              <Download size={16} className="text-slate-300 group-hover/btn:text-indigo-600 group-hover/btn:translate-y-0.5 transition-all" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                             <MapPin size={14} className="text-indigo-500" /> Destination Intelligence
+                          </p>
+                          <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-inner flex-1">
+                            <p className="text-xs font-black text-slate-900 leading-relaxed">
+                              {order.destination.addressLine1}<br />
+                              {order.destination.city}, {order.destination.state}<br />
+                              <span className="text-indigo-600">{order.destination.country} {order.destination.zipCode}</span>
+                            </p>
+                            <div className="flex items-center gap-3 mt-4">
+                               <button className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm"><Phone size={14} /></button>
+                               <button className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><MessageCircle size={14} /></button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col justify-end gap-3">
+                           <button 
+                             onClick={() => toast.success('Live GPS Link shared with customer via SMS.')}
+                             className="w-full py-4 bg-indigo-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100"
+                           >
+                             Share Tracking Hub
+                           </button>
+                           <button className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">
+                             View Operational Log
+                           </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : adminTab === 'Refunds' ? (
         <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -1772,9 +2158,26 @@ const AdminDashboard = ({
                   <RefreshCw size={14} className="text-slate-300 group-hover:rotate-180 transition-transform duration-500" />
                 </div>
               </button>
-              <button className="w-full text-left p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-colors">
-                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Transaction Logs</div>
-                <div className="text-sm font-bold text-slate-900">Download .CSV</div>
+              <button 
+                onClick={async () => {
+                  if (window.confirm('Are you absolutely sure you want to delete ALL orders and items? This cannot be undone.')) {
+                    try {
+                      await api.clearAllOrders();
+                      setOrders([]);
+                      setItems([]);
+                      toast.success('Database has been successfully cleared.');
+                    } catch (err: any) {
+                      toast.error('Failed to clear database: ' + err.message);
+                    }
+                  }
+                }}
+                className="w-full text-left p-4 bg-red-50 rounded-2xl border border-red-100 hover:bg-red-600 hover:text-white transition-all group"
+              >
+                <div className="text-[10px] font-black text-red-500 group-hover:text-red-100 uppercase tracking-widest">Hard Reset</div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-sm font-black">Clear All Orders & Items</span>
+                  <Trash2 size={14} className="group-hover:scale-110 transition-transform" />
+                </div>
               </button>
             </div>
           </div>
@@ -1891,8 +2294,31 @@ export default function App() {
     country: COUNTRIES[0],
   });
   const [selectedDate, setSelectedDate] = useState<string>(SHIPPING_DATES[0]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  
+  // Derieve appointments from orders in real-time
+  const appointments = useMemo(() => {
+    return orders
+      .filter(o => o.status === 'Scheduled' || o.status === 'Pending Pickup' || (o as any).pickupType)
+      .map(o => ({
+        id: o.id,
+        customerId: o.customerId,
+        customerName: o.customerName || o.destination.fullName,
+        date: o.shippingDate || (o as any).date || o.createdAt?.split('T')[0],
+        time: (o as any).time || 'Flexible',
+        address: o.destination.addressLine1,
+        phone: o.destination.phone,
+        status: o.status === 'Cancelled' ? 'Cancelled' : o.status === 'Delivered' ? 'Completed' : 'Scheduled',
+        items: o.items,
+        paymentStatus: o.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+        pickupType: (o as any).pickupType || 'AllAgent',
+        assignedAgent: (o as any).assignedAgent,
+        assignedAgentId: (o as any).assignedAgentId,
+        languagePreference: (o as any).languagePreference,
+        itemType: (o as any).itemType,
+        vehicleType: (o as any).vehicleType
+      })) as Appointment[];
+  }, [orders]);
   const [storeProducts, setStoreProducts] = useState<StoreProduct[]>(STORE_PRODUCTS);
   const [activeWorkOrder, setActiveWorkOrder] = useState<Appointment | null>(null);
   const [agents, setAgents] = useState<AgentProfile[]>([
@@ -2134,7 +2560,7 @@ export default function App() {
   };
 
   // Admin Section States
-  const [adminTab, setAdminTab] = useState<'Overview' | 'Agents' | 'Inventory' | 'Reports' | 'Settings'>('Overview');
+  const [adminTab, setAdminTab] = useState<'Overview' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds'>('Overview');
 
   // Store Section States
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -2152,6 +2578,8 @@ export default function App() {
   const [cartItemFragile, setCartItemFragile] = useState(false);
   const [cartItemInvoiceNumber, setCartItemInvoiceNumber] = useState('');
   const [cartItemRemarks, setCartItemRemarks] = useState('');
+  const [cartItemPurchaseSource, setCartItemPurchaseSource] = useState('Amazon');
+  const [cartItemImageUrl, setCartItemImageUrl] = useState('');
   const [cartItemSource, setCartItemSource] = useState<'Pickup' | 'Warehouse'>('Pickup');
 
   // Unique Customer ID for Warehouse
@@ -2196,7 +2624,7 @@ export default function App() {
     if (!currentUser) return;
     setLoadingNotifications(true);
     try {
-      const response = await fetch(`${API_URL}/notifications/${currentUser.id}`);
+      const response = await fetch(`${API_URL}/api/notifications/${encodeURIComponent(currentUser.id)}`);
       if (response.ok) {
         const data = await response.json();
         setNotifications(data);
@@ -2236,7 +2664,7 @@ export default function App() {
   const simulateNotification = async (event: string, message: string) => {
     if (!currentUser) return;
     try {
-      await fetch(`${API_URL}/notifications/simulate`, {
+      await fetch(`${API_URL}/api/notifications/simulate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.id, event, message })
@@ -2274,52 +2702,73 @@ export default function App() {
     confirmPickup('AllAgent');
   };
 
+  const generateNewOrderId = useCallback((source: 'Store' | 'Warehouse' | 'Pickup') => {
+    let prefix = 'BB';
+    if (source === 'Store') prefix = 'SH';
+    else if (source === 'Warehouse') prefix = 'SW';
+    else if (source === 'Pickup') prefix = 'PH';
+    
+    // Safety: Ensure we have a valid combined list to check for existing IDs
+    const allExisting = [...(orders || []), ...(appointments || [])];
+    const relevant = allExisting.filter(o => o.id && o.id.startsWith(prefix));
+    
+    let maxSeq = 0;
+    relevant.forEach(o => {
+      const parts = o.id.split('-');
+      if (parts.length >= 2) {
+        const s = parseInt(parts[1], 10);
+        if (!isNaN(s) && s > maxSeq) maxSeq = s;
+      }
+    });
+
+    const nextSeqNum = maxSeq + 1;
+    const seq = nextSeqNum.toString().padStart(5, '0');
+    
+    let finalId = `${prefix}-${seq}`;
+    // Final check for absolute uniqueness (e.g. if there's a custom ID that doesn't follow the pattern)
+    if (allExisting.some(o => o.id === finalId)) {
+      const random = Math.random().toString(36).substr(2, 4).toUpperCase();
+      finalId = `${prefix}-${seq}-${random}`;
+    }
+    return finalId;
+  }, [orders, appointments]);
+
   const confirmPickup = async (type: 'AllAgent' | 'Mixed' = 'AllAgent') => {
     const assignedAgent = type === 'AllAgent' ? agents[Math.floor(Math.random() * agents.length)] : undefined;
     const fullAddress = `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}, ${pickupAddress.city}, ${pickupAddress.state} ${pickupAddress.zip}`;
     
-    const newAppointment: Appointment = { 
-      id: 'WO-' + Math.random().toString(36).substr(2, 6).toUpperCase(),
-      date: selectedPickupDate, 
-      time: selectedPickupTime, 
-      address: fullAddress, 
-      phone: pickupPhone,
-      customerName: pickupName,
-      status: 'Scheduled',
-      items: [],
-      paymentStatus: 'Pending',
-      customerId: currentUser?.id || 'guest-user',
-      pickupType: type,
-      assignedAgent: assignedAgent,
-      assignedAgentId: assignedAgent?.id,
-      languagePreference: pickupLanguage,
-      itemType: pickupItemType,
-      vehicleType: pickupVehicleType
-    };
-    setAppointments([...appointments, newAppointment]);
+    const newAppointmentId = generateNewOrderId('Pickup');
     
-    // Also add to orders so it reflects in "My Orders"
+    // Create new order which will derive the appointment
     const newOrder: Order = {
-      id: newAppointment.id,
-      customerId: newAppointment.customerId!,
+      id: newAppointmentId,
+      customerId: currentUser?.id || 'guest-user',
       items: [],
       totalWeight: 0,
       totalCost: 0,
       status: 'Scheduled',
       createdAt: new Date().toISOString(),
-      shippingDate: newAppointment.date,
+      shippingDate: selectedPickupDate,
       destination: {
-        fullName: newAppointment.customerName || currentUser?.name || 'Guest User',
+        fullName: pickupName || currentUser?.name || 'Guest User',
         email: pickupEmail || currentUser?.email || '',
-        phone: newAppointment.phone,
-        addressLine1: newAppointment.address,
+        phone: pickupPhone,
+        addressLine1: fullAddress,
         city: pickupAddress.city,
         state: pickupAddress.state,
         zipCode: pickupAddress.zip,
         country: 'India'
       },
-      paymentStatus: 'Pending'
-    };
+      paymentStatus: 'Pending',
+      pickupType: type,
+      assignedAgent: assignedAgent,
+      assignedAgentId: assignedAgent?.id,
+      languagePreference: pickupLanguage,
+      itemType: pickupItemType,
+      vehicleType: pickupVehicleType,
+      customerName: pickupName
+    } as any;
+    
     setOrders([...orders, newOrder]);
 
     // Send confirmation email
@@ -2333,7 +2782,7 @@ export default function App() {
         });
     }
 
-    setLastBookingRef(newAppointment.id);
+    setLastBookingRef(newOrder.id);
     setIsSchedulingNewPickup(false);
     setActivePickupStep(5);
     window.scrollTo(0, 0);
@@ -2342,7 +2791,7 @@ export default function App() {
     if (dbStatus.connected && currentUser) {
       try {
         const orderData = {
-          ...newAppointment,
+          ...newOrder,
           customer_id: currentUser.id,
           total_weight: 0,
           total_cost: 0,
@@ -2371,7 +2820,6 @@ export default function App() {
 
   const confirmCancelPickup = () => {
     if (cancellingPickupId) {
-      setAppointments(prev => prev.filter(a => a.id !== cancellingPickupId));
       setOrders(prev => prev.filter(o => o.id !== cancellingPickupId));
       setCancellingPickupId(null);
       toast.success('Pickup cancelled successfully.');
@@ -2488,25 +2936,88 @@ export default function App() {
     }
   }, [session, isGuestMode, guestEmail, guestName]);
 
+  // Helper to normalize data from DB (handles both camelCase and snake_case)
+  const normalizeOrder = useCallback((o: any): Order => ({
+    ...o,
+    customerId: o.customerId || o.customer_id,
+    totalWeight: o.totalWeight || o.total_weight,
+    totalCost: o.totalCost || o.total_cost,
+    paymentStatus: o.paymentStatus || o.payment_status,
+    shippingDate: o.shippingDate || o.shipping_date,
+    createdAt: o.createdAt || o.created_at
+  }), []);
+
+  // Real-time Order Updates (Supabase Realtime)
+  useEffect(() => {
+    if (!currentUser || !dbStatus.connected) return;
+
+    const isAdmin = ['admin', 'webmaster', 'customer_service'].includes(currentUser.role);
+    const filterStr = isAdmin ? undefined : `customer_id=eq.${currentUser.id}`;
+
+    console.log(`[Realtime] Subscribing to order updates. Admin: ${isAdmin}, User: ${currentUser.id}`);
+    
+    // Create a channel for order updates
+    const channel = supabase
+      .channel('public:orders:all')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          ...(filterStr ? { filter: filterStr } : {}),
+        },
+        (payload) => {
+          console.log('[Realtime] Order Change Detected:', payload);
+          
+          if (payload.eventType === 'INSERT') {
+            const newOrder = normalizeOrder(payload.new);
+            setOrders(prev => {
+               if (prev.some(o => o.id === newOrder.id)) return prev;
+               return [newOrder, ...prev];
+            });
+            if (isAdmin) {
+              toast.success(`New order received: #${newOrder.id.slice(0, 8)}`);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedOrder = normalizeOrder(payload.new);
+            setOrders(prev => prev.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o));
+            if (!isAdmin || updatedOrder.customerId === currentUser.id) {
+               toast.info(`Order #${updatedOrder.id.slice(0, 8)} status updated to: ${updatedOrder.status}`);
+            }
+          } else if (payload.eventType === 'DELETE') {
+            setOrders(prev => prev.filter(o => o.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Realtime] Successfully subscribed to orders updates');
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, dbStatus.connected, normalizeOrder]);
+
   // Fetch orders when currentUser or activeTab changes
   useEffect(() => {
     if (dbStatus.connected && currentUser) {
-      if (activeTab === 'history' || activeTab === 'home') {
-        api.getOrders(currentUser.id).then(data => {
-          const normalized = data.map(o => ({
-            ...o,
-            customerId: o.customerId || o.customer_id,
-            totalWeight: o.totalWeight || o.total_weight,
-            totalCost: o.totalCost || o.total_cost,
-            paymentStatus: o.paymentStatus || o.payment_status,
-            shippingDate: o.shippingDate || o.shipping_date,
-            createdAt: o.createdAt || o.created_at
-          }));
-          setOrders(normalized);
-        }).catch(console.error);
+      const isAdminRole = ['admin', 'webmaster', 'customer_service'].includes(currentUser.role);
+      
+      const processOrders = (data: any[]) => {
+        const normalized = data.map(normalizeOrder);
+        setOrders(normalized);
+      };
+
+      if (isAdminRole && activeTab === 'admin') {
+        api.getAllOrders().then(processOrders).catch(console.error);
+      } else if (activeTab === 'history' || activeTab === 'home') {
+        api.getOrders(currentUser.id).then(processOrders).catch(console.error);
       }
     }
-  }, [currentUser, activeTab, dbStatus.connected]);
+  }, [currentUser, activeTab, dbStatus.connected, normalizeOrder]);
 
   // Scroll to top when major state changes
   useEffect(() => {
@@ -2598,7 +3109,7 @@ export default function App() {
     const newItem: ShippingItem = {
       ...item,
       id: crypto.randomUUID(),
-      status: source === 'Store' ? 'Received at Warehouse' : 'Pending',
+      status: source === 'Store' ? 'Received at Warehouse' : source === 'Warehouse' ? 'Awaiting Warehouse Arrival' : 'Pending',
       source: source,
       quantity: quantityToAdd,
       submitted: source !== 'Warehouse'
@@ -2651,6 +3162,72 @@ export default function App() {
     }
   }, [items]);
 
+  const updateOrderItemStatus = async (orderId: string, itemId: string, status: ShippingStatus) => {
+    setOrders(prevOrders => {
+      const updatedOrders = prevOrders.map(order => {
+        if (order.id === orderId) {
+          const updatedItems = order.items.map(item => 
+            item.id === itemId || (item.id.slice(0, 8) === itemId.slice(0, 8)) ? { ...item, status } : item
+          );
+          
+          // Check if all items are received at warehouse
+          // If all items are 'Received at Warehouse', order status becomes 'Ready to Ship'
+          const allReceived = updatedItems.every(item => item.status === 'Received at Warehouse');
+          const newOrderStatus = allReceived ? 'Ready to Ship' : order.status;
+          
+          const updatedOrder = { ...order, items: updatedItems, status: (newOrderStatus as ShippingStatus) };
+          
+          // Sync to DB
+          if (dbStatus.connected && currentUser) {
+            api.updateOrder(orderId, { 
+              items: updatedItems, 
+              status: updatedOrder.status 
+            }).catch(err => console.error('Failed to sync order update:', err));
+            
+            if (allReceived && order.status !== 'Ready to Ship') {
+              toast.info(`Order ${orderId} is now Ready to Ship!`);
+            }
+          }
+          
+          return updatedOrder;
+        }
+        return order;
+      });
+      return updatedOrders;
+    });
+  };
+
+  const updateOrderItemWeight = async (orderId: string, itemId: string, weight: number) => {
+    setOrders(prevOrders => {
+      const updatedOrders = prevOrders.map(order => {
+        if (order.id === orderId) {
+          const updatedItems = order.items.map(item => 
+            item.id === itemId || (item.id.slice(0, 8) === itemId.slice(0, 8)) ? { ...item, weight } : item
+          );
+          
+          // Re-calculate total weight (assuming item.weight is per unit or total for the quantity? 
+          // Previous code uses item.weight directly in total weight calculation usually)
+          const totalWeight = updatedItems.reduce((acc, item) => acc + item.weight, 0);
+          
+          const updatedOrder = { ...order, items: updatedItems, totalWeight: Number(totalWeight.toFixed(2)) };
+          
+          // Sync to DB
+          if (dbStatus.connected && currentUser) {
+            api.updateOrder(orderId, { 
+              items: updatedItems, 
+              totalWeight: updatedOrder.totalWeight 
+            }).catch(err => console.error('Failed to sync order weight update:', err));
+            toast.success(`Weight updated for item in ${orderId.slice(0, 8)}`);
+          }
+          
+          return updatedOrder;
+        }
+        return order;
+      });
+      return updatedOrders;
+    });
+  };
+
   const updateItemStatus = async (id: string, status: ShippingStatus) => {
     const item = items.find(i => i.id === id);
     setItems(items.map(i => i.id === id ? { ...i, status } : i));
@@ -2691,7 +3268,7 @@ export default function App() {
   };
 
   const cancelAppointment = (id: string) => {
-    setAppointments(prev => prev.filter(a => a.id !== id));
+    setOrders(prev => prev.filter(o => o.id !== id));
   };
 
   const handleFinalPayment = async () => {
@@ -2703,8 +3280,24 @@ export default function App() {
     const isPayAtHome = hasScheduledPickup && shippingPreference === 'International';
     const paymentStatus = isPayAtHome ? 'Pay at Home' : 'Paid';
 
+    // Infer order source from cart items as backup if orderId is falsy
+    let finalOrderId = orderId;
+    if (!finalOrderId) {
+      const hasWarehouse = cartItems.some(i => i.source === 'Warehouse');
+      const hasPickup = cartItems.some(i => i.source === 'Pickup');
+      const hasStore = cartItems.some(i => i.source === 'Store');
+
+      let inferredSource: 'Store' | 'Warehouse' | 'Pickup' = 'Store';
+      if (hasWarehouse) inferredSource = 'Warehouse';
+      else if (hasPickup) inferredSource = 'Pickup';
+      else if (hasStore) inferredSource = 'Store';
+
+      finalOrderId = generateNewOrderId(inferredSource);
+      setOrderId(finalOrderId);
+    }
+
     const newOrder: Order = {
-      id: orderId!,
+      id: finalOrderId,
       customerId: currentUser.id,
       items: [...cartItems],
       totalWeight,
@@ -2727,6 +3320,7 @@ export default function App() {
       try {
         await api.createOrder({
           ...newOrder,
+          id: finalOrderId,
           customer_id: currentUser.id, // Snake case for DB
           total_weight: totalWeight,
           total_cost: totalCost,
@@ -2771,7 +3365,7 @@ export default function App() {
 
   const handleWOComplete = () => {
     if (!activeWorkOrder) return;
-    const newOrderId = 'BB-WO-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+    const newOrderId = generateNewOrderId('Pickup');
     setWoOrderId(newOrderId);
     setIsWOPaid(true);
     
@@ -2802,14 +3396,24 @@ export default function App() {
     }));
     setItems(prev => [...prev, ...itemsWithStatus]);
 
-    setAppointments(prev => prev.map(apt => 
-      apt.id === activeWorkOrder.id 
-        ? { ...apt, status: 'Completed', orderId: newOrderId, paymentStatus: 'Paid' } 
-        : apt
+    setOrders(prev => prev.map(o => 
+      o.id === activeWorkOrder!.id 
+        ? { ...o, status: 'Delivered', paymentStatus: 'Paid' } 
+        : o
     ));
 
-    // Automatically send invoice email for Work Order
+    // Sync to DB
     if (dbStatus.connected) {
+      api.createOrder({
+        ...newOrder,
+        id: newOrderId,
+        customer_id: activeWorkOrder.customerId, // Snake case for DB
+        total_weight: totalW,
+        total_cost: totalC,
+        payment_status: 'Paid',
+        shipping_date: woShippingDate
+      } as any).catch(err => console.error('Failed to sync new order from work order:', err));
+
       const recipientEmail = woAddress.email || currentUser?.email || '';
       api.shareInvoice(newOrder)
         .then(() => toast.success(`Payment successful! Invoice sent to ${recipientEmail}`))
@@ -2823,18 +3427,34 @@ export default function App() {
   };
 
   const handleCheckout = async () => {
+    // Determine primary source and generate the correct order ID first so it is preserved even across login
+    const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled');
+    const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
+
+    let source: 'Store' | 'Warehouse' | 'Pickup' = 'Store';
+    
+    if (hasScheduledPickup && cartItems.length > 0) {
+      source = (cartItems[0]?.source || 'Pickup') as any;
+    } else {
+      const warehouseItems = items.filter(i => i.source === 'Warehouse' && i.submitted);
+      const storeItems = items.filter(i => i.source === 'Store');
+      const pickupItems = items.filter(i => i.source === 'Pickup');
+      
+      if (warehouseItems.length > 0) source = 'Warehouse';
+      else if (pickupItems.length > 0) source = 'Pickup';
+      else if (storeItems.length > 0) source = 'Store';
+    }
+
+    const newOrderId = generateNewOrderId(source);
+    setOrderId(newOrderId);
+
     if (!currentUser) {
       setLoginTriggerSource('checkout');
       setShowLoginModal(true);
       return;
     }
 
-    const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled');
-    const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
-
     if (hasScheduledPickup && cartItems.length > 0) {
-      const newOrderId = 'BB-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-      setOrderId(newOrderId);
       navigateTo('finalize');
       return;
     }
@@ -2849,26 +3469,94 @@ export default function App() {
       toast.warning(`You have ${pendingItems.length} item(s) with PENDING status. All items must be 'Received at Warehouse' before you can proceed to checkout.`);
       return;
     }
-    const newOrderId = 'BB-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-    setOrderId(newOrderId);
+    
     navigateTo('finalize');
   };
 
   // --- Components ---
 
-    const TrackSection = useMemo(() => {
+    const TrackSection = () => {
+      const [trackIdInput, setTrackIdInput] = useState('');
+      const [trackingOrder, setTrackingOrder] = useState<Order | null>(null);
+      const [isSearching, setIsSearching] = useState(false);
+
+      const handleTrackSearch = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (!trackIdInput) return;
+
+        setIsSearching(true);
+        try {
+          const order = await api.trackOrder(trackIdInput);
+          setTrackingOrder(normalizeOrder(order));
+          toast.success('Shipment found!');
+        } catch (err: any) {
+          console.error('Tracking error:', err);
+          setTrackingOrder(null);
+          toast.error(err.message || 'Order not found. Please check your Tracking ID.');
+        } finally {
+          setIsSearching(false);
+        }
+      };
+
       return (
-        <div className="max-w-3xl mx-auto py-12 px-4 space-y-12">
+        <div className="max-w-3xl mx-auto py-12 px-4 space-y-8">
           <div className="text-center space-y-4">
             <h1 className="text-4xl md:text-6xl font-black text-slate-900 tracking-tight">Track Your Shipment</h1>
             <p className="text-xl text-slate-500 max-w-2xl mx-auto">Enter your tracking ID to see the real-time status of your global delivery.</p>
           </div>
-          <div className="bg-white p-8 md:p-12 rounded-[3rem] shadow-xl border border-slate-50">
-            <StaticShipmentTracker />
+
+          <div className="bg-white p-6 rounded-[2.5rem] shadow-xl shadow-indigo-500/5 border border-slate-100">
+            <form onSubmit={handleTrackSearch} className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 relative group">
+                <div className="absolute inset-y-0 left-5 flex items-center text-slate-400 group-focus-within:text-indigo-600 transition-colors">
+                  <Package size={20} />
+                </div>
+                <input 
+                  type="text" 
+                  className="w-full pl-14 pr-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/5 focus:bg-white focus:border-indigo-200 transition-all font-bold text-slate-900 placeholder:text-slate-400"
+                  placeholder="Enter Tracking ID (e.g. SH-00001 or SW-00001)"
+                  value={trackIdInput}
+                  onChange={(e) => setTrackIdInput(e.target.value)}
+                />
+              </div>
+              <button 
+                type="submit"
+                disabled={isSearching}
+                className="px-10 py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isSearching ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
+                {isSearching ? 'Searching...' : 'Track Now'}
+              </button>
+            </form>
           </div>
+
+          <AnimatePresence mode="wait">
+            {trackingOrder ? (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="space-y-6"
+              >
+                <StaticShipmentTracker order={trackingOrder} />
+                
+                <div className="bg-amber-50 p-6 rounded-[2rem] border border-amber-100 flex items-start gap-4">
+                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-amber-500 shadow-sm shrink-0">
+                    <Info size={20} />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-black text-amber-900 uppercase tracking-tight">Important Notice</h4>
+                    <p className="text-xs text-amber-700 leading-relaxed font-medium">
+                      Status updates may take 12-24 hours to reflect after physical handover. If your status hasn't changed in 48 hours, please contact support.
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
       );
-    }, []);
+    };
 
     const HomeSection = useMemo(() => {
       return (
@@ -3300,13 +3988,13 @@ export default function App() {
             </h3>
             <div className="flex gap-2">
               <button 
-                onClick={() => simulateNotification('Out for delivery', 'Your shipment BB-X7291 is out for delivery today!')}
+                onClick={() => simulateNotification('Out for delivery', 'Your shipment SH-00001 is out for delivery today!')}
                 className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold rounded-lg hover:bg-indigo-700 transition-colors"
               >
                 Simulate Out for Delivery
               </button>
               <button 
-                onClick={() => simulateNotification('Delivered', 'Success! Your shipment BB-X7291 has been delivered.')}
+                onClick={() => simulateNotification('Delivered', 'Success! Your shipment SH-00001 has been delivered.')}
                 className="px-3 py-1.5 bg-emerald-600 text-white text-[10px] font-bold rounded-lg hover:bg-emerald-700 transition-colors"
               >
                 Simulate Delivered
@@ -3398,8 +4086,26 @@ export default function App() {
 
     return (
       <div className="space-y-8">
-        <StaticShipmentTracker />
-        <h2 className="text-3xl font-black text-slate-900">My Orders & History</h2>
+        <div className="flex justify-between items-center">
+          <h2 className="text-3xl font-black text-slate-900">My Orders & History</h2>
+          <button 
+            onClick={async () => {
+              if (window.confirm("Are you sure you want to clear ALL orders and items? This cannot be undone.")) {
+                try {
+                  await api.clearAllOrders();
+                  toast.success("All orders cleared successfully.");
+                  setOrders([]);
+                  setItems([]);
+                } catch (err) {
+                  toast.error("Failed to clear orders.");
+                }
+              }
+            }}
+            className="px-4 py-2 bg-red-100 text-red-600 rounded-xl text-sm font-bold hover:bg-red-200 transition-colors flex items-center gap-2"
+          >
+            <Trash2 size={16} /> Debug: Clear All
+          </button>
+        </div>
         
         <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
           <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
@@ -3535,7 +4241,16 @@ export default function App() {
                           </div>
                           <div>
                             <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                            <div className="text-[10px] text-slate-500">{item.source} • {item.weight}kg</div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-slate-500">{item.source} • {item.weight}kg</span>
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider ${
+                                item.status === 'Received at Warehouse' ? 'bg-emerald-100 text-emerald-700' :
+                                item.status === 'Awaiting Warehouse Arrival' ? 'bg-amber-100 text-amber-700' :
+                                'bg-slate-100 text-slate-600'
+                              }`}>
+                                {item.status}
+                              </span>
+                            </div>
                           </div>
                         </div>
                         <div className="text-sm font-bold text-slate-900">
@@ -3954,7 +4669,7 @@ export default function App() {
         </div>
       </div>
     );
-  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, setAppointments, woAddress, address, currentUser]);
+  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, woAddress, address, currentUser]);
 
   const AgentSection = useMemo(() => {
     if (!currentUser) return null;
@@ -4032,9 +4747,15 @@ export default function App() {
     );
   }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser]);
   const renderWarehouseManagementSection = () => {
-    const warehouseItems = items.filter(i => i.source === 'Warehouse' || i.source === 'Pickup');
-    const pendingItems = warehouseItems.filter(i => i.status !== 'Received at Warehouse');
-    const receivedItems = warehouseItems.filter(i => i.status === 'Received at Warehouse');
+    const warehouseItems = items.filter(i => i.source === 'Warehouse' || i.source === 'Pickup').map(i => ({ ...i, orderId: null as string | null }));
+    const orderWarehouseItems = orders.flatMap(o => 
+      o.items.filter(i => (i.source === 'Warehouse' || i.source === 'Pickup') && o.status !== 'Delivered' && o.status !== 'Cancelled')
+        .map(i => ({ ...i, orderId: o.id }))
+    );
+    
+    const allItems = [...warehouseItems, ...orderWarehouseItems];
+    const pendingItems = allItems.filter(i => i.status !== 'Received at Warehouse');
+    const receivedItems = allItems.filter(i => i.status === 'Received at Warehouse');
     
     // Group received items by customer for consolidation
     const itemsByCustomer = receivedItems.reduce((acc, item) => {
@@ -4111,6 +4832,7 @@ export default function App() {
                   <thead>
                     <tr className="bg-slate-50/50">
                       <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Item Details</th>
+                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Reference</th>
                       <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Source</th>
                       <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Weight</th>
                       <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Action</th>
@@ -4136,8 +4858,13 @@ export default function App() {
                               </div>
                               <div>
                                 <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                                <div className="text-[10px] text-slate-500 font-medium">ID: {item.id.slice(0, 8)}</div>
+                                <div className="text-[10px] text-slate-500 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">ID: {item.id}</div>
                               </div>
+                            </div>
+                          </td>
+                          <td className="px-8 py-5">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                              {item.orderId ? `Order: ${item.orderId.slice(0, 8)}` : 'Cart/Stock'}
                             </div>
                           </td>
                           <td className="px-8 py-5">
@@ -4148,15 +4875,56 @@ export default function App() {
                             </span>
                           </td>
                           <td className="px-8 py-5">
-                            <div className="text-sm font-bold text-slate-700">{item.weight > 0 ? `${item.weight} kg` : 'TBD'}</div>
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center gap-1">
+                                <input 
+                                  type="number" 
+                                  className="w-16 p-1 text-xs border border-slate-200 rounded outline-none focus:ring-1 focus:ring-indigo-500"
+                                  defaultValue={item.weight}
+                                  onBlur={(e) => {
+                                    const val = parseFloat(e.target.value);
+                                    if (!isNaN(val) && val !== item.weight) {
+                                      if (item.orderId) {
+                                        updateOrderItemWeight(item.orderId, item.id, val);
+                                      } else {
+                                        // Update weight for items not in an order yet
+                                        setItems(prev => prev.map(i => i.id === item.id ? { ...i, weight: val } : i));
+                                        if (dbStatus.connected) {
+                                          api.updateItemWeight(item.id, val).catch(err => console.error('Failed to update item weight:', err));
+                                        }
+                                      }
+                                    }
+                                  }}
+                                />
+                                <span className="text-[10px] font-bold text-slate-400">kg</span>
+                              </div>
+                              <div className="text-[8px] text-amber-600 font-bold max-w-[80px] leading-tight">Official weight update after arrival</div>
+                            </div>
                           </td>
                           <td className="px-8 py-5">
-                            <button 
-                              onClick={() => updateItemStatus(item.id, 'Received at Warehouse')}
-                              className="px-4 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100"
-                            >
-                              Receive
-                            </button>
+                            <div className="flex flex-col gap-2">
+                              <select 
+                                className="p-1 px-2 text-[10px] bg-white border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
+                                value={item.status}
+                                onChange={(e) => item.orderId ? updateOrderItemStatus(item.orderId, item.id, e.target.value as ShippingStatus) : updateItemStatus(item.id, e.target.value as ShippingStatus)}
+                              >
+                                <option value="Pending">Pending</option>
+                                <option value="Awaiting Warehouse Arrival">Awaiting Arrival</option>
+                                <option value="Received at Warehouse">Received at Warehouse</option>
+                                <option value="Processing Order">Processing</option>
+                                <option value="Consolidating items">Consolidating</option>
+                                <option value="Packed">Packed</option>
+                                <option value="Ready to Ship">Ready to Ship</option>
+                                <option value="In Transit">In Transit</option>
+                                <option value="Delivered">Delivered</option>
+                              </select>
+                              <button 
+                                onClick={() => item.orderId ? updateOrderItemStatus(item.orderId, item.id, 'Received at Warehouse') : updateItemStatus(item.id, 'Received at Warehouse')}
+                                className="px-4 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100"
+                              >
+                                {item.status === 'Received at Warehouse' ? 'Received' : 'Receive Now'}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -4365,7 +5133,9 @@ export default function App() {
         quantity: cartItemQuantity,
         fragile: cartItemFragile,
         invoiceNumber: cartItemInvoiceNumber,
-        remarks: cartItemRemarks
+        remarks: cartItemRemarks,
+        purchaseSource: cartItemPurchaseSource,
+        image: cartItemImageUrl
       }, mode || cartItemSource);
       setCartItemName('');
       setCartItemWeight('');
@@ -4374,6 +5144,7 @@ export default function App() {
       setCartItemInvoiceNumber('');
       setNavbarTrackingId('');
       setCartItemRemarks('');
+      setCartItemImageUrl('');
       
       // Scroll to items list after adding
       if (mode === 'Warehouse') {
@@ -4524,6 +5295,36 @@ export default function App() {
                           onChange={(e) => setCartItemName(e.target.value)}
                         />
                       </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Source</label>
+                          <select 
+                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-medium appearance-none"
+                            value={cartItemPurchaseSource}
+                            onChange={(e) => setCartItemPurchaseSource(e.target.value)}
+                          >
+                            <option value="Amazon">Amazon</option>
+                            <option value="Flipkart">Flipkart</option>
+                            <option value="Myntra">Myntra</option>
+                            <option value="Ajio">Ajio</option>
+                            <option value="Nykaa">Nykaa</option>
+                            <option value="FirstCry">FirstCry</option>
+                            <option value="Meesho">Meesho</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Item Image (URL Optional)</label>
+                          <input 
+                            type="text" 
+                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-medium"
+                            placeholder="https://..."
+                            value={cartItemImageUrl}
+                            onChange={(e) => setCartItemImageUrl(e.target.value)}
+                          />
+                        </div>
+                      </div>
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -4557,6 +5358,24 @@ export default function App() {
                             >
                               <Plus size={14} />
                             </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-start gap-3">
+                        <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
+                          <Info size={16} />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-bold text-amber-900">Payment Notice</p>
+                          <p className="text-[10px] text-amber-700 leading-relaxed">
+                            Please ensure payment for all items is completed before they arrive at our warehouse. 
+                            Unpaid items may experience delays in processing and forwarding.
+                          </p>
+                          <div className="pt-2 border-t border-amber-200 mt-2">
+                             <p className="text-[10px] text-amber-700 leading-relaxed font-bold italic">
+                               Note: The weight of each item will be officially updated by our team after it is physically received and weighed at the warehouse.
+                             </p>
                           </div>
                         </div>
                       </div>
@@ -4621,8 +5440,12 @@ export default function App() {
                               <Trash2 size={16} />
                             </button>
                             <div className="flex items-start gap-4">
-                              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
-                                <Package size={24} />
+                              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0 overflow-hidden">
+                                {item.image ? (
+                                  <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <Package size={24} />
+                                )}
                               </div>
                               <div className="space-y-1">
                                 <h4 className="font-black text-slate-900 line-clamp-1">{item.name}</h4>
@@ -4630,6 +5453,11 @@ export default function App() {
                                   <span className="px-2 py-0.5 bg-white rounded-lg text-[10px] font-bold text-slate-500 border border-slate-100">
                                     {item.quantity} Qty
                                   </span>
+                                  {item.purchaseSource && (
+                                    <span className="px-2 py-0.5 bg-indigo-50 rounded-lg text-[10px] font-bold text-indigo-600 border border-indigo-100 uppercase tracking-tight">
+                                      {item.purchaseSource}
+                                    </span>
+                                  )}
                                   {item.invoiceNumber && (
                                     <span className="px-2 py-0.5 bg-indigo-50 rounded-lg text-[10px] font-bold text-indigo-600 border border-indigo-100">
                                       Track: {item.invoiceNumber}
@@ -5884,7 +6712,7 @@ export default function App() {
                               key={item.id} 
                               className="grid grid-cols-1 md:grid-cols-12 gap-6 p-5 rounded-2xl border border-slate-100 bg-white hover:shadow-xl hover:shadow-indigo-500/5 transition-all group items-center"
                             >
-                              <div className={item.source === 'Store' ? "md:col-span-3" : "md:col-span-2"}>
+                              <div className={item.source === 'Store' ? "md:col-span-3" : item.source === 'Warehouse' ? "md:col-span-7" : "md:col-span-2"}>
                                 <h4 className="font-bold text-slate-900 truncate">{item.name}</h4>
                                 <div className="flex flex-wrap gap-2 mt-1">
                                   {item.fragile && (
@@ -5900,18 +6728,20 @@ export default function App() {
                                 </div>
                               </div>
 
-                              <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-1"}>
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 whitespace-nowrap">Unit Price</div>
-                                <div className="text-xs font-bold text-emerald-600">
-                                  {item.price ? (
-                                    <span>₹{(item.price / (item.quantity || 1)).toFixed(2)}</span>
-                                  ) : (
-                                    <span className="text-slate-400">N/A</span>
-                                  )}
+                              {item.source !== 'Warehouse' && (
+                                <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-1"}>
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 whitespace-nowrap">Unit Price</div>
+                                  <div className="text-xs font-bold text-emerald-600">
+                                    {item.price ? (
+                                      <span>₹{(item.price / (item.quantity || 1)).toFixed(2)}</span>
+                                    ) : (
+                                      <span className="text-slate-400">N/A</span>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
+                              )}
 
-                              <div className="md:col-span-2">
+                              <div className={item.source === 'Warehouse' ? "md:col-span-3" : "md:col-span-2"}>
                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Weight</div>
                                 <div className="text-xs font-bold text-indigo-600">
                                   {item.weight > 0 ? (
@@ -5952,7 +6782,7 @@ export default function App() {
                                 </div>
                               </div>
 
-                              {item.source !== 'Store' && (
+                              {item.source !== 'Store' && item.source !== 'Warehouse' && (
                                 <div className="md:col-span-2">
                                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</div>
                                   <div className="flex items-center gap-2">
@@ -5972,16 +6802,18 @@ export default function App() {
                                 </div>
                               )}
 
-                              <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-3"}>
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 whitespace-nowrap">Total Amount</div>
-                                <div className="text-xs font-black text-slate-900">
-                                  {item.price ? (
-                                    <span>₹{item.price.toFixed(2)}</span>
-                                  ) : (
-                                    <span className="text-slate-400">N/A</span>
-                                  )}
+                              {item.source !== 'Store' && item.source !== 'Warehouse' && (
+                                <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-3"}>
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 whitespace-nowrap">Total Amount</div>
+                                  <div className="text-xs font-black text-slate-900">
+                                    {item.price ? (
+                                      <span>₹{item.price.toFixed(2)}</span>
+                                    ) : (
+                                      <span className="text-slate-400">N/A</span>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
+                              )}
 
                               <div className="md:col-span-1 flex justify-end">
                                 {!mode && !hasCompletedPickup && (
@@ -6940,7 +7772,6 @@ export default function App() {
     
     // Clear all local state on logout
     setItems([]);
-    setAppointments([]);
     setOrders([]);
     setActivePickupStep(1);
     setLastBookingRef(null);
@@ -6982,6 +7813,23 @@ export default function App() {
     setOrderId(null);
     setActiveTab('home');
     setTabHistory(['home']);
+  };
+
+  const handleAssignAgent = async (orderId: string, agent: AgentProfile | null) => {
+    try {
+      await api.updateOrder(orderId, { 
+        assignedAgent: agent || undefined, 
+        assignedAgentId: agent ? agent.id : undefined 
+      });
+      setOrders(prev => prev.map(o => o.id === orderId ? { 
+        ...o, 
+        assignedAgent: agent || undefined, 
+        assignedAgentId: agent ? agent.id : undefined 
+      } : o));
+    } catch (err) {
+      console.error('Failed to assign agent:', err);
+      throw err;
+    }
   };
 
   return (
@@ -7438,7 +8286,7 @@ export default function App() {
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'home' && HomeSection}
-            {activeTab === 'track' && TrackSection}
+            {activeTab === 'track' && <TrackSection />}
             {activeTab === 'pickup' && renderUnifiedCartSection('Pickup')}
             {activeTab === 'warehouse' && renderUnifiedCartSection('Warehouse')}
             {activeTab === 'cart' && renderUnifiedCartSection()}
@@ -7462,16 +8310,19 @@ export default function App() {
                 currentUser={currentUser}
                 orders={orders}
                 appointments={appointments}
-                setAppointments={setAppointments}
+                onAssignAgent={handleAssignAgent}
                 agents={agents}
                 setAgents={setAgents}
                 categories={categories}
                 setCategories={setCategories}
-                adminTab={adminTab as 'Overview' | 'Agents' | 'Inventory' | 'Reports' | 'Settings'}
-                setAdminTab={setAdminTab as React.Dispatch<React.SetStateAction<'Overview' | 'Agents' | 'Inventory' | 'Reports' | 'Settings'>>}
+                adminTab={adminTab as any}
+                setAdminTab={setAdminTab as any}
                 storeProducts={storeProducts}
                 setStoreProducts={setStoreProducts}
                 setOrders={setOrders}
+                setItems={setItems}
+                onUpdateOrderItemStatus={updateOrderItemStatus}
+                onUpdateOrderItemWeight={updateOrderItemWeight}
                 refundRequests={refundRequests}
                 setRefundRequests={setRefundRequests}
                 isWebmaster={currentUser?.role === 'webmaster'}

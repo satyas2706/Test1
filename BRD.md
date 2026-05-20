@@ -66,7 +66,7 @@ Jiffex is a specialized international logistics platform designed to bridge the 
 #### 4.3 Order Management & Validation
 - **Item Status Tracking:** Each item in a shipment must track its own status (Pending vs. Received at Warehouse).
 - **Checkout Validation:** The system **must block checkout** if any item is in "Pending" status. All items must be physically received at the warehouse before payment.
-- **Order ID Generation:** Unique reference numbers (e.g., BB-XXXXX) for every consolidated shipment.
+- **Order ID Generation:** Unique reference numbers with specific prefixes (SH- for Shop, SW- for Warehouse, PH- for Pickup) followed by a 5-digit sequence (e.g., SH-00001).
 
 #### 4.4 Payment System
 - **Methods:** Support for Credit/Debit Cards and UPI (PhonePe).

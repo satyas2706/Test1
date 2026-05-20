@@ -66,3 +66,16 @@ CREATE POLICY "Allow public read products" ON products FOR SELECT USING (true);
 CREATE POLICY "Allow public insert products" ON products FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update products" ON products FOR UPDATE USING (true);
 CREATE POLICY "Allow public delete products" ON products FOR DELETE USING (true);
+
+-- ENABLE REALTIME
+-- To view tables in the "Database -> Replication" section of Supabase Dashboard:
+-- 1. Create the publication if it doesn't exist
+DROP PUBLICATION IF EXISTS supabase_realtime;
+CREATE PUBLICATION supabase_realtime;
+
+-- 2. Add the tables you want to enable real-time for
+ALTER PUBLICATION supabase_realtime ADD TABLE orders;
+ALTER PUBLICATION supabase_realtime ADD TABLE items;
+
+-- OPTIONAL: If you want to enable it for ALL current and future tables
+-- ALTER PUBLICATION supabase_realtime SET FOR ALL TABLES;
