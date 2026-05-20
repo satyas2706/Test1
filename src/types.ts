@@ -67,8 +67,8 @@ export interface Order {
   total_cost?: number;
   totalCost?: number;
   status: ShippingStatus;
-  payment_status?: 'Pending' | 'Paid' | 'Pay at Home';
-  paymentStatus?: 'Pending' | 'Paid' | 'Pay at Home';
+  payment_status?: 'Pending' | 'Paid' | 'Pay at Home' | 'Payment on Arrival';
+  paymentStatus?: 'Pending' | 'Paid' | 'Pay at Home' | 'Payment on Arrival';
   shipping_date?: string;
   shippingDate?: string;
   created_at?: string;

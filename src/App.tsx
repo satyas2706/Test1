@@ -3278,7 +3278,8 @@ export default function App() {
     
     // Determine payment status based on pickup and shipping preference
     const isPayAtHome = hasScheduledPickup && shippingPreference === 'International';
-    const paymentStatus = isPayAtHome ? 'Pay at Home' : 'Paid';
+    const isWarehouseCheckout = cartItems.some(i => i.source === 'Warehouse');
+    const paymentStatus = isWarehouseCheckout ? 'Pending' : isPayAtHome ? 'Pay at Home' : 'Paid';
 
     // Infer order source from cart items as backup if orderId is falsy
     let finalOrderId = orderId;
@@ -3302,7 +3303,7 @@ export default function App() {
       items: [...cartItems],
       totalWeight,
       totalCost,
-      status: 'Request Placed',
+      status: isWarehouseCheckout ? 'Request Placed' : 'Request Placed',
       createdAt: new Date().toISOString(),
       shippingDate: selectedDate,
       destination: address,
@@ -3330,7 +3331,10 @@ export default function App() {
 
         // Automatically send invoice email with PDF
         const recipientEmail = address.email || currentUser.email;
-        if (isPayAtHome) {
+        if (isWarehouseCheckout) {
+          await api.sendOrderConfirmationEmail(recipientEmail, newOrder, COMPANY_DETAILS);
+          toast.success(`Shipment request confirmed! Confirmation sent to ${recipientEmail}.`);
+        } else if (isPayAtHome) {
           // Send a special "Pay at Home" confirmation email
           await api.sendOrderConfirmationEmail(recipientEmail, newOrder, COMPANY_DETAILS);
           toast.success(`Order confirmed! Confirmation sent to ${recipientEmail}. Final billing will be done at your home.`);
@@ -3340,11 +3344,15 @@ export default function App() {
         }
       } catch (err: any) {
         console.error('Failed to sync order or send email:', err.message);
-        const successMsg = isPayAtHome ? 'Order confirmed' : 'Payment successful';
+        const successMsg = isWarehouseCheckout ? 'Shipment request confirmed' : isPayAtHome ? 'Order confirmed' : 'Payment successful';
         toast.error(`${successMsg}, but ${err.message || 'failed to send confirmation email'}.`);
       }
     } else {
-      const successMsg = isPayAtHome ? 'Order confirmed (Offline Mode)' : 'Payment successful (Offline Mode)';
+      const successMsg = isWarehouseCheckout 
+        ? 'Shipment request confirmed (Offline Mode)' 
+        : isPayAtHome 
+          ? 'Order confirmed (Offline Mode)' 
+          : 'Payment successful (Offline Mode)';
       toast.success(successMsg);
     }
   };
@@ -3476,7 +3484,7 @@ export default function App() {
   // --- Components ---
 
     const TrackSection = () => {
-      const [trackIdInput, setTrackIdInput] = useState('');
+      const [trackIdInput, setTrackIdInput] = useState(trackingId);
       const [trackingOrder, setTrackingOrder] = useState<Order | null>(null);
       const [isSearching, setIsSearching] = useState(false);
 
@@ -3497,6 +3505,24 @@ export default function App() {
           setIsSearching(false);
         }
       };
+
+      useEffect(() => {
+        if (trackingId) {
+          setTrackIdInput(trackingId);
+          const autoSearch = async () => {
+            setIsSearching(true);
+            try {
+              const order = await api.trackOrder(trackingId);
+              setTrackingOrder(normalizeOrder(order));
+            } catch (err) {
+              console.error('Auto tracking error:', err);
+            } finally {
+              setIsSearching(false);
+            }
+          };
+          autoSearch();
+        }
+      }, [trackingId]);
 
       return (
         <div className="max-w-3xl mx-auto py-12 px-4 space-y-8">
@@ -4087,7 +4113,7 @@ export default function App() {
     return (
       <div className="space-y-8">
         <div className="flex justify-between items-center">
-          <h2 className="text-3xl font-black text-slate-900">My Orders & History</h2>
+          <h2 className="text-3xl font-black text-slate-900">My Orders</h2>
           <button 
             onClick={async () => {
               if (window.confirm("Are you sure you want to clear ALL orders and items? This cannot be undone.")) {
@@ -4108,10 +4134,7 @@ export default function App() {
         </div>
         
         <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-          <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-            <Truck className="text-indigo-600" /> Active Shipments
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6">
             {unifiedHistory.length === 0 ? (
               <div className="col-span-full text-center py-12 text-slate-400">
                 <Package size={48} className="mx-auto mb-4 opacity-20" />
@@ -4133,45 +4156,107 @@ export default function App() {
                       {order.status}
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4 bg-white p-4 rounded-xl border border-slate-100">
                     <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase">Destination</div>
-                      <div className="text-sm font-bold">{order.destination?.country || 'N/A'}</div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Source Country</div>
+                      <div className="text-sm font-bold flex items-center gap-1.5">
+                        <span className="text-base leading-none">🇮🇳</span>
+                        <span>India</span>
+                      </div>
                     </div>
                     <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase">Weight</div>
-                      <div className="text-sm font-bold">{order.totalWeight || order.total_weight || 0} kg</div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Destination</div>
+                      <div className="text-sm font-bold text-slate-800">{order.destination?.country || 'N/A'}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase">Total Paid</div>
-                      <div className="text-sm font-bold">₹{order.totalCost || order.total_cost || 0}</div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Items Shipped</div>
+                      <div className="text-sm font-bold text-slate-800">{order.items?.length || 0} items</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Weight</div>
+                      <div className="text-sm font-bold text-slate-800">{order.totalWeight || order.total_weight || 0} kg</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Paid</div>
+                      <div className="text-sm font-bold text-indigo-600">₹{order.totalCost || order.total_cost || 0}</div>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200">
-                      <Clock size={12} className="text-indigo-600" />
-                      <span className="text-[10px] text-slate-600">{new Date(order.createdAt || order.created_at || Date.now()).toLocaleDateString()}</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-slate-100 pt-4">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-slate-200 w-fit">
+                      <Clock size={14} className="text-indigo-600" />
+                      <div className="text-xs text-slate-600 font-medium">
+                        <span className="text-slate-400 mr-1.5 uppercase tracking-widest text-[9px] font-black">Placed:</span>
+                        {new Date(order.createdAt || order.created_at || Date.now()).toLocaleString(undefined, {
+                          dateStyle: 'medium',
+                          timeStyle: 'short'
+                        })}
+                      </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button 
+                        onClick={() => {
+                          setTrackingId(order.id);
+                          setActiveTab('track');
+                        }}
+                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 border border-indigo-100"
+                      >
+                        <Search size={12} /> Track Shipment
+                      </button>
+                      
+                      <button 
+                        onClick={async () => {
+                          const promise = api.shareInvoice(order);
+                          toast.promise(promise, {
+                            loading: 'Sending invoice...',
+                            success: 'Invoice sent to your email!',
+                            error: 'Could not send invoice via Email.'
+                          });
+
+                          const summary = `JiffEX Invoice\nOrder ID: ${order.id}\nDestination: ${order.destination.fullName || ''}, ${order.destination.country}\nTotal Weight: ${order.totalWeight || order.total_weight || 0} kg\nTotal Cost: ₹${order.totalCost || order.total_cost || 0}`;
+                          if (navigator.share) {
+                            try {
+                              await navigator.share({
+                                title: `JiffEX Invoice - ${order.id}`,
+                                text: summary,
+                              });
+                            } catch (e) {
+                              console.warn('Native share dismissed or failed', e);
+                            }
+                          } else {
+                            try {
+                              await navigator.clipboard.writeText(summary);
+                              toast.success('Invoice summary copied to clipboard!');
+                            } catch (e) {
+                              toast.error('Could not copy to clipboard.');
+                            }
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 border border-emerald-100"
+                      >
+                        <Share size={12} /> Share Invoice
+                      </button>
+
                       {order.status !== 'Delivered' && order.status !== 'Cancelled' && (
                         <button 
                           onClick={() => cancelPickup(order.id)}
-                          className="px-2 py-1 bg-red-500 text-white text-[9px] font-bold rounded hover:bg-red-600 transition-colors flex items-center gap-1"
+                          className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 border border-red-100"
                         >
-                          <Trash2 size={10} /> Cancel
+                          <Trash2 size={12} /> Cancel
                         </button>
                       )}
+                      
                       {order.status === 'Received at Warehouse' && (
                         <button 
                           onClick={() => simulateNotification('Shipment dispatched', `Your shipment ${order.id} has been dispatched to ${order.destination.country}.`)}
-                          className="px-2 py-1 bg-indigo-600 text-white text-[9px] font-bold rounded hover:bg-indigo-700 transition-colors"
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors"
                         >
                           Dispatch
                         </button>
                       )}
+
                       <button 
                         onClick={() => setSelectedOrderForInvoice(order)}
-                        className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1"
+                        className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 hover:underline"
                       >
                         View Invoice <ChevronRight size={14} />
                       </button>
@@ -4241,15 +4326,11 @@ export default function App() {
                           </div>
                           <div>
                             <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-slate-500">{item.source} • {item.weight}kg</span>
-                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider ${
-                                item.status === 'Received at Warehouse' ? 'bg-emerald-100 text-emerald-700' :
-                                item.status === 'Awaiting Warehouse Arrival' ? 'bg-amber-100 text-amber-700' :
-                                'bg-slate-100 text-slate-600'
-                              }`}>
-                                {item.status}
-                              </span>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
+                              <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
+                              <span>Weight: <strong className="text-slate-700">{item.weight} kg</strong></span>
+                              <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
+                              <span>Total Weight: <strong className="text-slate-800">{(item.weight * (item.quantity || 1)).toFixed(2)} kg</strong></span>
                             </div>
                           </div>
                         </div>
@@ -5498,7 +5579,7 @@ export default function App() {
           </div>
         ) : (
           <>
-            {!mode && hasActivePickup && (
+            {!mode && hasActivePickup && !displayItems.some(i => i.source === 'Warehouse') && (
               <motion.div 
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -6703,6 +6784,14 @@ export default function App() {
                         <h4 className={`text-sm font-black ${sourceColor} uppercase tracking-widest flex items-center gap-2`}>
                           <SourceIcon size={18} /> {sourceLabel}
                         </h4>
+                        {source === 'Warehouse' && (
+                          <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 text-indigo-800 text-xs flex items-start gap-2.5">
+                            <Info size={16} className="text-indigo-600 shrink-0 mt-0.5" />
+                            <p className="leading-relaxed font-medium">
+                              The weights of the items will be updated once they are received at our warehouse. You can check the final verified details in <span className="font-bold">My Orders</span>.
+                            </p>
+                          </div>
+                        )}
                         <div className="space-y-3">
                           {sourceItems.map(item => (
                             <motion.div 
@@ -6712,7 +6801,7 @@ export default function App() {
                               key={item.id} 
                               className="grid grid-cols-1 md:grid-cols-12 gap-6 p-5 rounded-2xl border border-slate-100 bg-white hover:shadow-xl hover:shadow-indigo-500/5 transition-all group items-center"
                             >
-                              <div className={item.source === 'Store' ? "md:col-span-3" : item.source === 'Warehouse' ? "md:col-span-7" : "md:col-span-2"}>
+                              <div className={item.source === 'Store' ? "md:col-span-3" : item.source === 'Warehouse' ? "md:col-span-4" : "md:col-span-2"}>
                                 <h4 className="font-bold text-slate-900 truncate">{item.name}</h4>
                                 <div className="flex flex-wrap gap-2 mt-1">
                                   {item.fragile && (
@@ -6727,6 +6816,16 @@ export default function App() {
                                   )}
                                 </div>
                               </div>
+
+                              {item.source === 'Warehouse' && (
+                                <div className="md:col-span-3">
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Source</div>
+                                  <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-xl border border-indigo-100/50 w-fit">
+                                    <ShoppingBag size={12} className="text-indigo-500" />
+                                    <span>{item.purchaseSource || 'Other'}</span>
+                                  </div>
+                                </div>
+                              )}
 
                               {item.source !== 'Warehouse' && (
                                 <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-1"}>
@@ -6843,7 +6942,7 @@ export default function App() {
               {/* Action Buttons - Only show in My Cart tab (!mode) */}
               {!mode && (displayItems.length > 0 || appointments.length > 0) && !hasCompletedPickup && (
                 <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col gap-6">
-                  {appointments.some(a => a.status === 'Scheduled') && (
+                  {appointments.some(a => a.status === 'Scheduled') && !displayItems.some(i => i.source === 'Warehouse') && (
                     <div className="p-5 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-start gap-4">
                       <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-sm">
                         <Home size={20} />
@@ -7387,13 +7486,15 @@ export default function App() {
   const FinalizeSection = useMemo(() => {
     if (!currentUser) return null;
     const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
+    const isWarehouseCheckout = orderId ? orderId.startsWith('SW-') : cartItems.some(i => i.source === 'Warehouse');
+
     if (isPaid) {
       const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled');
       const isPayAtHome = hasScheduledPickup && shippingPreference === 'International';
       
       return (
         <div className="max-w-2xl mx-auto text-center space-y-8 pb-12">
-          <CheckoutProgressTracker />
+          {!isWarehouseCheckout && <CheckoutProgressTracker />}
           <motion.div 
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
@@ -7403,21 +7504,28 @@ export default function App() {
           </motion.div>
           <div className="space-y-2">
             <h2 className="text-4xl font-black text-slate-900">
-              {isPayAtHome ? 'Order Confirmed!' : 'Payment Successful!'}
+              {isWarehouseCheckout ? 'Shipment Request Confirmed!' : isPayAtHome ? 'Order Confirmed!' : 'Payment Successful!'}
             </h2>
-            <p className="text-slate-500">Your order <span className="font-bold text-indigo-600">{orderId}</span> has been placed successfully.</p>
+            <p className="text-slate-500">
+              {isWarehouseCheckout 
+                ? `Your shipment request has been placed successfully. Order ID: ${orderId}` 
+                : `Your order ${orderId} has been placed successfully.`
+              }
+            </p>
           </div>
           <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-4">
-              <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Estimated Delivery</span>
-              <span className="font-black text-slate-900">12-15 Business Days</span>
+              <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Status</span>
+              <span className="font-black text-indigo-600">{isWarehouseCheckout ? 'Awaiting Warehouse Arrival' : '12-15 Business Days'}</span>
             </div>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              {isPayAtHome 
-                ? "Your order is confirmed. Our agent will collect your items and finalize the billing at your home during pickup. You'll receive a confirmation email shortly."
-                : shippingPreference === 'LocalPickup'
-                  ? "Your payment is successful. Our agent will bring these items when they come for your scheduled home pickup. You'll receive a confirmation email shortly."
-                  : `We have received your payment. Our team will consolidate your items and ship them on ${selectedDate}. You can track your shipment in your history.`
+            <p className="text-sm text-slate-500 leading-relaxed font-semibold">
+              {isWarehouseCheckout 
+                ? "Your shipment request has been successfully registered. You can check the status of your order in My Orders."
+                : isPayAtHome 
+                  ? "Your order is confirmed. Our agent will collect your items and finalize the billing at your home during pickup. You'll receive a confirmation email shortly."
+                  : shippingPreference === 'LocalPickup'
+                    ? "Your payment is successful. Our agent will bring these items when they come for your scheduled home pickup. You'll receive a confirmation email shortly."
+                    : `We have received your payment. Our team will consolidate your items and ship them on ${selectedDate}. You can track your shipment in your history.`
               }
             </p>
           </div>
@@ -7426,7 +7534,7 @@ export default function App() {
               onClick={() => { navigateTo('history'); setIsPaid(false); setOrderId(null); }}
               className="w-full md:w-2/3 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition-all"
             >
-              View Order History
+              {isWarehouseCheckout ? 'Go to My Orders' : 'View Order History'}
             </button>
           </div>
         </div>
@@ -7436,10 +7544,10 @@ export default function App() {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          <CheckoutProgressTracker />
+          {!isWarehouseCheckout && <CheckoutProgressTracker />}
           
           {/* Shipping Preference Selection */}
-          {appointments.some(a => a.status === 'Scheduled') && cartItems.length > 0 && (
+          {!isWarehouseCheckout && appointments.some(a => a.status === 'Scheduled') && cartItems.length > 0 && (
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
                 <Truck className="text-indigo-600" /> How should we deliver your shop items?
@@ -7493,7 +7601,7 @@ export default function App() {
           )}
 
           {/* Order ID Header */}
-          {orderId && (
+          {orderId && !isWarehouseCheckout && (
             <div className="bg-indigo-600 p-6 rounded-2xl text-white shadow-lg shadow-indigo-200 flex items-center justify-between">
               <div>
                 <div className="text-xs font-bold uppercase tracking-widest opacity-80">Order Reference</div>
@@ -7618,85 +7726,105 @@ export default function App() {
           </div>
 
           {/* Payment */}
-          {(!appointments.some(a => a.status === 'Scheduled') || shippingPreference === 'LocalPickup') ? (
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <CreditCard className="text-emerald-600" /> Payment Method
-              </h3>
-              <div className="space-y-4">
-                <div 
-                  onClick={() => setPaymentMethod('phonepe')}
-                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
-                >
-                  <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold">Pe</div>
-                  <div>
-                    <div className="font-bold">PhonePe</div>
-                    <div className="text-xs text-slate-500">UPI, Wallet & Cards</div>
+          {!isWarehouseCheckout && (
+            (!appointments.some(a => a.status === 'Scheduled') || shippingPreference === 'LocalPickup') ? (
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                  <CreditCard className="text-emerald-600" /> Payment Method
+                </h3>
+                <div className="space-y-4">
+                  <div 
+                    onClick={() => setPaymentMethod('phonepe')}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                  >
+                    <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold">Pe</div>
+                    <div>
+                      <div className="font-bold">PhonePe</div>
+                      <div className="text-xs text-slate-500">UPI, Wallet & Cards</div>
+                    </div>
+                    <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                      {paymentMethod === 'phonepe' && <div className="w-2 h-2 bg-white rounded-full" />}
+                    </div>
                   </div>
-                  <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                    {paymentMethod === 'phonepe' && <div className="w-2 h-2 bg-white rounded-full" />}
+                  <div 
+                    onClick={() => setPaymentMethod('card')}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                  >
+                    <div className="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center text-white"><CreditCard size={24} /></div>
+                    <div>
+                      <div className="font-bold">Credit / Debit Card</div>
+                      <div className="text-xs text-slate-500">Visa, Mastercard, Amex</div>
+                    </div>
+                    <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                      {paymentMethod === 'card' && <div className="w-2 h-2 bg-white rounded-full" />}
+                    </div>
                   </div>
                 </div>
-                <div 
-                  onClick={() => setPaymentMethod('card')}
-                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
-                >
-                  <div className="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center text-white"><CreditCard size={24} /></div>
-                  <div>
-                    <div className="font-bold">Credit / Debit Card</div>
-                    <div className="text-xs text-slate-500">Visa, Mastercard, Amex</div>
-                  </div>
-                  <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                    {paymentMethod === 'card' && <div className="w-2 h-2 bg-white rounded-full" />}
-                  </div>
+              </div>
+            ) : (
+              <div className="bg-emerald-50 p-8 rounded-3xl border border-emerald-100 space-y-4">
+                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm">
+                  <Home size={32} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">Pay at Home enabled</h3>
+                  <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                    Since you have a scheduled pickup and opted to ship to your home, you can pay for your shop items along with your shipping charges. 
+                    <span className="block mt-2 font-bold text-emerald-700">Final billing will be done at your home during pickup.</span>
+                  </p>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="bg-emerald-50 p-8 rounded-3xl border border-emerald-100 space-y-4">
-              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm">
-                <Home size={32} />
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-900">Pay at Home enabled</h3>
-                <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-                  Since you have a scheduled pickup and opted to ship to your home, you can pay for your shop items along with your shipping charges. 
-                  <span className="block mt-2 font-bold text-emerald-700">Final billing will be done at your home during pickup.</span>
-                </p>
-              </div>
-            </div>
+            )
           )}
         </div>
 
         {/* Summary Sidebar */}
         <div className="lg:col-span-1">
           <div className="bg-slate-900 text-white p-6 rounded-3xl sticky top-8">
-            <h3 className="text-xl font-bold mb-6">Order Summary</h3>
-            <div className="space-y-4 mb-8">
-              <div className="flex justify-between text-slate-400 text-sm">
-                <span>Total Weight</span>
-                <span className="text-white font-medium">{totalWeight.toFixed(2)} kg</span>
-              </div>
-              <div className="flex justify-between text-slate-400 text-sm">
-                <span>Shipping ({address.country})</span>
-                <span className="text-white font-medium">₹{(totalWeight * (SHIPPING_RATES[address.country] || 10)).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-slate-400 text-sm">
-                <span>Items Cost</span>
-                <span className="text-white font-medium">₹{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
-              </div>
-              {appointments.some(a => a.status === 'Scheduled') && (
-                <div className="flex justify-between text-slate-400 text-sm">
-                  <span>Shop Item Delivery</span>
-                  <span className="text-emerald-400 font-medium">{shippingPreference === 'LocalPickup' ? 'During Home Pickup' : 'To my Home'}</span>
+            {isWarehouseCheckout ? (
+              <div className="space-y-4 mb-8">
+                <h3 className="text-xl font-bold mb-2">Shipment Information</h3>
+                <p className="text-xs text-slate-400 leading-relaxed font-semibold">
+                  No payment is required right now. Final billing and invoice will be generated after all items are received at our warehouse. You can check the status of your order in <span className="font-bold text-indigo-400">My Orders</span>.
+                </p>
+                <div className="h-px bg-slate-800 my-4" />
+                <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-800">
+                  <div className="flex items-center justify-between text-slate-300 text-sm">
+                    <span className="font-medium">Total Items</span>
+                    <span className="font-black text-indigo-400 text-lg">{cartItems.length} Items</span>
+                  </div>
                 </div>
-              )}
-              <div className="h-px bg-slate-800 my-4" />
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-bold">Total Amount</span>
-                <span className="text-2xl font-black text-indigo-400">₹{totalCost.toFixed(2)}</span>
               </div>
-            </div>
+            ) : (
+              <>
+                <h3 className="text-xl font-bold mb-6">Order Summary</h3>
+                <div className="space-y-4 mb-8">
+                  <div className="flex justify-between text-slate-400 text-sm">
+                    <span>Total Weight</span>
+                    <span className="text-white font-medium">{totalWeight.toFixed(2)} kg</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400 text-sm">
+                    <span>Shipping ({address.country})</span>
+                    <span className="text-white font-medium">₹{(totalWeight * (SHIPPING_RATES[address.country] || 10)).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400 text-sm">
+                    <span>Items Cost</span>
+                    <span className="text-white font-medium">₹{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
+                  </div>
+                  {appointments.some(a => a.status === 'Scheduled') && (
+                    <div className="flex justify-between text-slate-400 text-sm">
+                      <span>Shop Item Delivery</span>
+                      <span className="text-emerald-400 font-medium">{shippingPreference === 'LocalPickup' ? 'During Home Pickup' : 'To my Home'}</span>
+                    </div>
+                  )}
+                  <div className="h-px bg-slate-800 my-4" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-bold">Total Amount</span>
+                    <span className="text-2xl font-black text-indigo-400">₹{totalCost.toFixed(2)}</span>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="bg-slate-800 p-4 rounded-2xl mb-6">
               <div className="flex items-start gap-3 text-xs text-slate-300">
@@ -7710,7 +7838,12 @@ export default function App() {
               onClick={handleFinalPayment}
               className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-200"
             >
-              {(appointments.some(a => a.status === 'Scheduled') && shippingPreference === 'International') ? 'Confirm Order (Pay at Home)' : 'Confirm & Pay'}
+              {isWarehouseCheckout 
+                ? 'Confirm Shipment Request'
+                : (appointments.some(a => a.status === 'Scheduled') && shippingPreference === 'International') 
+                  ? 'Confirm Order (Pay at Home)' 
+                  : 'Confirm & Pay'
+              }
             </button>
 
             <div className="mt-8 pt-8 border-t border-slate-800">
@@ -8275,7 +8408,7 @@ export default function App() {
               : 'pt-20'
       }`}>
         <AnimatePresence>
-          {activeTab !== 'home' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'finalize' && <BackButton onClick={goBack} />}
+          {activeTab !== 'home' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'finalize' && activeTab !== 'history' && <BackButton onClick={goBack} />}
         </AnimatePresence>
         <AnimatePresence mode="wait">
           <motion.div
