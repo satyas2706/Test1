@@ -123,15 +123,16 @@ import { api } from './services/api';
 import { supabase } from './lib/supabase';
 import { Login } from './components/Login';
 import { Session } from '@supabase/supabase-js';
+import AccountSection from './components/sections/AccountSection';
 
-type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'history' | 'admin' | 'warehouse-mgmt' | 'agent' | 'support' | 'notifications' | 'track';
+type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'history' | 'admin' | 'warehouse-mgmt' | 'agent' | 'support' | 'notifications' | 'track' | 'account';
 
 
 const API_URL = window.location.origin;
 
 const sendWhatsApp = (phone: string, message: string) => {
   if (!phone) {
-    toast.error('No phone number provided');
+    toast.error('Unable to send WhatsApp notification. No contact phone number is associated with this shipment.');
     return;
   }
   let cleanPhone = phone.replace(/\D/g, '');
@@ -141,6 +142,74 @@ const sendWhatsApp = (phone: string, message: string) => {
   }
   const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
   window.open(url, '_blank');
+};
+
+const getStatusWhatsAppMessage = (orderId: string, status: string, name: string, country: string, totalCost?: number) => {
+  const trackingUrl = `${window.location.origin}/track?id=${orderId}`;
+  let statusEmoji = '📦';
+  let statusDescription = 'has been updated.';
+  
+  switch(status) {
+    case 'Scheduled':
+      statusEmoji = '📅';
+      statusDescription = 'has been successfully Scheduled! Our agent will contact you for pickup shortly.';
+      break;
+    case 'Pending Pickup':
+      statusEmoji = '🕒';
+      statusDescription = 'is currently Pending Pickup.';
+      break;
+    case 'Picked Up':
+      statusEmoji = '🚚';
+      statusDescription = 'has been successfully Picked Up by our logistics agent and is on its way to the warehouse.';
+      break;
+    case 'In Warehouse':
+    case 'Received at Warehouse':
+      statusEmoji = '🏢';
+      statusDescription = 'has been Received at our Warehouse hub and is ready for the next processing stages.';
+      break;
+    case 'Order Confirmed':
+      statusEmoji = '✅';
+      statusDescription = 'has been Confirmed.';
+      break;
+    case 'Processing Order':
+      statusEmoji = '⚙️';
+      statusDescription = 'is currently being Processed.';
+      break;
+    case 'Consolidating items':
+      statusEmoji = '📥';
+      statusDescription = 'is undergoing Consolidation of all package items.';
+      break;
+    case 'Packed':
+      statusEmoji = '📦';
+      statusDescription = 'has been securely Packed and ready for dispatch.';
+      break;
+    case 'Ready to Ship':
+      statusEmoji = '✈️';
+      statusDescription = 'is fully Packed and Ready to Ship internationally!';
+      break;
+    case 'In Transit':
+      statusEmoji = '🌐';
+      statusDescription = 'is In Transit (International Shipping / Air Cargo). It is currently flying to the destination hub.';
+      break;
+    case 'Out for Delivery':
+      statusEmoji = '🛵';
+      statusDescription = 'is now Out for Delivery! Our local courier agent is delivering your packages today.';
+      break;
+    case 'Delivered':
+      statusEmoji = '🎉';
+      statusDescription = 'has been successfully Delivered! Thank you for shipping with JiffEX. We hope to serve you again soon!';
+      break;
+    case 'Cancelled':
+      statusEmoji = '❌';
+      statusDescription = 'has been Cancelled.';
+      break;
+    default:
+      statusDescription = `status is now: *${status}*.`;
+  }
+
+  const costString = totalCost ? `\n💰 Total cost: *₹${totalCost.toFixed(2)}*` : '';
+
+  return `*JiffEX Shipment Notification* ${statusEmoji}\n\nDear *${name || 'Customer'}*,\n\nYour shipment *#${orderId.slice(0, 8)}* ${statusDescription}\n\n📍 Destination: *${country || 'N/A'}*${costString}\n\n🔗 Live Tracker: ${trackingUrl}\n\nThank you for choosing JiffEX!`;
 };
 
 const BackButton = ({ onClick }: { onClick: () => void }) => (
@@ -278,6 +347,10 @@ interface AdminDashboardProps {
   isWebmaster: boolean;
   onUpdateOrderItemStatus: (orderId: string, itemId: string, status: ShippingStatus) => Promise<void>;
   onUpdateOrderItemWeight: (orderId: string, itemId: string, weight: number) => Promise<void>;
+  shippingRates?: Record<string, number>;
+  setShippingRates?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  shippingDiscounts?: Record<string, number>;
+  setShippingDiscounts?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
 }
 
 interface SupportDeskDashboardProps {
@@ -831,12 +904,78 @@ const AdminDashboard = ({
   setRefundRequests,
   isWebmaster: isWebmasterProp,
   onUpdateOrderItemStatus,
-  onUpdateOrderItemWeight
+  onUpdateOrderItemWeight,
+  shippingRates = SHIPPING_RATES,
+  setShippingRates,
+  shippingDiscounts = {},
+  setShippingDiscounts
 }: AdminDashboardProps) => {
   const [categoryInput, setCategoryInput] = useState('');
+
+  // Local state to manage shipping rate configuration in the admin panel
+  const [editingRates, setEditingRates] = useState<Record<string, string>>({});
+  const [editingDiscounts, setEditingDiscounts] = useState<Record<string, string>>({});
+  const [isSavingShipping, setIsSavingShipping] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (shippingRates) {
+      const initialRates: Record<string, string> = {};
+      Object.keys(shippingRates).forEach(country => {
+        initialRates[country] = String(shippingRates[country]);
+      });
+      setEditingRates(initialRates);
+    }
+  }, [shippingRates]);
+
+  useEffect(() => {
+    if (shippingDiscounts) {
+      const initialDiscounts: Record<string, string> = {};
+      COUNTRIES.forEach(country => {
+        initialDiscounts[country] = String(shippingDiscounts[country] || 0);
+      });
+      setEditingDiscounts(initialDiscounts);
+    }
+  }, [shippingDiscounts]);
+
+  const handleSaveShippingSettings = async () => {
+    setIsSavingShipping(true);
+    try {
+      const parsedRates: Record<string, number> = {};
+      Object.keys(editingRates).forEach(country => {
+        parsedRates[country] = Number(editingRates[country]) || 0;
+      });
+      const parsedDiscounts: Record<string, number> = {};
+      Object.keys(editingDiscounts).forEach(country => {
+        parsedDiscounts[country] = Number(editingDiscounts[country]) || 0;
+      });
+      
+      const response = await api.updateShippingSettings({
+        rates: parsedRates,
+        discounts: parsedDiscounts
+      });
+      
+      if (setShippingRates) {
+        setShippingRates(response.rates);
+      }
+      if (setShippingDiscounts) {
+        setShippingDiscounts(response.discounts);
+      }
+      toast.success("Country shipping rates and specific discounts updated successfully!");
+    } catch (err: any) {
+      toast.error("Failed to update shipping settings: " + err.message);
+    } finally {
+      setIsSavingShipping(false);
+    }
+  };
+
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editPriceValue, setEditPriceValue] = useState<string>('');
   const [editDeliveryValue, setEditDeliveryValue] = useState<string>('');
+
+  // Local states for updating itemized cargo weights and tracking confirmed ones
+  const [cargoWeights, setCargoWeights] = useState<Record<string, string>>({});
+  const [confirmedWeights, setConfirmedWeights] = useState<Record<string, boolean>>({});
+  const [expandedCargo, setExpandedCargo] = useState<Record<string, boolean>>({});
 
   // Local state for drafts to prevent global re-renders and focus loss
   const [newAgent, setNewAgent] = useState({ name: '', phone: '', email: '', vehicleNumber: '' });
@@ -916,6 +1055,17 @@ const AdminDashboard = ({
     try {
       await api.updateOrderStatus(orderId, newStatus, order.customerId, order.destination);
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      
+      // Send dynamic WhatsApp message on status change
+      const message = getStatusWhatsAppMessage(
+        orderId, 
+        newStatus, 
+        order.destination?.fullName || 'Valued Customer', 
+        order.destination?.country || '', 
+        order.totalCost
+      );
+      sendWhatsApp(order.destination?.phone || '', message);
+
       toast.success(`Order ${orderId} status updated to ${newStatus}. WhatsApp notification sent.`);
     } catch (err: any) {
       console.error('Failed to update order status:', err.message);
@@ -1305,7 +1455,7 @@ const AdminDashboard = ({
             <div className="space-y-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
                 <div>
-                  <h2 className="text-3xl font-black text-slate-900 tracking-tight">Active Logistics Pipeline</h2>
+                  <h2 className="text-xl font-bold text-slate-900 tracking-tight">Pipeline Control Center</h2>
                   <p className="text-slate-500 font-medium mt-1">Cross-border logistics management for {orders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled').length} active shipments.</p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -1337,63 +1487,108 @@ const AdminDashboard = ({
                       className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden hover:shadow-2xl hover:shadow-indigo-500/10 transition-all group"
                     >
                       <div className="p-8">
-                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-10">
-                          <div className="flex items-start gap-8">
-                            <div className="w-20 h-20 bg-indigo-50 rounded-[2.5rem] flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-700 shrink-0 shadow-lg shadow-indigo-100 group-hover:shadow-indigo-500/20">
-                              <Package size={40} />
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+                          {/* Route & Shipment Identification */}
+                          <div className="lg:col-span-5 space-y-4 flex flex-col justify-between">
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2">
+                                <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                                  Global Shipment
+                                </span>
+                                <span className="font-mono text-xs font-black bg-slate-100 text-slate-700 px-2.5 py-1 rounded-xl">
+                                  #{order.id.slice(0, 12).toUpperCase()}
+                                </span>
+                              </div>
+
+                              {/* Visual Route Connect (Origin Hub to Destination City) */}
+                              <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-50/80">
+                                <div className="flex items-center gap-3">
+                                  <div className="text-left shrink-0">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Origin</p>
+                                    <p className="text-sm font-black text-slate-800 flex items-center gap-1">
+                                      🇮🇳 India Hub
+                                    </p>
+                                  </div>
+
+                                  <div className="flex-1 flex items-center justify-center px-1">
+                                    <div className="w-full relative flex items-center justify-center">
+                                      <div className="absolute inset-0 flex items-center">
+                                        <div className="w-full border-t border-dashed border-indigo-200" />
+                                      </div>
+                                      <div className="relative bg-white border border-indigo-50 px-2 py-0.5 rounded-full text-indigo-500 shadow-sm">
+                                        <Plane size={12} className="transform rotate-45" />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="text-right shrink-0">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Destination</p>
+                                    <p className="text-sm font-black text-indigo-600 flex items-center justify-end gap-1">
+                                      🇺🇸 {order.destination.city}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-3">
-                                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Global Shipment</span>
-                                <span className="px-3 py-1 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase tracking-widest">#{order.id.slice(0, 12)}</span>
-                              </div>
-                              <h3 className="text-3xl font-black text-slate-900 flex items-center gap-4">
-                                {order.destination.city}
-                                <ArrowRight size={24} className="text-indigo-200 group-hover:text-indigo-500 transition-colors" />
-                                <span className="text-indigo-600 uppercase tracking-tight">{order.destination.country}</span>
-                              </h3>
-                              <div className="flex flex-wrap items-center gap-4 mt-4">
-                                <div className="px-4 py-2 bg-amber-50 text-amber-700 rounded-2xl text-[10px] font-black border border-amber-200 flex items-center gap-2 uppercase tracking-widest">
-                                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                                  {order.status}
-                                </div>
-                                <div className="h-4 w-px bg-slate-200" />
-                                <div className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
-                                  {order.items.length} Units • {order.totalWeight}kg Payload
-                                </div>
-                                <div className="text-sm font-black text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100">
-                                  ₹{order.totalCost.toLocaleString()} Cost
-                                </div>
-                              </div>
+
+                            {/* Shipment Status & Payload Metrics Row */}
+                            <div className="flex flex-wrap items-center gap-2 pt-2">
+                              <span className="px-3 py-1.5 bg-amber-50 rounded-xl border border-amber-100 text-[10px] font-extrabold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                {order.status}
+                              </span>
+                              <span className="px-3 py-1.5 bg-indigo-50/50 rounded-xl border border-indigo-100/30 text-[10px] font-bold text-slate-600">
+                                {order.items.length} Units • {order.totalWeight || order.total_weight || 0}kg Payload
+                              </span>
+                              <span className="px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100 text-[10px] font-extrabold text-emerald-700">
+                                ₹{(order.totalCost || order.total_cost || 0).toLocaleString()} Cost
+                              </span>
                             </div>
                           </div>
 
-                          <div className="flex flex-col sm:flex-row items-center gap-6 lg:min-w-[500px]">
-                             <div className="w-full bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100 group-hover:bg-white transition-colors">
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Consignee Intelligence</p>
-                              <div className="space-y-2.5">
+                          {/* Consignee Intelligence */}
+                          <div className="lg:col-span-4 bg-slate-50/30 p-5 rounded-[2rem] border border-slate-100 flex flex-col justify-between">
+                            <div>
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
+                                <UserIcon size={12} className="text-indigo-400" /> Consignee Information
+                              </p>
+                              <div className="space-y-2">
                                 <div className="flex items-center justify-between text-xs">
-                                  <span className="font-bold text-slate-400 uppercase tracking-tighter text-[9px]">Full Name</span>
-                                  <span className="font-black text-slate-900">{order.destination.fullName}</span>
+                                  <span className="font-bold text-slate-400 uppercase tracking-tight text-[9px]">Recipient</span>
+                                  <span className="font-black text-slate-900 truncate max-w-[150px]">{order.destination.fullName}</span>
                                 </div>
                                 <div className="flex items-center justify-between text-xs">
-                                  <span className="font-bold text-slate-400 uppercase tracking-tighter text-[9px]">Phone (IN/US)</span>
-                                  <span className="font-black text-indigo-600">{order.destination.phone}</span>
+                                  <span className="font-bold text-slate-400 uppercase tracking-tight text-[9px]">Phone</span>
+                                  <span className="font-black text-indigo-600 font-mono">{order.destination.phone}</span>
                                 </div>
                                 <div className="flex items-center justify-between text-xs">
-                                  <span className="font-bold text-slate-400 uppercase tracking-tighter text-[9px]">Ledger Status</span>
-                                  <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase ${order.paymentStatus === 'Paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
-                                    {order.paymentStatus || 'Pending'}
-                                  </span>
+                                  <span className="font-bold text-slate-400 uppercase tracking-tight text-[9px]">Email</span>
+                                  <span className="font-bold text-slate-600 truncate max-w-[155px]" title={order.destination.email}>{order.destination.email}</span>
                                 </div>
                               </div>
                             </div>
 
-                            <div className="w-full space-y-3">
-                              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest ml-1">Lifecycle Management</p>
+                            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Financial Ledger</span>
+                              <span className={`px-2.5 py-1 rounded-xl text-[9px] font-black uppercase tracking-wider border ${
+                                order.paymentStatus === 'Paid' 
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                                  : 'bg-red-50 text-red-600 border-red-100'
+                              }`}>
+                                {order.paymentStatus || 'Pending'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Lifecycle Controller & Expander */}
+                          <div className="lg:col-span-3 flex flex-col justify-between gap-4">
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest border-b border-indigo-50 pb-1 flex items-center gap-1.5">
+                                <Settings2 size={12} /> Live Operations
+                              </p>
                               <div className="relative">
                                 <select 
-                                  className="w-full p-4 pl-4 pr-12 rounded-[1.5rem] bg-white border-2 border-slate-100 text-sm font-black text-slate-700 outline-none focus:ring-8 focus:ring-indigo-500/5 focus:border-indigo-500 appearance-none transition-all cursor-pointer shadow-lg shadow-slate-100 hover:border-indigo-200"
+                                  className="w-full p-3.5 pl-4 pr-10 rounded-2xl bg-white border-2 border-slate-100 text-xs font-black text-slate-700 outline-none focus:ring-8 focus:ring-indigo-500/5 focus:border-indigo-500 appearance-none transition-all cursor-pointer shadow-sm hover:border-indigo-200"
                                   value={order.status}
                                   onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value as ShippingStatus)}
                                 >
@@ -1415,114 +1610,202 @@ const AdminDashboard = ({
                                   </optgroup>
                                   <option value="Cancelled" className="text-red-600 font-bold">Void/Cancel Shipment</option>
                                 </select>
-                                <ChevronDown size={20} className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" />
+                                <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" />
                               </div>
                             </div>
+
+                            {/* Dropdown toggling for the entire inventory list */}
+                            <button
+                              type="button"
+                              onClick={() => setExpandedCargo(prev => ({ ...prev, [order.id]: !prev[order.id] }))}
+                              className={`w-full py-3 px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-between gap-2 border ${
+                                expandedCargo[order.id]
+                                  ? 'bg-slate-950 border-slate-950 text-white shadow-lg'
+                                  : 'bg-indigo-600 border-indigo-600 text-white hover:bg-slate-900 hover:border-slate-900 shadow-lg shadow-indigo-100 hover:shadow-none'
+                              }`}
+                            >
+                              <span>
+                                {expandedCargo[order.id] ? 'Hide Cargo Details' : 'Manage Itemized Cargo'}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="bg-white/20 text-white text-[9px] px-1.5 py-0.5 rounded-md font-extrabold">
+                                  {order.items.length}
+                                </span>
+                                <ChevronDown 
+                                  size={14} 
+                                  className={`transform transition-transform duration-300 ${
+                                    expandedCargo[order.id] ? 'rotate-180' : ''
+                                  }`} 
+                                />
+                              </div>
+                            </button>
                           </div>
                         </div>
                       </div>
 
                       {/* Deep Inventory Breakdown UI */}
-                      <div className="bg-slate-50/50 p-8 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
-                        <div>
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                             <Boxes size={14} className="text-indigo-500" /> Itemized Cargo
+                      {expandedCargo[order.id] && (
+                        <div className="bg-slate-50 p-8 border-t border-slate-100 grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        <div className="lg:col-span-8 space-y-4">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                             <Boxes size={14} className="text-indigo-500" /> Itemized Cargo Breakdown ({order.items.length} units)
                           </p>
-                          <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                            {order.items.map((item, idx) => (
-                              <div key={idx} className="flex flex-col gap-2 p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
-                                <div className="flex items-center justify-between text-xs font-black">
-                                  <span className="text-slate-900 truncate max-w-[120px]">{item.name}</span>
-                                  <div className="flex items-center gap-2">
-                                     <span className="text-slate-400 text-[10px]">x{item.quantity || 1}</span>
-                                     <span className="text-indigo-600">{item.weight}kg</span>
+                          <div className="space-y-3 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+                            {order.items.map((item, idx) => {
+                              const itemKey = `${order.id}_${item.id}`;
+                              const displayWeight = cargoWeights[itemKey] !== undefined 
+                                ? cargoWeights[itemKey] 
+                                : (item.weight || 0).toString();
+                              const isWeightChanged = displayWeight !== (item.weight || 0).toString();
+                              const parsedWeight = parseFloat(displayWeight);
+                              const isValidWeight = !isNaN(parsedWeight) && parsedWeight > 0;
+                              const isWeightConfirmed = (item.weight > 0) && !isWeightChanged;
+
+                              return (
+                                <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white rounded-2xl border border-slate-100 shadow-sm hover:border-indigo-100 transition-all">
+                                  <div className="space-y-1 min-w-0 max-w-sm">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-extrabold text-slate-900 text-sm truncate">{item.name}</span>
+                                      <span className="text-indigo-600 text-xs font-black bg-indigo-52 px-2 py-0.5 rounded-lg border border-indigo-100/50">x{item.quantity || 1}</span>
+                                    </div>
+                                    <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
+                                      <span className="bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                                        {item.purchaseSource ? `Vendor: ${item.purchaseSource}` : `Source: ${item.source || 'Direct Store'}`}
+                                      </span>
+                                    </p>
                                   </div>
-                                </div>
-                                <div className="flex items-center justify-between gap-2 mt-1 pt-2 border-t border-slate-50">
-                                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider ${
-                                    item.status === 'Received at Warehouse' ? 'bg-emerald-100 text-emerald-700' :
-                                    item.status === 'Awaiting Warehouse Arrival' ? 'bg-amber-100 text-amber-700' :
-                                    'bg-slate-100 text-slate-600'
-                                  }`}>
-                                    {item.status}
-                                  </span>
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
-                                      <span className="text-[9px] text-slate-400 font-black uppercase">Weight:</span>
-                                      <input 
-                                        type="number" 
-                                        step="0.01"
-                                        className="w-12 bg-transparent text-[10px] font-bold text-indigo-600 outline-none"
-                                        defaultValue={item.weight}
-                                        onBlur={(e) => {
-                                          const val = parseFloat(e.target.value);
-                                          if (!isNaN(val) && val !== item.weight) {
-                                            onUpdateOrderItemWeight(order.id, item.id, val);
+
+                                  <div className="flex flex-wrap items-center gap-4">
+                                    <div>
+                                      <span className={`text-[9px] font-black px-2.5 py-1 rounded-xl uppercase tracking-wider border ${
+                                        item.status === 'Received at Warehouse' 
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                                          : item.status === 'Awaiting Warehouse Arrival' 
+                                            ? 'bg-amber-50 text-amber-700 border-amber-100 animate-pulse' 
+                                            : 'bg-slate-50 text-slate-600 border-slate-100'
+                                      }`}>
+                                        {item.status}
+                                      </span>
+                                    </div>
+
+                                    {/* Interactive Weight & Confirm Button */}
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                                        <span className="text-[10px] text-slate-400 font-black uppercase">Weight</span>
+                                        <input 
+                                          type="number" 
+                                          step="0.01"
+                                          className="w-14 bg-transparent text-xs font-bold text-indigo-600 outline-none text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          value={displayWeight}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            setCargoWeights(prev => ({ ...prev, [itemKey]: val }));
+                                          }}
+                                        />
+                                        <span className="text-[10px] text-slate-400 font-bold">kg</span>
+                                      </div>
+
+                                      <button 
+                                        type="button"
+                                        disabled={!isWeightChanged || !isValidWeight}
+                                        onClick={async () => {
+                                          if (isValidWeight) {
+                                            await onUpdateOrderItemWeight(order.id, item.id, parsedWeight);
+                                            setConfirmedWeights(prev => ({ ...prev, [itemKey]: true }));
+                                            toast.success(`Weight for ${item.name} updated to ${parsedWeight} kg!`);
                                           }
                                         }}
-                                      />
-                                      <span className="text-[9px] text-slate-400 font-bold">kg</span>
-                                    </div>
-                                    {item.status !== 'Received at Warehouse' && (
-                                      <button 
-                                        onClick={() => onUpdateOrderItemStatus(order.id, item.id, 'Received at Warehouse')}
-                                        className="text-[9px] font-black text-indigo-600 hover:text-indigo-800 underline uppercase tracking-widest"
+                                        className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all ${
+                                          isWeightChanged && isValidWeight
+                                            ? 'bg-indigo-600 hover:bg-slate-900 text-white shadow-md shadow-indigo-100'
+                                            : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-100'
+                                        }`}
                                       >
-                                        Receive
+                                        Confirm
                                       </button>
+                                    </div>
+
+                                    {/* Action Button to Receive */}
+                                    {item.status !== 'Received at Warehouse' && (
+                                      <div className="flex flex-col items-center sm:items-end gap-1">
+                                        <button 
+                                          type="button"
+                                          disabled={!isWeightConfirmed}
+                                          onClick={() => {
+                                            if (isWeightConfirmed) {
+                                              onUpdateOrderItemStatus(order.id, item.id, 'Received at Warehouse');
+                                            }
+                                          }}
+                                          className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                            isWeightConfirmed
+                                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-100'
+                                              : 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed'
+                                          }`}
+                                        >
+                                          Receive Item
+                                        </button>
+                                        {!isWeightConfirmed && (
+                                          <span className="text-[8px] text-red-500 font-extrabold tracking-wider uppercase">
+                                            {isWeightChanged ? 'Confirm weight first' : 'Set weight to unlock'}
+                                          </span>
+                                        )}
+                                      </div>
                                     )}
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
 
-                        <div>
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                            <FileText size={14} className="text-indigo-500" /> Export Compliance
-                          </p>
-                          <div className="space-y-3">
-                            <button className="w-full flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-200 text-[10px] font-black text-slate-700 uppercase tracking-wider hover:border-indigo-500 hover:text-indigo-600 transition-all group/btn shadow-sm">
-                              Air Waybill (AWB)
-                              <Download size={16} className="text-slate-300 group-hover/btn:text-indigo-600 group-hover/btn:translate-y-0.5 transition-all" />
-                            </button>
-                            <button className="w-full flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-200 text-[10px] font-black text-slate-700 uppercase tracking-wider hover:border-indigo-500 hover:text-indigo-600 transition-all group/btn shadow-sm">
-                              Packing List
-                              <Download size={16} className="text-slate-300 group-hover/btn:text-indigo-600 group-hover/btn:translate-y-0.5 transition-all" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                             <MapPin size={14} className="text-indigo-500" /> Destination Intelligence
-                          </p>
-                          <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-inner flex-1">
-                            <p className="text-xs font-black text-slate-900 leading-relaxed">
-                              {order.destination.addressLine1}<br />
-                              {order.destination.city}, {order.destination.state}<br />
-                              <span className="text-indigo-600">{order.destination.country} {order.destination.zipCode}</span>
+                        <div className="lg:col-span-4 space-y-6">
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                              <FileText size={14} className="text-indigo-500" /> Export Compliance
                             </p>
-                            <div className="flex items-center gap-3 mt-4">
-                               <button className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm"><Phone size={14} /></button>
-                               <button className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><MessageCircle size={14} /></button>
+                            <div className="grid grid-cols-2 gap-3">
+                              <button className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-200 text-[10px] font-black text-slate-700 uppercase tracking-wider hover:border-indigo-500 hover:text-indigo-600 transition-all group/btn shadow-sm">
+                                AWB
+                                <Download size={14} className="text-slate-300 group-hover/btn:text-indigo-600 group-hover/btn:translate-y-0.5 transition-all" />
+                              </button>
+                              <button className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-200 text-[10px] font-black text-slate-700 uppercase tracking-wider hover:border-indigo-500 hover:text-indigo-600 transition-all group/btn shadow-sm">
+                                Packing List
+                                <Download size={14} className="text-slate-300 group-hover/btn:text-indigo-600 group-hover/btn:translate-y-0.5 transition-all" />
+                              </button>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="flex flex-col justify-end gap-3">
-                           <button 
-                             onClick={() => toast.success('Live GPS Link shared with customer via SMS.')}
-                             className="w-full py-4 bg-indigo-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100"
-                           >
-                             Share Tracking Hub
-                           </button>
-                           <button className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">
-                             View Operational Log
-                           </button>
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                               <MapPin size={14} className="text-indigo-500" /> Destination Intelligence
+                            </p>
+                            <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                              <p className="text-xs font-black text-slate-900 leading-relaxed">
+                                {order.destination.addressLine1}<br />
+                                {order.destination.city}, {order.destination.state}<br />
+                                <span className="text-indigo-600">{order.destination.country} {order.destination.zipCode}</span>
+                              </p>
+                              <div className="flex items-center gap-3 mt-4">
+                                 <button className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm"><Phone size={14} /></button>
+                                 <button className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><MessageCircle size={14} /></button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="pt-2 flex flex-col gap-3">
+                             <button 
+                               onClick={() => toast.success('Live GPS Link shared with customer via SMS.')}
+                               className="w-full py-4 bg-indigo-600 text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100"
+                             >
+                               Share Tracking Hub
+                             </button>
+                             <button className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">
+                               View Operational Log
+                             </button>
+                          </div>
                         </div>
                       </div>
+                      )}
                     </motion.div>
                   ))
                 )}
@@ -2114,6 +2397,131 @@ const AdminDashboard = ({
         </div>
       ) : adminTab === 'Settings' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {/* Shipping Rates & Discounts Configurator */}
+          <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm md:col-span-2 lg:col-span-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                  <Truck size={20} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">Shipping Rates & Discounts</h3>
+                  <p className="text-xs text-slate-500 font-medium">Manage country-specific per-kg shipping rates and configure global discount offers.</p>
+                </div>
+              </div>
+              
+              <button
+                onClick={handleSaveShippingSettings}
+                disabled={isSavingShipping}
+                id="save-shipping-settings-btn"
+                className="px-6 py-3 bg-indigo-600 hover:bg-slate-900 text-white font-bold rounded-2xl flex items-center gap-2 text-sm transition-all shadow-md shadow-indigo-100 active:scale-95 disabled:opacity-50"
+              >
+                {isSavingShipping ? 'Saving Settings...' : 'Save Operations Configuration'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+              {/* Left Column: Countries Rates & discounts Editing */}
+              <div className="md:col-span-3 bg-slate-50/50 p-6 rounded-[2.5rem] border border-slate-100">
+                <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Operations Config (Rates & Discounts)</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {COUNTRIES.map(country => (
+                    <div key={country} className="bg-white p-5 rounded-3xl border border-slate-150 shadow-sm space-y-4">
+                      <div>
+                        <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-black tracking-wide uppercase mb-1">
+                          {country}
+                        </span>
+                        <div className="text-[10px] font-bold text-slate-400">OPERATIONS RATIO</div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-slate-500">Shipping Rate</label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                            <input
+                              id={`rate-input-${country}`}
+                              type="number"
+                              value={editingRates[country] !== undefined ? editingRates[country] : ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditingRates(prev => ({
+                                  ...prev,
+                                  [country]: val
+                                }));
+                              }}
+                              className="w-full pl-7 pr-12 py-2 text-slate-800 text-sm font-black border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                              placeholder="e.g. 10"
+                              min="0"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">/ kg</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-slate-500">Country Discount</label>
+                          <div className="relative overflow-hidden">
+                            <input
+                              id={`discount-input-${country}`}
+                              type="number"
+                              value={editingDiscounts[country] !== undefined ? editingDiscounts[country] : ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditingDiscounts(prev => ({
+                                  ...prev,
+                                  [country]: val
+                                }));
+                              }}
+                              className="w-full pl-3 pr-14 py-2 text-rose-600 text-sm font-black border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-100"
+                              placeholder="0"
+                              min="0"
+                              max="100"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-rose-500">% OFF</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right Column: Active Campaign & Insights Panel */}
+              <div className="bg-indigo-900 text-white p-6 rounded-[2.5rem] flex flex-col justify-between border border-indigo-950/25 relative overflow-hidden">
+                <div className="absolute right-0 top-0 translate-x-1/4 -translate-y-1/4 w-32 h-32 bg-white/5 rounded-full pointer-events-none" />
+                
+                <div>
+                  <div className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mb-1">Campaigns Monitor</div>
+                  <h4 className="text-lg font-black text-white">Active Discounts</h4>
+                  <p className="text-xs text-indigo-200 leading-relaxed mt-2 font-medium">Below are the active shipping discount rates configured specifically for selected destination regions.</p>
+                  
+                  <div className="mt-4 space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {COUNTRIES.filter(c => Number(editingDiscounts[c]) > 0).map(c => (
+                      <div key={c} className="flex justify-between items-center bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs">
+                        <span className="font-bold text-indigo-100">{c}</span>
+                        <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-extrabold rounded text-[10px]">
+                          {editingDiscounts[c]}% OFF
+                        </span>
+                      </div>
+                    ))}
+                    {COUNTRIES.filter(c => Number(editingDiscounts[c]) > 0).length === 0 && (
+                      <div className="text-xs text-indigo-300 italic py-4 text-center">
+                        No active country discounts. Flat rates are applied at checkout.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-white/10">
+                  <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-[11px] text-indigo-200 leading-relaxed font-semibold">
+                    <span className="text-emerald-400 font-bold block mb-1">💡 Optimization Tip</span>
+                    Offering specific regional promos drives conversions in your highest volume shipping lanes.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
             <div className="flex items-center gap-3 mb-8">
               <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
@@ -2234,6 +2642,59 @@ const AdminDashboard = ({
   );
 };
 
+// --- Weight calculation helpers ---
+const getSafeItemUnitWeight = (item: any): number => {
+  if (!item) return 0.5;
+  const match = STORE_PRODUCTS.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+  if (match) return match.weight;
+  
+  const rawWeight = parseFloat(item.weight);
+  if (!isNaN(rawWeight) && rawWeight > 0) {
+    if (item.quantity && item.quantity > 1) {
+      return Number((rawWeight / item.quantity).toFixed(2));
+    }
+    return rawWeight;
+  }
+  return 0.5;
+};
+
+const getSafeItemTotalWeight = (item: any): number => {
+  if (!item) return 0.5;
+  const qty = item.quantity || 1;
+  const unit = getSafeItemUnitWeight(item);
+  return Number((unit * qty).toFixed(2));
+};
+
+const getSafeOrderTotalWeight = (order: any): number => {
+  if (!order) return 0;
+  
+  const itemsList = order.items || [];
+  if (itemsList.length > 0) {
+    const calculatedSum = itemsList.reduce((acc: number, item: any) => acc + getSafeItemTotalWeight(item), 0);
+    if (calculatedSum > 0) return Number(calculatedSum.toFixed(2));
+  }
+  
+  const dbWeight = parseFloat(order.totalWeight || order.total_weight || 0);
+  if (!isNaN(dbWeight) && dbWeight > 0) return dbWeight;
+  
+  if (order.vehicleType) {
+    const v = order.vehicleType.toLowerCase();
+    if (v.includes('scooter') || v.includes('bike')) return 5;
+    if (v.includes('car')) return 15;
+    if (v.includes('van')) return 150;
+    if (v.includes('truck')) return 500;
+  }
+  
+  if (order.itemType) {
+    const t = order.itemType.toLowerCase();
+    if (t.includes('heavy')) return 25;
+    if (t.includes('documents')) return 0.5;
+    if (t.includes('everyday')) return 5;
+  }
+  
+  return 1.5;
+};
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -2247,7 +2708,8 @@ export default function App() {
 
   const navigateTo = (tab: Tab) => {
     if (tab === 'pickup' && appointments.some(a => a.status === 'Scheduled') && !isSchedulingNewPickup) {
-      setActivePickupStep(5);
+      setShowPickupInProgressModal(true);
+      return;
     }
     if (tab !== activeTab) {
       setTabHistory(prev => [...prev, tab]);
@@ -2321,6 +2783,7 @@ export default function App() {
   }, [orders]);
   const [storeProducts, setStoreProducts] = useState<StoreProduct[]>(STORE_PRODUCTS);
   const [activeWorkOrder, setActiveWorkOrder] = useState<Appointment | null>(null);
+  const [agentActiveTab, setAgentActiveTab] = useState<'Scheduled' | 'Completed' | 'Canceled'>('Scheduled');
   const [agents, setAgents] = useState<AgentProfile[]>([
     { id: 'AG-1', name: 'Rahul Sharma', phone: '+91 98765 43210', email: 'rahul@jiffex.com', status: 'Active', vehicleNumber: 'KA-01-AB-1234' },
     { id: 'AG-2', name: 'Priya Patel', phone: '+91 87654 32109', email: 'priya@jiffex.com', status: 'Active', vehicleNumber: 'MH-02-CD-5678' },
@@ -2384,6 +2847,7 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginTriggerSource, setLoginTriggerSource] = useState<'default' | 'checkout' | 'pickup'>('default');
   const [showPickupConfirmModal, setShowPickupConfirmModal] = useState(false);
+  const [showPickupInProgressModal, setShowPickupInProgressModal] = useState(false);
   const [activePickupStep, setActivePickupStep] = useState(1);
 
   // Celebration effect for pickup confirmation
@@ -2489,6 +2953,27 @@ export default function App() {
       requestedAt: '1 day ago'
     }
   ]);
+
+  // Shipping setting states
+  const [shippingRates, setShippingRates] = useState<Record<string, number>>(SHIPPING_RATES);
+  const [shippingDiscounts, setShippingDiscounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const fetchShippingSettings = async () => {
+      try {
+        const data = await api.getShippingSettings();
+        if (data && data.rates) {
+          setShippingRates(data.rates);
+        }
+        if (data && data.discounts) {
+          setShippingDiscounts(data.discounts);
+        }
+      } catch (err) {
+        console.error("Error fetching shipping settings:", err);
+      }
+    };
+    fetchShippingSettings();
+  }, []);
 
   // Home Section States
   const [qCountry, setQCountry] = useState(COUNTRIES[0]);
@@ -2617,6 +3102,7 @@ export default function App() {
   const [showConflictModal, setShowConflictModal] = useState<{ show: boolean; item: any; source: any }>({ show: false, item: null, source: null });
   const [cancellingPickupId, setCancellingPickupId] = useState<string | null>(null);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
+  const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<Order | null>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
 
@@ -2737,14 +3223,36 @@ export default function App() {
     const assignedAgent = type === 'AllAgent' ? agents[Math.floor(Math.random() * agents.length)] : undefined;
     const fullAddress = `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}, ${pickupAddress.city}, ${pickupAddress.state} ${pickupAddress.zip}`;
     
-    const newAppointmentId = generateNewOrderId('Pickup');
+    let newAppointmentId = generateNewOrderId('Pickup');
+    try {
+      const resp = await api.getNextOrderId('PH');
+      if (resp && resp.nextId) {
+        newAppointmentId = resp.nextId;
+      }
+    } catch (err) {
+      console.warn('Failed to get next sequential ID from backend, using fallback:', err);
+    }
     
+    // Calculate realistic estimated weight
+    let estWeight = 3;
+    if (pickupEstimatedWeight) {
+      if (pickupEstimatedWeight.includes('1-5')) estWeight = 3;
+      else if (pickupEstimatedWeight.includes('5-15')) estWeight = 10;
+      else if (pickupEstimatedWeight.includes('15-50')) estWeight = 32;
+      else if (pickupEstimatedWeight.includes('50+')) estWeight = 75;
+      else {
+        const match = pickupEstimatedWeight.match(/(\d+)/);
+        if (match) estWeight = parseInt(match[0], 10);
+      }
+    }
+    if (estWeight === 0) estWeight = 3;
+
     // Create new order which will derive the appointment
     const newOrder: Order = {
       id: newAppointmentId,
       customerId: currentUser?.id || 'guest-user',
       items: [],
-      totalWeight: 0,
+      totalWeight: estWeight,
       totalCost: 0,
       status: 'Scheduled',
       createdAt: new Date().toISOString(),
@@ -2787,13 +3295,13 @@ export default function App() {
     setActivePickupStep(5);
     window.scrollTo(0, 0);
     
-    // Sync to DB if connected
-    if (dbStatus.connected && currentUser) {
+    // Sync to DB
+    if (dbStatus.checked) {
       try {
         const orderData = {
           ...newOrder,
-          customer_id: currentUser.id,
-          total_weight: 0,
+          customer_id: currentUser?.id || 'guest-user',
+          total_weight: newOrder.totalWeight || 3,
           total_cost: 0,
           destination: newOrder.destination,
           payment_status: 'Pending',
@@ -2806,12 +3314,15 @@ export default function App() {
       }
     }
 
+    setShowPickupChoiceModal(false);
+  };
+
+  const clearPickupInputs = () => {
     setPickupName('');
     setPickupEmail('');
     setPickupPhone('');
     setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
     setPickupLanguage('English');
-    setShowPickupChoiceModal(false);
   };
 
   const cancelPickup = (id: string) => {
@@ -2897,7 +3408,7 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Sync currentUser with session or Guest Mode
+  // Sync currentUser with session or Guest Mode, restoring custom offline profile if present
   useEffect(() => {
     if (session?.user) {
       const email = session.user.email || '';
@@ -2910,11 +3421,25 @@ export default function App() {
       else if (email === 'webmaster@jiffex.com') role = 'webmaster';
       else role = (session.user.user_metadata?.role as UserRole) || 'customer';
 
+      const userId = session.user.id;
+      const savedProfileStr = localStorage.getItem(`jiffex_user_profile_${userId}`);
+      let localProfile: any = {};
+      
+      if (savedProfileStr) {
+        try {
+          localProfile = JSON.parse(savedProfileStr);
+        } catch (e) {
+          console.error("Error parsing stored user profile:", e);
+        }
+      }
+
       setCurrentUser({
-        id: session.user.id,
-        name: session.user.user_metadata?.full_name || email.split('@')[0] || 'User',
-        email: email,
-        role: role
+        id: userId,
+        name: localProfile.name || session.user.user_metadata?.full_name || email.split('@')[0] || 'User',
+        email: localProfile.email || email,
+        role: role,
+        phone: localProfile.phone || '',
+        address: localProfile.address || ''
       });
     } else if (isGuestMode) {
       const email = guestEmail || '';
@@ -2925,27 +3450,112 @@ export default function App() {
       else if (email === 'agent@jiffex.com') role = 'agent';
       else if (email === 'webmaster@jiffex.com') role = 'webmaster';
 
+      const userId = 'guest-user';
+      const savedProfileStr = localStorage.getItem(`jiffex_user_profile_${userId}`);
+      let localProfile: any = {};
+      
+      if (savedProfileStr) {
+        try {
+          localProfile = JSON.parse(savedProfileStr);
+        } catch (e) {
+          console.error("Error parsing stored guest profile:", e);
+        }
+      }
+
       setCurrentUser({
-        id: 'guest-user',
-        name: guestName || (role === 'admin' ? 'Admin User' : role === 'agent' ? 'Agent User' : role === 'customer_service' ? 'Support CSR' : role === 'webmaster' ? 'Webmaster' : 'Guest User'),
-        email: email || 'guest@example.com',
-        role: role
+        id: userId,
+        name: localProfile.name || guestName || (role === 'admin' ? 'Admin User' : role === 'agent' ? 'Agent User' : role === 'customer_service' ? 'Support CSR' : role === 'webmaster' ? 'Webmaster' : 'Guest User'),
+        email: localProfile.email || email || 'guest@example.com',
+        role: role,
+        phone: localProfile.phone || '',
+        address: localProfile.address || ''
       });
     } else {
       setCurrentUser(null);
     }
   }, [session, isGuestMode, guestEmail, guestName]);
 
+  // Profile Save Callback Handler
+  const handleUpdateProfile = (updatedProfile: { name: string; email: string; phone: string; address: string }) => {
+    if (!currentUser) return;
+    
+    const updatedUser = {
+      ...currentUser,
+      ...updatedProfile
+    };
+    
+    setCurrentUser(updatedUser);
+    localStorage.setItem(`jiffex_user_profile_${currentUser.id}`, JSON.stringify(updatedProfile));
+    
+    // Fallback/auto-propagate to checkout forms
+    setAddress(prev => ({
+      ...prev,
+      fullName: updatedProfile.name || prev.fullName,
+      email: updatedProfile.email || prev.email,
+      phone: updatedProfile.phone || prev.phone,
+      addressLine1: updatedProfile.address || prev.addressLine1
+    }));
+  };
+
+  // Auto-propagate loaded custom profile info to checkout fields
+  useEffect(() => {
+    if (currentUser) {
+      setAddress(prev => ({
+        ...prev,
+        fullName: prev.fullName || currentUser.name || '',
+        email: prev.email || currentUser.email || '',
+        phone: prev.phone || currentUser.phone || '',
+        addressLine1: prev.addressLine1 || currentUser.address || ''
+      }));
+    }
+  }, [currentUser]);
+
   // Helper to normalize data from DB (handles both camelCase and snake_case)
-  const normalizeOrder = useCallback((o: any): Order => ({
-    ...o,
-    customerId: o.customerId || o.customer_id,
-    totalWeight: o.totalWeight || o.total_weight,
-    totalCost: o.totalCost || o.total_cost,
-    paymentStatus: o.paymentStatus || o.payment_status,
-    shippingDate: o.shippingDate || o.shipping_date,
-    createdAt: o.createdAt || o.created_at
-  }), []);
+  const normalizeOrder = useCallback((o: any): Order => {
+    let dest = o.destination;
+    if (typeof dest === 'string') {
+      try {
+        dest = JSON.parse(dest);
+      } catch (e) {
+        console.error('Failed to parse destination JSON string:', e);
+      }
+    }
+    
+    let its = o.items;
+    if (typeof its === 'string') {
+      try {
+        its = JSON.parse(its);
+      } catch (e) {
+        console.error('Failed to parse items JSON string:', e);
+        its = [];
+      }
+    } else if (!its) {
+      its = [];
+    }
+
+    return {
+      ...o,
+      destination: dest,
+      items: its,
+      customerId: o.customerId || o.customer_id || dest?.customerId || dest?.customer_id,
+      totalWeight: o.totalWeight !== undefined ? o.totalWeight : (o.total_weight !== undefined ? o.total_weight : (dest?.totalWeight || dest?.total_weight || 0)),
+      totalCost: o.totalCost !== undefined ? o.totalCost : (o.total_cost !== undefined ? o.total_cost : (dest?.totalCost || dest?.total_cost || 0)),
+      paymentStatus: o.paymentStatus || o.payment_status || dest?.paymentStatus || dest?.payment_status || 'Pending',
+      shippingDate: o.shippingDate || o.shipping_date || dest?.shippingDate || dest?.shipping_date || dest?.date,
+      createdAt: o.createdAt || o.created_at,
+      pickupType: o.pickupType || o.pickup_type || dest?.pickupType || dest?.pickup_type || 'AllAgent',
+      assignedAgent: o.assignedAgent || o.assigned_agent || dest?.assignedAgent || dest?.assigned_agent,
+      assignedAgentId: o.assignedAgentId || o.assigned_agent_id || dest?.assignedAgentId || dest?.assigned_agent_id,
+      languagePreference: o.languagePreference || o.language_preference || dest?.languagePreference || dest?.language_preference || 'English',
+      itemType: o.itemType || o.item_type || dest?.itemType || dest?.item_type || 'General',
+      vehicleType: o.vehicleType || o.vehicle_type || dest?.vehicleType || dest?.vehicle_type || 'Two-Wheeler',
+      customerName: o.customerName || o.customer_name || dest?.customerName || dest?.customer_name || dest?.fullName,
+      phone: o.phone || dest?.phone,
+      date: o.date || dest?.date || o.shippingDate || o.shipping_date,
+      time: o.time || dest?.time || 'Flexible',
+      address: o.address || dest?.address || dest?.addressLine1
+    };
+  }, []);
 
   // Real-time Order Updates (Supabase Realtime)
   useEffect(() => {
@@ -3003,21 +3613,22 @@ export default function App() {
 
   // Fetch orders when currentUser or activeTab changes
   useEffect(() => {
-    if (dbStatus.connected && currentUser) {
-      const isAdminRole = ['admin', 'webmaster', 'customer_service'].includes(currentUser.role);
+    if (dbStatus.checked) {
+      const uId = currentUser?.id || 'guest-user';
+      const isAdminRole = currentUser ? ['admin', 'webmaster', 'customer_service'].includes(currentUser.role) : false;
       
       const processOrders = (data: any[]) => {
         const normalized = data.map(normalizeOrder);
         setOrders(normalized);
       };
 
-      if (isAdminRole && activeTab === 'admin') {
+      if ((isAdminRole && activeTab === 'admin') || activeTab === 'agent') {
         api.getAllOrders().then(processOrders).catch(console.error);
-      } else if (activeTab === 'history' || activeTab === 'home') {
-        api.getOrders(currentUser.id).then(processOrders).catch(console.error);
+      } else if (activeTab === 'history' || activeTab === 'home' || activeTab === 'pickup') {
+        api.getOrders(uId).then(processOrders).catch(console.error);
       }
     }
-  }, [currentUser, activeTab, dbStatus.connected, normalizeOrder]);
+  }, [currentUser, activeTab, dbStatus.checked, normalizeOrder]);
 
   // Scroll to top when major state changes
   useEffect(() => {
@@ -3038,11 +3649,14 @@ export default function App() {
   }, [appointments]);
 
   const totalCost = useMemo(() => {
-    const rate = SHIPPING_RATES[address.country] || 10;
-    const shippingCost = totalWeight * rate;
+    const rate = shippingRates[address.country] || 10;
+    const rawShippingCost = totalWeight * rate;
+    const discountPercent = shippingDiscounts[address.country] || 0;
+    const discountAmount = rawShippingCost * (discountPercent / 100);
+    const shippingCost = Math.max(0, rawShippingCost - discountAmount);
     const itemsCost = cartItems.reduce((sum, item) => sum + (item.price || 0), 0);
     return shippingCost + itemsCost;
-  }, [cartItems, totalWeight, address.country]);
+  }, [cartItems, totalWeight, address.country, shippingRates, shippingDiscounts]);
 
   const minPickupDate = useMemo(() => {
     const storeItems = items.filter(i => i.source === 'Store' && i.estimatedDelivery);
@@ -3123,19 +3737,18 @@ export default function App() {
       setShowJiffySuggestion(true);
     }
 
-    // If Supabase is connected, try to sync
-    if (dbStatus.connected && currentUser) {
+    // Try to sync to backend database
+    if (dbStatus.checked) {
       try {
         await api.createItem({
           ...newItem,
-          user_id: currentUser.id // Ensure user_id is passed for Supabase
+          user_id: currentUser?.id || 'guest-user' // Ensure user_id is passed
         } as any);
       } catch (err: any) {
         console.error('Failed to sync item to DB:', err.message);
-        // Optional: show a toast or alert
       }
     }
-  }, [items, dbStatus.connected, currentUser]);
+  }, [items, dbStatus.checked, currentUser]);
 
   const removeItem = (id: string) => {
     setItems(items.filter(i => i.id !== id));
@@ -3177,6 +3790,20 @@ export default function App() {
           
           const updatedOrder = { ...order, items: updatedItems, status: (newOrderStatus as ShippingStatus) };
           
+          if (newOrderStatus !== order.status) {
+            // Trigger WhatsApp update
+            const message = getStatusWhatsAppMessage(
+              orderId, 
+              newOrderStatus, 
+              order.destination?.fullName || 'Valued Customer', 
+              order.destination?.country || '', 
+              order.totalCost
+            );
+            setTimeout(() => {
+              sendWhatsApp(order.destination?.phone || '', message);
+            }, 100);
+          }
+
           // Sync to DB
           if (dbStatus.connected && currentUser) {
             api.updateOrder(orderId, { 
@@ -3281,6 +3908,14 @@ export default function App() {
     const isWarehouseCheckout = cartItems.some(i => i.source === 'Warehouse');
     const paymentStatus = isWarehouseCheckout ? 'Pending' : isPayAtHome ? 'Pay at Home' : 'Paid';
 
+    // Validate checkout details
+    if (shippingPreference !== 'LocalPickup') {
+      if (!address.fullName || !address.phone || !address.addressLine1 || !address.city || !address.zipCode) {
+        toast.error('Please complete your shipping address details including your contact phone number.');
+        return;
+      }
+    }
+
     // Infer order source from cart items as backup if orderId is falsy
     let finalOrderId = orderId;
     if (!finalOrderId) {
@@ -3297,18 +3932,24 @@ export default function App() {
       setOrderId(finalOrderId);
     }
 
+    const isPickupType = finalOrderId.startsWith('PH-') || cartItems.some(i => i.source === 'Pickup');
+    const assignedAgent = isPickupType ? agents[Math.floor(Math.random() * agents.length)] : undefined;
+
     const newOrder: Order = {
       id: finalOrderId,
       customerId: currentUser.id,
       items: [...cartItems],
       totalWeight,
       totalCost,
-      status: isWarehouseCheckout ? 'Request Placed' : 'Request Placed',
+      status: isWarehouseCheckout ? 'Request Placed' : (isPickupType ? 'Scheduled' : 'Request Placed'),
       createdAt: new Date().toISOString(),
       shippingDate: selectedDate,
       destination: address,
-      paymentStatus: paymentStatus
-    };
+      paymentStatus: paymentStatus,
+      pickupType: isPickupType ? 'AllAgent' : undefined,
+      assignedAgent: assignedAgent,
+      assignedAgentId: assignedAgent?.id
+    } as any;
     
     // Optimistic update
     setOrders([...orders, newOrder]);
@@ -3326,7 +3967,10 @@ export default function App() {
           total_weight: totalWeight,
           total_cost: totalCost,
           payment_status: paymentStatus,
-          shipping_date: selectedDate
+          shipping_date: selectedDate,
+          pickup_type: isPickupType ? 'AllAgent' : undefined,
+          assigned_agent: assignedAgent,
+          assigned_agent_id: assignedAgent?.id
         } as any);
 
         // Automatically send invoice email with PDF
@@ -3378,7 +4022,11 @@ export default function App() {
     setIsWOPaid(true);
     
     const totalW = woItems.reduce((s, i) => s + i.weight, 0);
-    const totalC = totalW * (SHIPPING_RATES[woAddress.country] || 800);
+    const rate = shippingRates[woAddress.country] || 10;
+    const rawC = totalW * rate;
+    const discountPercent = shippingDiscounts[woAddress.country] || 0;
+    const discC = rawC * (discountPercent / 100);
+    const totalC = Math.max(0, rawC - discC);
 
     const newOrder: Order = {
       id: newOrderId,
@@ -3453,7 +4101,20 @@ export default function App() {
       else if (storeItems.length > 0) source = 'Store';
     }
 
-    const newOrderId = generateNewOrderId(source);
+    let prefix = 'BB';
+    if (source === 'Store') prefix = 'SH';
+    else if (source === 'Warehouse') prefix = 'SW';
+    else if (source === 'Pickup') prefix = 'PH';
+
+    let newOrderId = generateNewOrderId(source);
+    try {
+      const resp = await api.getNextOrderId(prefix);
+      if (resp && resp.nextId) {
+        newOrderId = resp.nextId;
+      }
+    } catch (err) {
+      console.warn('Failed to get next sequential ID from backend, using fallback:', err);
+    }
     setOrderId(newOrderId);
 
     if (!currentUser) {
@@ -3870,8 +4531,29 @@ export default function App() {
                           Estimated Cost ({qMethod})
                         </span>
                         <div className="text-4xl font-black">
-                          ₹{(qWeight * SHIPPING_RATES[qCountry] * (qMethod === 'Standard' ? 0.7 : 1.0)).toFixed(2)}
+                          ₹{(() => {
+                            const rate = shippingRates[qCountry] || 10;
+                            const methodMultiplier = qMethod === 'Standard' ? 0.7 : 1.0;
+                            const rawQuote = qWeight * rate * methodMultiplier;
+                            const discountPercent = shippingDiscounts[qCountry] || 0;
+                            const discount = rawQuote * (discountPercent / 100);
+                            return Math.max(0, rawQuote - discount).toFixed(2);
+                          })()}
                         </div>
+                        {(() => {
+                          const discountPercent = shippingDiscounts[qCountry] || 0;
+                          if (discountPercent > 0) {
+                            const rate = shippingRates[qCountry] || 10;
+                            const methodMultiplier = qMethod === 'Standard' ? 0.7 : 1.0;
+                            const saved = qWeight * rate * methodMultiplier * (discountPercent / 100);
+                            return (
+                              <div className="text-xs font-bold text-rose-300 mt-1">
+                                Discount of {discountPercent}% Applied for {qCountry}! (Save ₹{saved.toFixed(2)})
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                         <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-2 flex items-center gap-1">
                           <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
                         </div>
@@ -4145,13 +4827,37 @@ export default function App() {
               unifiedHistory.map(order => (
                 <div key={order.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-200 hover:border-indigo-300 transition-all group">
                   <div className="flex justify-between items-start mb-4">
-                    <button 
-                      onClick={() => setSelectedOrderForInvoice(order)}
-                      className="text-left group-hover:text-indigo-600 transition-colors"
-                    >
-                      <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Order ID</div>
-                      <div className="text-lg font-black">{order.id}</div>
-                    </button>
+                    <div className="flex-1 min-w-0">
+                      <button 
+                        onClick={() => setSelectedOrderForDetails(order)}
+                        className="text-left group-hover:text-indigo-600 transition-colors w-full"
+                      >
+                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Order ID</div>
+                        <div className="text-lg font-black flex items-center flex-wrap gap-2 text-slate-900 group-hover:text-indigo-600 transition-colors">
+                          {order.id}
+                          {(order.id.startsWith('PH-') || (order as any).pickupType) && (
+                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] font-black uppercase tracking-wider rounded-md">
+                              Home Pickup Scheduled
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                      {(order.id.startsWith('PH-') || (order as any).pickupType) && (
+                        <div className="mt-2.5 text-xs bg-indigo-50/50 border border-indigo-100/60 rounded-xl p-3 text-slate-700 font-sans space-y-1 font-medium transition-all group-hover:bg-indigo-50 max-w-2xl">
+                          <div className="font-extrabold flex items-center gap-1.5 text-slate-900 text-xs pb-1.5 mb-1.5 border-b border-indigo-100/40">
+                            <Calendar size={13} className="text-indigo-600 font-bold" /> Scheduled Pickup Details
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                            <div><span className="text-slate-400">Date:</span> <strong className="text-slate-800">{order.shippingDate || (order as any).shipping_date || 'N/A'}</strong></div>
+                            <div><span className="text-slate-400">Time:</span> <strong className="text-slate-800">{(order as any).time || (order as any).destination?.time || 'General Slot'}</strong></div>
+                            <div><span className="text-slate-400">Address:</span> <strong className="text-slate-800">{order.destination?.addressLine1 || (order as any).destination?.addressLine1 || 'N/A'}</strong></div>
+                            <div><span className="text-slate-400">Weight Est:</span> <strong className="text-slate-800">{order.totalWeight || (order as any).total_weight || 0} kg</strong></div>
+                            <div><span className="text-slate-400">Assigned Agent:</span> <strong className="text-slate-800">{order.assignedAgent?.name || (order as any).assignedAgent?.name || (order as any).destination?.assignedAgent?.name || 'Assigning soon...'}</strong></div>
+                            <div><span className="text-slate-400">Item Type:</span> <strong className="text-slate-800">{(order as any).itemType || (order as any).destination?.itemType || 'General Store Goods'}</strong></div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     <div className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold uppercase tracking-widest">
                       {order.status}
                     </div>
@@ -4174,7 +4880,7 @@ export default function App() {
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Weight</div>
-                      <div className="text-sm font-bold text-slate-800">{order.totalWeight || order.total_weight || 0} kg</div>
+                      <div className="text-sm font-bold text-slate-800">{getSafeOrderTotalWeight(order)} kg</div>
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Paid</div>
@@ -4315,48 +5021,81 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="border-t border-slate-100 pt-6 mb-8">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
-                  <div className="space-y-3">
-                    {selectedOrderForInvoice.items.map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                            {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <Package size={20} />}
-                          </div>
-                          <div>
-                            <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
-                              <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
-                              <span>Weight: <strong className="text-slate-700">{item.weight} kg</strong></span>
-                              <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
-                              <span>Total Weight: <strong className="text-slate-800">{(item.weight * (item.quantity || 1)).toFixed(2)} kg</strong></span>
+                {(() => {
+                  const isPendingInvoice = selectedOrderForInvoice.id?.startsWith('PH-') || selectedOrderForInvoice.status === 'Scheduled' || selectedOrderForInvoice.status === 'Pending Pickup';
+                  return (
+                    <>
+                      <div className="border-t border-slate-100 pt-6 mb-8">
+                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
+                        {isPendingInvoice ? (
+                          <div className="bg-indigo-50/50 border border-indigo-100/60 text-indigo-900 rounded-2xl p-6 text-center">
+                            <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                              <Clock size={20} />
                             </div>
+                            <p className="text-sm font-bold text-slate-800">No items picked or billed yet</p>
+                            <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                              This is a scheduled pickup from home. The item list will be finalized and updated once our agent collects and measures your items at our hub.
+                            </p>
                           </div>
-                        </div>
-                        <div className="text-sm font-bold text-slate-900">
-                          {item.price ? `₹${item.price}` : '-'}
-                        </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {selectedOrderForInvoice.items.map((item, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
+                                    {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <Package size={20} />}
+                                  </div>
+                                  <div>
+                                    <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
+                                      <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
+                                      <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
+                                      <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
+                                      <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-sm font-bold text-slate-900">
+                                  {item.price ? `₹${item.price}` : '-'}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                </div>
 
-                <div className="bg-slate-900 rounded-2xl p-6 text-white">
-                  <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
-                    <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Weight</span>
-                    <span className="font-bold">{selectedOrderForInvoice.totalWeight} kg</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Grand Total</span>
-                      <div className="text-3xl font-black">₹{selectedOrderForInvoice.totalCost}</div>
-                    </div>
-                    <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
-                      {selectedOrderForInvoice.paymentStatus}
-                    </div>
-                  </div>
-                </div>
+                      <div className="bg-slate-900 rounded-2xl p-6 text-white mb-4">
+                        {isPendingInvoice ? (
+                          <div className="text-center py-4 font-sans">
+                            <span className="text-indigo-400 text-[10px] font-black uppercase tracking-widest block mb-1">Invoice Notification</span>
+                            <div className="text-sm font-bold text-slate-200 max-w-md mx-auto leading-relaxed">
+                              Invoice will be displayed once the items are picked and billed.
+                            </div>
+                            <span className="inline-block mt-3.5 px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[9px] font-bold uppercase tracking-widest">
+                              Awaiting Pick & Bill
+                            </span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
+                              <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Weight</span>
+                              <span className="font-bold">{getSafeOrderTotalWeight(selectedOrderForInvoice)} kg</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Grand Total</span>
+                                <div className="text-3xl font-black">₹{selectedOrderForInvoice.totalCost}</div>
+                              </div>
+                              <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
+                                {selectedOrderForInvoice.paymentStatus}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
 
                 <div className="mt-8 flex gap-4">
                   <button className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
@@ -4370,14 +5109,169 @@ export default function App() {
             </div>
           )}
         </AnimatePresence>
-      </div>
-    );
-  }, [orders, appointments, currentUser, setActiveTab, selectedOrderForInvoice]);
+
+          {/* Details Modal (when Clicking Order ID) */}
+          <AnimatePresence>
+            {selectedOrderForDetails && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                  className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
+                >
+                  <div className="flex justify-between items-start mb-8">
+                    <div>
+                      <h2 className="text-2xl font-black text-slate-900">Order Details</h2>
+                      <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {selectedOrderForDetails.id}</p>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedOrderForDetails(null)}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                    >
+                      <XCircle size={24} className="text-slate-400" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-8 mb-8">
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
+                      <div className="text-sm font-bold text-slate-900">JiffEX Warehouse</div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {WAREHOUSE_ADDRESS.street}<br />
+                        {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
+                        {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
+                      <div className="text-sm font-bold text-slate-900">{selectedOrderForDetails.destination?.fullName || currentUser?.name}</div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {selectedOrderForDetails.destination?.addressLine1 || 'N/A'}<br />
+                        {selectedOrderForDetails.destination?.city || ''} {selectedOrderForDetails.destination?.state || ''}<br />
+                        {selectedOrderForDetails.destination?.zipCode || ''} {selectedOrderForDetails.destination?.country || ''}
+                      </div>
+                    </div>
+                  </div>
+
+                  {(selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType) && (
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 mb-6 text-slate-700">
+                      <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-3 flex items-center gap-1.5 pb-2 border-b border-indigo-100/60">
+                        <Calendar size={14} className="text-indigo-600" /> Home Pickup Scheduled Details
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4 text-xs font-sans">
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pickup Date</div>
+                          <div className="font-bold text-slate-800">{selectedOrderForDetails.shippingDate || (selectedOrderForDetails as any).shipping_date || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Preferred Time</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).time || (selectedOrderForDetails as any).destination?.time || 'General Slot'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Assigned Agent</div>
+                          <div className="font-bold text-slate-800">
+                            {selectedOrderForDetails.assignedAgent?.name || (selectedOrderForDetails as any).assignedAgent?.name || (selectedOrderForDetails as any).destination?.assignedAgent?.name || 'Assigning soon...'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Language Preference</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).languagePreference || (selectedOrderForDetails as any).destination?.languagePreference || 'English'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Item Category</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).itemType || (selectedOrderForDetails as any).destination?.itemType || 'General Cargo'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Vehicle Type</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).vehicleType || (selectedOrderForDetails as any).destination?.vehicleType || 'Two-Wheeler'}</div>
+                        </div>
+                        <div className="col-span-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Full Pickup Address</div>
+                          <div className="font-bold text-slate-800">{selectedOrderForDetails.destination?.addressLine1 || (selectedOrderForDetails as any).destination?.addressLine1 || 'N/A'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border-t border-slate-100 pt-6 mb-6">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
+                    <div className="space-y-3">
+                      {(selectedOrderForDetails.items || []).map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
+                              {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <Package size={20} />}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium font-sans">
+                                <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
+                                <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
+                                <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
+                                <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-sm font-bold text-slate-900">
+                              {item.price ? `₹${item.price}` : '-'}
+                            </div>
+                            <div className="mt-1.5">
+                              <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[9px] font-extrabold rounded-md uppercase tracking-wider">
+                                {item.status || selectedOrderForDetails.status}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Total weight and grand total in TEXT format (No black box) */}
+                  <div className="border-t border-slate-200 pt-5 space-y-3">
+                    <div className="flex justify-between items-center text-sm font-semibold text-slate-600">
+                      <span>Total Weight:</span>
+                      <span className="text-slate-900 font-extrabold text-base">{getSafeOrderTotalWeight(selectedOrderForDetails)} kg</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm font-semibold text-slate-600 border-t border-slate-100 pt-3">
+                      <div>
+                        <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">Grand Total</span>
+                        <div className="text-2xl font-black text-slate-950 mt-1">₹{selectedOrderForDetails.totalCost || selectedOrderForDetails.total_cost || 0}</div>
+                      </div>
+                      <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold rounded-xl text-xs uppercase tracking-widest">
+                        {selectedOrderForDetails.paymentStatus || selectedOrderForDetails.payment_status || 'Paid'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 flex justify-end pt-2">
+                    <button 
+                      onClick={() => setSelectedOrderForDetails(null)}
+                      className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-all text-sm shadow-sm"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+        </div>
+      );
+    }, [orders, appointments, currentUser, setActiveTab, selectedOrderForInvoice, selectedOrderForDetails]);
 
 
   const WorkOrderSection = useMemo(() => {
     if (!currentUser) return null;
     if (!activeWorkOrder) return null;
+
+    const woTotalWeight = woItems.reduce((s, i) => s + i.weight, 0);
+    const woRate = shippingRates[woAddress.country] || 10;
+    const woRawShippingCost = woTotalWeight * woRate;
+    const woDiscountPercent = shippingDiscounts[woAddress.country] || 0;
+    const woDiscountAmount = woRawShippingCost * (woDiscountPercent / 100);
+    const woTotalCost = Math.max(0, woRawShippingCost - woDiscountAmount);
 
     if (isWOPaid) {
       return (
@@ -4460,10 +5354,21 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="p-4 bg-slate-900 text-white rounded-2xl">
+                <div className="p-4 bg-slate-900 text-white rounded-2xl space-y-2">
+                  <div className="flex justify-between items-center text-xs text-slate-400">
+                    <span>Base Shipping Cost</span>
+                    <span>₹{woRawShippingCost.toFixed(2)}</span>
+                  </div>
+                  {woDiscountPercent > 0 && (
+                    <div className="flex justify-between items-center text-xs text-rose-400">
+                      <span>Shipping Discount ({woDiscountPercent}%)</span>
+                      <span>-₹{woDiscountAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="h-px bg-slate-800 my-1" />
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-bold">Total Amount Paid</span>
-                    <span className="text-2xl font-black text-indigo-400">₹{(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 10)).toFixed(2)}</span>
+                    <span className="text-2xl font-black text-indigo-400">₹{woTotalCost.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -4478,9 +5383,7 @@ export default function App() {
               </button>
               <button 
                 onClick={() => {
-                  const totalW = woItems.reduce((s, i) => s + i.weight, 0);
-                  const totalC = totalW * (SHIPPING_RATES[woAddress.country] || 10);
-                  const message = `*JiffEX Work Order Invoice*\n\nOrder ID: ${woOrderId}\nCustomer: ${woAddress.fullName}\nTotal Amount: ₹${totalC.toFixed(2)}\nDestination: ${woAddress.country}\nStatus: Processed & Paid\n\nThank you for choosing JiffEX!`;
+                  const message = `*JiffEX Work Order Invoice*\n\nOrder ID: ${woOrderId}\nCustomer: ${woAddress.fullName}\nTotal Amount: ₹${woTotalCost.toFixed(2)}\nDestination: ${woAddress.country}\nStatus: Processed & Paid\n\nThank you for choosing JiffEX!`;
                   sendWhatsApp(woAddress.phone, message);
                 }}
                 className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
@@ -4489,7 +5392,7 @@ export default function App() {
               </button>
               <button 
                 onClick={() => {
-                  const summary = `JiffEX Invoice\nOrder ID: ${woOrderId}\nDestination: ${woAddress.fullName}, ${woAddress.country}\nTotal: ₹${(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 10)).toFixed(2)}`;
+                  const summary = `JiffEX Invoice\nOrder ID: ${woOrderId}\nDestination: ${woAddress.fullName}, ${woAddress.country}\nTotal Weight: ${woTotalWeight.toFixed(1)} kg\nTotal: ₹${woTotalCost.toFixed(2)}`;
                   if (navigator.share) {
                     navigator.share({
                       title: 'JiffEX Invoice',
@@ -4726,16 +5629,22 @@ export default function App() {
             <div className="p-4 bg-slate-900 rounded-2xl text-white space-y-2 mb-6">
               <div className="flex justify-between items-center text-xs text-slate-400">
                 <span>Total Weight</span>
-                <span className="text-white font-bold">{woItems.reduce((s, i) => s + i.weight, 0).toFixed(1)} kg</span>
+                <span className="text-white font-bold">{woTotalWeight.toFixed(1)} kg</span>
               </div>
               <div className="flex justify-between items-center text-xs text-slate-400">
                 <span>Shipping Rate</span>
-                <span className="text-white font-bold">₹{SHIPPING_RATES[woAddress.country] || 10}/kg</span>
+                <span className="text-white font-bold">₹{woRate}/kg</span>
               </div>
+              {woDiscountPercent > 0 && (
+                <div className="flex justify-between items-center text-xs text-rose-400">
+                  <span>Discount ({woDiscountPercent}%)</span>
+                  <span>-₹{woDiscountAmount.toFixed(2)}</span>
+                </div>
+              )}
               <div className="h-px bg-slate-800 my-2" />
               <div className="flex justify-between items-center">
                 <span className="text-sm font-bold">Total Amount</span>
-                <span className="text-xl font-black text-indigo-400">₹{(woItems.reduce((s, i) => s + i.weight, 0) * (SHIPPING_RATES[woAddress.country] || 10)).toFixed(2)}</span>
+                <span className="text-xl font-black text-indigo-400">₹{woTotalCost.toFixed(2)}</span>
               </div>
             </div>
 
@@ -4754,33 +5663,95 @@ export default function App() {
 
   const AgentSection = useMemo(() => {
     if (!currentUser) return null;
-    const assignedApts = appointments.filter(a => a.status === 'Scheduled' && a.assignedAgentId);
+    
+    const scheduledApts = appointments.filter(a => a.status === 'Scheduled' && a.assignedAgentId);
+    const completedApts = appointments.filter(a => a.status === 'Completed' && a.assignedAgentId);
+    const canceledApts = appointments.filter(a => a.status === 'Cancelled' && a.assignedAgentId);
+
+    const displayedApts = 
+      agentActiveTab === 'Scheduled' ? scheduledApts : 
+      agentActiveTab === 'Completed' ? completedApts : 
+      canceledApts;
 
     if (activeWorkOrder) {
       return WorkOrderSection;
     }
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-3xl font-black text-slate-900">Agent Portal</h2>
             <p className="text-slate-500">Manage and process assigned pickups.</p>
           </div>
-          <div className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold">
-            {assignedApts.length} Assigned Tasks
+          <div className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold animate-pulse">
+            {scheduledApts.length} Pending Tasks
           </div>
         </div>
 
+        {/* Tabs Bar */}
+        <div className="flex border-b border-slate-100 gap-6">
+          <button
+            onClick={() => setAgentActiveTab('Scheduled')}
+            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 relative ${
+              agentActiveTab === 'Scheduled'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <Clock size={16} />
+            <span>Scheduled</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+              agentActiveTab === 'Scheduled' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'
+            }`}>
+              {scheduledApts.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setAgentActiveTab('Completed')}
+            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 relative ${
+              agentActiveTab === 'Completed'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <CheckCircle2 size={16} />
+            <span>Completed</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+              agentActiveTab === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+            }`}>
+              {completedApts.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setAgentActiveTab('Canceled')}
+            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 relative ${
+              agentActiveTab === 'Canceled'
+                ? 'border-rose-600 text-rose-600'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <XCircle size={16} />
+            <span>Canceled</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+              agentActiveTab === 'Canceled' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'
+            }`}>
+              {canceledApts.length}
+            </span>
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {assignedApts.length === 0 ? (
-            <div className="col-span-full text-center py-20 bg-white rounded-3xl border border-slate-100">
-              <CheckCircle2 size={64} className="mx-auto mb-4 text-emerald-500 opacity-20" />
-              <h3 className="text-xl font-bold text-slate-900">All caught up!</h3>
-              <p className="text-slate-500">No pending pickups assigned to you.</p>
+          {displayedApts.length === 0 ? (
+            <div className="col-span-full text-center py-16 bg-white rounded-3xl border border-slate-100">
+              <CheckCircle2 size={64} className="mx-auto mb-4 text-slate-300 opacity-40" />
+              <h3 className="text-xl font-bold text-slate-900">No pickups found</h3>
+              <p className="text-slate-500">There are no {agentActiveTab.toLowerCase()} pickups assigned.</p>
             </div>
           ) : (
-            assignedApts.map(apt => (
+            displayedApts.map(apt => (
               <motion.div 
                 key={apt.id}
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -4814,19 +5785,29 @@ export default function App() {
                   </div>
                 </div>
 
-                <button 
-                  onClick={() => setActiveWorkOrder(apt)}
-                  className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2"
-                >
-                  Process Pickup <ArrowRight size={18} />
-                </button>
+                {apt.status === 'Completed' ? (
+                  <div className="w-full py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-emerald-100">
+                    <CheckCircle2 size={16} /> Completed & Processed
+                  </div>
+                ) : apt.status === 'Cancelled' ? (
+                  <div className="w-full py-3 bg-rose-50 text-rose-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-rose-100">
+                    <XCircle size={16} /> Pickup Canceled
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => setActiveWorkOrder(apt)}
+                    className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2"
+                  >
+                    Process Pickup <ArrowRight size={18} />
+                  </button>
+                )}
               </motion.div>
             ))
           )}
         </div>
       </div>
     );
-  }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser]);
+  }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser, agentActiveTab, setAgentActiveTab]);
   const renderWarehouseManagementSection = () => {
     const warehouseItems = items.filter(i => i.source === 'Warehouse' || i.source === 'Pickup').map(i => ({ ...i, orderId: null as string | null }));
     const orderWarehouseItems = orders.flatMap(o => 
@@ -6527,6 +7508,7 @@ export default function App() {
                         <div className="flex flex-col items-center gap-4 pt-6">
                           <button 
                             onClick={() => {
+                              clearPickupInputs();
                               navigateTo('history');
                               setActivePickupStep(1);
                               setLastBookingRef(null);
@@ -6539,6 +7521,7 @@ export default function App() {
                           </button>
                           <button 
                             onClick={() => {
+                              clearPickupInputs();
                               navigateTo('home');
                               setActivePickupStep(1);
                               setLastBookingRef(null);
@@ -7805,8 +8788,22 @@ export default function App() {
                   </div>
                   <div className="flex justify-between text-slate-400 text-sm">
                     <span>Shipping ({address.country})</span>
-                    <span className="text-white font-medium">₹{(totalWeight * (SHIPPING_RATES[address.country] || 10)).toFixed(2)}</span>
+                    <span className="text-white font-medium">₹{(totalWeight * (shippingRates[address.country] || 10)).toFixed(2)}</span>
                   </div>
+                  {(() => {
+                    const discountPercent = shippingDiscounts[address.country] || 0;
+                    if (discountPercent > 0) {
+                      const baseShip = totalWeight * (shippingRates[address.country] || 10);
+                      const saved = baseShip * (discountPercent / 100);
+                      return (
+                        <div className="flex justify-between text-rose-400 text-sm font-semibold">
+                          <span>Shipping Discount ({discountPercent}%)</span>
+                          <span>-₹{saved.toFixed(2)}</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                   <div className="flex justify-between text-slate-400 text-sm">
                     <span>Items Cost</span>
                     <span className="text-white font-medium">₹{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
@@ -8218,7 +9215,7 @@ export default function App() {
                           </button>
                           
                           <button 
-                            onClick={() => { /* Account page doesn't exist yet, but we'll show a toast */ toast.info("Account settings coming soon!"); setShowUserDropdown(false); }}
+                            onClick={() => { navigateTo('account'); setShowUserDropdown(false); }}
                             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
                           >
                             <UserIcon size={18} /> My Account
@@ -8352,7 +9349,7 @@ export default function App() {
                           <History size={20} /> My Orders
                         </button>
                         <button 
-                          onClick={() => { toast.info("Account settings coming soon!"); setIsMobileMenuOpen(false); }}
+                          onClick={() => { navigateTo('account'); setIsMobileMenuOpen(false); }}
                           className="text-lg font-bold p-3 rounded-xl text-left text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-3"
                         >
                           <UserIcon size={20} /> My Account
@@ -8459,9 +9456,20 @@ export default function App() {
                 refundRequests={refundRequests}
                 setRefundRequests={setRefundRequests}
                 isWebmaster={currentUser?.role === 'webmaster'}
+                shippingRates={shippingRates}
+                setShippingRates={setShippingRates}
+                shippingDiscounts={shippingDiscounts}
+                setShippingDiscounts={setShippingDiscounts}
               />
             )}
             {activeTab === 'agent' && AgentSection}
+            {activeTab === 'account' && (
+              <AccountSection 
+                currentUser={currentUser} 
+                onUpdateProfile={handleUpdateProfile}
+                customerWarehouseId={customerWarehouseId}
+              />
+            )}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -8491,6 +9499,7 @@ export default function App() {
             <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Account</h4>
             <ul className="space-y-4">
               <li><button onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Sign In</button></li>
+              <li><button onClick={() => navigateTo(currentUser ? 'account' : 'home')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">My Account Details</button></li>
               <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">My Shipments</button></li>
               <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Order History</button></li>
               <li><button onClick={() => navigateTo('notifications')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Notifications</button></li>
@@ -8753,6 +9762,78 @@ export default function App() {
                     className="w-full py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm"
                   >
                     Back to Edit
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showPickupInProgressModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                    <Truck size={24} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900">Active Pickup Order</h3>
+                </div>
+                <button 
+                  onClick={() => setShowPickupInProgressModal(false)}
+                  className="w-10 h-10 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-200 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="p-5 bg-amber-50 rounded-2xl border border-amber-100 flex gap-3 text-slate-700">
+                  <AlertCircle size={20} className="shrink-0 text-amber-500 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-slate-900">Order Already in Progress</p>
+                    <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                      An existing order is already in progress. Do you want to place another order?
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 pt-2">
+                  <button 
+                    onClick={() => {
+                      setIsSchedulingNewPickup(true);
+                      setActivePickupStep(1);
+                      setShowPickupInProgressModal(false);
+                      setTabHistory(prev => [...prev, 'pickup']);
+                      setActiveTab('pickup');
+                      setTimeout(() => {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }, 100);
+                    }}
+                    className="w-full py-4 bg-indigo-600 text-white rounded-[1.5rem] text-md font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2"
+                  >
+                    Yes, Place Another Order <ArrowRight size={18} />
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setIsSchedulingNewPickup(false);
+                      setActivePickupStep(5);
+                      setShowPickupInProgressModal(false);
+                      setTabHistory(prev => [...prev, 'pickup']);
+                      setActiveTab('pickup');
+                      setTimeout(() => {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }, 100);
+                    }}
+                    className="w-full py-4 bg-slate-100 text-slate-700 rounded-[1.5rem] text-md font-black hover:bg-slate-200 transition-all border border-slate-200 flex items-center justify-center"
+                  >
+                    No, View Existing Order
                   </button>
                 </div>
               </div>

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Truck, Calendar, MapPin, User as UserIcon, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Truck, Calendar, MapPin, User as UserIcon, ArrowRight, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import { User, Appointment } from '../../types';
 
 interface AgentSectionProps {
@@ -18,34 +18,98 @@ const AgentSection = ({
   setActiveWorkOrder,
   WorkOrderSection
 }: AgentSectionProps) => {
+  const [activeTab, setActiveTab] = useState<'Scheduled' | 'Completed' | 'Canceled'>('Scheduled');
+
   if (!currentUser) return null;
-  const assignedApts = appointments.filter(a => a.status === 'Scheduled' && a.assignedAgentId);
+
+  const scheduledApts = appointments.filter(a => a.status === 'Scheduled' && a.assignedAgentId);
+  const completedApts = appointments.filter(a => a.status === 'Completed' && a.assignedAgentId);
+  const canceledApts = appointments.filter(a => a.status === 'Cancelled' && a.assignedAgentId);
+
+  const displayedApts = 
+    activeTab === 'Scheduled' ? scheduledApts : 
+    activeTab === 'Completed' ? completedApts : 
+    canceledApts;
 
   if (activeWorkOrder) {
     return <>{WorkOrderSection}</>;
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-black text-slate-900">Agent Portal</h2>
           <p className="text-slate-500">Manage and process assigned pickups.</p>
         </div>
-        <div className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold">
-          {assignedApts.length} Assigned Tasks
+        <div className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold animate-pulse">
+          {scheduledApts.length} Pending Tasks
         </div>
       </div>
 
+      {/* Tabs Bar */}
+      <div className="flex border-b border-slate-100 gap-6">
+        <button
+          onClick={() => setActiveTab('Scheduled')}
+          className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 relative ${
+            activeTab === 'Scheduled'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <Clock size={16} />
+          <span>Scheduled</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+            activeTab === 'Scheduled' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'
+          }`}>
+            {scheduledApts.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('Completed')}
+          className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 relative ${
+            activeTab === 'Completed'
+              ? 'border-emerald-600 text-emerald-600'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <CheckCircle2 size={16} />
+          <span>Completed</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+            activeTab === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+          }`}>
+            {completedApts.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('Canceled')}
+          className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 relative ${
+            activeTab === 'Canceled'
+              ? 'border-rose-600 text-rose-600'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          <XCircle size={16} />
+          <span>Canceled</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+            activeTab === 'Canceled' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'
+          }`}>
+            {canceledApts.length}
+          </span>
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {assignedApts.length === 0 ? (
-          <div className="col-span-full text-center py-20 bg-white rounded-3xl border border-slate-100">
-            <CheckCircle2 size={64} className="mx-auto mb-4 text-emerald-500 opacity-20" />
-            <h3 className="text-xl font-bold text-slate-900">All caught up!</h3>
-            <p className="text-slate-500">No pending pickups assigned to you.</p>
+        {displayedApts.length === 0 ? (
+          <div className="col-span-full text-center py-16 bg-white rounded-3xl border border-slate-100">
+            <CheckCircle2 size={64} className="mx-auto mb-4 text-slate-300 opacity-40" />
+            <h3 className="text-xl font-bold text-slate-900">No pickups found</h3>
+            <p className="text-slate-500">There are no {activeTab.toLowerCase()} pickups assigned.</p>
           </div>
         ) : (
-          assignedApts.map(apt => (
+          displayedApts.map(apt => (
             <motion.div 
               key={apt.id}
               initial={{ opacity: 0, scale: 0.95 }}
@@ -79,12 +143,22 @@ const AgentSection = ({
                 </div>
               </div>
 
-              <button 
-                onClick={() => setActiveWorkOrder(apt)}
-                className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2"
-              >
-                Process Pickup <ArrowRight size={18} />
-              </button>
+              {apt.status === 'Completed' ? (
+                <div className="w-full py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-emerald-100">
+                  <CheckCircle2 size={16} /> Completed & Processed
+                </div>
+              ) : apt.status === 'Cancelled' ? (
+                <div className="w-full py-3 bg-rose-50 text-rose-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-rose-100">
+                  <XCircle size={16} /> Pickup Canceled
+                </div>
+              ) : (
+                <button 
+                  onClick={() => setActiveWorkOrder(apt)}
+                  className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2"
+                >
+                  Process Pickup <ArrowRight size={18} />
+                </button>
+              )}
             </motion.div>
           ))
         )}

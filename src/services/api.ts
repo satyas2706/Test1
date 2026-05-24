@@ -71,6 +71,12 @@ export const api = {
     return await response.json();
   },
 
+  async getNextOrderId(prefix: string): Promise<{ nextId: string }> {
+    const response = await fetch(`${API_URL}/api/orders/next-seq/${prefix}`);
+    if (!response.ok) throw new Error('Failed to fetch next sequential order ID');
+    return await response.json();
+  },
+
   async trackOrder(orderId: string): Promise<Order> {
     const response = await fetch(`${API_URL}/api/orders/track/${orderId}`);
     if (!response.ok) {
@@ -147,6 +153,22 @@ export const api = {
       body: JSON.stringify({ weight }),
     });
     if (!response.ok) throw new Error('Failed to update weight');
+    return await response.json();
+  },
+
+  async getShippingSettings(): Promise<{ rates: Record<string, number>; discounts: Record<string, number> }> {
+    const response = await fetch(`${API_URL}/api/settings/shipping`);
+    if (!response.ok) throw new Error('Failed to fetch shipping settings');
+    return await response.json();
+  },
+
+  async updateShippingSettings(updates: { rates?: Record<string, number>; discounts?: Record<string, number> }): Promise<{ rates: Record<string, number>; discounts: Record<string, number> }> {
+    const response = await fetch(`${API_URL}/api/settings/shipping`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!response.ok) throw new Error('Failed to update shipping settings');
     return await response.json();
   },
 

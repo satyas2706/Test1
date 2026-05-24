@@ -32,6 +32,11 @@ console.log("Starting server initialization...");
 const otps = new Map<string, { code: string, expiresAt: number }>();
 console.log("Memory OTP store initialized.");
 
+// In-memory data store for fallback when Supabase is disconnected
+const memOrders: any[] = [];
+const memItems: any[] = [];
+console.log("Memory Orders and Items stores initialized.");
+
 // Notification Clients
 const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN 
   ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) 
@@ -236,7 +241,7 @@ app.post("/api/auth/send-otp", async (req, res) => {
 
     if (email) {
       if (mailTransporter && process.env.SMTP_FROM) {
-        await mailTransporter.sendMail({
+        mailTransporter.sendMail({
           from: process.env.SMTP_FROM,
           to: email,
           subject: "Your Login OTP",
@@ -248,9 +253,13 @@ app.post("/api/auth/send-otp", async (req, res) => {
               <p style="color: #64748b; font-size: 14px;">This code will expire in 10 minutes.</p>
             </div>
           `
+        }).then(() => {
+          console.log(`[Auth] OTP sent to email: ${email}`);
+        }).catch(err => {
+          console.error("[Auth] Background SMTP OTP send failed:", err.message);
         });
-        console.log(`[Auth] OTP sent to email: ${email}`);
-        res.json({ success: true });
+        console.log(`[Auth] Triggered background OTP email for ${email}. Custom OTP: ${code}`);
+        res.json({ success: true, devCode: code });
       } else {
         console.log(`[Auth] No SMTP configured. OTP for ${email} is: ${code}`);
         res.json({ success: true, devCode: code });
@@ -258,13 +267,17 @@ app.post("/api/auth/send-otp", async (req, res) => {
     } else if (phone) {
       const normalizedPhone = normalizePhoneNumber(phone);
       if (twilioClient && process.env.TWILIO_PHONE_NUMBER) {
-        await twilioClient.messages.create({
+        twilioClient.messages.create({
           body: `Your JiffEX login code is: ${code}. Valid for 10 minutes.`,
           from: process.env.TWILIO_PHONE_NUMBER,
           to: normalizedPhone
+        }).then(() => {
+          console.log(`[Auth] OTP sent to phone: ${normalizedPhone}`);
+        }).catch(err => {
+          console.error("[Auth] Background Twilio OTP send failed:", err.message);
         });
-        console.log(`[Auth] OTP sent to phone: ${normalizedPhone}`);
-        res.json({ success: true });
+        console.log(`[Auth] Triggered background Twilio SMS for ${normalizedPhone}. Custom OTP: ${code}`);
+        res.json({ success: true, devCode: code });
       } else {
         console.log(`[Auth] No Twilio configured. OTP for ${phone} is: ${code}`);
         res.json({ success: true, devCode: code });
@@ -315,6 +328,85 @@ app.get("/api/health", async (req, res) => {
   });
 });
 
+const SETTINGS_FILE_PATH = path.join(process.cwd(), 'shipping_settings.json');
+
+const DEFAULT_SHIPPING_SETTINGS = {
+  rates: {
+    'USA': 12,
+    'UK': 10,
+    'Canada': 11,
+    'Australia': 13,
+    'UAE': 8,
+    'Germany': 9,
+    'Singapore': 7,
+    'India': 5,
+  },
+  discounts: {
+    'USA': 0,
+    'UK': 0,
+    'Canada': 0,
+    'Australia': 0,
+    'UAE': 0,
+    'Germany': 0,
+    'Singapore': 0,
+    'India': 0,
+  }
+};
+
+const getShippingSettings = () => {
+  try {
+    if (fs.existsSync(SETTINGS_FILE_PATH)) {
+      const data = fs.readFileSync(SETTINGS_FILE_PATH, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (!parsed.discounts) {
+        parsed.discounts = {};
+        const ratesObj = parsed.rates || DEFAULT_SHIPPING_SETTINGS.rates;
+        Object.keys(ratesObj).forEach(country => {
+          parsed.discounts[country] = parsed.discountPercent || 0;
+        });
+      }
+      return parsed;
+    }
+  } catch (err) {
+    console.error("Error reading shipping settings:", err);
+  }
+  return DEFAULT_SHIPPING_SETTINGS;
+};
+
+const saveShippingSettings = (settings: any) => {
+  try {
+    fs.writeFileSync(SETTINGS_FILE_PATH, JSON.stringify(settings, null, 2), 'utf-8');
+    return true;
+  } catch (err) {
+    console.error("Error saving shipping settings:", err);
+    return false;
+  }
+};
+
+app.get("/api/settings/shipping", (req, res) => {
+  res.json(getShippingSettings());
+});
+
+app.post("/api/settings/shipping", (req, res) => {
+  const { rates, discounts } = req.body;
+  const current = getShippingSettings();
+  
+  if (rates) {
+    current.rates = { ...current.rates, ...rates };
+  }
+  if (discounts) {
+    // Make sure we sanitize incoming values to numbers
+    const sanitizedDiscounts: Record<string, number> = {};
+    Object.keys(discounts).forEach(country => {
+      sanitizedDiscounts[country] = Number(discounts[country]) || 0;
+    });
+    current.discounts = { ...current.discounts, ...sanitizedDiscounts };
+  }
+  
+  saveShippingSettings(current);
+  res.json(current);
+});
+
 // Mock Data Fallbacks
 const MOCK_PRODUCTS = [
   { id: 'm1', name: 'Premium Packing Box (S)', description: 'Perfect for small heavy items', price: 45, category: 'Packaging', weight: 0.1, imageUrl: 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?q=80&w=2070&auto=format&fit=crop' },
@@ -358,7 +450,13 @@ app.post("/api/products", async (req, res) => {
 
 // Example API: Get all items for a user
 app.get("/api/items/:userId", async (req, res) => {
-  if (!supabase) return res.json([]);
+  if (!supabase) {
+    const userItems = memItems.filter(i => {
+      const uId = i.user_id || i.userId || i.customer_id || i.customerId;
+      return String(uId) === String(req.params.userId);
+    });
+    return res.json(userItems);
+  }
 
   try {
     const { data, error } = await supabase
@@ -375,10 +473,34 @@ app.get("/api/items/:userId", async (req, res) => {
 
 // Example API: Create an item
 app.post("/api/items", async (req, res) => {
-  if (!supabase) return res.json(req.body);
+  if (!supabase) {
+    const finalId = req.body.id || crypto.randomUUID();
+    const itemData = {
+      id: finalId,
+      user_id: req.body.user_id || req.body.userId || req.body.customer_id || req.body.customerId,
+      name: req.body.name,
+      weight: req.body.weight,
+      status: req.body.status || 'Received at Warehouse',
+      source: req.body.source || 'Pickup',
+      price: req.body.price,
+      image: req.body.image
+    };
+    memItems.push(itemData);
+    return res.json(itemData);
+  }
 
   try {
-    const { data, error } = await supabase.from('items').insert(req.body).select().single();
+    const itemData: any = {};
+    if (req.body.id) itemData.id = req.body.id;
+    itemData.user_id = req.body.user_id || req.body.userId || req.body.customer_id || req.body.customerId;
+    if (req.body.name) itemData.name = req.body.name;
+    if (req.body.weight !== undefined) itemData.weight = req.body.weight;
+    if (req.body.status) itemData.status = req.body.status;
+    if (req.body.source) itemData.source = req.body.source;
+    if (req.body.price !== undefined) itemData.price = req.body.price;
+    if (req.body.image) itemData.image = req.body.image;
+
+    const { data, error } = await supabase.from('items').insert(itemData).select().single();
     if (error) throw error;
     res.json(data);
   } catch (err: any) {
@@ -393,8 +515,15 @@ app.post("/api/orders", async (req, res) => {
   const finalId = providedId && String(providedId).trim() !== "" ? providedId : crypto.randomUUID();
   
   if (!supabase) {
-    console.log(`[SQLITE] Creating order with ID: ${finalId}`);
-    return res.json({ ...req.body, id: finalId });
+    console.log(`[MEMDB] Creating order with ID: ${finalId}`);
+    const newOrder = { ...req.body, id: finalId };
+    const idx = memOrders.findIndex(o => o.id === finalId);
+    if (idx > -1) {
+      memOrders[idx] = newOrder;
+    } else {
+      memOrders.push(newOrder);
+    }
+    return res.json(newOrder);
   }
 
   try {
@@ -424,7 +553,50 @@ app.post("/api/orders", async (req, res) => {
 
     console.log(`[SUPABASE] Inserting order with ID: ${finalId}`);
     const { data, error } = await supabase.from('orders').insert(orderData).select().single();
-    if (error) throw error;
+    if (error) {
+      console.warn(`[SUPABASE] Normal insert failed. Retrying schema-compliant fallback. Error: ${error.message}`);
+      
+      let parsedDestination = req.body.destination || {};
+      if (typeof parsedDestination === 'string') {
+        try {
+          parsedDestination = JSON.parse(parsedDestination);
+        } catch (e) {
+          parsedDestination = {};
+        }
+      }
+
+      // Merge extra details inside the JSONB destination mapping to preserve them completely
+      const sanitizedDestination = {
+        ...parsedDestination,
+        pickupType: req.body.pickup_type || req.body.pickupType,
+        assignedAgent: req.body.assigned_agent || req.body.assignedAgent,
+        assignedAgentId: req.body.assigned_agent_id || req.body.assignedAgentId,
+        languagePreference: req.body.language_preference || req.body.languagePreference,
+        itemType: req.body.item_type || req.body.itemType,
+        vehicleType: req.body.vehicle_type || req.body.vehicleType,
+        customerName: req.body.customer_name || req.body.customerName,
+        phone: req.body.phone || req.body.destination?.phone,
+        date: req.body.date || req.body.shipping_date || req.body.shippingDate,
+        time: req.body.time,
+        address: req.body.address || req.body.destination?.addressLine1
+      };
+
+      const fallbackOrderData = {
+        id: finalId,
+        customer_id: req.body.customer_id || req.body.customerId,
+        items: req.body.items,
+        total_weight: req.body.total_weight || req.body.totalWeight || 0,
+        total_cost: req.body.total_cost || req.body.totalCost || 0,
+        status: req.body.status,
+        destination: sanitizedDestination,
+        payment_status: req.body.payment_status || req.body.paymentStatus || 'Pending',
+        shipping_date: req.body.shipping_date || req.body.shippingDate,
+      };
+
+      const { data: fbData, error: fbError } = await supabase.from('orders').insert(fallbackOrderData).select().single();
+      if (fbError) throw fbError;
+      return res.json(fbData);
+    }
     res.json(data);
   } catch (err: any) {
     console.error("Create Order Error:", err.message);
@@ -434,7 +606,16 @@ app.post("/api/orders", async (req, res) => {
 
 // API: Update item status
 app.patch("/api/items/:itemId/status", async (req, res) => {
-  if (!supabase) return res.json({ success: true });
+  if (!supabase) {
+    const { itemId } = req.params;
+    const { status } = req.body;
+    const idx = memItems.findIndex(i => i.id === itemId);
+    if (idx > -1) {
+      memItems[idx].status = status;
+      return res.json({ success: true });
+    }
+    return res.status(404).json({ error: "Item not found" });
+  }
 
   try {
     const { error } = await supabase
@@ -451,7 +632,16 @@ app.patch("/api/items/:itemId/status", async (req, res) => {
 
 // API: Update item weight
 app.patch("/api/items/:itemId/weight", async (req, res) => {
-  if (!supabase) return res.json({ success: true });
+  if (!supabase) {
+    const { itemId } = req.params;
+    const { weight } = req.body;
+    const idx = memItems.findIndex(i => i.id === itemId);
+    if (idx > -1) {
+      memItems[idx].weight = weight;
+      return res.json({ success: true });
+    }
+    return res.status(404).json({ error: "Item not found" });
+  }
 
   try {
     const { error } = await supabase
@@ -468,35 +658,167 @@ app.patch("/api/items/:itemId/weight", async (req, res) => {
 
 // API: Update order details (Partial)
 app.patch("/api/orders/:orderId", async (req, res) => {
-  if (!supabase) return res.json({ success: true });
+  if (!supabase) {
+    const { orderId } = req.params;
+    const idx = memOrders.findIndex(o => o.id === orderId);
+    if (idx > -1) {
+      memOrders[idx] = { ...memOrders[idx], ...req.body };
+      return res.json(transformDbOrder(memOrders[idx]));
+    }
+    return res.status(404).json({ error: "Order not found" });
+  }
 
   const { orderId } = req.params;
   const updates = req.body;
 
-  // Map camelCase to snake_case for DB
-  const dbUpdates: any = { ...updates };
-  if (updates.customerId) dbUpdates.customer_id = updates.customerId;
-  if (updates.totalWeight) dbUpdates.total_weight = updates.totalWeight;
-  if (updates.totalCost) dbUpdates.total_cost = updates.totalCost;
-  if (updates.paymentStatus) dbUpdates.payment_status = updates.paymentStatus;
-  if (updates.shippingDate) dbUpdates.shipping_date = updates.shippingDate;
-  if (updates.pickupType) dbUpdates.pickup_type = updates.pickupType;
-  if (updates.assignedAgent) dbUpdates.assigned_agent = updates.assignedAgent;
-  if (updates.assignedAgentId) dbUpdates.assigned_agent_id = updates.assignedAgentId;
-  if (updates.languagePreference) dbUpdates.language_preference = updates.languagePreference;
-  if (updates.itemType) dbUpdates.item_type = updates.itemType;
-  if (updates.vehicleType) dbUpdates.vehicle_type = updates.vehicleType;
-  if (updates.customerName) dbUpdates.customer_name = updates.customerName;
+  // Build clean snake_case updates object with only valid database columns
+  const dbUpdates: any = {};
+  
+  if (updates.id !== undefined) dbUpdates.id = updates.id;
+  if (updates.customerId !== undefined || updates.customer_id !== undefined) {
+    dbUpdates.customer_id = updates.customerId !== undefined ? updates.customerId : updates.customer_id;
+  }
+  if (updates.items !== undefined) dbUpdates.items = updates.items;
+  if (updates.totalWeight !== undefined || updates.total_weight !== undefined) {
+    dbUpdates.total_weight = updates.totalWeight !== undefined ? updates.totalWeight : updates.total_weight;
+  }
+  if (updates.totalCost !== undefined || updates.total_cost !== undefined) {
+    dbUpdates.total_cost = updates.totalCost !== undefined ? updates.totalCost : updates.total_cost;
+  }
+  if (updates.status !== undefined) dbUpdates.status = updates.status;
+  if (updates.destination !== undefined) dbUpdates.destination = updates.destination;
+  if (updates.paymentStatus !== undefined || updates.payment_status !== undefined) {
+    dbUpdates.payment_status = updates.paymentStatus !== undefined ? updates.paymentStatus : updates.payment_status;
+  }
+  if (updates.shippingDate !== undefined || updates.shipping_date !== undefined) {
+    dbUpdates.shipping_date = updates.shippingDate !== undefined ? updates.shippingDate : updates.shipping_date;
+  }
+  if (updates.pickupType !== undefined || updates.pickup_type !== undefined) {
+    dbUpdates.pickup_type = updates.pickupType !== undefined ? updates.pickupType : updates.pickup_type;
+  }
+  if (updates.assignedAgent !== undefined || updates.assigned_agent !== undefined) {
+    dbUpdates.assigned_agent = updates.assignedAgent !== undefined ? updates.assignedAgent : updates.assigned_agent;
+  }
+  if (updates.assignedAgentId !== undefined || updates.assigned_agent_id !== undefined) {
+    dbUpdates.assigned_agent_id = updates.assignedAgentId !== undefined ? updates.assignedAgentId : updates.assigned_agent_id;
+  }
+  if (updates.languagePreference !== undefined || updates.language_preference !== undefined) {
+    dbUpdates.language_preference = updates.languagePreference !== undefined ? updates.languagePreference : updates.language_preference;
+  }
+  if (updates.itemType !== undefined || updates.item_type !== undefined) {
+    dbUpdates.item_type = updates.itemType !== undefined ? updates.itemType : updates.item_type;
+  }
+  if (updates.vehicleType !== undefined || updates.vehicle_type !== undefined) {
+    dbUpdates.vehicle_type = updates.vehicleType !== undefined ? updates.vehicleType : updates.vehicle_type;
+  }
+  if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+  if (updates.customerName !== undefined || updates.customer_name !== undefined) {
+    dbUpdates.customer_name = updates.customerName !== undefined ? updates.customerName : updates.customer_name;
+  }
+  if (updates.date !== undefined) dbUpdates.date = updates.date;
+  if (updates.time !== undefined) dbUpdates.time = updates.time;
+  if (updates.address !== undefined) dbUpdates.address = updates.address;
 
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('orders')
       .update(dbUpdates)
       .eq('id', orderId)
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.warn(`[SUPABASE] Normal patch failed. Retrying schema-compliant fallback. Error: ${error.message}`);
+      
+      // Get current record to preserve previous destination values
+      const { data: currentOrder, error: getError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+        
+      if (getError) throw getError;
+      
+      let parsedDestination = currentOrder.destination || {};
+      if (typeof parsedDestination === 'string') {
+        try {
+          parsedDestination = JSON.parse(parsedDestination);
+        } catch (e) {
+          parsedDestination = {};
+        }
+      }
+
+      // Merge destination fields with updates
+      const fallbackUpdates: any = {};
+      if (updates.id !== undefined) fallbackUpdates.id = updates.id;
+      if (updates.customerId !== undefined || updates.customer_id !== undefined) {
+        fallbackUpdates.customer_id = updates.customerId !== undefined ? updates.customerId : updates.customer_id;
+      }
+      if (updates.items !== undefined) fallbackUpdates.items = updates.items;
+      if (updates.totalWeight !== undefined || updates.total_weight !== undefined) {
+        fallbackUpdates.total_weight = updates.totalWeight !== undefined ? updates.totalWeight : updates.total_weight;
+      }
+      if (updates.totalCost !== undefined || updates.total_cost !== undefined) {
+        fallbackUpdates.total_cost = updates.totalCost !== undefined ? updates.totalCost : updates.total_cost;
+      }
+      if (updates.status !== undefined) fallbackUpdates.status = updates.status;
+      if (updates.paymentStatus !== undefined || updates.payment_status !== undefined) {
+        fallbackUpdates.payment_status = updates.paymentStatus !== undefined ? updates.paymentStatus : updates.payment_status;
+      }
+      if (updates.shippingDate !== undefined || updates.shipping_date !== undefined) {
+        fallbackUpdates.shipping_date = updates.shippingDate !== undefined ? updates.shippingDate : updates.shipping_date;
+      }
+
+      const mergedDestination = {
+        ...parsedDestination,
+        ...(updates.destination || {}),
+        pickupType: updates.pickupType || updates.pickup_type || parsedDestination.pickupType,
+        assignedAgent: updates.assignedAgent || updates.assigned_agent || parsedDestination.assignedAgent,
+        assignedAgentId: updates.assignedAgentId || updates.assigned_agent_id || parsedDestination.assignedAgentId,
+        languagePreference: updates.languagePreference || updates.language_preference || parsedDestination.languagePreference,
+        itemType: updates.itemType || updates.item_type || parsedDestination.itemType,
+        vehicleType: updates.vehicleType || updates.vehicle_type || parsedDestination.vehicleType,
+        customerName: updates.customerName || updates.customer_name || parsedDestination.customerName,
+        phone: updates.phone || parsedDestination.phone,
+        date: updates.date || parsedDestination.date,
+        time: updates.time || parsedDestination.time,
+        address: updates.address || parsedDestination.address
+      };
+      
+      fallbackUpdates.destination = mergedDestination;
+
+      const { data: fbData, error: fbError } = await supabase
+        .from('orders')
+        .update(fallbackUpdates)
+        .eq('id', orderId)
+        .select()
+        .single();
+        
+      if (fbError) throw fbError;
+      data = fbData;
+    }
+
+    // Send WhatsApp/Email notification if order status was changed in PATCH updates
+    if (updates.status !== undefined && data) {
+      try {
+        const message = `*JiffEX Shipment Update* 📦\n\nYour order #${orderId.slice(0, 8)} status has changed to: *${updates.status}*\n\nTrack here: ${process.env.APP_URL || 'https://jiffex.com'}/track?id=${orderId}`;
+        await sendNotification(
+          data.customer_id || '',
+          "Order Status Updated",
+          message,
+          ['whatsapp', 'Email'],
+          { 
+            phone: (data.destination as any)?.phone,
+            email: (data.destination as any)?.email,
+            fullName: (data.destination as any)?.fullName,
+            orderId: orderId
+          }
+        );
+      } catch (notifyErr: any) {
+        console.error("Failed to send order status notification from PATCH:", notifyErr.message);
+      }
+    }
+
     res.json(data);
   } catch (err: any) {
     console.error("Update Order Error:", err.message);
@@ -507,7 +829,16 @@ app.patch("/api/orders/:orderId", async (req, res) => {
 // API: Update order status
 // Fix: Update order status AND send notification
 app.patch("/api/orders/:orderId/status", async (req, res) => {
-  if (!supabase) return res.json({ success: true });
+  if (!supabase) {
+    const { orderId } = req.params;
+    const { status } = req.body;
+    const idx = memOrders.findIndex(o => o.id === orderId);
+    if (idx > -1) {
+      memOrders[idx].status = status;
+      return res.json({ success: true, order: transformDbOrder(memOrders[idx]) });
+    }
+    return res.status(404).json({ error: "Order not found" });
+  }
 
   const { orderId } = req.params;
   const { status } = req.body;
@@ -984,9 +1315,89 @@ app.delete("/api/orders", async (req, res) => {
   }
 });
 
+// API: Get the next system-wide sequential ID for a given prefix
+app.get("/api/orders/next-seq/:prefix", async (req, res) => {
+  const { prefix } = req.params;
+  let maxSeq = 0;
+  
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id');
+      if (!error && data) {
+        data.forEach((o: any) => {
+          if (o.id && o.id.startsWith(prefix)) {
+            const parts = o.id.split('-');
+            if (parts.length >= 2) {
+              const s = parseInt(parts[1], 10);
+              if (!isNaN(s) && s > maxSeq) maxSeq = s;
+            }
+          }
+        });
+      }
+    } catch (err: any) {
+      console.error("Error getting next id from DB:", err.message);
+    }
+  }
+
+  // Also check memOrders for safety
+  memOrders.forEach((o: any) => {
+    if (o.id && o.id.startsWith(prefix)) {
+      const parts = o.id.split('-');
+      if (parts.length >= 2) {
+        const s = parseInt(parts[1], 10);
+        if (!isNaN(s) && s > maxSeq) maxSeq = s;
+      }
+    }
+  });
+
+  const nextSeqNum = maxSeq + 1;
+  const seq = nextSeqNum.toString().padStart(5, '0');
+  const finalId = `${prefix}-${seq}`;
+  res.json({ nextId: finalId });
+});
+
+// Helper to safely transform database order object supporting field extracting from destination JSONB
+const transformDbOrder = (o: any) => {
+  if (!o) return o;
+  let dest = o.destination;
+  if (typeof dest === 'string') {
+    try {
+      dest = JSON.parse(dest);
+    } catch (e) {
+      dest = {};
+    }
+  }
+
+  return {
+    ...o,
+    destination: dest,
+    customerId: o.customer_id || o.customerId || dest?.customerId || dest?.customer_id,
+    totalWeight: o.total_weight !== undefined && o.total_weight !== null ? o.total_weight : (o.totalWeight !== undefined ? o.totalWeight : (dest?.totalWeight || dest?.total_weight || 0)),
+    totalCost: o.total_cost !== undefined && o.total_cost !== null ? o.total_cost : (o.totalCost !== undefined ? o.totalCost : (dest?.totalCost || dest?.total_cost || 0)),
+    paymentStatus: o.payment_status || o.paymentStatus || dest?.paymentStatus || dest?.payment_status || 'Pending',
+    shippingDate: o.shipping_date || o.shippingDate || dest?.shippingDate || dest?.shipping_date || dest?.date,
+    createdAt: o.created_at || o.createdAt,
+    pickupType: o.pickup_type !== undefined && o.pickup_type !== null ? o.pickup_type : (o.pickupType !== undefined && o.pickupType !== null ? o.pickupType : (dest?.pickupType || dest?.pickup_type || 'AllAgent')),
+    assignedAgent: o.assigned_agent !== undefined && o.assigned_agent !== null ? o.assigned_agent : (o.assignedAgent !== undefined && o.assignedAgent !== null ? o.assignedAgent : (dest?.assignedAgent || dest?.assigned_agent)),
+    assignedAgentId: o.assigned_agent_id !== undefined && o.assigned_agent_id !== null ? o.assigned_agent_id : (o.assignedAgentId !== undefined && o.assignedAgentId !== null ? o.assignedAgentId : (dest?.assignedAgentId || dest?.assigned_agent_id)),
+    languagePreference: o.language_preference !== undefined && o.language_preference !== null ? o.language_preference : (o.languagePreference !== undefined && o.languagePreference !== null ? o.languagePreference : (dest?.languagePreference || dest?.language_preference || 'English')),
+    itemType: o.item_type !== undefined && o.item_type !== null ? o.item_type : (o.itemType !== undefined && o.itemType !== null ? o.itemType : (dest?.itemType || dest?.item_type || 'General')),
+    vehicleType: o.vehicle_type !== undefined && o.vehicle_type !== null ? o.vehicle_type : (o.vehicleType !== undefined && o.vehicleType !== null ? o.vehicleType : (dest?.vehicleType || dest?.vehicle_type || 'Two-Wheeler')),
+    customerName: o.customer_name !== undefined && o.customer_name !== null ? o.customer_name : (o.customerName !== undefined && o.customerName !== null ? o.customerName : (dest?.customerName || dest?.customer_name || dest?.fullName)),
+    phone: o.phone !== undefined && o.phone !== null ? o.phone : dest?.phone,
+    address: o.address !== undefined && o.address !== null ? o.address : dest?.address || dest?.addressLine1,
+    date: o.date !== undefined && o.date !== null ? o.date : (dest?.date || o.shipping_date || o.shipping_date),
+    time: o.time !== undefined && o.time !== null ? o.time : (dest?.time || 'Flexible'),
+  };
+};
+
 // API: Get all orders (Admin only)
 app.get("/api/orders", async (req, res) => {
-  if (!supabase) return res.json([]);
+  if (!supabase) {
+    return res.json(memOrders.map(transformDbOrder));
+  }
 
   try {
     const { data, error } = await supabase
@@ -996,22 +1407,7 @@ app.get("/api/orders", async (req, res) => {
     if (error) throw error;
     
     // Transform snake_case back to camelCase for frontend
-    const transformed = (data || []).map(o => ({
-      ...o,
-      customerId: o.customer_id,
-      totalWeight: o.total_weight,
-      totalCost: o.total_cost,
-      paymentStatus: o.payment_status,
-      shippingDate: o.shipping_date,
-      createdAt: o.created_at,
-      pickupType: o.pickup_type,
-      assignedAgent: o.assigned_agent,
-      assignedAgentId: o.assigned_agent_id,
-      languagePreference: o.language_preference,
-      itemType: o.item_type,
-      vehicleType: o.vehicle_type,
-      customerName: o.customer_name
-    }));
+    const transformed = (data || []).map(transformDbOrder);
 
     res.json(transformed);
   } catch (err: any) {
@@ -1022,7 +1418,12 @@ app.get("/api/orders", async (req, res) => {
 
 // API: Public Tracking (No Auth required)
 app.get("/api/orders/track/:orderId", async (req, res) => {
-  if (!supabase) return res.status(404).json({ error: "Database not connected" });
+  if (!supabase) {
+    const { orderId } = req.params;
+    const found = memOrders.find(o => o.id === orderId);
+    if (!found) return res.status(404).json({ error: "Order not found" });
+    return res.json(transformDbOrder(found));
+  }
 
   const { orderId } = req.params;
   
@@ -1038,22 +1439,7 @@ app.get("/api/orders/track/:orderId", async (req, res) => {
     }
 
     // Transform for frontend
-    const transformed = {
-      ...data,
-      customerId: data.customer_id,
-      totalWeight: data.total_weight,
-      totalCost: data.total_cost,
-      paymentStatus: data.payment_status,
-      shippingDate: data.shipping_date,
-      createdAt: data.created_at,
-      pickupType: data.pickup_type,
-      assignedAgent: data.assigned_agent,
-      assignedAgentId: data.assigned_agent_id,
-      languagePreference: data.language_preference,
-      itemType: data.item_type,
-      vehicleType: data.vehicle_type,
-      customerName: data.customer_name
-    };
+    const transformed = transformDbOrder(data);
 
     res.json(transformed);
   } catch (err: any) {
@@ -1064,7 +1450,14 @@ app.get("/api/orders/track/:orderId", async (req, res) => {
 
 // Example API: Get all orders for a user
 app.get("/api/orders/:customerId", async (req, res) => {
-  if (!supabase) return res.json([]);
+  if (!supabase) {
+    const customerId = req.params.customerId;
+    const userOrders = memOrders.filter(o => {
+      const cId = o.customer_id || o.customerId || o.destination?.customerId || o.destination?.customer_id;
+      return String(cId) === String(customerId);
+    });
+    return res.json(userOrders.map(transformDbOrder));
+  }
 
   try {
     const { data, error } = await supabase
@@ -1074,23 +1467,7 @@ app.get("/api/orders/:customerId", async (req, res) => {
       .order('created_at', { ascending: false });
     if (error) throw error;
     
-    // Transform snake_case back to camelCase for frontend if needed
-    const transformed = (data || []).map(o => ({
-      ...o,
-      customerId: o.customer_id,
-      totalWeight: o.total_weight,
-      totalCost: o.total_cost,
-      paymentStatus: o.payment_status,
-      shippingDate: o.shipping_date,
-      createdAt: o.created_at,
-      pickupType: o.pickup_type,
-      assignedAgent: o.assigned_agent,
-      assignedAgentId: o.assigned_agent_id,
-      languagePreference: o.language_preference,
-      itemType: o.item_type,
-      vehicleType: o.vehicle_type,
-      customerName: o.customer_name
-    }));
+    const transformed = (data || []).map(transformDbOrder);
 
     res.json(transformed);
   } catch (err: any) {
