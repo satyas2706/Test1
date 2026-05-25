@@ -7,6 +7,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Logo } from './components/Logo';
 import { 
   Package, 
+  PackageCheck, 
   Truck, 
   Store, 
   Calculator, 
@@ -80,6 +81,7 @@ import {
   ShoppingCart,
   Warehouse,
   Menu,
+  Save,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -3354,12 +3356,29 @@ export default function App() {
     country: COUNTRIES[0],
   });
   const [isWOPaid, setIsWOPaid] = useState(false);
+  const [woStep, setWoStep] = useState<number>(1);
+
+  // Auto-scroll to top when a step is changed
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const scrollableElements = document.querySelectorAll('.overflow-y-auto, [style*="overflow-y: auto"], [style*="overflow-y: scroll"]');
+    scrollableElements.forEach(el => {
+      el.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }, [woStep]);
+  const [woStatusInput, setWoStatusInput] = useState<ShippingStatus>('Picked Up');
   const [woOrderId, setWoOrderId] = useState<string | null>(null);
   const [woPaymentMethod, setWoPaymentMethod] = useState<'card' | 'phonepe'>('card');
   const [woShippingDate, setWoShippingDate] = useState<string>(SHIPPING_DATES[0]);
+  const [woDocuments, setWoDocuments] = useState<{ id: string; name: string; image: string; type: string; uploadedAt: string }[]>([]);
+  const [woDocName, setWoDocName] = useState('');
+  const [woDocType, setWoDocType] = useState('Govt ID Proof');
+  const [woDocImage, setWoDocImage] = useState('');
+  const [capturingDocId, setCapturingDocId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeWorkOrder) {
+      setWoStep(1);
       // Find corresponding order
       const correspondingOrder = orders.find(o => o.id === activeWorkOrder.id);
       if (correspondingOrder) {
@@ -3374,6 +3393,8 @@ export default function App() {
           country: correspondingOrder.destination?.country || 'India'
         });
         setWoItems(correspondingOrder.items || []);
+        setWoDocuments(correspondingOrder.documents || []);
+        setWoStatusInput(correspondingOrder.status === 'Scheduled' || correspondingOrder.status === 'Pending Pickup' ? 'Picked Up' : correspondingOrder.status);
       } else {
         setWoAddress({
           fullName: activeWorkOrder.customerName || '',
@@ -3386,15 +3407,23 @@ export default function App() {
           country: 'India'
         });
         setWoItems(activeWorkOrder.items || []);
+        setWoDocuments(activeWorkOrder.documents || []);
+        setWoStatusInput('Picked Up');
       }
       setIsWOPaid(correspondingOrder?.paymentStatus === 'Paid');
     } else {
       setWoItems([]);
+      setWoDocuments([]);
       setIsWOPaid(false);
+      setWoStatusInput('Picked Up');
       setWoItemName('');
       setWoItemWeight(1);
       setWoItemQuantity(1);
       setWoItemImage('');
+      setWoDocName('');
+      setWoDocType('Govt ID Proof');
+      setWoDocImage('');
+      setCapturingDocId(null);
     }
   }, [activeWorkOrder]);
 
@@ -4353,11 +4382,13 @@ export default function App() {
 
   const addWOItem = () => {
     if (!woItemName) return;
+    const finalWeight = Math.max(0.1, Number(woItemWeight) || 1);
+    const finalQty = Math.max(1, Math.round(Number(woItemQuantity)) || 1);
     const newItem: ShippingItem = {
       id: crypto.randomUUID(),
       name: woItemName,
-      weight: woItemWeight,
-      quantity: woItemQuantity,
+      weight: finalWeight,
+      quantity: finalQty,
       status: 'Pending',
       source: 'Pickup',
       image: woItemImage || undefined
@@ -4369,7 +4400,7 @@ export default function App() {
     setWoItemImage('');
   };
 
-  const handleWOMarkPickedUp = async () => {
+  const handleWOSaveDetails = async () => {
     if (!activeWorkOrder) return;
 
     const totalW = woItems.reduce((s, i) => s + (i.weight * (i.quantity || 1)), 0);
@@ -4387,29 +4418,21 @@ export default function App() {
       status: 'Active' as const
     };
 
-    // Update item details status to 'Picked Up'
-    const pickedUpItems = woItems.map(item => ({
-      ...item,
-      status: 'Picked Up' as ShippingStatus
-    }));
-
-    // Update original order/appointment status to 'Picked Up' and set updated fields
+    // Update original order/appointment with saved items, weight, and details
     setOrders(prev => prev.map(o => 
       o.id === activeWorkOrder!.id 
         ? { 
             ...o, 
-            status: 'Picked Up', 
-            items: pickedUpItems,
+            items: woItems,
             totalWeight: totalW,
             totalCost: totalC,
+            documents: woDocuments,
             destination: {
+              ...o.destination,
               ...woAddress,
               assignedAgent: currentAgent,
               assignedAgentId: currentAgent.id
             } as any,
-            paymentStatus: o.paymentStatus || 'Pending',
-            assignedAgent: currentAgent,
-            assignedAgentId: currentAgent.id
           } 
         : o
     ));
@@ -4417,34 +4440,29 @@ export default function App() {
     // Sync to database if connected
     if (dbStatus.connected) {
       try {
-        await api.updateOrderStatus(activeWorkOrder.id, 'Picked Up');
         await api.updateOrder(activeWorkOrder.id, {
-          status: 'Picked Up',
-          items: pickedUpItems,
+          items: woItems,
           totalWeight: totalW,
           totalCost: totalC,
+          documents: woDocuments,
           destination: {
             ...woAddress,
             assignedAgent: currentAgent,
             assignedAgentId: currentAgent.id
           } as any,
-          paymentStatus: 'Pending',
           assignedAgent: currentAgent,
           assignedAgentId: currentAgent.id,
           assigned_agent: currentAgent,
           assigned_agent_id: currentAgent.id
         } as any);
-        toast.success(`Order ${activeWorkOrder.id} successfully marked as Picked Up!`);
+        toast.success(`Cargo list, documents and details saved successfully!`);
       } catch (err: any) {
-        console.error('Failed to sync picked up status:', err);
-        toast.error('Local update succeeded, but failed to sync online.');
+        console.error('Failed to sync details:', err);
+        toast.error('Local changes saved, but failed to sync online.');
       }
     } else {
-      toast.success(`Order ${activeWorkOrder.id} successfully marked as Picked Up!`);
+      toast.success(`Cargo list and details saved successfully!`);
     }
-
-    // Go back to the dashboard/portal so the agent can take a new order!
-    setActiveWorkOrder(null);
   };
 
   const handleWOComplete = () => {
@@ -4470,7 +4488,7 @@ export default function App() {
 
     const completedItems = woItems.map(item => ({
       ...item,
-      status: 'Received at Warehouse' as ShippingStatus
+      status: woStatusInput as ShippingStatus
     }));
 
     const newOrder: Order = {
@@ -4479,7 +4497,7 @@ export default function App() {
       items: completedItems,
       totalWeight: totalW,
       totalCost: totalC,
-      status: 'Received at Warehouse',
+      status: woStatusInput,
       createdAt: new Date().toISOString(),
       shippingDate: woShippingDate,
       destination: {
@@ -4489,7 +4507,8 @@ export default function App() {
       } as any,
       paymentStatus: 'Paid',
       assignedAgent: currentAgent,
-      assignedAgentId: currentAgent.id
+      assignedAgentId: currentAgent.id,
+      documents: woDocuments
     };
 
     setOrders([...orders, newOrder]);
@@ -4506,11 +4525,12 @@ export default function App() {
       o.id === activeWorkOrder!.id 
         ? { 
             ...o, 
-            status: 'Delivered', 
+            status: woStatusInput, 
             paymentStatus: 'Paid',
             items: completedItems,
             assignedAgent: currentAgent,
-            assignedAgentId: currentAgent.id
+            assignedAgentId: currentAgent.id,
+            documents: woDocuments
           } 
         : o
     ));
@@ -4524,18 +4544,21 @@ export default function App() {
         total_weight: totalW,
         total_cost: totalC,
         payment_status: 'Paid',
-        shipping_date: woShippingDate
+        shipping_date: woShippingDate,
+        documents: woDocuments,
+        status: woStatusInput
       } as any).catch(err => console.error('Failed to sync new order from work order:', err));
 
-      api.updateOrderStatus(activeWorkOrder.id, 'Delivered').catch(err => console.error('Failed to update status on completion:', err));
+      api.updateOrderStatus(activeWorkOrder.id, woStatusInput).catch(err => console.error('Failed to update status on completion:', err));
       api.updateOrder(activeWorkOrder.id, {
-        status: 'Delivered',
+        status: woStatusInput,
         paymentStatus: 'Paid',
         items: completedItems,
         assignedAgent: currentAgent,
         assignedAgentId: currentAgent.id,
         assigned_agent: currentAgent,
-        assigned_agent_id: currentAgent.id
+        assigned_agent_id: currentAgent.id,
+        documents: woDocuments
       } as any).catch(err => console.error('Failed to update order info on completion:', err));
 
       const recipientEmail = woAddress.email || currentUser?.email || '';
@@ -5881,38 +5904,97 @@ export default function App() {
     }
 
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-            <div className="flex items-center justify-between mb-8">
-              <button 
-                onClick={() => setActiveWorkOrder(null)}
-                className="text-slate-400 hover:text-slate-900 flex items-center gap-1 text-sm font-bold"
-              >
-                <ChevronRight size={16} className="rotate-180" /> Back
-              </button>
-              <div className="text-right">
-                <h2 className="text-2xl font-black text-slate-900">Work Order: {activeWorkOrder.id}</h2>
-                <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">Pickup from home Processing</p>
-              </div>
+      <div className="max-w-4xl mx-auto space-y-6 text-slate-800">
+        {/* Header Block with Back Button & Steps Tracker */}
+        <div className="bg-white p-3.5 sm:p-8 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100">
+          <div className="flex items-center justify-between mb-4 sm:mb-6 pb-2.5 sm:pb-4 border-b border-slate-100">
+            <button 
+              type="button"
+              onClick={() => setActiveWorkOrder(null)}
+              className="text-slate-400 hover:text-slate-900 flex items-center gap-1 text-xs sm:text-sm font-bold transition-all cursor-pointer"
+            >
+              <ChevronRight size={14} className="rotate-180 sm:w-4 sm:h-4" /> Exit
+            </button>
+            <div className="text-right">
+              <h2 className="text-sm sm:text-lg font-black text-slate-900 leading-tight">Order: {activeWorkOrder.id}</h2>
+              <p className="hidden sm:block text-[10px] text-slate-500 uppercase font-black tracking-widest mt-0.5">Pickup & Shipping Wizard</p>
             </div>
-
-            <div className="grid grid-cols-2 gap-6 mb-8 p-6 bg-slate-50 rounded-2xl border border-slate-200">
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Customer Phone</label>
-                <div className="font-bold text-slate-900">{activeWorkOrder.phone}</div>
+          </div>
+ 
+          {/* Context Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 p-2.5 sm:p-4 mb-4 sm:mb-6 bg-indigo-50/40 border border-indigo-100/50 rounded-xl sm:rounded-2xl">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[7px] sm:text-[8px] font-black uppercase text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 tracking-wider shrink-0">Active Pickup</span>
+                <h4 className="text-xs font-black text-slate-800 truncate">Customer: {activeWorkOrder.customerName || 'Walk-in'}</h4>
+                <div className="block sm:hidden text-[9px] font-black text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-100 shrink-0">
+                  📞 {activeWorkOrder.phone}
+                </div>
               </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Pickup Address</label>
-                <div className="text-sm text-slate-600 leading-tight">{activeWorkOrder.address}</div>
-              </div>
+              <p className="text-[10px] text-slate-500 truncate mt-1">📍 {activeWorkOrder.address}</p>
             </div>
+            <div className="hidden sm:flex text-[10px] font-black text-slate-600 shrink-0 bg-white px-3 py-1.5 rounded-xl border border-slate-100 items-center gap-1">
+              <span>📞 {activeWorkOrder.phone}</span>
+            </div>
+          </div>
+ 
+          {/* Stepper Progress Bar (Line-based, like home pickup style, clickable) */}
+          <div className="mb-4 sm:mb-8 select-none">
+            <div className="flex items-center gap-1.5 sm:gap-3 w-full">
+              {[
+                { step: 1, label: 'Cargo', desc: 'Add items' },
+                { step: 2, label: 'KYC Docs', desc: 'Verify ID' },
+                { step: 3, label: 'Destination', desc: 'Recipient' },
+                { step: 4, label: 'Payment', desc: 'Settle cost' }
+              ].map((s) => (
+                <button
+                  key={s.step}
+                  type="button"
+                  onClick={() => {
+                    if (s.step < woStep || woItems.length > 0) {
+                      setWoStep(s.step);
+                    }
+                  }}
+                  className="flex-1 flex flex-col gap-2 text-left focus:outline-none cursor-pointer group"
+                >
+                  <div 
+                    className={`h-1.5 rounded-full transition-all duration-500 w-full ${
+                      woStep === s.step 
+                        ? 'bg-indigo-600 shadow-sm shadow-indigo-200/50' 
+                        : s.step < woStep 
+                          ? 'bg-emerald-500 shadow-xs' 
+                          : 'bg-slate-200'
+                    }`}
+                  />
+                  <div className="flex flex-col min-w-0">
+                    <span className={`text-[10px] uppercase font-black tracking-tight transition-colors truncate ${
+                      woStep === s.step 
+                        ? 'text-indigo-600 font-black' 
+                        : s.step < woStep 
+                          ? 'text-emerald-500 font-extrabold' 
+                          : 'text-slate-400 group-hover:text-slate-600'
+                    }`}>
+                      {s.label}
+                    </span>
+                    <span className={`text-[8px] sm:text-[9px] font-bold text-slate-400 truncate mt-0.5 transition-colors ${
+                      woStep === s.step ? 'text-slate-600' : 'text-slate-400/80'
+                    }`}>
+                      {s.desc}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                  <Package className="text-indigo-600" size={20} /> Collected Cargo list
+          {/* STEP 1: CARGO COLLECTION */}
+          {woStep === 1 && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                  <Package className="text-indigo-600 animate-pulse" size={20} /> 1. Cargo Collection
                 </h3>
+                <p className="text-xs text-slate-500 mt-1">Specify items, quantity, weights and snap real-world condition photos.</p>
               </div>
 
               {/* Hidden universal file camera input */}
@@ -5942,101 +6024,102 @@ export default function App() {
                 }}
               />
 
-              {/* Collapsed input form & buttons */}
-              <div className="bg-slate-50 border border-slate-200/50 p-5 rounded-2xl space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                  <div className="sm:col-span-5">
-                    <label className="block text-[10px] font-black text-slate-450 uppercase tracking-widest mb-1.5">Cargo Item Name</label>
+              {/* Item input box */}
+              <div className="bg-slate-50 border border-slate-200/50 p-3 sm:p-5 rounded-2xl space-y-3">
+                <div className="space-y-3">
+                  {/* Row 1: Item Name */}
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Cargo Item Name</label>
                     <input 
                       type="text" 
                       placeholder="e.g., File bundle, Parcel box, Clothes..."
-                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold placeholder:text-slate-350"
+                      className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold placeholder:text-slate-350"
                       value={woItemName}
                       onChange={(e) => setWoItemName(e.target.value)}
                     />
                   </div>
                   
-                  <div className="sm:col-span-2">
-                    <label className="block text-[10px] font-black text-slate-450 uppercase tracking-widest mb-1.5">Weight (Per item kg)</label>
-                    <input 
-                      type="number" 
-                      placeholder="1"
-                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold placeholder:text-slate-350"
-                      value={woItemWeight || ''}
-                      onChange={(e) => setWoItemWeight(Math.max(0.1, Number(e.target.value)))}
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-[10px] font-black text-slate-450 uppercase tracking-widest mb-1.5">Quantity</label>
-                    <div className="flex items-center bg-white rounded-xl border border-slate-200 p-0.5 select-none h-[38px]">
-                      <button 
-                        onClick={() => setWoItemQuantity(Math.max(1, woItemQuantity - 1))}
-                        className="w-7 h-7 bg-slate-50 hover:bg-slate-100 rounded-lg flex items-center justify-center font-bold text-slate-600 text-xs transition-colors cursor-pointer"
-                      >
-                        -
-                      </button>
-                      <span className="flex-1 text-center text-xs font-black text-slate-800">{woItemQuantity}</span>
-                      <button 
-                        onClick={() => setWoItemQuantity(woItemQuantity + 1)}
-                        className="w-7 h-7 bg-slate-50 hover:bg-slate-100 rounded-lg flex items-center justify-center font-bold text-slate-600 text-xs transition-colors cursor-pointer"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="sm:col-span-3 flex gap-2">
-                    <div className="flex-1">
-                      <label className="block text-[10px] text-center font-black text-slate-450 uppercase tracking-widest mb-1.5">Snap</label>
-                      <button 
-                        onClick={() => {
-                          setCapturingItemId('new');
-                          document.getElementById('universal-wo-camera')?.click();
+                  {/* Row 2: Weight, Quantity, Snap in a single line */}
+                  <div className="grid grid-cols-3 gap-2 sm:gap-4 items-end">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 truncate">Weight (kg)</label>
+                      <input 
+                        type="number" 
+                        placeholder="e.g., 2.5"
+                        step="any"
+                        className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold text-center"
+                        value={woItemWeight || ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? 0 : Number(e.target.value);
+                          setWoItemWeight(val);
                         }}
-                        title={woItemImage ? "Photo captured! Click to retake" : "Open Camera"}
-                        className={`w-full h-[38px] rounded-xl flex items-center justify-center border transition-all cursor-pointer relative ${
-                          woItemImage 
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-600 ring-2 ring-emerald-100' 
-                            : 'bg-white border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-300'
-                        }`}
-                      >
-                        <Camera size={16} className={!woItemImage ? "text-indigo-600" : ""} />
-                        {woItemImage && (
-                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border border-white flex items-center justify-center text-[8px] text-white">✓</span>
-                        )}
-                      </button>
+                      />
                     </div>
 
-                    {woItemImage && (
-                      <div className="pt-5 shrink-0">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 truncate">Quantity</label>
+                      <input 
+                        type="number" 
+                        placeholder="Qty"
+                        className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold text-center"
+                        value={woItemQuantity || ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? 1 : Math.max(1, parseInt(e.target.value, 10));
+                          setWoItemQuantity(val);
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-center font-black text-slate-400 uppercase tracking-widest mb-1 truncate">Snap Photo</label>
+                      <div className="flex gap-1.5 items-center justify-center w-full">
                         <button 
+                          type="button"
                           onClick={() => {
-                            setWoItemImage('');
-                            toast.info("Cleared item photo!");
+                            setCapturingItemId('new');
+                            document.getElementById('universal-wo-camera')?.click();
                           }}
-                          title="Clear image"
-                          className="w-9 h-9 bg-rose-50 hover:bg-rose-100 border border-rose-100 text-rose-500 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
+                          className={`flex-1 h-[38px] rounded-xl flex items-center justify-center border transition-all cursor-pointer relative ${
+                            woItemImage 
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-600 ring-2 ring-emerald-100' 
+                              : 'bg-white border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-300'
+                          }`}
                         >
-                          <X size={14} />
+                          <Camera size={14} className={!woItemImage ? "text-indigo-600" : ""} />
+                          {woItemImage && (
+                            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border border-white flex items-center justify-center text-[8px] text-white">✓</span>
+                          )}
                         </button>
+                        {woItemImage && (
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setWoItemImage('');
+                              toast.info("Cleared item photo!");
+                            }}
+                            className="w-8 h-8 bg-rose-50 hover:bg-rose-100 border border-rose-100 text-rose-500 rounded-xl flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center pt-3 border-t border-slate-150">
-                  <span className="text-[10px] font-bold text-slate-400">Add multiple items with their quantities as collected.</span>
+                <div className="flex justify-between items-center pt-2.5 border-t border-slate-150">
+                  <span className="text-[10px] font-bold text-slate-400">Add collected items representing cargo.</span>
                   <button 
+                    type="button"
                     onClick={addWOItem}
                     disabled={!woItemName}
-                    className={`px-5 py-2 rounded-xl font-bold transition-all text-xs cursor-pointer shadow-xs ${
+                    className={`px-6 py-2 rounded-xl font-bold transition-all text-xs cursor-pointer shadow-xs ${
                       woItemName 
                         ? 'bg-slate-900 text-white hover:bg-black hover:shadow-sm' 
                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                     }`}
                   >
-                    Add to Item List
+                    Add
                   </button>
                 </div>
               </div>
@@ -6050,21 +6133,21 @@ export default function App() {
                   <div className="grid grid-cols-3 gap-3 p-4 bg-indigo-50/45 border border-indigo-100/70 rounded-2xl">
                     <div className="text-center">
                       <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">Total Qty</span>
-                      <span className="text-lg font-black text-indigo-950 mt-0.5 block">{totalWoItemsCount} {totalWoItemsCount === 1 ? 'item' : 'items'}</span>
+                      <span className="text-sm sm:text-base font-black text-indigo-950 mt-0.5 block">{totalWoItemsCount} {totalWoItemsCount === 1 ? 'item' : 'items'}</span>
                     </div>
-                    <div className="text-center border-x border-indigo-100/80">
+                    <div className="text-center border-x border-indigo-100/80 font-sans">
                       <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">Total Weight</span>
-                      <span className="text-lg font-black text-indigo-950 mt-0.5 block">{totalWoWeightCalculated.toFixed(1)} kg</span>
+                      <span className="text-sm sm:text-base font-black text-indigo-950 mt-0.5 block">{totalWoWeightCalculated.toFixed(1)} kg</span>
                     </div>
                     <div className="text-center">
                       <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">Shipping Rate</span>
-                      <span className="text-lg font-black text-emerald-600 mt-0.5 block">₹{woRate.toFixed(2)}/kg</span>
+                      <span className="text-sm sm:text-base font-black text-emerald-600 mt-0.5 block">₹{woRate.toFixed(2)}/kg</span>
                     </div>
                   </div>
                 );
               })()}
 
-              {/* Collected List items list with fast Mobile capture icon */}
+              {/* Collected List items list */}
               <div className="mt-4 space-y-2">
                 {woItems.length === 0 ? (
                   <div className="text-center py-8 text-slate-400 font-medium text-xs bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
@@ -6074,14 +6157,12 @@ export default function App() {
                   woItems.map(item => (
                     <div key={item.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-150 shadow-xs hover:border-slate-350 transition-all">
                       <div className="flex items-center gap-3">
-                        {/* Camera icon or Captured photo clickable */}
                         <div 
                           onClick={() => {
                             setCapturingItemId(item.id);
                             document.getElementById('universal-wo-camera')?.click();
                           }}
-                          title="Click Camera to take photo"
-                          className="w-12 h-12 rounded-xl bg-slate-50 border border-dashed border-slate-200 font-bold overflow-hidden shrink-0 flex items-center justify-center cursor-pointer transition-all hover:border-indigo-400 group relative"
+                          className="w-12 h-12 rounded-xl bg-slate-50 border border-dashed border-slate-250 font-bold overflow-hidden shrink-0 flex items-center justify-center cursor-pointer transition-all hover:border-indigo-400 group relative"
                         >
                           {item.image ? (
                             <>
@@ -6104,29 +6185,28 @@ export default function App() {
                               x{item.quantity || 1}
                             </span>
                           </div>
-                          <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                          <div className="text-[10px] text-slate-505 font-semibold mt-0.5">
                             {item.weight} kg per unit • Total: {(item.weight * (item.quantity || 1)).toFixed(1)} kg
                           </div>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* Quick Camera Icon for fast mobile parcel check */}
                         <button 
+                          type="button"
                           onClick={() => {
                             setCapturingItemId(item.id);
                             document.getElementById('universal-wo-camera')?.click();
                           }}
-                          title="Take Photo"
-                          className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                          className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-all cursor-pointer"
                         >
                           <Camera size={15} />
                         </button>
                         
                         <button 
+                          type="button"
                           onClick={() => setWoItems(woItems.filter(i => i.id !== item.id))}
-                          title="Remove item"
-                          className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 flex items-center justify-center hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                          className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 flex items-center justify-center transition-all cursor-pointer"
                         >
                           <Trash2 size={15} />
                         </button>
@@ -6134,181 +6214,496 @@ export default function App() {
                     </div>
                   ))
                 )}
+                {woItems.length > 0 && (
+                  <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-100">
+                    <span className="text-[10px] text-slate-400 font-bold">Keep cargo list synchronized with servers.</span>
+                    <button
+                      type="button"
+                      onClick={handleWOSaveDetails}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer animate-pulse hover:animate-none"
+                    >
+                      <Save size={14} /> Save Collected Cargo List
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        </div>
+          )}
 
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-            <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-              <MapPin className="text-red-500" /> Destination Address
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Full Name</label>
-                <input 
-                  type="text" 
-                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                  value={woAddress.fullName}
-                  onChange={e => setWoAddress({...woAddress, fullName: e.target.value})}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+          {/* STEP 2: KYC VERIFICATION DOCUMENTS */}
+          {woStep === 2 && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between gap-2">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Email</label>
-                  <input 
-                    type="email" 
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    value={woAddress.email}
-                    onChange={e => setWoAddress({...woAddress, email: e.target.value})}
-                  />
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                    <ShieldCheck className="text-indigo-600" size={20} /> 2. KYC Verification Proof
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">Collect customer identity verification scans or bill copies for outbound clearances.</p>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Phone</label>
-                  <input 
-                    type="tel" 
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    value={woAddress.phone}
-                    onChange={e => setWoAddress({...woAddress, phone: e.target.value})}
-                  />
+                <span className="px-2 py-0.5 bg-amber-50 text-amber-700 text-[8px] font-black rounded border border-amber-100 uppercase tracking-widest leading-none shrink-0">
+                  KYC MANDATORY
+                </span>
+              </div>
+
+              {/* Document Camera/File Selector */}
+              <input 
+                type="file" 
+                id="universal-wo-doc-camera" 
+                accept="image/*" 
+                capture="environment" 
+                className="hidden" 
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const imgData = reader.result as string;
+                      setWoDocImage(imgData);
+                      toast.success("Document photo loaded successfully!");
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+
+              {/* Upload Panel */}
+              <div className="bg-slate-50 border border-slate-205 p-4 sm:p-5 rounded-2xl space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                  <div className="sm:col-span-4 border-none">
+                    <label className="block text-[10px] font-black text-slate-505 uppercase tracking-widest mb-1.5">Document Type</label>
+                    <select
+                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold"
+                      value={woDocType}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setWoDocType(val);
+                        // Set default names
+                        if (val === 'Aadhar Card') setWoDocName('Customer Aadhar Card');
+                        else if (val === 'Passport') setWoDocName('Customer Passport');
+                        else if (val === 'PAN Card') setWoDocName('Customer PAN Card');
+                        else if (val === 'Customs Declaration') setWoDocName('Signed Customs Declaration');
+                        else if (val === 'Invoice Copy') setWoDocName('Commercial Invoice / Bill');
+                        else setWoDocName('');
+                      }}
+                    >
+                      <option value="Aadhar Card">Aadhar Card</option>
+                      <option value="Passport">Passport Copy</option>
+                      <option value="PAN Card">PAN Card</option>
+                      <option value="Customs Declaration">Customs Declaration form</option>
+                      <option value="Invoice Copy">Commercial Invoice / Invoice copy</option>
+                      <option value="Other">Other Document Copy</option>
+                    </select>
+                  </div>
+                  
+                  <div className="sm:col-span-5">
+                    <label className="block text-[10px] font-black text-slate-505 uppercase tracking-widest mb-1.5">Document Description/Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g., Aadhar card number or custom label"
+                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold placeholder:text-slate-350"
+                      value={woDocName}
+                      onChange={(e) => setWoDocName(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="sm:col-span-3">
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('universal-wo-doc-camera')?.click()}
+                      className={`w-full py-2.5 px-3 rounded-xl border-2 border-dashed font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        woDocImage 
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
+                          : 'border-indigo-200 hover:border-indigo-400 bg-white text-indigo-700'
+                      }`}
+                    >
+                      <Camera size={14} />
+                      {woDocImage ? 'Change Photo' : 'Take Picture'}
+                    </button>
+                  </div>
+                </div>
+
+                {woDocImage && (
+                  <div className="flex flex-col items-center justify-center py-2">
+                    <div className="relative w-full max-w-[200px] h-32 bg-slate-100 rounded-xl overflow-hidden border border-slate-200">
+                      <img 
+                        src={woDocImage} 
+                        alt="Document Preview" 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setWoDocImage('')}
+                        className="absolute top-1 right-1 w-6 h-6 rounded-full bg-slate-900/60 hover:bg-slate-900 text-white flex items-center justify-center transition-colors"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const finalName = woDocName || `${woDocType} Copy`;
+                      if (!woDocImage) {
+                        toast.error('Please snap or upload a copy of the document first.');
+                        return;
+                      }
+                      const newDoc = {
+                        id: 'doc_' + Date.now(),
+                        name: finalName,
+                        type: woDocType,
+                        image: woDocImage,
+                        uploadedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      };
+                      setWoDocuments([...woDocuments, newDoc]);
+                      setWoDocName('');
+                      setWoDocImage('');
+                      toast.success(`${woDocType} added to intermediate collected checklist!`);
+                    }}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl cursor-pointer flex items-center gap-1 shadow-sm"
+                  >
+                    <Plus size={14} /> Add Document
+                  </button>
                 </div>
               </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Address Line 1</label>
-                <input 
-                  type="text" 
-                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                  value={woAddress.addressLine1}
-                  onChange={e => setWoAddress({...woAddress, addressLine1: e.target.value})}
-                />
+
+              {/* Added Documents list */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Collected Documents Database</h4>
+                {woDocuments.length === 0 ? (
+                  <div className="p-6 text-center border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
+                    <FileText className="mx-auto text-slate-350 mb-2" size={32} />
+                    <p className="text-xs text-slate-400 font-medium">No documents captured yet.</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Ask customer for ID copy, choose type and tap "Take Picture" to log copy.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {woDocuments.map(doc => (
+                      <div key={doc.id} className="p-4 bg-slate-50 hover:bg-slate-100/75 transition-all border border-slate-200/60 rounded-2xl flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-12 h-12 bg-white rounded-xl border border-slate-200 overflow-hidden shrink-0">
+                            <img 
+                              src={doc.image} 
+                              alt={doc.name} 
+                              className="w-full h-full object-cover cursor-zoom-in"
+                              onClick={() => {
+                                const w = window.open();
+                                if (w) {
+                                  w.document.write(`<img src="${doc.image}" style="max-width:100%; height:auto;" />`);
+                                } else {
+                                  toast.info("Check screen for document preview.");
+                                }
+                              }}
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-black text-slate-900 truncate">{doc.name}</div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-[8px] font-bold rounded border border-indigo-100">
+                                {doc.type}
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-medium">{doc.uploadedAt}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setWoDocuments(woDocuments.filter(d => d.id !== doc.id));
+                            toast.info(`${doc.name} removed.`);
+                          }}
+                          className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 flex items-center justify-center cursor-pointer hover:scale-110 transition-all"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
+            </div>
+          )}
+
+          {/* STEP 3: DESTINATION ADDRESS */}
+          {woStep === 3 && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                  <MapPin className="text-red-500 animate-bounce" size={20} /> 3. Destination Address Details
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">Provide strict destination parameters for duty computation of custom layers.</p>
+              </div>
+
+              <div className="space-y-4 max-w-xl">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">City</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Recipient Full Name</label>
                   <input 
                     type="text" 
                     className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    value={woAddress.city}
-                    onChange={e => setWoAddress({...woAddress, city: e.target.value})}
+                    value={woAddress.fullName}
+                    onChange={e => setWoAddress({...woAddress, fullName: e.target.value})}
                   />
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Email ID</label>
+                    <input 
+                      type="email" 
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                      value={woAddress.email}
+                      onChange={e => setWoAddress({...woAddress, email: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Recipient Phone</label>
+                    <input 
+                      type="tel" 
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                      value={woAddress.phone}
+                      onChange={e => setWoAddress({...woAddress, phone: e.target.value})}
+                    />
+                  </div>
+                </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Zip Code</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Address Line 1</label>
                   <input 
                     type="text" 
                     className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    value={woAddress.zipCode}
-                    onChange={e => setWoAddress({...woAddress, zipCode: e.target.value})}
+                    value={woAddress.addressLine1}
+                    onChange={e => setWoAddress({...woAddress, addressLine1: e.target.value})}
                   />
                 </div>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Country</label>
-                <select 
-                  className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                  value={woAddress.country}
-                  onChange={e => setWoAddress({...woAddress, country: e.target.value})}
-                >
-                  {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">City</label>
+                    <input 
+                      type="text" 
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                      value={woAddress.city}
+                      onChange={e => setWoAddress({...woAddress, city: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Zip Code</label>
+                    <input 
+                      type="text" 
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                      value={woAddress.zipCode}
+                      onChange={e => setWoAddress({...woAddress, zipCode: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Destination Country</label>
+                  <select 
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                    value={woAddress.country}
+                    onChange={e => setWoAddress({...woAddress, country: e.target.value})}
+                  >
+                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-            <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-              <Calendar className="text-indigo-600" /> Select Shipping Date
-            </h3>
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              {SHIPPING_DATES.map(date => (
-                <button 
-                  key={date}
-                  onClick={() => setWoShippingDate(date)}
-                  className={`p-3 rounded-xl border-2 transition-all text-center ${woShippingDate === date ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}
-                >
-                  <div className="text-[10px] font-bold uppercase opacity-60 mb-1">March</div>
-                  <div className="text-lg font-black">{date.split('-')[2]}</div>
-                </button>
-              ))}
+          {/* STEP 4: SCHEDULE & PAY */}
+          {woStep === 4 && (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start font-sans">
+              <div className="md:col-span-7 space-y-6">
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                    <Calendar className="text-indigo-600" size={20} /> 4. Shipping Schedule & Status
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">Review the designated ship dates, apply localized status rules and configure payment gateway channels.</p>
+                </div>
+
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Calendar size={12} className="text-indigo-600" /> Select Shipping Date</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {SHIPPING_DATES.map(date => (
+                      <button 
+                        type="button"
+                        key={date}
+                        onClick={() => setWoShippingDate(date)}
+                        className={`p-3 rounded-xl border-2 transition-all text-center cursor-pointer ${woShippingDate === date ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}
+                      >
+                        <div className="text-[8px] font-bold uppercase opacity-60 mb-1">March</div>
+                        <div className="text-base font-black">{date.split('-')[2]}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Sparkles size={11} className="text-indigo-600" /> Update Completion Status</h4>
+                  <p className="text-[10px] text-slate-550 mb-2 leading-relaxed">Choose status assigned to receipt lists.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      type="button"
+                      onClick={() => setWoStatusInput('Picked Up')}
+                      className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                        woStatusInput === 'Picked Up' 
+                          ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                          : 'border-slate-100 hover:border-slate-200 text-slate-500 bg-white'
+                      }`}
+                    >
+                      <PackageCheck size={20} className={woStatusInput === 'Picked Up' ? "text-indigo-600" : "text-slate-400"} />
+                      <span className="text-xs font-black mt-1.5">Picked Up</span>
+                      <span className="text-[8px] opacity-75 mt-0.5">Doorstep cargo loaded</span>
+                    </button>
+                    
+                    <button 
+                      type="button"
+                      onClick={() => setWoStatusInput('Received at Warehouse')}
+                      className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                        woStatusInput === 'Received at Warehouse' 
+                          ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                          : 'border-slate-100 hover:border-slate-200 text-slate-500 bg-white'
+                      }`}
+                    >
+                      <Warehouse size={18} className={woStatusInput === 'Received at Warehouse' ? "text-indigo-600" : "text-slate-400"} />
+                      <span className="text-xs font-black mt-2">At Warehouse</span>
+                      <span className="text-[8px] opacity-75 mt-0.5">High hub distribution</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><CreditCard size={11} className="text-emerald-600" /> Payment Method</h4>
+                  <div className="space-y-3">
+                    <div 
+                      onClick={() => setWoPaymentMethod('phonepe')}
+                      className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
+                    >
+                      <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0">Pe</div>
+                      <div className="flex-1">
+                        <div className="text-sm font-bold">PhonePe</div>
+                        <div className="text-[10px] text-slate-500">UPI, Wallet</div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                        {woPaymentMethod === 'phonepe' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                      </div>
+                    </div>
+
+                    <div 
+                      onClick={() => setWoPaymentMethod('card')}
+                      className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
+                    >
+                      <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center text-white shrink-0"><CreditCard size={18} /></div>
+                      <div className="flex-1">
+                        <div className="text-sm font-bold">Credit / Debit Card</div>
+                        <div className="text-[10px] text-slate-500">Visa, Mastercard</div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                        {woPaymentMethod === 'card' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Price list sidebar inside Step 4 */}
+              <div className="md:col-span-5 bg-slate-900 text-white rounded-3xl p-5 space-y-4 shadow-xl">
+                <span className="text-[8px] font-black uppercase text-indigo-400 bg-slate-850 border border-slate-700/60 rounded px-2 py-0.5 tracking-wider inline-block">Review Consolidated Pricing</span>
+                
+                <div className="space-y-2 pt-2">
+                  <div className="flex justify-between items-center text-xs text-slate-400">
+                    <span>Total Weight</span>
+                    <span className="text-white font-bold">{woTotalWeight.toFixed(1)} kg</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs text-slate-400">
+                    <span>Shipping Rate</span>
+                    <span className="text-white font-bold">₹{woRate}/kg</span>
+                  </div>
+                  {woDiscountPercent > 0 && (
+                    <div className="flex justify-between items-center text-xs text-rose-450">
+                      <span>Discount ({woDiscountPercent}%)</span>
+                      <span>-₹{woDiscountAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="h-px bg-slate-800 my-2" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold">Total Amount Due</span>
+                    <span className="text-base sm:text-lg font-black text-indigo-400">₹{woTotalCost.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
             </div>
+          )}
 
-            <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-              <CreditCard className="text-emerald-600" /> Payment Method
-            </h3>
-            <div className="space-y-3 mb-6">
-              <div 
-                onClick={() => setWoPaymentMethod('phonepe')}
-                className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+          {/* Stepper Navigation Buttons */}
+          <div className="mt-8 pt-6 border-t border-slate-150 flex items-center justify-between gap-4 select-none">
+            {woStep > 1 ? (
+              <button
+                type="button"
+                onClick={() => setWoStep(prev => prev - 1)}
+                className="px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
-                <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">Pe</div>
-                <div className="flex-1">
-                  <div className="text-sm font-bold">PhonePe</div>
-                  <div className="text-[10px] text-slate-500">UPI, Wallet</div>
-                </div>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                  {woPaymentMethod === 'phonepe' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                </div>
-              </div>
-              <div 
-                onClick={() => setWoPaymentMethod('card')}
-                className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
-              >
-                <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center text-white"><CreditCard size={18} /></div>
-                <div className="flex-1">
-                  <div className="text-sm font-bold">Credit / Debit Card</div>
-                  <div className="text-[10px] text-slate-500">Visa, Mastercard</div>
-                </div>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                  {woPaymentMethod === 'card' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 bg-slate-900 rounded-2xl text-white space-y-2 mb-6">
-              <div className="flex justify-between items-center text-xs text-slate-400">
-                <span>Total Weight</span>
-                <span className="text-white font-bold">{woTotalWeight.toFixed(1)} kg</span>
-              </div>
-              <div className="flex justify-between items-center text-xs text-slate-400">
-                <span>Shipping Rate</span>
-                <span className="text-white font-bold">₹{woRate}/kg</span>
-              </div>
-              {woDiscountPercent > 0 && (
-                <div className="flex justify-between items-center text-xs text-rose-400">
-                  <span>Discount ({woDiscountPercent}%)</span>
-                  <span>-₹{woDiscountAmount.toFixed(2)}</span>
-                </div>
-              )}
-              <div className="h-px bg-slate-800 my-2" />
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-bold">Total Amount</span>
-                <span className="text-xl font-black text-indigo-400">₹{woTotalCost.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div className="space-y-3">
+                ← Previous Step
+              </button>
+            ) : (
               <button 
+                type="button"
+                onClick={() => setActiveWorkOrder(null)}
+                className="px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl border border-slate-200 text-slate-450 hover:text-red-700 hover:border-red-150 font-bold hover:bg-slate-50 transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                Cancel & Exit
+              </button>
+            )}
+
+            {woStep < 3 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (woStep === 1 && woItems.length === 0) {
+                    toast.error("Please add at least 1 collected item to the cargo list first.");
+                    return;
+                  }
+                  setWoStep(prev => prev + 1);
+                }}
+                className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all text-xs flex items-center gap-1.5 cursor-pointer shadow-sm shadow-indigo-100"
+              >
+                Next Step →
+              </button>
+            ) : woStep === 3 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!woAddress.fullName.trim()) {
+                    toast.error("Please specify Recipient Full Name.");
+                    return;
+                  }
+                  if (!woAddress.addressLine1.trim()) {
+                    toast.error("Please specify Address Line 1.");
+                    return;
+                  }
+                  setWoStep(4);
+                }}
+                className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all text-xs flex items-center gap-1.5 cursor-pointer shadow-sm shadow-indigo-100"
+              >
+                Next Step →
+              </button>
+            ) : (
+              <button 
+                type="button"
                 onClick={handleWOComplete}
                 disabled={woItems.length === 0 || !woAddress.email || !woAddress.fullName}
-                className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-200 cursor-pointer flex items-center justify-center gap-2"
+                className="px-5 py-2.5 sm:px-6 sm:py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-250 cursor-pointer flex items-center justify-center gap-2"
               >
-                Collect Payment & Complete
+                <CheckCircle2 size={15} className="shrink-0" /> Collect Payment & Complete
               </button>
-              
-              <button 
-                onClick={handleWOMarkPickedUp}
-                disabled={woItems.length === 0}
-                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-100 cursor-pointer flex items-center justify-center gap-2"
-              >
-                Mark Picked Up & Take New Order
-              </button>
-            </div>
+            )}
           </div>
         </div>
       </div>
     );
-  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, woAddress, address, currentUser, handleWOMarkPickedUp]);
+  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, woAddress, address, currentUser, handleWOSaveDetails, woStatusInput, setWoStatusInput, woStep, setWoStep]);
 
   const AgentSection = useMemo(() => {
     if (!currentUser) return null;
@@ -9913,7 +10308,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 safe-top safe-bottom">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 safe-top safe-bottom overflow-x-hidden">
       {/* Supabase Status Banner */}
       {!dbStatus.connected && dbStatus.checked && (
         <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex flex-col items-center justify-center gap-1 text-[10px] font-bold text-amber-700 uppercase tracking-widest">
@@ -9958,9 +10353,9 @@ export default function App() {
 
         {/* Navigation */}
         <nav className="border-b border-slate-200 bg-white sticky top-0 z-[100]">
-          <div className="max-w-7xl mx-auto px-6 h-20 flex items-center">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center">
             <div 
-              className="flex items-center gap-3 cursor-pointer shrink-0 mr-10" 
+              className="flex items-center gap-3 cursor-pointer shrink-0 mr-4 sm:mr-6 md:mr-10" 
               onClick={() => {
                 if (currentUser?.role === 'Admin') navigateTo('admin');
                 else if (currentUser?.role === 'Agent') navigateTo('agent');
@@ -9970,7 +10365,7 @@ export default function App() {
               <Logo height="h-12 sm:h-14" />
             </div>
             
-            <div className="flex-1 flex items-center justify-between gap-10 lg:gap-14">
+            <div className="flex-1 flex items-center justify-between gap-2 sm:gap-6 md:gap-10 lg:gap-14">
               <div className="hidden md:flex items-center gap-6">
                 {currentUser?.role !== 'agent' && (
                   <button 
@@ -10107,11 +10502,11 @@ export default function App() {
                 )}
               </div>
 
-              <div className="flex items-center gap-4 lg:gap-6">
+              <div className="flex items-center gap-2 sm:gap-4 lg:gap-6">
                 {currentUser?.role !== 'agent' && (
                   <button 
                     onClick={handleQuickQuoteClick}
-                    className="text-sm lg:text-base font-bold text-indigo-600 hover:text-indigo-700 transition-all"
+                    className="hidden sm:block text-sm lg:text-base font-bold text-indigo-600 hover:text-indigo-700 transition-all text-nowrap"
                   >
                     Quick Quote
                   </button>
@@ -10120,7 +10515,7 @@ export default function App() {
                 {currentUser?.role !== 'agent' && (
                   <button 
                     onClick={() => navigateTo('cart')}
-                    className={`relative p-2 sm:p-3 rounded-2xl transition-all ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
+                    className={`relative p-1.5 sm:p-3 rounded-2xl transition-all ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
                   >
                     <ShoppingCart size={20} className="sm:w-6 sm:h-6" />
                     {cartItems.length > 0 && (
@@ -10138,20 +10533,20 @@ export default function App() {
                     onMouseLeave={() => setShowUserDropdown(false)}
                   >
                     <button 
-                      className={`flex items-center gap-3 px-4 py-2 rounded-2xl transition-all border-2 ${
+                      className={`flex items-center gap-1.5 sm:gap-3 px-2 py-1.5 sm:px-4 sm:py-2 rounded-2xl transition-all border-2 ${
                         showUserDropdown ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-transparent text-slate-700 hover:bg-slate-100'
                       }`}
                     >
-                      <div className="w-8 h-8 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-black text-sm shadow-sm">
+                      <div className="w-8 h-8 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-black text-sm shadow-sm shrink-0">
                         {currentUser.name.charAt(0).toUpperCase()}
                       </div>
-                      <div className="flex flex-col items-start leading-none">
+                      <div className="hidden md:flex flex-col items-start leading-none">
                         {currentUser.role.toLowerCase() !== 'customer' && (
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{currentUser.role}</span>
                         )}
                         <span className="text-sm font-black text-slate-900">{currentUser.name}</span>
                       </div>
-                      <ChevronDown size={16} className={`transition-transform duration-300 ${showUserDropdown ? 'rotate-180' : ''}`} />
+                      <ChevronDown size={16} className={`hidden md:block transition-transform duration-300 ${showUserDropdown ? 'rotate-180' : ''}`} />
                     </button>
 
                     <AnimatePresence>
@@ -10453,7 +10848,9 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-slate-50 border-t border-slate-200 pt-16 pb-24 px-4 relative z-40">
+      <footer className={`bg-slate-50 border-t border-slate-200 pt-16 pb-24 px-4 relative z-40 ${
+        currentUser?.role?.toLowerCase() === 'agent' ? 'hidden md:block' : ''
+      }`}>
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
           <div className="col-span-1">
             <div className="flex items-center gap-2 mb-6">
@@ -10509,19 +10906,21 @@ export default function App() {
       </footer>
 
       {/* Disclaimer Banner */}
-      <div className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white py-3 px-4 z-50">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <AlertTriangle size={20} className="text-amber-400 shrink-0" />
-            <p className="text-xs text-slate-300">
-              <span className="font-bold text-white">Disclaimer:</span> Items like knives, chemicals, and explosives are prohibited. Unshipped items will be returned to the sender.
-            </p>
+      {activeTab !== 'agent' && currentUser?.role !== 'Agent' && currentUser?.role !== 'Admin' && (
+        <div className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white py-3 px-4 z-50">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <AlertTriangle size={20} className="text-amber-400 shrink-0" />
+              <p className="text-xs text-slate-300">
+                <span className="font-bold text-white">Disclaimer:</span> Items like knives, chemicals, and explosives are prohibited. Unshipped items will be returned to the sender.
+              </p>
+            </div>
+            <button className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors underline underline-offset-4">
+              Full Policy Details
+            </button>
           </div>
-          <button className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors underline underline-offset-4">
-            Full Policy Details
-          </button>
         </div>
-      </div>
+      )}
 
       {/* Pickup Choice Modal - Removed for Unified Workflow */}
 
@@ -10620,23 +11019,23 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+              className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden"
             >
               <button 
                 onClick={() => setShowLoginModal(false)}
-                className="absolute top-6 right-6 w-10 h-10 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-200 transition-all z-10"
+                className="absolute top-5 right-5 w-10 h-10 bg-slate-100/90 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-200 transition-all z-20 shadow-sm"
               >
                 <X size={20} />
               </button>
-              <div className="p-8">
-                <div className="text-center mb-8">
-                  <div className="flex items-center justify-center mx-auto mb-4">
-                    <Logo height="h-16" />
+              <div className="p-6 sm:p-8 overflow-y-auto flex-1 custom-scrollbar">
+                <div className="text-center mb-6">
+                  <div className="flex items-center justify-center mx-auto mb-3">
+                    <Logo height="h-14 sm:h-16" />
                   </div>
-                  <h2 className="text-3xl font-black text-slate-900">
+                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
                     {loginTriggerSource === 'checkout' ? 'Almost There!' : loginTriggerSource === 'pickup' ? 'One Last Step!' : 'Welcome to Jiffex'}
                   </h2>
-                  <p className="text-slate-500 mt-2">
+                  <p className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed">
                     {loginTriggerSource === 'checkout' 
                       ? 'Sign in or create an account to complete your secure checkout' 
                       : loginTriggerSource === 'pickup'

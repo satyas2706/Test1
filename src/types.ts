@@ -76,6 +76,7 @@ export interface Order {
   updatedAt?: string;
   assignedAgent?: AgentProfile;
   assignedAgentId?: string;
+  documents?: { id: string; name: string; image: string; type: string; uploadedAt: string }[];
 }
 
 export interface Appointment {
@@ -96,6 +97,7 @@ export interface Appointment {
   languagePreference?: string;
   itemType?: string;
   vehicleType?: string;
+  documents?: { id: string; name: string; image: string; type: string; uploadedAt: string }[];
 }
 
 export interface AgentProfile {

@@ -121,20 +121,20 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '', init
   return (
     <div className="space-y-6">
       {/* Testing Mode Banner */}
-      <div className="bg-indigo-600 border border-indigo-700 rounded-3xl p-6 flex flex-col gap-4 shadow-xl shadow-indigo-100 relative overflow-hidden">
+      <div className="bg-indigo-600 border border-indigo-700 rounded-2xl md:rounded-3xl p-4 md:p-6 flex flex-col gap-3 md:gap-4 shadow-xl shadow-indigo-100 relative overflow-hidden">
         <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
-        <div className="flex items-center gap-4 relative z-10">
-          <div className="w-12 h-12 bg-white/20 text-white rounded-2xl flex items-center justify-center shrink-0 border border-white/20 backdrop-blur-md">
-            <ShieldCheck size={28} />
+        <div className="flex items-center gap-3 relative z-10">
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-white/20 text-white rounded-xl md:rounded-2xl flex items-center justify-center shrink-0 border border-white/20 backdrop-blur-md">
+            <ShieldCheck size={22} className="md:w-7 md:h-7" />
           </div>
           <div>
-            <p className="text-sm font-black text-white tracking-tight">System in Testing Mode</p>
-            <p className="text-[11px] text-indigo-100 font-bold uppercase tracking-wider opacity-80">Real SMS/Email is disabled</p>
+            <p className="text-xs md:text-sm font-black text-white tracking-tight">System in Testing Mode</p>
+            <p className="text-[10px] md:text-[11px] text-indigo-100 font-bold uppercase tracking-wider opacity-80">Demo SMS/Email auto-fills</p>
           </div>
         </div>
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 relative z-10">
-          <p className="text-xs text-indigo-50 font-medium leading-relaxed">
-            Please use any <span className="text-white font-black underline decoration-indigo-400 underline-offset-4 decoration-2">6 digits (e.g. 123456)</span> to verify. 
+        <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 md:p-4 border border-white/10 relative z-10">
+          <p className="text-[11px] md:text-xs text-indigo-50 font-medium leading-relaxed">
+            Use any <span className="text-white font-black underline decoration-indigo-400 underline-offset-4 decoration-2">6 digits (e.g. 123456)</span> to verify. 
             We'll also auto-fill the code for you after you click "Send OTP".
           </p>
         </div>
