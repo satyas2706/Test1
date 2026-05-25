@@ -201,11 +201,20 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '', init
             <div className="h-px flex-1 bg-slate-100" />
           </div>
 
-          <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-            <ShieldCheck size={20} className="text-emerald-600 shrink-0" />
-            <p className="text-[11px] text-emerald-700 font-medium leading-relaxed">
-              We'll send a one-time password to verify your account. No password required.
-            </p>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+              <ShieldCheck size={20} className="text-emerald-600 shrink-0" />
+              <p className="text-[11px] text-emerald-700 font-medium leading-relaxed">
+                We'll send a one-time password to verify your account. No password required.
+              </p>
+            </div>
+            {method === 'email' && (
+              <div className="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100/40 text-left">
+                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                  <span className="font-bold text-indigo-600">Field Agent Login:</span> Use your unique 5-digit ID to log in, e.g., <span className="font-bold font-mono text-indigo-700">12345.agent@jiffex.com</span>.
+                </p>
+              </div>
+            )}
           </div>
         </>
       ) : (

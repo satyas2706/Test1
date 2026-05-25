@@ -38,6 +38,7 @@ import {
   RefreshCw,
   FileText,
   Image as ImageIcon,
+  Camera,
   User as UserIcon,
   ShoppingBag,
   Info,
@@ -911,6 +912,7 @@ const AdminDashboard = ({
   setShippingDiscounts
 }: AdminDashboardProps) => {
   const [categoryInput, setCategoryInput] = useState('');
+  const [agentSearch, setAgentSearch] = useState('');
 
   // Local state to manage shipping rate configuration in the admin panel
   const [editingRates, setEditingRates] = useState<Record<string, string>>({});
@@ -978,7 +980,10 @@ const AdminDashboard = ({
   const [expandedCargo, setExpandedCargo] = useState<Record<string, boolean>>({});
 
   // Local state for drafts to prevent global re-renders and focus loss
-  const [newAgent, setNewAgent] = useState({ name: '', phone: '', email: '', vehicleNumber: '' });
+  const [newAgent, setNewAgent] = useState(() => {
+    const sugId = Math.floor(10000 + Math.random() * 90000).toString();
+    return { id: sugId, name: '', phone: '', email: `${sugId}.agent@jiffex.com`, vehicleNumber: '' };
+  });
   const [newProduct, setNewProduct] = useState<Partial<StoreProduct>>({ name: '', price: 0, category: categories[0] || 'Pooja', image: '', weight: 0, estimatedDelivery: '' });
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1014,14 +1019,38 @@ const AdminDashboard = ({
   }, [isWebmaster, adminTab, setAdminTab]);
 
   const handleAddAgent = () => {
-    if (!newAgent.name || !newAgent.phone) return;
+    if (!newAgent.id || !newAgent.name || !newAgent.phone) {
+      toast.error('Agent ID, Name, and Phone are required.');
+      return;
+    }
+    const idNormalized = newAgent.id.trim();
+    if (!/^\d{5}$/.test(idNormalized)) {
+      toast.error('Agent ID must be an exact 5-digit number (e.g. 12345).');
+      return;
+    }
+    if (agents.some(a => a.id === idNormalized)) {
+      toast.error(`Agent ID "${idNormalized}" is already taken. Please enter a unique ID.`);
+      return;
+    }
     const agent: AgentProfile = {
-      id: 'AG-' + Math.random().toString(36).substr(2, 4).toUpperCase(),
-      ...newAgent,
+      id: idNormalized,
+      name: newAgent.name.trim(),
+      phone: newAgent.phone.trim(),
+      email: `${idNormalized}.agent@jiffex.com`,
+      vehicleNumber: newAgent.vehicleNumber?.trim() || undefined,
       status: 'Active'
     };
     setAgents([...agents, agent]);
-    setNewAgent({ name: '', phone: '', email: '', vehicleNumber: '' });
+    
+    const sugId = Math.floor(10000 + Math.random() * 90000).toString();
+    setNewAgent({
+      id: sugId,
+      name: '',
+      phone: '',
+      email: `${sugId}.agent@jiffex.com`,
+      vehicleNumber: ''
+    });
+    toast.success(`Agent ${agent.name} with ID ${idNormalized} registered successfully!`);
   };
 
   const handleAssignAgent = async (aptId: string, agentId: string) => {
@@ -1109,7 +1138,7 @@ const AdminDashboard = ({
                 }`}
               >
                 <Icon size={18} className={`${adminTab === tab ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
-                {tab === 'Inventory' && isWebmaster ? 'Catalog' : (tab === 'Agents' ? 'Logistics' : tab)}
+                {tab === 'Inventory' && isWebmaster ? 'Catalog' : (tab === 'Agents' ? 'Agent Management' : tab)}
                 {adminTab === tab && (
                   <motion.div 
                     layoutId="activeTabIndicator"
@@ -1146,7 +1175,7 @@ const AdminDashboard = ({
                 : 'bg-slate-100 text-slate-500'
             }`}
           >
-            {tab}
+            {tab === 'Inventory' && isWebmaster ? 'Catalog' : (tab === 'Agents' ? 'Agent Management' : tab)}
           </button>
         ))}
       </div>
@@ -1159,7 +1188,7 @@ const AdminDashboard = ({
               {adminTab === 'Overview' && 'Dashboard Overview'}
               {adminTab === 'Pickups' && 'Pickup Requests'}
               {adminTab === 'Logistics' && 'Active Logistics Pipeline'}
-              {adminTab === 'Agents' && 'Logistics & Agent Network'}
+              {adminTab === 'Agents' && 'Agent Management'}
               {adminTab === 'Inventory' && (isWebmaster ? 'Product Catalog' : 'Inventory Management')}
               {adminTab === 'Reports' && 'Business Intelligence'}
               {adminTab === 'Refunds' && 'Refund Management'}
@@ -1891,114 +1920,322 @@ const AdminDashboard = ({
           </div>
         </div>
       ) : adminTab === 'Agents' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-4 bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm h-fit sticky top-24">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
-                <PlusCircle size={20} />
+        <div className="space-y-8 pb-12">
+          {/* Top Panel: Agent Metrics and Summary */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="bg-slate-50 border border-slate-200/60 p-6 rounded-[2rem] flex items-center gap-4">
+              <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center shrink-0">
+                <Users size={24} />
               </div>
-              <h3 className="text-xl font-black text-slate-900">Onboard Agent</h3>
+              <div>
+                <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Total Field Network</div>
+                <div className="text-2xl font-black text-slate-900">{agents.length} Deployed</div>
+              </div>
             </div>
             
-            <div className="space-y-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Full Identity</label>
-                  <input 
-                    type="text" 
-                    className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all"
-                    placeholder="Enter full name"
-                    value={newAgent.name}
-                    onChange={e => setNewAgent({...newAgent, name: e.target.value})}
-                  />
+            <div className="bg-slate-50 border border-slate-200/60 p-6 rounded-[2rem] flex items-center gap-4">
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0">
+                <ShieldCheck size={24} />
+              </div>
+              <div>
+                <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Active Protocols</div>
+                <div className="text-2xl font-black text-slate-900">{agents.filter(a => a.status === 'Active').length} Verified</div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200/60 p-6 rounded-[2rem] flex items-center gap-4">
+              <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center shrink-0">
+                <Car size={24} />
+              </div>
+              <div>
+                <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Active Fleet</div>
+                <div className="text-2xl font-black text-slate-900">
+                  {agents.filter(a => a.vehicleNumber).length} Vehicles
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-8">
+            {/* Onboard Agent form */}
+            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/80 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 animate-pulse">
+                  <PlusCircle size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">Onboard Field Agent</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Register a new verified courier to the logistics network. Secure login identity auto-syncs with the 5-digit ID block.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mt-6 space-y-4">
+                {/* Inputs Row 1: Key Metadata & Demographics */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Contact</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Agent ID (5-Digits)</label>
+                    <input 
+                      type="text" 
+                      className="w-full p-3.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all font-mono"
+                      placeholder="e.g. 12345"
+                      value={newAgent.id}
+                      onChange={e => {
+                        const idVal = e.target.value.replace(/\D/g, '').slice(0, 5);
+                        setNewAgent({
+                          ...newAgent, 
+                          id: idVal,
+                          email: idVal ? `${idVal.toLowerCase()}.agent@jiffex.com` : ''
+                        });
+                      }}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Full Legal Name</label>
+                    <input 
+                      type="text" 
+                      className="w-full p-3.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold transition-all"
+                      placeholder="e.g. Amit Patel"
+                      value={newAgent.name}
+                      onChange={e => setNewAgent({...newAgent, name: e.target.value})}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Contact Phone</label>
                     <input 
                       type="tel" 
-                      className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all"
-                      placeholder="Phone"
+                      className="w-full p-3.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold transition-all"
+                      placeholder="+91 XXXXX"
                       value={newAgent.phone}
                       onChange={e => setNewAgent({...newAgent, phone: e.target.value})}
                     />
                   </div>
+
                   <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Plate #</label>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Vehicle Plate #</label>
                     <input 
                       type="text" 
-                      className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all"
-                      placeholder="KA-01-..."
+                      className="w-full p-3.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold transition-all uppercase"
+                      placeholder="KA-01-AB-1234"
                       value={newAgent.vehicleNumber}
                       onChange={e => setNewAgent({...newAgent, vehicleNumber: e.target.value})}
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Work Email</label>
-                  <input 
-                    type="email" 
-                    className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold transition-all"
-                    placeholder="agent@jiffex.com"
-                    value={newAgent.email}
-                    onChange={e => setNewAgent({...newAgent, email: e.target.value})}
-                  />
+
+                {/* Inputs Row 2: Generated Credentials & Submission Action */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end pt-2">
+                  <div className="md:col-span-8">
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Assigned Work Email (Login ID)</label>
+                    <div className="relative">
+                      <input 
+                        type="email" 
+                        disabled
+                        className="w-full p-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs font-bold font-mono opacity-80 cursor-not-allowed outline-none"
+                        placeholder="agentid.agent@jiffex.com"
+                        value={newAgent.email}
+                      />
+                      <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                        <Lock size={14} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-4">
+                    <button 
+                      onClick={handleAddAgent}
+                      className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-black text-xs hover:bg-slate-900 transition-all shadow-md flex items-center justify-center gap-2 group cursor-pointer"
+                    >
+                      Deploy Field Agent <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                    </button>
+                  </div>
                 </div>
               </div>
-              <button 
-                onClick={handleAddAgent}
-                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2 group"
-              >
-                Register Field Agent <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-              </button>
             </div>
-          </div>
 
-          <div className="lg:col-span-8 space-y-6">
-            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
-              <div className="flex items-center justify-between mb-8">
+            {/* Agent Network registry */}
+            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200/80 shadow-sm flex flex-col">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                 <div>
-                  <h3 className="text-xl font-black text-slate-900">Agent Network</h3>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{agents.length} active operators deployed</p>
+                  <h3 className="text-lg font-black text-slate-900">Agent Network Directory</h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-0.5">Manage and track active operators & deployment metrics</p>
                 </div>
-                <div className="flex gap-2">
-                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-400">
-                    <Search size={18} />
-                  </div>
+                
+                {/* Search field */}
+                <div className="relative w-full sm:w-72">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
+                    <Search size={16} />
+                  </span>
+                  <input
+                    type="text"
+                    value={agentSearch}
+                    onChange={e => setAgentSearch(e.target.value)}
+                    placeholder="Search name, ID, phone, vehicle plate..."
+                    className="w-full pl-10 pr-8 py-2 text-xs font-bold rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 transition-all"
+                  />
+                  {agentSearch && (
+                    <button 
+                      onClick={() => setAgentSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {agents.map(agent => (
-                  <div key={agent.id} className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-200 flex items-start gap-4 hover:border-indigo-200 transition-colors group">
-                    <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0 border border-slate-100">
-                      <UserIcon size={28} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="font-black text-slate-900 text-lg tracking-tight truncate mb-0.5">{agent.name}</div>
-                          <div className="text-xs font-bold text-indigo-600">{agent.phone}</div>
-                        </div>
-                        <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[9px] font-black uppercase tracking-wider">
-                          {agent.status}
-                        </span>
-                      </div>
-                      
-                      <div className="mt-4 flex items-center gap-3">
-                        <div className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[10px] font-bold text-slate-500 flex items-center gap-2">
-                          <Car size={12} /> {agent.vehicleNumber || 'No Vehicle'}
-                        </div>
-                        <button 
-                          onClick={() => setAgents(agents.filter(a => a.id !== agent.id))}
-                          className="ml-auto p-2 text-slate-300 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
+              {/* Directory Header Labels for Large Screens */}
+              <div className="hidden lg:grid lg:grid-cols-12 gap-4 px-5 py-3.5 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 rounded-xl mb-4">
+                <div className="col-span-3">Agent Profile</div>
+                <div className="col-span-2">Contact Info</div>
+                <div className="col-span-3">Work Email</div>
+                <div className="col-span-2">Fleet Details</div>
+                <div className="col-span-2 text-right pr-4">Duty & Actions</div>
+              </div>
+
+              {/* Grid or Table layout showing ALL details of agents */}
+              <div className="space-y-3">
+                {agents.filter(agent => {
+                  if (!agentSearch) return true;
+                  const query = agentSearch.toLowerCase();
+                  return (
+                    agent.name.toLowerCase().includes(query) ||
+                    agent.id.includes(query) ||
+                    agent.phone.includes(query) ||
+                    (agent.email && agent.email.toLowerCase().includes(query)) ||
+                    (agent.vehicleNumber && agent.vehicleNumber.toLowerCase().includes(query))
+                  );
+                }).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-slate-400 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                    <Users size={36} className="stroke-slate-300 mb-2" />
+                    <p className="text-sm font-bold text-slate-700">No agents match your search filter</p>
+                    <p className="text-xs text-slate-400 mt-1">Try resetting the search parameter</p>
                   </div>
-                ))}
+                ) : (
+                  <div className="space-y-4">
+                    {agents
+                      .filter(agent => {
+                        if (!agentSearch) return true;
+                        const query = agentSearch.toLowerCase();
+                        return (
+                          agent.name.toLowerCase().includes(query) ||
+                          agent.id.includes(query) ||
+                          agent.phone.includes(query) ||
+                          (agent.email && agent.email.toLowerCase().includes(query)) ||
+                          (agent.vehicleNumber && agent.vehicleNumber.toLowerCase().includes(query))
+                        );
+                      })
+                      .map(agent => {
+                        // Calculate metrics
+                        const activePickups = orders.filter(
+                          o => o.assignedAgentId === agent.id && 
+                          (o.status === 'Scheduled' || o.status === 'Pending Pickup')
+                        ).length;
+
+                        const completedDuites = orders.filter(
+                          o => o.assignedAgentId === agent.id && o.status === 'Delivered'
+                        ).length;
+
+                        return (
+                          <div 
+                            key={agent.id} 
+                            className="bg-slate-50 border border-slate-200/80 rounded-2xl hover:border-indigo-300 transition-all p-5 shadow-sm"
+                          >
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+                              {/* Profile Field */}
+                              <div className="lg:col-span-3 flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs shrink-0 uppercase">
+                                  {agent.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="font-extrabold text-slate-900 text-sm leading-snug truncate">{agent.name}</h4>
+                                  <span className="inline-block mt-1 px-1.5 py-0.5 bg-indigo-50 border border-indigo-100 rounded text-[9px] font-black text-indigo-600 font-mono tracking-tight shrink-0">
+                                    ID: {agent.id}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Contact Info Field */}
+                              <div className="lg:col-span-2">
+                                <div className="block lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Contact Phone</div>
+                                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                                  <Phone size={12} className="text-slate-400 shrink-0" />
+                                  <span>{agent.phone}</span>
+                                </div>
+                              </div>
+
+                              {/* Email Field */}
+                              <div className="lg:col-span-3">
+                                <div className="block lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Work Email</div>
+                                <div className="flex items-center gap-1.5 text-xs font-mono text-slate-600">
+                                  <Mail size={12} className="text-slate-400 shrink-0" />
+                                  <span className="truncate max-w-[170px] lg:max-w-none">{agent.email || `${agent.id}.agent@jiffex.com`}</span>
+                                  <button
+                                    onClick={() => {
+                                      const loginEmail = agent.email || `${agent.id}.agent@jiffex.com`;
+                                      navigator.clipboard.writeText(loginEmail);
+                                      toast.success(`Copied login ID: ${loginEmail}`);
+                                    }}
+                                    className="p-1 hover:bg-slate-200 rounded text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"
+                                    title="Copy Login Email"
+                                  >
+                                    <Copy size={11} />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Vehicle Plate # */}
+                              <div className="lg:col-span-2">
+                                <div className="block lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Vehicle Plate #</div>
+                                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                                  <Car size={12} className="text-slate-400 shrink-0" />
+                                  <span className="bg-white border border-slate-200 px-2 py-0.5 rounded text-[10px] font-mono font-medium">
+                                    {agent.vehicleNumber || 'No Vehicle'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Duty Metrics and Action Button */}
+                              <div className="lg:col-span-2 flex items-center justify-between lg:justify-end gap-4">
+                                {/* Metrics */}
+                                <div className="text-left lg:text-right">
+                                  <div className="block lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Duty Stats</div>
+                                  <div className="flex flex-row lg:flex-col gap-3 lg:gap-0.5">
+                                    <span className="text-[10px] font-bold text-slate-500">
+                                      Active: <strong className="text-indigo-600">{activePickups}</strong>
+                                    </span>
+                                    <span className="text-[10px] font-bold text-slate-500">
+                                      Delivered: <strong className="text-emerald-600">{completedDuites}</strong>
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Delete button wrapper */}
+                                <div>
+                                  <button
+                                    onClick={() => {
+                                      if (window.confirm(`Are you sure you want to remove agent "${agent.name}"? Active work assignments will require re-assignment.`)) {
+                                        setAgents(agents.filter(a => a.id !== agent.id));
+                                        toast.success(`Agent ${agent.name} has been de-registered.`);
+                                      }
+                                    }}
+                                    className="p-2 rounded-xl border border-red-100 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all cursor-pointer"
+                                    title="De-register Agent"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </div>
+
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2630,7 +2867,7 @@ const AdminDashboard = ({
                 onClick={() => setAdminTab(t)}
                 className="px-6 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-black text-slate-600 hover:border-indigo-500 hover:text-indigo-600 transition-all shadow-sm flex items-center gap-2"
               >
-                Explore {t} <ArrowRight size={14} />
+                Explore {t === 'Inventory' && isWebmaster ? 'Catalog' : (t === 'Agents' ? 'Agent Management' : t)} <ArrowRight size={14} />
               </button>
             ))}
           </div>
@@ -2759,36 +2996,55 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   
   // Derieve appointments from orders in real-time
+  const [agents, setAgents] = useState<AgentProfile[]>(() => {
+    const saved = localStorage.getItem('jiffex_agents_list');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse saved agents list:', e);
+      }
+    }
+    return [
+      { id: '10001', name: 'Rahul Sharma', phone: '+91 98765 43210', email: '10001.agent@jiffex.com', status: 'Active', vehicleNumber: 'KA-01-AB-1234' },
+      { id: '10002', name: 'Priya Patel', phone: '+91 87654 32109', email: '10002.agent@jiffex.com', status: 'Active', vehicleNumber: 'MH-02-CD-5678' },
+      { id: '12345', name: 'Test Agent (You)', phone: '+91 00000 00000', email: '12345.agent@jiffex.com', status: 'Active', vehicleNumber: 'TEST-001' },
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('jiffex_agents_list', JSON.stringify(agents));
+  }, [agents]);
+
   const appointments = useMemo(() => {
     return orders
-      .filter(o => o.status === 'Scheduled' || o.status === 'Pending Pickup' || (o as any).pickupType)
-      .map(o => ({
-        id: o.id,
-        customerId: o.customerId,
-        customerName: o.customerName || o.destination.fullName,
-        date: o.shippingDate || (o as any).date || o.createdAt?.split('T')[0],
-        time: (o as any).time || 'Flexible',
-        address: o.destination.addressLine1,
-        phone: o.destination.phone,
-        status: o.status === 'Cancelled' ? 'Cancelled' : o.status === 'Delivered' ? 'Completed' : 'Scheduled',
-        items: o.items,
-        paymentStatus: o.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
-        pickupType: (o as any).pickupType || 'AllAgent',
-        assignedAgent: (o as any).assignedAgent,
-        assignedAgentId: (o as any).assignedAgentId,
-        languagePreference: (o as any).languagePreference,
-        itemType: (o as any).itemType,
-        vehicleType: (o as any).vehicleType
-      })) as Appointment[];
-  }, [orders]);
+      .filter(o => o.status === 'Scheduled' || o.status === 'Pending Pickup' || o.status === 'Picked Up' || (o as any).pickupType)
+      .map(o => {
+        const agentId = o.assignedAgentId || o.assigned_agent_id || (o as any).destination?.assignedAgentId || (o as any).destination?.assigned_agent_id;
+        const resolvedAgent = agentId ? agents.find(a => a.id === agentId) : undefined;
+        return {
+          id: o.id,
+          customerId: o.customerId,
+          customerName: o.customerName || o.destination.fullName,
+          date: o.shippingDate || (o as any).date || o.createdAt?.split('T')[0],
+          time: (o as any).time || 'Flexible',
+          address: o.destination.addressLine1,
+          phone: o.destination.phone,
+          status: o.status === 'Cancelled' ? 'Cancelled' : o.status === 'Delivered' ? 'Completed' : o.status === 'Picked Up' ? 'Picked Up' : 'Scheduled',
+          items: o.items,
+          paymentStatus: o.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
+          pickupType: (o as any).pickupType || 'AllAgent',
+          assignedAgent: resolvedAgent,
+          assignedAgentId: resolvedAgent ? resolvedAgent.id : undefined,
+          languagePreference: (o as any).languagePreference,
+          itemType: (o as any).itemType,
+          vehicleType: (o as any).vehicleType
+        };
+      }) as Appointment[];
+  }, [orders, agents]);
   const [storeProducts, setStoreProducts] = useState<StoreProduct[]>(STORE_PRODUCTS);
   const [activeWorkOrder, setActiveWorkOrder] = useState<Appointment | null>(null);
-  const [agentActiveTab, setAgentActiveTab] = useState<'Scheduled' | 'Completed' | 'Canceled'>('Scheduled');
-  const [agents, setAgents] = useState<AgentProfile[]>([
-    { id: 'AG-1', name: 'Rahul Sharma', phone: '+91 98765 43210', email: 'rahul@jiffex.com', status: 'Active', vehicleNumber: 'KA-01-AB-1234' },
-    { id: 'AG-2', name: 'Priya Patel', phone: '+91 87654 32109', email: 'priya@jiffex.com', status: 'Active', vehicleNumber: 'MH-02-CD-5678' },
-    { id: 'AG-TEST', name: 'Test Agent (You)', phone: '+91 00000 00000', email: 'agent@jiffex.com', status: 'Active', vehicleNumber: 'TEST-001' },
-  ]);
+  const [agentActiveTab, setAgentActiveTab] = useState<'Summary' | 'Scheduled' | 'Completed' | 'Canceled'>('Summary');
 
   // Cart Section States
   const getInitialPickupSlot = () => {
@@ -3084,6 +3340,9 @@ export default function App() {
   const [woItems, setWoItems] = useState<ShippingItem[]>([]);
   const [woItemName, setWoItemName] = useState('');
   const [woItemWeight, setWoItemWeight] = useState(1);
+  const [woItemQuantity, setWoItemQuantity] = useState(1);
+  const [woItemImage, setWoItemImage] = useState('');
+  const [capturingItemId, setCapturingItemId] = useState<string | null>(null);
   const [woAddress, setWoAddress] = useState<DestinationAddress>({
     fullName: '',
     email: '',
@@ -3098,6 +3357,47 @@ export default function App() {
   const [woOrderId, setWoOrderId] = useState<string | null>(null);
   const [woPaymentMethod, setWoPaymentMethod] = useState<'card' | 'phonepe'>('card');
   const [woShippingDate, setWoShippingDate] = useState<string>(SHIPPING_DATES[0]);
+
+  useEffect(() => {
+    if (activeWorkOrder) {
+      // Find corresponding order
+      const correspondingOrder = orders.find(o => o.id === activeWorkOrder.id);
+      if (correspondingOrder) {
+        setWoAddress({
+          fullName: correspondingOrder.destination?.fullName || activeWorkOrder.customerName || '',
+          email: correspondingOrder.destination?.email || '',
+          phone: correspondingOrder.destination?.phone || activeWorkOrder.phone || '',
+          addressLine1: correspondingOrder.destination?.addressLine1 || activeWorkOrder.address || '',
+          city: correspondingOrder.destination?.city || '',
+          state: correspondingOrder.destination?.state || '',
+          zipCode: correspondingOrder.destination?.zipCode || '',
+          country: correspondingOrder.destination?.country || 'India'
+        });
+        setWoItems(correspondingOrder.items || []);
+      } else {
+        setWoAddress({
+          fullName: activeWorkOrder.customerName || '',
+          email: '',
+          phone: activeWorkOrder.phone || '',
+          addressLine1: activeWorkOrder.address || '',
+          city: '',
+          state: '',
+          zipCode: '',
+          country: 'India'
+        });
+        setWoItems(activeWorkOrder.items || []);
+      }
+      setIsWOPaid(correspondingOrder?.paymentStatus === 'Paid');
+    } else {
+      setWoItems([]);
+      setIsWOPaid(false);
+      setWoItemName('');
+      setWoItemWeight(1);
+      setWoItemQuantity(1);
+      setWoItemImage('');
+    }
+  }, [activeWorkOrder]);
+
   const [showPickupChoiceModal, setShowPickupChoiceModal] = useState(false);
   const [showConflictModal, setShowConflictModal] = useState<{ show: boolean; item: any; source: any }>({ show: false, item: null, source: null });
   const [cancellingPickupId, setCancellingPickupId] = useState<string | null>(null);
@@ -3414,10 +3714,12 @@ export default function App() {
       const email = session.user.email || '';
       let role: UserRole = 'customer';
       
+      const isAgentEmail = email.toLowerCase().endsWith('.agent@jiffex.com') || email === 'agent@jiffex.com';
+      
       // Auto-assign roles based on official emails
       if (email === 'admin@jiffex.com') role = 'admin';
       else if (email === 'service@jiffex.com') role = 'customer_service';
-      else if (email === 'agent@jiffex.com') role = 'agent';
+      else if (isAgentEmail) role = 'agent';
       else if (email === 'webmaster@jiffex.com') role = 'webmaster';
       else role = (session.user.user_metadata?.role as UserRole) || 'customer';
 
@@ -3433,24 +3735,48 @@ export default function App() {
         }
       }
 
+      let nameToUse = localProfile.name || session.user.user_metadata?.full_name || email.split('@')[0] || 'User';
+      let phoneToUse = localProfile.phone || '';
+      let idToUse = userId;
+
+      if (role === 'agent') {
+        const parts = email.toLowerCase().split('.agent@jiffex.com');
+        if (parts.length > 1) {
+          const matchId = parts[0].toUpperCase();
+          idToUse = matchId;
+          const registeredAgent = agents.find(a => a.id.toUpperCase() === matchId);
+          if (registeredAgent) {
+            nameToUse = registeredAgent.name;
+            phoneToUse = registeredAgent.phone;
+          } else {
+            nameToUse = `Agent ${matchId}`;
+          }
+        } else if (email === 'agent@jiffex.com') {
+          idToUse = 'AG-TEST';
+          nameToUse = 'Test Agent (You)';
+        }
+      }
+
       setCurrentUser({
-        id: userId,
-        name: localProfile.name || session.user.user_metadata?.full_name || email.split('@')[0] || 'User',
+        id: idToUse,
+        name: nameToUse,
         email: localProfile.email || email,
         role: role,
-        phone: localProfile.phone || '',
+        phone: phoneToUse,
         address: localProfile.address || ''
       });
     } else if (isGuestMode) {
       const email = guestEmail || '';
       let role: UserRole = 'customer';
       
+      const isAgentEmail = email.toLowerCase().endsWith('.agent@jiffex.com') || email === 'agent@jiffex.com';
+      
       if (email === 'admin@jiffex.com') role = 'admin';
       else if (email === 'service@jiffex.com') role = 'customer_service';
-      else if (email === 'agent@jiffex.com') role = 'agent';
+      else if (isAgentEmail) role = 'agent';
       else if (email === 'webmaster@jiffex.com') role = 'webmaster';
 
-      const userId = 'guest-user';
+      const userId = email ? `guest_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : 'guest-user';
       const savedProfileStr = localStorage.getItem(`jiffex_user_profile_${userId}`);
       let localProfile: any = {};
       
@@ -3462,18 +3788,42 @@ export default function App() {
         }
       }
 
+      let nameToUse = localProfile.name || guestName || 'Guest User';
+      let phoneToUse = localProfile.phone || '';
+      let idToUse = userId;
+
+      if (role === 'agent') {
+        const parts = email.toLowerCase().split('.agent@jiffex.com');
+        if (parts.length > 1) {
+          const matchId = parts[0].toUpperCase();
+          idToUse = matchId;
+          const registeredAgent = agents.find(a => a.id.toUpperCase() === matchId);
+          if (registeredAgent) {
+            nameToUse = registeredAgent.name;
+            phoneToUse = registeredAgent.phone;
+          } else {
+            nameToUse = `Agent ${matchId}`;
+          }
+        } else if (email === 'agent@jiffex.com') {
+          idToUse = 'AG-TEST';
+          nameToUse = 'Test Agent (You)';
+        }
+      } else {
+        nameToUse = localProfile.name || guestName || (role === 'admin' ? 'Admin User' : role === 'customer_service' ? 'Support CSR' : role === 'webmaster' ? 'Webmaster' : 'Guest User');
+      }
+
       setCurrentUser({
-        id: userId,
-        name: localProfile.name || guestName || (role === 'admin' ? 'Admin User' : role === 'agent' ? 'Agent User' : role === 'customer_service' ? 'Support CSR' : role === 'webmaster' ? 'Webmaster' : 'Guest User'),
+        id: idToUse,
+        name: nameToUse,
         email: localProfile.email || email || 'guest@example.com',
         role: role,
-        phone: localProfile.phone || '',
+        phone: phoneToUse,
         address: localProfile.address || ''
       });
     } else {
       setCurrentUser(null);
     }
-  }, [session, isGuestMode, guestEmail, guestName]);
+  }, [session, isGuestMode, guestEmail, guestName, agents]);
 
   // Profile Save Callback Handler
   const handleUpdateProfile = (updatedProfile: { name: string; email: string; phone: string; address: string }) => {
@@ -4007,12 +4357,94 @@ export default function App() {
       id: crypto.randomUUID(),
       name: woItemName,
       weight: woItemWeight,
+      quantity: woItemQuantity,
       status: 'Pending',
-      source: 'Pickup'
+      source: 'Pickup',
+      image: woItemImage || undefined
     };
     setWoItems([...woItems, newItem]);
     setWoItemName('');
     setWoItemWeight(1);
+    setWoItemQuantity(1);
+    setWoItemImage('');
+  };
+
+  const handleWOMarkPickedUp = async () => {
+    if (!activeWorkOrder) return;
+
+    const totalW = woItems.reduce((s, i) => s + (i.weight * (i.quantity || 1)), 0);
+    const rate = shippingRates[woAddress.country] || 10;
+    const rawC = totalW * rate;
+    const discountPercent = shippingDiscounts[woAddress.country] || 0;
+    const discC = rawC * (discountPercent / 100);
+    const totalC = Math.max(0, rawC - discC);
+
+    const currentAgent = {
+      id: currentUser?.id || 'AG-TEST',
+      name: currentUser?.name || 'Test Agent',
+      phone: currentUser?.phone || '',
+      email: currentUser?.email || '',
+      status: 'Active' as const
+    };
+
+    // Update item details status to 'Picked Up'
+    const pickedUpItems = woItems.map(item => ({
+      ...item,
+      status: 'Picked Up' as ShippingStatus
+    }));
+
+    // Update original order/appointment status to 'Picked Up' and set updated fields
+    setOrders(prev => prev.map(o => 
+      o.id === activeWorkOrder!.id 
+        ? { 
+            ...o, 
+            status: 'Picked Up', 
+            items: pickedUpItems,
+            totalWeight: totalW,
+            totalCost: totalC,
+            destination: {
+              ...woAddress,
+              assignedAgent: currentAgent,
+              assignedAgentId: currentAgent.id
+            } as any,
+            paymentStatus: o.paymentStatus || 'Pending',
+            assignedAgent: currentAgent,
+            assignedAgentId: currentAgent.id
+          } 
+        : o
+    ));
+
+    // Sync to database if connected
+    if (dbStatus.connected) {
+      try {
+        await api.updateOrderStatus(activeWorkOrder.id, 'Picked Up');
+        await api.updateOrder(activeWorkOrder.id, {
+          status: 'Picked Up',
+          items: pickedUpItems,
+          totalWeight: totalW,
+          totalCost: totalC,
+          destination: {
+            ...woAddress,
+            assignedAgent: currentAgent,
+            assignedAgentId: currentAgent.id
+          } as any,
+          paymentStatus: 'Pending',
+          assignedAgent: currentAgent,
+          assignedAgentId: currentAgent.id,
+          assigned_agent: currentAgent,
+          assigned_agent_id: currentAgent.id
+        } as any);
+        toast.success(`Order ${activeWorkOrder.id} successfully marked as Picked Up!`);
+      } catch (err: any) {
+        console.error('Failed to sync picked up status:', err);
+        toast.error('Local update succeeded, but failed to sync online.');
+      }
+    } else {
+      toast.success(`Order ${activeWorkOrder.id} successfully marked as Picked Up!`);
+    }
+
+    // Go back to the dashboard/portal so the agent can take a new order!
+    setActiveWorkOrder(null);
   };
 
   const handleWOComplete = () => {
@@ -4021,32 +4453,50 @@ export default function App() {
     setWoOrderId(newOrderId);
     setIsWOPaid(true);
     
-    const totalW = woItems.reduce((s, i) => s + i.weight, 0);
+    const totalW = woItems.reduce((s, i) => s + (i.weight * (i.quantity || 1)), 0);
     const rate = shippingRates[woAddress.country] || 10;
     const rawC = totalW * rate;
     const discountPercent = shippingDiscounts[woAddress.country] || 0;
     const discC = rawC * (discountPercent / 100);
     const totalC = Math.max(0, rawC - discC);
 
+    const currentAgent = {
+      id: currentUser?.id || 'AG-TEST',
+      name: currentUser?.name || 'Test Agent',
+      phone: currentUser?.phone || '',
+      email: currentUser?.email || '',
+      status: 'Active' as const
+    };
+
+    const completedItems = woItems.map(item => ({
+      ...item,
+      status: 'Received at Warehouse' as ShippingStatus
+    }));
+
     const newOrder: Order = {
       id: newOrderId,
       customerId: activeWorkOrder.customerId,
-      items: woItems,
+      items: completedItems,
       totalWeight: totalW,
       totalCost: totalC,
       status: 'Received at Warehouse',
       createdAt: new Date().toISOString(),
       shippingDate: woShippingDate,
-      destination: woAddress,
-      paymentStatus: 'Paid'
+      destination: {
+        ...woAddress,
+        assignedAgent: currentAgent,
+        assignedAgentId: currentAgent.id
+      } as any,
+      paymentStatus: 'Paid',
+      assignedAgent: currentAgent,
+      assignedAgentId: currentAgent.id
     };
 
     setOrders([...orders, newOrder]);
     
     // Add items to the main items list as well, marked as received
-    const itemsWithStatus = woItems.map(item => ({
+    const itemsWithStatus = completedItems.map(item => ({
       ...item,
-      status: 'Received at Warehouse' as ShippingStatus,
       source: 'Pickup' as const,
       submitted: true
     }));
@@ -4054,7 +4504,14 @@ export default function App() {
 
     setOrders(prev => prev.map(o => 
       o.id === activeWorkOrder!.id 
-        ? { ...o, status: 'Delivered', paymentStatus: 'Paid' } 
+        ? { 
+            ...o, 
+            status: 'Delivered', 
+            paymentStatus: 'Paid',
+            items: completedItems,
+            assignedAgent: currentAgent,
+            assignedAgentId: currentAgent.id
+          } 
         : o
     ));
 
@@ -4069,6 +4526,17 @@ export default function App() {
         payment_status: 'Paid',
         shipping_date: woShippingDate
       } as any).catch(err => console.error('Failed to sync new order from work order:', err));
+
+      api.updateOrderStatus(activeWorkOrder.id, 'Delivered').catch(err => console.error('Failed to update status on completion:', err));
+      api.updateOrder(activeWorkOrder.id, {
+        status: 'Delivered',
+        paymentStatus: 'Paid',
+        items: completedItems,
+        assignedAgent: currentAgent,
+        assignedAgentId: currentAgent.id,
+        assigned_agent: currentAgent,
+        assigned_agent_id: currentAgent.id
+      } as any).catch(err => console.error('Failed to update order info on completion:', err));
 
       const recipientEmail = woAddress.email || currentUser?.email || '';
       api.shareInvoice(newOrder)
@@ -5022,7 +5490,7 @@ export default function App() {
                 </div>
 
                 {(() => {
-                  const isPendingInvoice = selectedOrderForInvoice.id?.startsWith('PH-') || selectedOrderForInvoice.status === 'Scheduled' || selectedOrderForInvoice.status === 'Pending Pickup';
+                  const isPendingInvoice = selectedOrderForInvoice.status === 'Scheduled' || selectedOrderForInvoice.status === 'Pending Pickup';
                   return (
                     <>
                       <div className="border-t border-slate-100 pt-6 mb-8">
@@ -5266,7 +5734,7 @@ export default function App() {
     if (!currentUser) return null;
     if (!activeWorkOrder) return null;
 
-    const woTotalWeight = woItems.reduce((s, i) => s + i.weight, 0);
+    const woTotalWeight = woItems.reduce((s, i) => s + (i.weight * (i.quantity || 1)), 0);
     const woRate = shippingRates[woAddress.country] || 10;
     const woRawShippingCost = woTotalWeight * woRate;
     const woDiscountPercent = shippingDiscounts[woAddress.country] || 0;
@@ -5342,15 +5810,15 @@ export default function App() {
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                     {woItems.map(item => (
                       <div key={item.id} className="flex justify-between items-center text-xs">
-                        <span className="text-slate-600 font-medium">{item.name}</span>
-                        <span className="text-slate-400">{item.weight} kg</span>
+                        <span className="text-slate-600 font-medium">{item.name} <span className="text-[10px] text-slate-400 font-bold ml-1">x{item.quantity || 1}</span></span>
+                        <span className="text-slate-400">{(item.weight * (item.quantity || 1)).toFixed(1)} kg</span>
                       </div>
                     ))}
                   </div>
                   <div className="h-px bg-slate-200 my-3" />
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-bold text-slate-900">Total Weight</span>
-                    <span className="text-sm font-black text-slate-900">{woItems.reduce((s, i) => s + i.weight, 0).toFixed(1)} kg</span>
+                    <span className="text-sm font-black text-slate-900">{woItems.reduce((s, i) => s + (i.weight * (i.quantity || 1)), 0).toFixed(1)} kg</span>
                   </div>
                 </div>
 
@@ -5441,60 +5909,231 @@ export default function App() {
             </div>
 
             <div className="space-y-4">
-              <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                <Package className="text-indigo-600" size={20} /> Collected Items
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <input 
-                    type="text" 
-                    placeholder="Item Name"
-                    className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-                    value={woItemName}
-                    onChange={(e) => setWoItemName(e.target.value)}
-                  />
-                  <div className="flex gap-2">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                  <Package className="text-indigo-600" size={20} /> Collected Cargo list
+                </h3>
+              </div>
+
+              {/* Hidden universal file camera input */}
+              <input 
+                type="file" 
+                id="universal-wo-camera" 
+                accept="image/*" 
+                capture="environment" 
+                className="hidden" 
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const imgData = reader.result as string;
+                      if (capturingItemId === 'new') {
+                        setWoItemImage(imgData);
+                        toast.success("Photo captured for new item!");
+                      } else if (capturingItemId) {
+                        setWoItems(prev => prev.map(item => item.id === capturingItemId ? { ...item, image: imgData } : item));
+                        toast.success("Photo updated in the item list!");
+                      }
+                      setCapturingItemId(null);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+
+              {/* Collapsed input form & buttons */}
+              <div className="bg-slate-50 border border-slate-200/50 p-5 rounded-2xl space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                  <div className="sm:col-span-5">
+                    <label className="block text-[10px] font-black text-slate-450 uppercase tracking-widest mb-1.5">Cargo Item Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g., File bundle, Parcel box, Clothes..."
+                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold placeholder:text-slate-350"
+                      value={woItemName}
+                      onChange={(e) => setWoItemName(e.target.value)}
+                    />
+                  </div>
+                  
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-black text-slate-450 uppercase tracking-widest mb-1.5">Weight (Per item kg)</label>
                     <input 
                       type="number" 
-                      placeholder="Weight (kg)"
-                      className="flex-1 p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      value={woItemWeight}
-                      onChange={(e) => setWoItemWeight(Number(e.target.value))}
+                      placeholder="1"
+                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold placeholder:text-slate-350"
+                      value={woItemWeight || ''}
+                      onChange={(e) => setWoItemWeight(Math.max(0.1, Number(e.target.value)))}
                     />
-                    <button 
-                      onClick={addWOItem}
-                      className="px-6 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all"
-                    >
-                      Add
-                    </button>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-black text-slate-450 uppercase tracking-widest mb-1.5">Quantity</label>
+                    <div className="flex items-center bg-white rounded-xl border border-slate-200 p-0.5 select-none h-[38px]">
+                      <button 
+                        onClick={() => setWoItemQuantity(Math.max(1, woItemQuantity - 1))}
+                        className="w-7 h-7 bg-slate-50 hover:bg-slate-100 rounded-lg flex items-center justify-center font-bold text-slate-600 text-xs transition-colors cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="flex-1 text-center text-xs font-black text-slate-800">{woItemQuantity}</span>
+                      <button 
+                        onClick={() => setWoItemQuantity(woItemQuantity + 1)}
+                        className="w-7 h-7 bg-slate-50 hover:bg-slate-100 rounded-lg flex items-center justify-center font-bold text-slate-600 text-xs transition-colors cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="sm:col-span-3 flex gap-2">
+                    <div className="flex-1">
+                      <label className="block text-[10px] text-center font-black text-slate-450 uppercase tracking-widest mb-1.5">Snap</label>
+                      <button 
+                        onClick={() => {
+                          setCapturingItemId('new');
+                          document.getElementById('universal-wo-camera')?.click();
+                        }}
+                        title={woItemImage ? "Photo captured! Click to retake" : "Open Camera"}
+                        className={`w-full h-[38px] rounded-xl flex items-center justify-center border transition-all cursor-pointer relative ${
+                          woItemImage 
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-600 ring-2 ring-emerald-100' 
+                            : 'bg-white border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-300'
+                        }`}
+                      >
+                        <Camera size={16} className={!woItemImage ? "text-indigo-600" : ""} />
+                        {woItemImage && (
+                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border border-white flex items-center justify-center text-[8px] text-white">✓</span>
+                        )}
+                      </button>
+                    </div>
+
+                    {woItemImage && (
+                      <div className="pt-5 shrink-0">
+                        <button 
+                          onClick={() => {
+                            setWoItemImage('');
+                            toast.info("Cleared item photo!");
+                          }}
+                          title="Clear image"
+                          className="w-9 h-9 bg-rose-50 hover:bg-rose-100 border border-rose-100 text-rose-500 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center text-slate-400 hover:border-indigo-300 hover:text-indigo-400 cursor-pointer transition-all">
-                  <ImageIcon size={32} />
-                  <span className="text-xs mt-2">Upload Picture</span>
+
+                <div className="flex justify-between items-center pt-3 border-t border-slate-150">
+                  <span className="text-[10px] font-bold text-slate-400">Add multiple items with their quantities as collected.</span>
+                  <button 
+                    onClick={addWOItem}
+                    disabled={!woItemName}
+                    className={`px-5 py-2 rounded-xl font-bold transition-all text-xs cursor-pointer shadow-xs ${
+                      woItemName 
+                        ? 'bg-slate-900 text-white hover:bg-black hover:shadow-sm' 
+                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    Add to Item List
+                  </button>
                 </div>
               </div>
 
-              <div className="mt-6 space-y-2">
-                {woItems.map(item => (
-                  <div key={item.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-200">
-                        <Package size={20} />
+              {/* Total Summary of Cargo: Items Count, Total Weight, Shipping Rate */}
+              {(() => {
+                const totalWoItemsCount = woItems.reduce((acc, item) => acc + (item.quantity || 1), 0);
+                const totalWoWeightCalculated = woItems.reduce((acc, item) => acc + (item.weight * (item.quantity || 1)), 0);
+                const woRate = shippingRates[woAddress.country] || 10;
+                return (
+                  <div className="grid grid-cols-3 gap-3 p-4 bg-indigo-50/45 border border-indigo-100/70 rounded-2xl">
+                    <div className="text-center">
+                      <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">Total Qty</span>
+                      <span className="text-lg font-black text-indigo-950 mt-0.5 block">{totalWoItemsCount} {totalWoItemsCount === 1 ? 'item' : 'items'}</span>
+                    </div>
+                    <div className="text-center border-x border-indigo-100/80">
+                      <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">Total Weight</span>
+                      <span className="text-lg font-black text-indigo-950 mt-0.5 block">{totalWoWeightCalculated.toFixed(1)} kg</span>
+                    </div>
+                    <div className="text-center">
+                      <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">Shipping Rate</span>
+                      <span className="text-lg font-black text-emerald-600 mt-0.5 block">₹{woRate.toFixed(2)}/kg</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Collected List items list with fast Mobile capture icon */}
+              <div className="mt-4 space-y-2">
+                {woItems.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 font-medium text-xs bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
+                    No items added yet. Enter items details above to start collecting.
+                  </div>
+                ) : (
+                  woItems.map(item => (
+                    <div key={item.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-150 shadow-xs hover:border-slate-350 transition-all">
+                      <div className="flex items-center gap-3">
+                        {/* Camera icon or Captured photo clickable */}
+                        <div 
+                          onClick={() => {
+                            setCapturingItemId(item.id);
+                            document.getElementById('universal-wo-camera')?.click();
+                          }}
+                          title="Click Camera to take photo"
+                          className="w-12 h-12 rounded-xl bg-slate-50 border border-dashed border-slate-200 font-bold overflow-hidden shrink-0 flex items-center justify-center cursor-pointer transition-all hover:border-indigo-400 group relative"
+                        >
+                          {item.image ? (
+                            <>
+                              <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <Camera size={14} className="text-white" />
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600">
+                              <Camera size={18} className="text-indigo-500 animate-pulse" />
+                              <span className="text-[7px] text-slate-400 font-black tracking-tighter uppercase mt-0.5">TAP SNAP</span>
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                            {item.name}
+                            <span className="px-1.5 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-black rounded">
+                              x{item.quantity || 1}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                            {item.weight} kg per unit • Total: {(item.weight * (item.quantity || 1)).toFixed(1)} kg
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                        <div className="text-[10px] text-slate-500 font-medium">{item.weight} kg</div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Quick Camera Icon for fast mobile parcel check */}
+                        <button 
+                          onClick={() => {
+                            setCapturingItemId(item.id);
+                            document.getElementById('universal-wo-camera')?.click();
+                          }}
+                          title="Take Photo"
+                          className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                        >
+                          <Camera size={15} />
+                        </button>
+                        
+                        <button 
+                          onClick={() => setWoItems(woItems.filter(i => i.id !== item.id))}
+                          title="Remove item"
+                          className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 flex items-center justify-center hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                        >
+                          <Trash2 size={15} />
+                        </button>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => setWoItems(woItems.filter(i => i.id !== item.id))}
-                      className="text-slate-400 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -5648,30 +6287,137 @@ export default function App() {
               </div>
             </div>
 
-            <button 
-              onClick={handleWOComplete}
-              disabled={woItems.length === 0 || !woAddress.email || !woAddress.fullName}
-              className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-200"
-            >
-              Collect Payment & Complete
-            </button>
+            <div className="space-y-3">
+              <button 
+                onClick={handleWOComplete}
+                disabled={woItems.length === 0 || !woAddress.email || !woAddress.fullName}
+                className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-200 cursor-pointer flex items-center justify-center gap-2"
+              >
+                Collect Payment & Complete
+              </button>
+              
+              <button 
+                onClick={handleWOMarkPickedUp}
+                disabled={woItems.length === 0}
+                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-100 cursor-pointer flex items-center justify-center gap-2"
+              >
+                Mark Picked Up & Take New Order
+              </button>
+            </div>
           </div>
         </div>
       </div>
     );
-  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, woAddress, address, currentUser]);
+  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, woAddress, address, currentUser, handleWOMarkPickedUp]);
 
   const AgentSection = useMemo(() => {
     if (!currentUser) return null;
     
-    const scheduledApts = appointments.filter(a => a.status === 'Scheduled' && a.assignedAgentId);
-    const completedApts = appointments.filter(a => a.status === 'Completed' && a.assignedAgentId);
-    const canceledApts = appointments.filter(a => a.status === 'Cancelled' && a.assignedAgentId);
+    const agentId = currentUser.id.toUpperCase();
+    const scheduledApts = appointments.filter(a => a.status === 'Scheduled' && a.assignedAgentId && a.assignedAgentId.toUpperCase() === agentId);
+    const completedApts = appointments.filter(a => (a.status === 'Completed' || a.status === 'Picked Up') && a.assignedAgentId && a.assignedAgentId.toUpperCase() === agentId);
+    const canceledApts = appointments.filter(a => a.status === 'Cancelled' && a.assignedAgentId && a.assignedAgentId.toUpperCase() === agentId);
 
     const displayedApts = 
       agentActiveTab === 'Scheduled' ? scheduledApts : 
       agentActiveTab === 'Completed' ? completedApts : 
-      canceledApts;
+      agentActiveTab === 'Canceled' ? canceledApts : [];
+
+    // Real dynamic stats calculation
+    const agentOrders = orders.filter(o => {
+      const aid = o.assignedAgentId || o.assigned_agent_id || (o as any).destination?.assignedAgentId || (o as any).destination?.assigned_agent_id;
+      return aid && aid.toUpperCase() === agentId;
+    });
+
+    const totalWeightCollected = agentOrders.reduce((sum, o) => {
+      if (['Picked Up', 'Delivered', 'Received at Warehouse', 'In Warehouse', 'Ready to Ship', 'In Transit', 'Out for Delivery'].includes(o.status)) {
+        return sum + (o.totalWeight || o.total_weight || 0);
+      }
+      return sum;
+    }, 0);
+
+    const totalRevenuePaid = agentOrders.reduce((sum, o) => {
+      if (['Delivered', 'Received at Warehouse', 'In Warehouse', 'Ready to Ship', 'In Transit', 'Out for Delivery'].includes(o.status) && o.paymentStatus === 'Paid') {
+        return sum + (o.totalCost || o.total_cost || 0);
+      }
+      return sum;
+    }, 0);
+
+    const totalTasksCount = scheduledApts.length + completedApts.length + canceledApts.length;
+    const productivityRate = totalTasksCount > 0 
+      ? Math.round((completedApts.length / totalTasksCount) * 100) 
+      : 100;
+
+    // Daily historical collection logic for AreaChart
+    const dateWeightMap: Record<string, number> = {};
+    const dateCountMap: Record<string, number> = {};
+
+    completedApts.forEach(apt => {
+      const matchingOrder = orders.find(o => o.id === apt.id);
+      const weight = matchingOrder?.totalWeight || 0;
+      const dateStr = apt.date; // has YYYY-MM-DD
+      dateWeightMap[dateStr] = (dateWeightMap[dateStr] || 0) + weight;
+      dateCountMap[dateStr] = (dateCountMap[dateStr] || 0) + 1;
+    });
+
+    const chartData = [];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(today.getDate() - i);
+      const dStr = d.toISOString().split('T')[0];
+      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      chartData.push({
+        date: dStr,
+        label,
+        weight: dateWeightMap[dStr] || 0,
+        pickups: dateCountMap[dStr] || 0,
+      });
+    }
+
+    // Agent dynamic activities list
+    const agentActivities: any[] = [];
+    scheduledApts.forEach(apt => {
+      agentActivities.push({
+        id: `act-sched-${apt.id}`,
+        type: 'scheduled',
+        title: `Scheduled Pickup Request`,
+        desc: `Assigned for ${apt.customerName} [${apt.time}]`,
+        details: apt.address,
+        timeLabel: 'Scheduled',
+        style: 'text-indigo-600 bg-indigo-50 border-indigo-100'
+      });
+    });
+
+    completedApts.forEach(apt => {
+      const matchingOrder = orders.find(o => o.id === apt.id);
+      const weightStr = matchingOrder ? `${matchingOrder.totalWeight || 0} kg` : 'N/A';
+      const revStr = matchingOrder ? `₹${(matchingOrder.totalCost || 0).toFixed(2)}` : 'N/A';
+      agentActivities.push({
+        id: `act-comp-${apt.id}`,
+        type: 'completed',
+        title: `Completed Pickup`,
+        desc: `Collected ${weightStr} from ${apt.customerName} (${revStr})`,
+        details: apt.address,
+        timeLabel: apt.date,
+        style: 'text-emerald-600 bg-emerald-50 border-emerald-100'
+      });
+    });
+
+    canceledApts.forEach(apt => {
+      agentActivities.push({
+        id: `act-cand-${apt.id}`,
+        type: 'cancelled',
+        title: `Cancelled Pickup`,
+        desc: `Pickup canceled for ${apt.customerName}`,
+        details: apt.address,
+        timeLabel: apt.date,
+        style: 'text-rose-600 bg-rose-50 border-rose-100'
+      });
+    });
+
+    // Sort: put latest first or keep structured
+    agentActivities.sort((a, b) => b.timeLabel.localeCompare(a.timeLabel));
 
     if (activeWorkOrder) {
       return WorkOrderSection;
@@ -5682,7 +6428,7 @@ export default function App() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-3xl font-black text-slate-900">Agent Portal</h2>
-            <p className="text-slate-500">Manage and process assigned pickups.</p>
+            <p className="text-slate-500">Manage, process and review performance metrics.</p>
           </div>
           <div className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold animate-pulse">
             {scheduledApts.length} Pending Tasks
@@ -5690,10 +6436,22 @@ export default function App() {
         </div>
 
         {/* Tabs Bar */}
-        <div className="flex border-b border-slate-100 gap-6">
+        <div className="flex border-b border-slate-100 gap-6 overflow-x-auto">
+          <button
+            onClick={() => setAgentActiveTab('Summary')}
+            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
+              agentActiveTab === 'Summary'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <BarChart3 size={16} />
+            <span>Activity Summary</span>
+          </button>
+
           <button
             onClick={() => setAgentActiveTab('Scheduled')}
-            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 relative ${
+            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
               agentActiveTab === 'Scheduled'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -5710,7 +6468,7 @@ export default function App() {
 
           <button
             onClick={() => setAgentActiveTab('Completed')}
-            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 relative ${
+            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
               agentActiveTab === 'Completed'
                 ? 'border-emerald-600 text-emerald-600'
                 : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -5727,7 +6485,7 @@ export default function App() {
 
           <button
             onClick={() => setAgentActiveTab('Canceled')}
-            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 relative ${
+            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
               agentActiveTab === 'Canceled'
                 ? 'border-rose-600 text-rose-600'
                 : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -5743,71 +6501,263 @@ export default function App() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {displayedApts.length === 0 ? (
-            <div className="col-span-full text-center py-16 bg-white rounded-3xl border border-slate-100">
-              <CheckCircle2 size={64} className="mx-auto mb-4 text-slate-300 opacity-40" />
-              <h3 className="text-xl font-bold text-slate-900">No pickups found</h3>
-              <p className="text-slate-500">There are no {agentActiveTab.toLowerCase()} pickups assigned.</p>
+        {agentActiveTab === 'Summary' ? (
+          <div className="space-y-6">
+            {/* Quick Metrics Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shrink-0">
+                  <TrendingUp size={24} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Completed Jobs</div>
+                  <div className="text-2xl font-black text-slate-900 mt-1">{completedApts.length}</div>
+                  <div className="text-[10px] text-emerald-500 font-bold mt-0.5">{(completedApts.length / Math.max(1, totalTasksCount) * 100).toFixed(0)}% completion</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shrink-0">
+                  <Box size={24} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Weight Handled</div>
+                  <div className="text-2xl font-black text-slate-900 mt-1">{totalWeightCollected.toFixed(1)} kg</div>
+                  <div className="text-[10px] text-indigo-500 font-bold mt-0.5">Average {(totalWeightCollected / Math.max(1, completedApts.length)).toFixed(1)} kg / job</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0">
+                  <CreditCard size={24} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Revenue Managed</div>
+                  <div className="text-2xl font-black text-slate-900 mt-1">₹{totalRevenuePaid.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
+                  <div className="text-[10px] text-slate-500 font-bold mt-0.5">Processed & fully paid</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center shrink-0">
+                  <Clock size={24} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest font-sans">Productivity Index</div>
+                  <div className="text-2xl font-black text-slate-900 mt-1">{productivityRate}%</div>
+                  <div className="text-[10px] text-slate-500 font-bold mt-0.5">{scheduledApts.length} pending operations</div>
+                </div>
+              </div>
             </div>
-          ) : (
-            displayedApts.map(apt => (
-              <motion.div 
-                key={apt.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center">
-                    <Truck size={24} />
+
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">Weekly Weight Analytics</h3>
+                    <p className="text-xs text-slate-400">Total volume of physical weight collected in pickups over the week.</p>
                   </div>
-                  <div className="text-right">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work Order</div>
-                    <div className="text-sm font-black text-slate-900">{apt.id}</div>
-                  </div>
+                </div>
+                <div className="h-[280px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.15}/>
+                          <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.01}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="label" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} unit="kg" />
+                      <Tooltip 
+                        contentStyle={{ background: '#0f172a', borderRadius: '16px', border: 'none', color: '#fff' }}
+                        labelStyle={{ fontWeight: 'bold', color: '#38bdf8' }}
+                      />
+                      <Area type="monotone" dataKey="weight" name="Weight (kg)" stroke="#4f46e5" strokeWidth={2} fillOpacity={1} fill="url(#colorWeight)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Status Pie Metrics */}
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">Job Status Mix</h3>
+                  <p className="text-xs text-slate-400">Distribution of assigned work orders.</p>
                 </div>
                 
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar size={14} className="text-slate-400" />
-                    <span className="font-bold text-slate-700">{apt.date}</span>
-                    <span className="text-slate-400">•</span>
-                    <span className="text-slate-500">{apt.time}</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-sm">
-                    <MapPin size={14} className="text-slate-400 mt-1" />
-                    <span className="text-slate-600 leading-tight">{apt.address}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <UserIcon size={14} className="text-slate-400" />
-                    <span className="font-bold text-indigo-600">{apt.phone}</span>
-                  </div>
+                <div className="h-[200px] flex items-center justify-center relative">
+                  {totalTasksCount === 0 ? (
+                    <div className="text-sm text-slate-400 font-bold">No jobs assigned yet</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Scheduled', value: scheduledApts.length, color: '#4f46e5' },
+                            { name: 'Completed', value: completedApts.length, color: '#10b981' },
+                            { name: 'Canceled', value: canceledApts.length, color: '#f43f5e' }
+                          ].filter(x => x.value > 0)}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {[
+                            { color: '#4f46e5' },
+                            { color: '#10b981' },
+                            { color: '#f43f5e' }
+                          ].map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                  {totalTasksCount > 0 && (
+                    <div className="absolute flex flex-col items-center justify-center">
+                      <span className="text-2xl font-black text-slate-800">{totalTasksCount}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Jobs</span>
+                    </div>
+                  )}
                 </div>
 
-                {apt.status === 'Completed' ? (
-                  <div className="w-full py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-emerald-100">
-                    <CheckCircle2 size={16} /> Completed & Processed
+                <div className="space-y-2 pt-4 border-t border-slate-50">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-600 font-sans">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                      <span>Scheduled Pickup Tasks</span>
+                    </div>
+                    <span>{scheduledApts.length}</span>
                   </div>
-                ) : apt.status === 'Cancelled' ? (
-                  <div className="w-full py-3 bg-rose-50 text-rose-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-rose-100">
-                    <XCircle size={16} /> Pickup Canceled
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-600 font-sans">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                      <span>Completed / Picked Up</span>
+                    </div>
+                    <span>{completedApts.length}</span>
                   </div>
-                ) : (
-                  <button 
-                    onClick={() => setActiveWorkOrder(apt)}
-                    className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2"
-                  >
-                    Process Pickup <ArrowRight size={18} />
-                  </button>
-                )}
-              </motion.div>
-            ))
-          )}
-        </div>
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-600 font-sans">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                      <span>Canceled Tasks</span>
+                    </div>
+                    <span>{canceledApts.length}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Activities Timeline Log */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+              <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2 font-sans">
+                <History className="text-indigo-600" size={20} />
+                Recent Operations and Activity Log
+              </h3>
+              
+              {agentActivities.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 font-bold">
+                  No registered activities found for this agent.
+                </div>
+              ) : (
+                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                  {agentActivities.map((act) => (
+                    <div key={act.id} className="flex gap-4 p-4 hover:bg-slate-50 rounded-2xl border border-transparent hover:border-slate-100 transition-all">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${act.style}`}>
+                        {act.type === 'scheduled' ? <Clock size={20} /> : act.type === 'completed' ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-black text-slate-950 truncate font-sans">{act.title}</h4>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{act.timeLabel}</span>
+                        </div>
+                        <p className="text-slate-600 text-xs mt-0.5 font-medium leading-relaxed font-sans">{act.desc}</p>
+                        <p className="text-[10px] text-slate-400 mt-1 font-semibold flex items-center gap-1">
+                          <MapPin size={10} /> {act.details}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {displayedApts.length === 0 ? (
+              <div className="col-span-full text-center py-16 bg-white rounded-3xl border border-slate-100">
+                <CheckCircle2 size={64} className="mx-auto mb-4 text-slate-300 opacity-40" />
+                <h3 className="text-xl font-bold text-slate-900">No pickups found</h3>
+                <p className="text-slate-500">There are no {agentActiveTab.toLowerCase()} pickups assigned.</p>
+              </div>
+            ) : (
+              displayedApts.map(apt => (
+                <motion.div 
+                  key={apt.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center">
+                      <Truck size={24} />
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work Order</div>
+                      <div className="text-sm font-black text-slate-900">{apt.id}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3 mb-6">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Calendar size={14} className="text-slate-400" />
+                      <span className="font-bold text-slate-700">{apt.date}</span>
+                      <span className="text-slate-400">•</span>
+                      <span className="text-slate-500">{apt.time}</span>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm">
+                      <MapPin size={14} className="text-slate-400 mt-1" />
+                      <span className="text-slate-600 leading-tight">{apt.address}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <UserIcon size={14} className="text-slate-400" />
+                      <span className="font-bold text-indigo-600">{apt.phone}</span>
+                    </div>
+                  </div>
+
+                  {apt.status === 'Completed' ? (
+                    <div className="w-full py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-emerald-100">
+                      <CheckCircle2 size={16} /> Completed & Processed
+                    </div>
+                  ) : apt.status === 'Picked Up' ? (
+                    <div className="w-full py-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-indigo-100">
+                      <CheckCircle2 size={16} /> Picked Up
+                    </div>
+                  ) : apt.status === 'Cancelled' ? (
+                    <div className="w-full py-3 bg-rose-50 text-rose-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-rose-100">
+                      <XCircle size={16} /> Pickup Canceled
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => setActiveWorkOrder(apt)}
+                      className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2"
+                    >
+                      Process Pickup <ArrowRight size={18} />
+                    </button>
+                  )}
+                </motion.div>
+              ))
+            )}
+          </div>
+        )}
       </div>
     );
-  }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser, agentActiveTab, setAgentActiveTab]);
+  }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser, agentActiveTab, setAgentActiveTab, orders]);
   const renderWarehouseManagementSection = () => {
     const warehouseItems = items.filter(i => i.source === 'Warehouse' || i.source === 'Pickup').map(i => ({ ...i, orderId: null as string | null }));
     const orderWarehouseItems = orders.flatMap(o => 
@@ -9022,91 +9972,97 @@ export default function App() {
             
             <div className="flex-1 flex items-center justify-between gap-10 lg:gap-14">
               <div className="hidden md:flex items-center gap-6">
-                <button 
-                  onClick={() => navigateTo('store')}
-                  className={`text-sm lg:text-base font-bold transition-all ${activeTab === 'store' ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}
-                >
-                  Shop
-                </button>
-
-              <div 
-                className="relative group"
-                onMouseEnter={() => setShowSendDropdown(true)}
-                onMouseLeave={() => setShowSendDropdown(false)}
-              >
-                <button 
-                  onClick={() => setShowSendDropdown(!showSendDropdown)}
-                  className={`flex items-center gap-2 text-base lg:text-lg font-black transition-all px-4 lg:px-5 py-2.5 rounded-2xl border-2 ${
-                    activeTab === 'pickup' || activeTab === 'warehouse'
-                      ? 'bg-indigo-50 border-indigo-600 text-indigo-700 shadow-sm' 
-                      : 'border-transparent text-slate-900 hover:text-black hover:bg-slate-100/60 hover:border-slate-200/40'
-                  }`}
-                >
-                  Send <ChevronDown size={20} strokeWidth={3} className={`transition-transform duration-500 ${showSendDropdown ? 'rotate-180 text-indigo-600' : 'text-slate-900'}`} />
-                </button>
-
-                {/* Dropdown */}
-                <AnimatePresence>
-                  {showSendDropdown && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                        transition={{ duration: 0.2, ease: "easeOut" }}
-                        className="absolute top-full left-0 mt-3 dropdown-send z-50 flex flex-row gap-4 p-3 bg-white/90 backdrop-blur-xl rounded-[2.5rem] border border-slate-200/60 shadow-2xl shadow-slate-200/50"
-                      >
-                      <button 
-                        onClick={() => { navigateTo('pickup'); setShowSendDropdown(false); }}
-                        className="w-44 aspect-square flex flex-col items-center justify-center text-center gap-4 p-4 rounded-xl bg-[#f8fafc] hover:bg-white hover:-translate-y-[3px] hover:shadow-[0_10px_25px_rgba(0,0,0,0.1)] text-slate-600 hover:text-indigo-600 transition-all duration-200 ease-in-out border border-transparent hover:border-indigo-100 group/item"
-                      >
-                        <div className="w-14 h-14 bg-white text-indigo-600 rounded-2xl flex items-center justify-center shadow-sm group-hover/item:bg-indigo-600 group-hover/item:text-white transition-all duration-300">
-                          <Truck size={28} />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-black text-sm">Pickup from Home</span>
-                          <span className="text-[10px] text-slate-400 font-bold mt-0.5">Agent collects from you</span>
-                        </div>
-                      </button>
-
-                      <button 
-                        onClick={() => { navigateTo('warehouse'); setShowSendDropdown(false); }}
-                        className="w-44 aspect-square flex flex-col items-center justify-center text-center gap-4 p-4 rounded-xl bg-[#f8fafc] hover:bg-white hover:-translate-y-[3px] hover:shadow-[0_10px_25px_rgba(0,0,0,0.1)] text-slate-600 hover:text-indigo-600 transition-all duration-200 ease-in-out border border-transparent hover:border-indigo-100 group/item"
-                      >
-                        <div className="w-14 h-14 bg-white text-indigo-600 rounded-2xl flex items-center justify-center shadow-sm group-hover/item:bg-indigo-600 group-hover/item:text-white transition-all duration-300">
-                          <Package size={28} />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-black text-sm">Send to Warehouse</span>
-                          <span className="text-[10px] text-slate-400 font-bold mt-0.5">Ship from our facility</span>
-                        </div>
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-                <div className="hidden xl:flex items-center gap-2 bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-none">
-                  <input 
-                    type="text" 
-                    placeholder="Enter Tracking ID" 
-                    value={navbarTrackingId}
-                    onChange={(e) => setNavbarTrackingId(e.target.value)}
-                    autoComplete="new-password"
-                    className="bg-transparent border-none focus:ring-0 text-sm w-24 lg:w-32 placeholder:text-slate-400 font-medium"
-                  />
+                {currentUser?.role !== 'agent' && (
                   <button 
-                    onClick={() => {
-                      if (navbarTrackingId.trim()) {
-                        toast.success(`Tracking shipment: ${navbarTrackingId}`);
-                        navigateTo('track');
-                        setNavbarTrackingId('');
-                      }
-                    }}
-                    className="bg-deep-blue text-white shadow-none py-1 px-3 text-xs rounded-lg font-bold hover:bg-slate-800 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    onClick={() => navigateTo('store')}
+                    className={`text-sm lg:text-base font-bold transition-all ${activeTab === 'store' ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'}`}
                   >
-                    Track
+                    Shop
                   </button>
-                </div>
+                )}
+
+                {currentUser?.role !== 'agent' && (
+                  <div 
+                    className="relative group"
+                    onMouseEnter={() => setShowSendDropdown(true)}
+                    onMouseLeave={() => setShowSendDropdown(false)}
+                  >
+                    <button 
+                      onClick={() => setShowSendDropdown(!showSendDropdown)}
+                      className={`flex items-center gap-2 text-base lg:text-lg font-black transition-all px-4 lg:px-5 py-2.5 rounded-2xl border-2 ${
+                        activeTab === 'pickup' || activeTab === 'warehouse'
+                          ? 'bg-indigo-50 border-indigo-600 text-indigo-700 shadow-sm' 
+                          : 'border-transparent text-slate-900 hover:text-black hover:bg-slate-100/60 hover:border-slate-200/40'
+                      }`}
+                    >
+                      Send <ChevronDown size={20} strokeWidth={3} className={`transition-transform duration-500 ${showSendDropdown ? 'rotate-180 text-indigo-600' : 'text-slate-900'}`} />
+                    </button>
+
+                    {/* Dropdown */}
+                    <AnimatePresence>
+                      {showSendDropdown && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                          transition={{ duration: 0.2, ease: "easeOut" }}
+                          className="absolute top-full left-0 mt-3 dropdown-send z-50 flex flex-row gap-4 p-3 bg-white/90 backdrop-blur-xl rounded-[2.5rem] border border-slate-200/60 shadow-2xl shadow-slate-200/50"
+                        >
+                          <button 
+                            onClick={() => { navigateTo('pickup'); setShowSendDropdown(false); }}
+                            className="w-44 aspect-square flex flex-col items-center justify-center text-center gap-4 p-4 rounded-xl bg-[#f8fafc] hover:bg-white hover:-translate-y-[3px] hover:shadow-[0_10px_25px_rgba(0,0,0,0.1)] text-slate-600 hover:text-indigo-600 transition-all duration-200 ease-in-out border border-transparent hover:border-indigo-100 group/item"
+                          >
+                            <div className="w-14 h-14 bg-white text-indigo-600 rounded-2xl flex items-center justify-center shadow-sm group-hover/item:bg-indigo-600 group-hover/item:text-white transition-all duration-300">
+                              <Truck size={28} />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-black text-sm">Pickup from Home</span>
+                              <span className="text-[10px] text-slate-400 font-bold mt-0.5">Agent collects from you</span>
+                            </div>
+                          </button>
+
+                          <button 
+                            onClick={() => { navigateTo('warehouse'); setShowSendDropdown(false); }}
+                            className="w-44 aspect-square flex flex-col items-center justify-center text-center gap-4 p-4 rounded-xl bg-[#f8fafc] hover:bg-white hover:-translate-y-[3px] hover:shadow-[0_10px_25px_rgba(0,0,0,0.1)] text-slate-600 hover:text-indigo-600 transition-all duration-200 ease-in-out border border-transparent hover:border-indigo-100 group/item"
+                          >
+                            <div className="w-14 h-14 bg-white text-indigo-600 rounded-2xl flex items-center justify-center shadow-sm group-hover/item:bg-indigo-600 group-hover/item:text-white transition-all duration-300">
+                              <Package size={28} />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-black text-sm">Send to Warehouse</span>
+                              <span className="text-[10px] text-slate-400 font-bold mt-0.5">Ship from our facility</span>
+                            </div>
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+
+                {currentUser?.role !== 'agent' && (
+                  <div className="hidden xl:flex items-center gap-2 bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-none">
+                    <input 
+                      type="text" 
+                      placeholder="Enter Tracking ID" 
+                      value={navbarTrackingId}
+                      onChange={(e) => setNavbarTrackingId(e.target.value)}
+                      autoComplete="new-password"
+                      className="bg-transparent border-none focus:ring-0 text-sm w-24 lg:w-32 placeholder:text-slate-400 font-medium"
+                    />
+                    <button 
+                      onClick={() => {
+                        if (navbarTrackingId.trim()) {
+                          toast.success(`Tracking shipment: ${navbarTrackingId}`);
+                          navigateTo('track');
+                          setNavbarTrackingId('');
+                        }
+                      }}
+                      className="bg-deep-blue text-white shadow-none py-1 px-3 text-xs rounded-lg font-bold hover:bg-slate-800 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      Track
+                    </button>
+                  </div>
+                )}
 
                 {currentUser?.role === 'admin' && (
                   <button 
@@ -9141,7 +10097,7 @@ export default function App() {
                   </button>
                 )}
 
-                {currentUser?.role !== 'customer_service' && (
+                {currentUser?.role !== 'customer_service' && currentUser?.role !== 'agent' && (
                   <button 
                     onClick={() => navigateTo('support')}
                     className={`text-sm lg:text-base font-medium transition-all ${activeTab === 'support' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
@@ -9152,24 +10108,28 @@ export default function App() {
               </div>
 
               <div className="flex items-center gap-4 lg:gap-6">
-                <button 
-                  onClick={handleQuickQuoteClick}
-                  className="text-sm lg:text-base font-bold text-indigo-600 hover:text-indigo-700 transition-all"
-                >
-                  Quick Quote
-                </button>
+                {currentUser?.role !== 'agent' && (
+                  <button 
+                    onClick={handleQuickQuoteClick}
+                    className="text-sm lg:text-base font-bold text-indigo-600 hover:text-indigo-700 transition-all"
+                  >
+                    Quick Quote
+                  </button>
+                )}
                 {/* Cart Icon Only */}
-                <button 
-                  onClick={() => navigateTo('cart')}
-                  className={`relative p-2 sm:p-3 rounded-2xl transition-all ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                  <ShoppingCart size={20} className="sm:w-6 sm:h-6" />
-                  {cartItems.length > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[10px] w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center font-black border-2 border-white">
-                      {cartItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}
-                    </span>
-                  )}
-                </button>
+                {currentUser?.role !== 'agent' && (
+                  <button 
+                    onClick={() => navigateTo('cart')}
+                    className={`relative p-2 sm:p-3 rounded-2xl transition-all ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <ShoppingCart size={20} className="sm:w-6 sm:h-6" />
+                    {cartItems.length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[10px] w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center font-black border-2 border-white">
+                        {cartItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}
+                      </span>
+                    )}
+                  </button>
+                )}
 
                 {currentUser ? (
                   <div 
@@ -9207,19 +10167,23 @@ export default function App() {
                             <p className="text-sm font-bold text-slate-900 truncate">{currentUser.email}</p>
                           </div>
                           
-                          <button 
-                            onClick={() => { navigateTo('history'); setShowUserDropdown(false); }}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
-                          >
-                            <History size={18} /> My Orders
-                          </button>
-                          
-                          <button 
-                            onClick={() => { navigateTo('account'); setShowUserDropdown(false); }}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
-                          >
-                            <UserIcon size={18} /> My Account
-                          </button>
+                          {currentUser?.role !== 'agent' && (
+                            <>
+                              <button 
+                                onClick={() => { navigateTo('history'); setShowUserDropdown(false); }}
+                                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                              >
+                                <History size={18} /> My Orders
+                              </button>
+                              
+                              <button 
+                                onClick={() => { navigateTo('account'); setShowUserDropdown(false); }}
+                                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                              >
+                                <UserIcon size={18} /> My Account
+                              </button>
+                            </>
+                          )}
 
                           <div className="h-px bg-slate-50 my-1 mx-2" />
                           
@@ -9266,33 +10230,39 @@ export default function App() {
                   <div className="px-3 py-4 mb-2 border-b border-slate-50">
                     <Logo height="h-10" />
                   </div>
-                  <button 
-                    onClick={() => { navigateTo('store'); setIsMobileMenuOpen(false); }}
-                    className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'store' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    Shop
-                  </button>
-                  <div className="flex flex-col gap-1">
-                    <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Send Items</div>
+                  {currentUser?.role !== 'agent' && (
                     <button 
-                      onClick={() => { navigateTo('pickup'); setIsMobileMenuOpen(false); }}
-                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'pickup' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                      onClick={() => { navigateTo('store'); setIsMobileMenuOpen(false); }}
+                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'store' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
                     >
-                      <Truck size={20} /> Pickup from Home
+                      Shop
                     </button>
+                  )}
+                  {currentUser?.role !== 'agent' && (
+                    <div className="flex flex-col gap-1">
+                      <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Send Items</div>
+                      <button 
+                        onClick={() => { navigateTo('pickup'); setIsMobileMenuOpen(false); }}
+                        className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'pickup' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        <Truck size={20} /> Pickup from Home
+                      </button>
+                      <button 
+                        onClick={() => { navigateTo('warehouse'); setIsMobileMenuOpen(false); }}
+                        className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'warehouse' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        <Package size={20} /> Send to Warehouse
+                      </button>
+                    </div>
+                  )}
+                  {currentUser?.role !== 'agent' && (
                     <button 
-                      onClick={() => { navigateTo('warehouse'); setIsMobileMenuOpen(false); }}
-                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'warehouse' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                      onClick={() => { navigateTo('support'); setIsMobileMenuOpen(false); }}
+                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'support' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
                     >
-                      <Package size={20} /> Send to Warehouse
+                      {currentUser?.role === 'customer_service' ? 'Support Desk' : 'Support'}
                     </button>
-                  </div>
-                  <button 
-                    onClick={() => { navigateTo('support'); setIsMobileMenuOpen(false); }}
-                    className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'support' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    {currentUser?.role === 'customer_service' ? 'Support Desk' : 'Support'}
-                  </button>
+                  )}
 
                   {currentUser?.role === 'admin' && (
                     <button 
@@ -9318,12 +10288,14 @@ export default function App() {
                       Work Portal
                     </button>
                   )}
-                  <button 
-                    onClick={handleQuickQuoteClick}
-                    className="text-lg font-bold p-3 rounded-xl text-left text-indigo-600 hover:bg-indigo-50 transition-all"
-                  >
-                    Quick Quote
-                  </button>
+                  {currentUser?.role !== 'agent' && (
+                    <button 
+                      onClick={handleQuickQuoteClick}
+                      className="text-lg font-bold p-3 rounded-xl text-left text-indigo-600 hover:bg-indigo-50 transition-all"
+                    >
+                      Quick Quote
+                    </button>
+                  )}
                   
                   <div className="pt-4 mt-2 border-t border-slate-100">
                     {!currentUser ? (
@@ -9342,18 +10314,22 @@ export default function App() {
                           <span className="text-xs text-slate-500 font-medium truncate">{currentUser.email}</span>
                         </div>
                         <div className="h-px bg-slate-100 my-2 mx-3" />
-                        <button 
-                          onClick={() => { navigateTo('history'); setIsMobileMenuOpen(false); }}
-                          className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'history' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                        >
-                          <History size={20} /> My Orders
-                        </button>
-                        <button 
-                          onClick={() => { navigateTo('account'); setIsMobileMenuOpen(false); }}
-                          className="text-lg font-bold p-3 rounded-xl text-left text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-3"
-                        >
-                          <UserIcon size={20} /> My Account
-                        </button>
+                        {currentUser?.role !== 'agent' && (
+                          <>
+                            <button 
+                              onClick={() => { navigateTo('history'); setIsMobileMenuOpen(false); }}
+                              className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'history' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                            >
+                              <History size={20} /> My Orders
+                            </button>
+                            <button 
+                              onClick={() => { navigateTo('account'); setIsMobileMenuOpen(false); }}
+                              className="text-lg font-bold p-3 rounded-xl text-left text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-3"
+                            >
+                              <UserIcon size={20} /> My Account
+                            </button>
+                          </>
+                        )}
                         <button 
                           onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
                           className="w-full p-3 rounded-xl text-left font-bold text-red-600 bg-red-50 flex items-center gap-2 mt-2"
@@ -9364,28 +10340,30 @@ export default function App() {
                       </div>
                     )}
                     
-                    <div className="mt-4 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-                      <input 
-                        type="text" 
-                        placeholder="Enter Tracking ID" 
-                        value={navbarTrackingId}
-                        onChange={(e) => setNavbarTrackingId(e.target.value)}
-                        className="bg-transparent border-none focus:ring-0 text-sm flex-1 placeholder:text-slate-400 font-medium"
-                      />
-                      <button 
-                        onClick={() => {
-                          if (navbarTrackingId.trim()) {
-                            toast.success(`Tracking shipment: ${navbarTrackingId}`);
-                            navigateTo('track');
-                            setNavbarTrackingId('');
-                            setIsMobileMenuOpen(false);
-                          }
-                        }}
-                        className="bg-deep-blue text-white py-1.5 px-4 text-xs rounded-lg font-bold hover:bg-slate-800 transition-all active:scale-95"
-                      >
-                        Track
-                      </button>
-                    </div>
+                    {currentUser?.role !== 'agent' && (
+                      <div className="mt-4 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                        <input 
+                          type="text" 
+                          placeholder="Enter Tracking ID" 
+                          value={navbarTrackingId}
+                          onChange={(e) => setNavbarTrackingId(e.target.value)}
+                          className="bg-transparent border-none focus:ring-0 text-sm flex-1 placeholder:text-slate-400 font-medium"
+                        />
+                        <button 
+                          onClick={() => {
+                            if (navbarTrackingId.trim()) {
+                              toast.success(`Tracking shipment: ${navbarTrackingId}`);
+                              navigateTo('track');
+                              setNavbarTrackingId('');
+                              setIsMobileMenuOpen(false);
+                            }
+                          }}
+                          className="bg-deep-blue text-white py-1.5 px-4 text-xs rounded-lg font-bold hover:bg-slate-800 transition-all active:scale-95"
+                        >
+                          Track
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -9405,7 +10383,7 @@ export default function App() {
               : 'pt-20'
       }`}>
         <AnimatePresence>
-          {activeTab !== 'home' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'finalize' && activeTab !== 'history' && <BackButton onClick={goBack} />}
+          {activeTab !== 'home' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'finalize' && activeTab !== 'history' && activeTab !== 'agent' && activeTab !== 'support' && activeTab !== 'admin' && <BackButton onClick={goBack} />}
         </AnimatePresence>
         <AnimatePresence mode="wait">
           <motion.div
@@ -9495,16 +10473,18 @@ export default function App() {
             </ul>
           </div>
           
-          <div>
-            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Account</h4>
-            <ul className="space-y-4">
-              <li><button onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Sign In</button></li>
-              <li><button onClick={() => navigateTo(currentUser ? 'account' : 'home')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">My Account Details</button></li>
-              <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">My Shipments</button></li>
-              <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Order History</button></li>
-              <li><button onClick={() => navigateTo('notifications')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Notifications</button></li>
-            </ul>
-          </div>
+          {currentUser?.role !== 'agent' && (
+            <div>
+              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Account</h4>
+              <ul className="space-y-4">
+                <li><button onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Sign In</button></li>
+                <li><button onClick={() => navigateTo(currentUser ? 'account' : 'home')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">My Account Details</button></li>
+                <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">My Shipments</button></li>
+                <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Order History</button></li>
+                <li><button onClick={() => navigateTo('notifications')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Notifications</button></li>
+              </ul>
+            </div>
+          )}
 
           <div>
             <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Services</h4>
@@ -9672,7 +10652,7 @@ export default function App() {
                   
                   // Auto-redirect based on role for smoother testing
                   const isAdmin = email === 'admin@jiffex.com';
-                  const isAgent = email === 'agent@jiffex.com';
+                  const isAgent = email.toLowerCase().endsWith('.agent@jiffex.com') || email === 'agent@jiffex.com';
                   if (isAdmin) navigateTo('admin');
                   else if (isAgent) navigateTo('agent');
                   else if (loginTriggerSource === 'pickup') navigateTo('pickup');

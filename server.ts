@@ -527,73 +527,64 @@ app.post("/api/orders", async (req, res) => {
   }
 
   try {
-    // Transform keys to match SQL schema (camelCase to snake_case if necessary)
-    const orderData = {
+    let parsedDestination = req.body.destination || {};
+    if (typeof parsedDestination === 'string') {
+      try {
+        parsedDestination = JSON.parse(parsedDestination);
+      } catch (e) {
+        parsedDestination = {};
+      }
+    }
+
+    // Merge extra details inside the JSONB destination mapping to preserve them completely
+    const sanitizedDestination = {
+      ...parsedDestination,
+      pickupType: req.body.pickup_type || req.body.pickupType || parsedDestination.pickupType,
+      assignedAgent: req.body.assigned_agent || req.body.assignedAgent || parsedDestination.assignedAgent,
+      assignedAgentId: req.body.assigned_agent_id || req.body.assignedAgentId || parsedDestination.assignedAgentId,
+      languagePreference: req.body.language_preference || req.body.languagePreference || parsedDestination.languagePreference,
+      itemType: req.body.item_type || req.body.itemType || parsedDestination.itemType,
+      vehicleType: req.body.vehicle_type || req.body.vehicleType || parsedDestination.vehicleType,
+      customerName: req.body.customer_name || req.body.customerName || parsedDestination.customerName || parsedDestination.fullName,
+      phone: req.body.phone || req.body.destination?.phone || parsedDestination.phone,
+      date: req.body.date || req.body.shipping_date || req.body.shippingDate || parsedDestination.date,
+      time: req.body.time || parsedDestination.time || 'Flexible',
+      address: req.body.address || req.body.destination?.addressLine1 || parsedDestination.address || parsedDestination.addressLine1
+    };
+
+    const databaseOrderData = {
       id: finalId,
       customer_id: req.body.customer_id || req.body.customerId,
       items: req.body.items,
-      total_weight: req.body.total_weight || req.body.totalWeight,
-      total_cost: req.body.total_cost || req.body.totalCost,
+      total_weight: req.body.total_weight || req.body.totalWeight || 0,
+      total_cost: req.body.total_cost || req.body.totalCost || 0,
       status: req.body.status,
-      destination: req.body.destination,
-      payment_status: req.body.payment_status || req.body.paymentStatus,
+      destination: sanitizedDestination,
+      payment_status: req.body.payment_status || req.body.paymentStatus || 'Pending',
       shipping_date: req.body.shipping_date || req.body.shippingDate,
-      pickup_type: req.body.pickup_type || req.body.pickupType,
-      assigned_agent: req.body.assigned_agent || req.body.assignedAgent,
-      assigned_agent_id: req.body.assigned_agent_id || req.body.assignedAgentId,
-      language_preference: req.body.language_preference || req.body.languagePreference,
-      item_type: req.body.item_type || req.body.itemType,
-      vehicle_type: req.body.vehicle_type || req.body.vehicleType,
-      phone: req.body.phone,
-      customer_name: req.body.customer_name || req.body.customerName,
-      date: req.body.date,
-      time: req.body.time,
-      address: req.body.address
     };
 
-    console.log(`[SUPABASE] Inserting order with ID: ${finalId}`);
-    const { data, error } = await supabase.from('orders').insert(orderData).select().single();
+    console.log(`[SUPABASE] Inserting schema-compliant order with ID: ${finalId}`);
+    const { data, error } = await supabase.from('orders').insert(databaseOrderData).select().single();
     if (error) {
-      console.warn(`[SUPABASE] Normal insert failed. Retrying schema-compliant fallback. Error: ${error.message}`);
+      console.warn(`[SUPABASE] Schema insert failed, retrying with full object just in case. Error: ${error.message}`);
       
-      let parsedDestination = req.body.destination || {};
-      if (typeof parsedDestination === 'string') {
-        try {
-          parsedDestination = JSON.parse(parsedDestination);
-        } catch (e) {
-          parsedDestination = {};
-        }
-      }
-
-      // Merge extra details inside the JSONB destination mapping to preserve them completely
-      const sanitizedDestination = {
-        ...parsedDestination,
-        pickupType: req.body.pickup_type || req.body.pickupType,
-        assignedAgent: req.body.assigned_agent || req.body.assignedAgent,
-        assignedAgentId: req.body.assigned_agent_id || req.body.assignedAgentId,
-        languagePreference: req.body.language_preference || req.body.languagePreference,
-        itemType: req.body.item_type || req.body.itemType,
-        vehicleType: req.body.vehicle_type || req.body.vehicleType,
-        customerName: req.body.customer_name || req.body.customerName,
-        phone: req.body.phone || req.body.destination?.phone,
-        date: req.body.date || req.body.shipping_date || req.body.shippingDate,
+      const fullOrderData = {
+        ...databaseOrderData,
+        pickup_type: req.body.pickup_type || req.body.pickupType,
+        assigned_agent: req.body.assigned_agent || req.body.assignedAgent,
+        assigned_agent_id: req.body.assigned_agent_id || req.body.assignedAgentId,
+        language_preference: req.body.language_preference || req.body.languagePreference,
+        item_type: req.body.item_type || req.body.itemType,
+        vehicle_type: req.body.vehicle_type || req.body.vehicleType,
+        phone: req.body.phone,
+        customer_name: req.body.customer_name || req.body.customerName,
+        date: req.body.date,
         time: req.body.time,
-        address: req.body.address || req.body.destination?.addressLine1
+        address: req.body.address
       };
 
-      const fallbackOrderData = {
-        id: finalId,
-        customer_id: req.body.customer_id || req.body.customerId,
-        items: req.body.items,
-        total_weight: req.body.total_weight || req.body.totalWeight || 0,
-        total_cost: req.body.total_cost || req.body.totalCost || 0,
-        status: req.body.status,
-        destination: sanitizedDestination,
-        payment_status: req.body.payment_status || req.body.paymentStatus || 'Pending',
-        shipping_date: req.body.shipping_date || req.body.shippingDate,
-      };
-
-      const { data: fbData, error: fbError } = await supabase.from('orders').insert(fallbackOrderData).select().single();
+      const { data: fbData, error: fbError } = await supabase.from('orders').insert(fullOrderData).select().single();
       if (fbError) throw fbError;
       return res.json(fbData);
     }
@@ -671,131 +662,106 @@ app.patch("/api/orders/:orderId", async (req, res) => {
   const { orderId } = req.params;
   const updates = req.body;
 
-  // Build clean snake_case updates object with only valid database columns
-  const dbUpdates: any = {};
-  
-  if (updates.id !== undefined) dbUpdates.id = updates.id;
-  if (updates.customerId !== undefined || updates.customer_id !== undefined) {
-    dbUpdates.customer_id = updates.customerId !== undefined ? updates.customerId : updates.customer_id;
-  }
-  if (updates.items !== undefined) dbUpdates.items = updates.items;
-  if (updates.totalWeight !== undefined || updates.total_weight !== undefined) {
-    dbUpdates.total_weight = updates.totalWeight !== undefined ? updates.totalWeight : updates.total_weight;
-  }
-  if (updates.totalCost !== undefined || updates.total_cost !== undefined) {
-    dbUpdates.total_cost = updates.totalCost !== undefined ? updates.totalCost : updates.total_cost;
-  }
-  if (updates.status !== undefined) dbUpdates.status = updates.status;
-  if (updates.destination !== undefined) dbUpdates.destination = updates.destination;
-  if (updates.paymentStatus !== undefined || updates.payment_status !== undefined) {
-    dbUpdates.payment_status = updates.paymentStatus !== undefined ? updates.paymentStatus : updates.payment_status;
-  }
-  if (updates.shippingDate !== undefined || updates.shipping_date !== undefined) {
-    dbUpdates.shipping_date = updates.shippingDate !== undefined ? updates.shippingDate : updates.shipping_date;
-  }
-  if (updates.pickupType !== undefined || updates.pickup_type !== undefined) {
-    dbUpdates.pickup_type = updates.pickupType !== undefined ? updates.pickupType : updates.pickup_type;
-  }
-  if (updates.assignedAgent !== undefined || updates.assigned_agent !== undefined) {
-    dbUpdates.assigned_agent = updates.assignedAgent !== undefined ? updates.assignedAgent : updates.assigned_agent;
-  }
-  if (updates.assignedAgentId !== undefined || updates.assigned_agent_id !== undefined) {
-    dbUpdates.assigned_agent_id = updates.assignedAgentId !== undefined ? updates.assignedAgentId : updates.assigned_agent_id;
-  }
-  if (updates.languagePreference !== undefined || updates.language_preference !== undefined) {
-    dbUpdates.language_preference = updates.languagePreference !== undefined ? updates.languagePreference : updates.language_preference;
-  }
-  if (updates.itemType !== undefined || updates.item_type !== undefined) {
-    dbUpdates.item_type = updates.itemType !== undefined ? updates.itemType : updates.item_type;
-  }
-  if (updates.vehicleType !== undefined || updates.vehicle_type !== undefined) {
-    dbUpdates.vehicle_type = updates.vehicleType !== undefined ? updates.vehicleType : updates.vehicle_type;
-  }
-  if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
-  if (updates.customerName !== undefined || updates.customer_name !== undefined) {
-    dbUpdates.customer_name = updates.customerName !== undefined ? updates.customerName : updates.customer_name;
-  }
-  if (updates.date !== undefined) dbUpdates.date = updates.date;
-  if (updates.time !== undefined) dbUpdates.time = updates.time;
-  if (updates.address !== undefined) dbUpdates.address = updates.address;
-
   try {
-    let { data, error } = await supabase
+    // Get current record to preserve previous destination values
+    const { data: currentOrder, error: getError } = await supabase
       .from('orders')
-      .update(dbUpdates)
+      .select('*')
+      .eq('id', orderId)
+      .single();
+      
+    if (getError || !currentOrder) {
+      throw getError || new Error("Order not found");
+    }
+    
+    let parsedDestination = currentOrder.destination || {};
+    if (typeof parsedDestination === 'string') {
+      try {
+        parsedDestination = JSON.parse(parsedDestination);
+      } catch (e) {
+        parsedDestination = {};
+      }
+    }
+
+    // Merge incoming destination block with updates & custom metadata fields
+    const mergedDestination = {
+      ...parsedDestination,
+      ...(updates.destination || {}),
+      pickupType: updates.pickupType || updates.pickup_type || parsedDestination.pickupType,
+      assignedAgent: updates.assignedAgent !== undefined ? updates.assignedAgent : (updates.assigned_agent !== undefined ? updates.assigned_agent : parsedDestination.assignedAgent),
+      assignedAgentId: updates.assignedAgentId !== undefined ? updates.assignedAgentId : (updates.assigned_agent_id !== undefined ? updates.assigned_agent_id : parsedDestination.assignedAgentId),
+      languagePreference: updates.languagePreference || updates.language_preference || parsedDestination.languagePreference,
+      itemType: updates.itemType || updates.item_type || parsedDestination.itemType,
+      vehicleType: updates.vehicleType || updates.vehicle_type || parsedDestination.vehicleType,
+      customerName: updates.customerName || updates.customer_name || parsedDestination.customerName || parsedDestination.fullName,
+      phone: updates.phone || parsedDestination.phone,
+      date: updates.date || parsedDestination.date,
+      time: updates.time || parsedDestination.time,
+      address: updates.address || parsedDestination.address
+    };
+
+    // Filter down to only columns that are guaranteed to exist in the orders postgres schema
+    const databaseUpdates: any = {
+      destination: mergedDestination
+    };
+
+    if (updates.customerId !== undefined || updates.customer_id !== undefined) {
+      databaseUpdates.customer_id = updates.customerId !== undefined ? updates.customerId : updates.customer_id;
+    }
+    if (updates.items !== undefined) {
+      databaseUpdates.items = updates.items;
+    }
+    if (updates.totalWeight !== undefined || updates.total_weight !== undefined) {
+      databaseUpdates.total_weight = updates.totalWeight !== undefined ? updates.totalWeight : updates.total_weight;
+    }
+    if (updates.totalCost !== undefined || updates.total_cost !== undefined) {
+      databaseUpdates.total_cost = updates.totalCost !== undefined ? updates.totalCost : updates.total_cost;
+    }
+    if (updates.status !== undefined) {
+      databaseUpdates.status = updates.status;
+    }
+    if (updates.paymentStatus !== undefined || updates.payment_status !== undefined) {
+      databaseUpdates.payment_status = updates.paymentStatus !== undefined ? updates.paymentStatus : updates.payment_status;
+    }
+    if (updates.shippingDate !== undefined || updates.shipping_date !== undefined) {
+      databaseUpdates.shipping_date = updates.shippingDate !== undefined ? updates.shippingDate : updates.shipping_date;
+    }
+
+    console.log(`[SUPABASE] Updating schema-compliant order ${orderId}`);
+    const { data, error } = await supabase
+      .from('orders')
+      .update(databaseUpdates)
       .eq('id', orderId)
       .select()
       .single();
-    
+      
     if (error) {
-      console.warn(`[SUPABASE] Normal patch failed. Retrying schema-compliant fallback. Error: ${error.message}`);
+      console.warn(`[SUPABASE] Compliant update failed. Retrying with full updates payload as fallback. Error: ${error.message}`);
       
-      // Get current record to preserve previous destination values
-      const { data: currentOrder, error: getError } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .single();
-        
-      if (getError) throw getError;
-      
-      let parsedDestination = currentOrder.destination || {};
-      if (typeof parsedDestination === 'string') {
-        try {
-          parsedDestination = JSON.parse(parsedDestination);
-        } catch (e) {
-          parsedDestination = {};
-        }
-      }
-
-      // Merge destination fields with updates
-      const fallbackUpdates: any = {};
-      if (updates.id !== undefined) fallbackUpdates.id = updates.id;
-      if (updates.customerId !== undefined || updates.customer_id !== undefined) {
-        fallbackUpdates.customer_id = updates.customerId !== undefined ? updates.customerId : updates.customer_id;
-      }
-      if (updates.items !== undefined) fallbackUpdates.items = updates.items;
-      if (updates.totalWeight !== undefined || updates.total_weight !== undefined) {
-        fallbackUpdates.total_weight = updates.totalWeight !== undefined ? updates.totalWeight : updates.total_weight;
-      }
-      if (updates.totalCost !== undefined || updates.total_cost !== undefined) {
-        fallbackUpdates.total_cost = updates.totalCost !== undefined ? updates.totalCost : updates.total_cost;
-      }
-      if (updates.status !== undefined) fallbackUpdates.status = updates.status;
-      if (updates.paymentStatus !== undefined || updates.payment_status !== undefined) {
-        fallbackUpdates.payment_status = updates.paymentStatus !== undefined ? updates.paymentStatus : updates.payment_status;
-      }
-      if (updates.shippingDate !== undefined || updates.shipping_date !== undefined) {
-        fallbackUpdates.shipping_date = updates.shippingDate !== undefined ? updates.shippingDate : updates.shipping_date;
-      }
-
-      const mergedDestination = {
-        ...parsedDestination,
-        ...(updates.destination || {}),
-        pickupType: updates.pickupType || updates.pickup_type || parsedDestination.pickupType,
-        assignedAgent: updates.assignedAgent || updates.assigned_agent || parsedDestination.assignedAgent,
-        assignedAgentId: updates.assignedAgentId || updates.assigned_agent_id || parsedDestination.assignedAgentId,
-        languagePreference: updates.languagePreference || updates.language_preference || parsedDestination.languagePreference,
-        itemType: updates.itemType || updates.item_type || parsedDestination.itemType,
-        vehicleType: updates.vehicleType || updates.vehicle_type || parsedDestination.vehicleType,
-        customerName: updates.customerName || updates.customer_name || parsedDestination.customerName,
-        phone: updates.phone || parsedDestination.phone,
-        date: updates.date || parsedDestination.date,
-        time: updates.time || parsedDestination.time,
-        address: updates.address || parsedDestination.address
+      const fallbackUpdatesFull = {
+        ...databaseUpdates,
+        pickup_type: updates.pickupType || updates.pickup_type,
+        assigned_agent: updates.assignedAgent || updates.assigned_agent,
+        assigned_agent_id: updates.assignedAgentId || updates.assigned_agent_id,
+        language_preference: updates.languagePreference || updates.language_preference,
+        item_type: updates.itemType || updates.item_type,
+        vehicle_type: updates.vehicleType || updates.vehicle_type,
+        phone: updates.phone,
+        customer_name: updates.customerName || updates.customer_name,
+        date: updates.date,
+        time: updates.time,
+        address: updates.address
       };
-      
-      fallbackUpdates.destination = mergedDestination;
 
       const { data: fbData, error: fbError } = await supabase
         .from('orders')
-        .update(fallbackUpdates)
+        .update(fallbackUpdatesFull)
         .eq('id', orderId)
         .select()
         .single();
         
       if (fbError) throw fbError;
-      data = fbData;
+      return res.json(fbData);
     }
 
     // Send WhatsApp/Email notification if order status was changed in PATCH updates
