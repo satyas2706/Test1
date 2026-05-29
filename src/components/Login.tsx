@@ -10,6 +10,15 @@ interface LoginProps {
   initialMethod?: 'email' | 'phone';
 }
 
+interface AgentProfile {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  status: string;
+  vehicleNumber?: string;
+}
+
 export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '', initialPhone = '', initialMethod = 'email' }) => {
   const [method, setMethod] = useState<'email' | 'phone'>(initialMethod);
   const [step, setStep] = useState<'input' | 'otp'>('input');
@@ -17,6 +26,49 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '', init
   const [phone, setPhone] = useState(initialPhone);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Helper to validate agent work email against agent management list
+  const checkAgentEmailValidity = (enteredEmail: string): { isValid: boolean; error?: string } => {
+    const emailLower = enteredEmail.trim().toLowerCase();
+    const isAgentPattern = emailLower.endsWith('.agent@jiffex.com') || emailLower === 'agent@jiffex.com';
+
+    if (!isAgentPattern) {
+      return { isValid: true };
+    }
+
+    // Default agents list
+    let agents: AgentProfile[] = [
+      { id: '10001', name: 'Rahul Sharma', phone: '+91 98765 43210', email: '10001.agent@jiffex.com', status: 'Active', vehicleNumber: 'KA-01-AB-1234' },
+      { id: '10002', name: 'Priya Patel', phone: '+91 87654 32109', email: '10002.agent@jiffex.com', status: 'Active', vehicleNumber: 'MH-02-CD-5678' },
+      { id: '12345', name: 'Test Agent (You)', phone: '+91 00000 00000', email: '12345.agent@jiffex.com', status: 'Active', vehicleNumber: 'TEST-001' },
+    ];
+
+    // Load from localStorage if present
+    const saved = localStorage.getItem('jiffex_agents_list');
+    if (saved) {
+      try {
+        agents = JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse saved agents list:', e);
+      }
+    }
+
+    // Check matches in list:
+    // 1. Matches customized email explicitly
+    // 2. Matches [id].agent@jiffex.com pattern
+    const matchesExplicit = agents.some(a => a.email && a.email.trim().toLowerCase() === emailLower);
+    const matchesDefaultPattern = agents.some(a => `${a.id.trim().toLowerCase()}.agent@jiffex.com` === emailLower);
+    const isTestAgent = emailLower === 'agent@jiffex.com';
+
+    if (matchesExplicit || matchesDefaultPattern || isTestAgent) {
+      return { isValid: true };
+    }
+
+    return {
+      isValid: false,
+      error: 'This email is not registered under Agent Management. Access Denied.'
+    };
+  };
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,6 +78,14 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '', init
     if (method === 'email') {
       if (!email || !email.includes('@')) {
         toast.error('Please enter a valid email address');
+        setIsLoading(false);
+        return;
+      }
+
+      // Check agent email validation
+      const agentCheck = checkAgentEmailValidity(email);
+      if (!agentCheck.isValid) {
+        toast.error(agentCheck.error || 'Access Denied');
         setIsLoading(false);
         return;
       }
@@ -74,6 +134,15 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '', init
     setIsLoading(true);
     const otpCode = otp.join('');
     
+    if (method === 'email') {
+      const agentCheck = checkAgentEmailValidity(email);
+      if (!agentCheck.isValid) {
+        toast.error(agentCheck.error || 'Access Denied');
+        setIsLoading(false);
+        return;
+      }
+    }
+
     try {
       const payload = method === 'email' ? { email: email.trim().toLowerCase(), code: otpCode } : { phone: phone.trim(), code: otpCode };
       const response = await fetch('/api/auth/verify-otp', {

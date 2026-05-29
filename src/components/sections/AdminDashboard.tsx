@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Package, 
@@ -13,7 +13,14 @@ import {
   X,
   Mail,
   MessageCircle,
-  Settings
+  Settings,
+  AlertCircle,
+  Activity,
+  CheckCircle,
+  RefreshCw,
+  Play,
+  Lock,
+  Info
 } from 'lucide-react';
 import { 
   User, 
@@ -22,6 +29,7 @@ import {
   AgentProfile, 
   StoreProduct 
 } from '../../types';
+import { api } from '../../services/api';
 
 interface AdminDashboardProps {
   currentUser: User | null;
@@ -64,6 +72,68 @@ const AdminDashboard = ({
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editPriceValue, setEditPriceValue] = useState<string>('');
   const [editDeliveryValue, setEditDeliveryValue] = useState<string>('');
+
+  // States for dynamic SMTP & Env Variables status check
+  const [smtpStatus, setSmtpStatus] = useState<any>(null);
+  const [loadingStatus, setLoadingStatus] = useState(false);
+  const [statusError, setStatusError] = useState('');
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [testSuccessMessage, setTestSuccessMessage] = useState('');
+  const [testErrorMessage, setTestErrorMessage] = useState('');
+
+  // Form states to override or input test parameters
+  const [testHost, setTestHost] = useState('smtp.gmail.com');
+  const [testPort, setTestPort] = useState('587');
+  const [testUser, setTestUser] = useState('');
+  const [testPass, setTestPass] = useState('');
+  const [testFrom, setTestFrom] = useState('');
+
+  const fetchSmtpStatus = async () => {
+    setLoadingStatus(true);
+    setStatusError('');
+    try {
+      const status = await api.getSmtpStatus();
+      setSmtpStatus(status);
+      setTestHost(status.SMTP_HOST !== "NOT CONFIGURED" ? status.SMTP_HOST : 'smtp.gmail.com');
+      // Strip defaults notation or port spaces
+      const strippedPort = status.SMTP_PORT !== "NOT CONFIGURED" ? status.SMTP_PORT.split(' ')[0] : '587';
+      setTestPort(strippedPort);
+      setTestUser(status.SMTP_USER !== "NOT CONFIGURED" ? status.SMTP_USER : '');
+      setTestFrom(status.SMTP_FROM !== "NOT CONFIGURED" ? status.SMTP_FROM : '');
+    } catch (err: any) {
+      setStatusError(err.message || 'Failed to load SMTP status');
+    } finally {
+      setLoadingStatus(false);
+    }
+  };
+
+  useEffect(() => {
+    if (adminTab === 'Settings') {
+      fetchSmtpStatus();
+    }
+  }, [adminTab]);
+
+  const handleTestSmtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTestingConnection(true);
+    setTestSuccessMessage('');
+    setTestErrorMessage('');
+    try {
+      const res = await api.testSmtpConnection({
+        host: testHost,
+        port: testPort,
+        user: testUser,
+        pass: testPass,
+        from: testFrom
+      });
+      setTestSuccessMessage(res.message);
+      fetchSmtpStatus(); // Refresh masked status view
+    } catch (err: any) {
+      setTestErrorMessage(err.message || 'SMTP Connection Test Failed');
+    } finally {
+      setTestingConnection(false);
+    }
+  };
 
   if (!currentUser) return null;
   const stats = [
@@ -400,23 +470,234 @@ const AdminDashboard = ({
               </div>
 
               <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                <h4 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                  <Mail className="text-blue-500" size={20} /> SMTP (Email)
-                </h4>
-                <p className="text-sm text-slate-600 mb-4">To enable email notifications, set these environment variables in the project settings:</p>
-                <div className="space-y-2">
-                  {[
-                    'SMTP_HOST',
-                    'SMTP_PORT',
-                    'SMTP_USER',
-                    'SMTP_PASS',
-                    'SMTP_FROM'
-                  ].map(key => (
-                    <div key={key} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200">
-                      <code className="text-xs font-bold text-indigo-600">{key}</code>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Required</span>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <Mail className="text-blue-500" size={20} /> SMTP (Email) Server Config
+                  </h4>
+                  <button 
+                    onClick={fetchSmtpStatus}
+                    disabled={loadingStatus}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-white text-indigo-600 font-bold text-xs rounded-lg border border-indigo-100 hover:bg-slate-50 disabled:opacity-50 transition"
+                  >
+                    <RefreshCw size={13} className={loadingStatus ? "animate-spin" : ""} />
+                    Refresh
+                  </button>
+                </div>
+
+                <p className="text-sm text-slate-600 mb-4">
+                  To enable order confirmations and dispatch emails, configure these variables in your app's **Settings &rarr; Environment Variables**. Here are the values currently loaded on the server:
+                </p>
+
+                {loadingStatus ? (
+                  <div className="flex items-center justify-center p-6 bg-white rounded-2xl border border-slate-200">
+                    <div className="flex items-center gap-2 text-slate-400 font-bold text-xs">
+                      <RefreshCw size={14} className="animate-spin text-indigo-600" />
+                      Reading loaded environment variables...
                     </div>
-                  ))}
+                  </div>
+                ) : statusError ? (
+                  <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-600 text-xs font-semibold">
+                    Error reading server status: {statusError}
+                  </div>
+                ) : smtpStatus ? (
+                  <div className="space-y-4 mb-6">
+                    {[
+                      { key: 'SMTP_HOST', val: smtpStatus.SMTP_HOST, desc: 'SMTP hostname (e.g. smtp.gmail.com)' },
+                      { key: 'SMTP_PORT', val: smtpStatus.SMTP_PORT, desc: 'SMTP port (usually 587 or 465)' },
+                      { key: 'SMTP_USER', val: smtpStatus.SMTP_USER, desc: 'Mail account username (e.g. your email)' },
+                      { key: 'SMTP_FROM', val: smtpStatus.SMTP_FROM, desc: 'Sender identity address (e.g. no-reply@)' },
+                      { 
+                        key: 'SMTP_PASS', 
+                        val: `${smtpStatus.SMTP_PASS_MASKED} (${smtpStatus.SMTP_PASS_LENGTH} chars)`, 
+                        desc: 'Mail account password or 16-char App Password',
+                        isCritical: true,
+                        length: smtpStatus.SMTP_PASS_LENGTH
+                      }
+                    ].map(item => (
+                      <div key={item.key} className="p-3.5 bg-white rounded-2xl border border-slate-200 hover:border-slate-300 transition shadow-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-black text-indigo-600">{item.key}</span>
+                          <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${
+                            item.val === "NOT CONFIGURED" 
+                              ? "bg-rose-50 text-rose-600 border border-rose-100" 
+                              : "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                          }`}>
+                            {item.val === "NOT CONFIGURED" ? "Missing" : "Active"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs mt-1">
+                          <code className="bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 text-slate-700 font-mono text-[11px] break-all truncate max-w-[200px]">
+                            {item.val}
+                          </code>
+                          <span className="text-[10px] text-slate-400 font-medium">{item.desc}</span>
+                        </div>
+                        {item.isCritical && item.val !== "NOT CONFIGURED" && (item.length === 19 || item.length === 16) && (
+                          <div className="mt-2 p-2 bg-indigo-50/50 border border-indigo-100 rounded-xl text-[10px] text-indigo-700 flex gap-1.5">
+                            <Info size={12} className="shrink-0 mt-0.5" />
+                            <span>This looks like a {item.length}-character App Password. Our system automatically trims any internal formatting spaces during send.</span>
+                          </div>
+                        )}
+                        {item.isCritical && item.val !== "NOT CONFIGURED" && item.length > 0 && item.length !== 16 && item.length !== 19 && (
+                          <div className="mt-2 p-2 bg-amber-50 border border-amber-100 rounded-xl text-[10px] text-amber-700 flex gap-1.5">
+                            <AlertCircle size={12} className="shrink-0 mt-0.5" />
+                            <span>Warning: Gmail App Passwords must contain exactly 16 characters (or 19 characters with space formatting). Please verify this is correct.</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {smtpStatus && (
+                  (() => {
+                    const extractEmail = (str: string) => {
+                      const match = str.match(/<([^>]+)>/);
+                      return (match ? match[1] : str).trim().toLowerCase();
+                    };
+                    const parsedUser = extractEmail(smtpStatus.SMTP_USER || '');
+                    const parsedFrom = extractEmail(smtpStatus.SMTP_FROM || '');
+                    const isMismatched = parsedUser && parsedFrom && parsedUser !== parsedFrom && smtpStatus.SMTP_USER !== "NOT CONFIGURED" && smtpStatus.SMTP_FROM !== "NOT CONFIGURED";
+                    if (isMismatched) {
+                      return (
+                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs mt-3 mb-4 flex gap-2.5">
+                          <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-extrabold text-amber-800 uppercase tracking-wide text-[10px] mb-1">⚠️ SMTP Username & Sender Mismatch Detected</p>
+                            <p className="leading-relaxed font-medium">Your SMTP Login Username (<code className="font-semibold px-1 bg-amber-100 rounded text-amber-950 font-mono">{parsedUser}</code>) does not match your Sender "From" Address (<code className="font-semibold px-1 bg-amber-100 rounded text-amber-950 font-mono">{parsedFrom}</code>).</p>
+                            <p className="mt-1.5 font-semibold text-amber-800">Google SMTP requires you to authenticate using the exact Google Account that generated the 16-character App Password. If your App Password was configured for <code className="font-semibold text-amber-950">{parsedFrom}</code>, please make sure your <span className="font-bold underline">SMTP_USER</span> is also set to <code className="font-semibold text-amber-950">{parsedFrom}</code> in platform settings.</p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()
+                )}
+
+                {/* Secure Active SMTP Diagnostic Mailer */}
+                <div className="p-5 bg-white rounded-2xl border border-slate-200 mt-6 shadow-xs">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Activity size={16} className="text-indigo-600 animate-pulse" />
+                    <h5 className="text-xs font-black text-slate-800 uppercase tracking-wider">Test SMTP Connection</h5>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+                    Test your SMTP settings in real-time. Enter credentials below to send a diagnostic test copy to your inbox.
+                  </p>
+
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Host</label>
+                        <input
+                          type="text"
+                          required
+                          value={testHost}
+                          onChange={e => setTestHost(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium"
+                          placeholder="smtp.gmail.com"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Port</label>
+                        <input
+                          type="text"
+                          required
+                          value={testPort}
+                          onChange={e => setTestPort(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium"
+                          placeholder="587"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">SMTP User (Your Gmail)</label>
+                      <input
+                        type="email"
+                        required
+                        value={testUser}
+                        onChange={e => setTestUser(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium"
+                        placeholder="yourname@gmail.com"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                        SMTP App Password <span className="text-slate-400 lowercase italic">(leave empty to use loaded secret)</span>
+                      </label>
+                      <input
+                        type="password"
+                        value={testPass}
+                        onChange={e => setTestPass(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-mono"
+                        placeholder={smtpStatus?.SMTP_PASS_MASKED !== "NOT CONFIGURED" ? "Using currently saved variables password" : "Your 16-character App Password"}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">SMTP From (Sender address)</label>
+                      <input
+                        type="text"
+                        required
+                        value={testFrom}
+                        onChange={e => setTestFrom(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium"
+                        placeholder="JiffEX Notifications <yourname@gmail.com>"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleTestSmtp(e);
+                      }}
+                      disabled={testingConnection}
+                      className="w-full py-2.5 px-4 bg-indigo-600 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:opacity-50 transition"
+                    >
+                      {testingConnection ? (
+                        <>
+                          <RefreshCw size={13} className="animate-spin" />
+                          Testing connection...
+                        </>
+                      ) : (
+                        <>
+                          <Play size={12} className="fill-current" />
+                          Test Connection & Send Email
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {testSuccessMessage && (
+                    <div className="mt-4 p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-xs font-semibold flex items-start gap-2.5">
+                      <CheckCircle size={15} className="text-emerald-500 shrink-0 mt-0.5" />
+                      <span>{testSuccessMessage}</span>
+                    </div>
+                  )}
+
+                  {testErrorMessage && (
+                    <div className="mt-4 p-3 bg-rose-50 border border-rose-100 rounded-xl text-rose-800 text-xs font-medium flex items-start gap-2.5">
+                      <AlertCircle size={15} className="text-rose-500 shrink-0 mt-0.5" />
+                      <span className="whitespace-pre-line leading-relaxed">{testErrorMessage}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Guided steps for App Password */}
+                <div className="mt-6 p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-[11px] text-indigo-700 leading-relaxed">
+                  <h5 className="text-xs font-black text-indigo-900 uppercase tracking-wider mb-2">How to guide: Google App Passwords</h5>
+                  <p className="mb-2">
+                    Gmail blocks standard main passwords because of updated secure protocols. To fix the <code className="font-semibold px-1 py-0.5 bg-indigo-100 rounded">535 Bad Credentials</code> error, generate a 16-character SMTP credential:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1.5 pl-1 text-[11px] text-indigo-600 font-medium">
+                    <li>Go to your Google Account Security Dashboard (<a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="underline font-extrabold text-indigo-800">myaccount.google.com/security</a>)</li>
+                    <li>Ensure **2-Step Verification** is turned ON for your account.</li>
+                    <li>Go to the Google Account search box at the top and type **App Passwords**.</li>
+                    <li>Generate a password with App Name: **JiffEX Mail**.</li>
+                    <li>Copy the 16-character code Google displays.</li>
+                    <li>Open **Settings** (located in top right menu of AI Studio Platform), select **Environment Variables**, and paste code into <code className="font-semibold bg-indigo-100 rounded px-1">SMTP_PASS</code>. Then click **Restart Dev Server**.</li>
+                  </ol>
                 </div>
               </div>
 

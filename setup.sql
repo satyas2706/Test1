@@ -67,6 +67,69 @@ CREATE POLICY "Allow public insert products" ON products FOR INSERT WITH CHECK (
 CREATE POLICY "Allow public update products" ON products FOR UPDATE USING (true);
 CREATE POLICY "Allow public delete products" ON products FOR DELETE USING (true);
 
+-- Create the 'agents' table
+CREATE TABLE IF NOT EXISTS agents (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'Active',
+  vehicle_number TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS for agents
+ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for public access (for development)
+CREATE POLICY "Allow public read agents" ON agents FOR SELECT USING (true);
+CREATE POLICY "Allow public insert agents" ON agents FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update agents" ON agents FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete agents" ON agents FOR DELETE USING (true);
+
+-- Create the 'agent_logs' table for logging all admin actions performed on agents
+CREATE TABLE IF NOT EXISTS agent_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  action_type TEXT NOT NULL, -- 'CREATE', 'UPDATE', 'DELETE', 'ASSIGN', 'DEASSIGN'
+  agent_id TEXT,
+  agent_name TEXT,
+  details JSONB,
+  performed_by TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS for agent_logs
+ALTER TABLE agent_logs ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for public access (for security-exempt dev setup)
+CREATE POLICY "Allow public read agent_logs" ON agent_logs FOR SELECT USING (true);
+CREATE POLICY "Allow public insert agent_logs" ON agent_logs FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update agent_logs" ON agent_logs FOR UPDATE USING (true);
+
+-- Create the 'customer_profiles' table for saving and auto-filling pickup/profile details
+CREATE TABLE IF NOT EXISTS customer_profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  email TEXT,
+  phone TEXT,
+  street TEXT,
+  apartment TEXT,
+  city TEXT,
+  state TEXT,
+  zip TEXT,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS for customer_profiles
+ALTER TABLE customer_profiles ENABLE ROW LEVEL SECURITY;
+
+-- Public access policies for development
+CREATE POLICY "Allow public read customer_profiles" ON customer_profiles FOR SELECT USING (true);
+CREATE POLICY "Allow public insert customer_profiles" ON customer_profiles FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update customer_profiles" ON customer_profiles FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete customer_profiles" ON customer_profiles FOR DELETE USING (true);
+
 -- ENABLE REALTIME
 -- To view tables in the "Database -> Replication" section of Supabase Dashboard:
 -- 1. Create the publication if it doesn't exist
@@ -76,6 +139,9 @@ CREATE PUBLICATION supabase_realtime;
 -- 2. Add the tables you want to enable real-time for
 ALTER PUBLICATION supabase_realtime ADD TABLE orders;
 ALTER PUBLICATION supabase_realtime ADD TABLE items;
+ALTER PUBLICATION supabase_realtime ADD TABLE agents;
+ALTER PUBLICATION supabase_realtime ADD TABLE agent_logs;
+ALTER PUBLICATION supabase_realtime ADD TABLE customer_profiles;
 
 -- OPTIONAL: If you want to enable it for ALL current and future tables
 -- ALTER PUBLICATION supabase_realtime SET FOR ALL TABLES;

@@ -156,13 +156,13 @@ export const api = {
     return await response.json();
   },
 
-  async getShippingSettings(): Promise<{ rates: Record<string, number>; discounts: Record<string, number> }> {
+  async getShippingSettings(): Promise<{ rates: Record<string, number>; discounts: Record<string, number>; coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }> }> {
     const response = await fetch(`${API_URL}/api/settings/shipping`);
     if (!response.ok) throw new Error('Failed to fetch shipping settings');
     return await response.json();
   },
 
-  async updateShippingSettings(updates: { rates?: Record<string, number>; discounts?: Record<string, number> }): Promise<{ rates: Record<string, number>; discounts: Record<string, number> }> {
+  async updateShippingSettings(updates: { rates?: Record<string, number>; discounts?: Record<string, number>; coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }> }): Promise<{ rates: Record<string, number>; discounts: Record<string, number>; coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }> }> {
     const response = await fetch(`${API_URL}/api/settings/shipping`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -177,6 +177,40 @@ export const api = {
       method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to clear orders');
+    return await response.json();
+  },
+
+  async getSmtpStatus(): Promise<{ 
+    SMTP_HOST: string; 
+    SMTP_PORT: string; 
+    SMTP_USER: string; 
+    SMTP_FROM: string; 
+    SMTP_PASS_MASKED: string; 
+    SMTP_PASS_LENGTH: number;
+    twilioSidConfigured: boolean;
+    twilioPhoneConfigured: boolean;
+  }> {
+    const response = await fetch(`${API_URL}/api/admin/smtp-status`);
+    if (!response.ok) throw new Error('Failed to fetch SMTP status');
+    return await response.json();
+  },
+
+  async testSmtpConnection(params: {
+    host: string;
+    port: string;
+    user: string;
+    pass: string;
+    from: string;
+  }): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${API_URL}/api/smtp/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params)
+    });
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || errData.message || "Failed to verify SMTP link");
+    }
     return await response.json();
   }
 };

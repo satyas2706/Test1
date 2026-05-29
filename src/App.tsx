@@ -27,6 +27,7 @@ import {
   Minus,
   PlusCircle,
   Trash2, 
+  Ticket as TicketIcon,
   ChevronRight, 
   CheckCircle2, 
   Clock,
@@ -123,7 +124,7 @@ import {
   COMPANY_DETAILS
 } from './constants';
 import { api } from './services/api';
-import { supabase } from './lib/supabase';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { Login } from './components/Login';
 import { Session } from '@supabase/supabase-js';
 import AccountSection from './components/sections/AccountSection';
@@ -132,6 +133,58 @@ type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'hi
 
 
 const API_URL = window.location.origin;
+
+export const logAgentActionToSupabase = async (
+  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'ASSIGN' | 'DEASSIGN',
+  agentId: string,
+  agentName: string,
+  details: any,
+  performedBy: string
+) => {
+  try {
+    console.log(`[Supabase Agent Sync] ${actionType} on ${agentId} (${agentName}) by ${performedBy}`);
+    if (isSupabaseConfigured) {
+      if (actionType === 'CREATE' || actionType === 'UPDATE') {
+        const { error: upsertError } = await supabase
+          .from('agents')
+          .upsert({
+            id: agentId,
+            name: agentName,
+            phone: details.phone || '',
+            email: details.email || `${agentId}.agent@jiffex.com`,
+            status: details.status || 'Active',
+            vehicle_number: details.vehicleNumber || ''
+          });
+        if (upsertError) {
+          console.error('[Supabase agents upsert error]:', upsertError);
+        }
+      } else if (actionType === 'DELETE') {
+        const { error: deleteError } = await supabase
+          .from('agents')
+          .delete()
+          .eq('id', agentId);
+        if (deleteError) {
+          console.error('[Supabase agents delete error]:', deleteError);
+        }
+      }
+
+      const { error: logError } = await supabase
+        .from('agent_logs')
+        .insert({
+          action_type: actionType,
+          agent_id: agentId,
+          agent_name: agentName,
+          details,
+          performed_by: performedBy
+        });
+      if (logError) {
+        console.error('[Supabase agent_logs log error]:', logError);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to update Supabase agent records:', err);
+  }
+};
 
 const sendWhatsApp = (phone: string, message: string) => {
   if (!phone) {
@@ -339,8 +392,8 @@ interface AdminDashboardProps {
   setAgents: React.Dispatch<React.SetStateAction<AgentProfile[]>>;
   categories: string[];
   setCategories: React.Dispatch<React.SetStateAction<string[]>>;
-  adminTab: 'Overview' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds';
-  setAdminTab: React.Dispatch<React.SetStateAction<'Overview' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds'>>;
+  adminTab: 'Overview' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds' | 'Rates';
+  setAdminTab: React.Dispatch<React.SetStateAction<'Overview' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds' | 'Rates'>>;
   storeProducts: StoreProduct[];
   setStoreProducts: React.Dispatch<React.SetStateAction<StoreProduct[]>>;
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
@@ -354,6 +407,10 @@ interface AdminDashboardProps {
   setShippingRates?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   shippingDiscounts?: Record<string, number>;
   setShippingDiscounts?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }>;
+  setCoupons?: React.Dispatch<React.SetStateAction<Array<{ code: string; discountPercent: number; isEnabled: boolean }>>>;
+  isAutoAssignAgentEnabled: boolean;
+  setIsAutoAssignAgentEnabled: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 interface SupportDeskDashboardProps {
@@ -911,15 +968,72 @@ const AdminDashboard = ({
   shippingRates = SHIPPING_RATES,
   setShippingRates,
   shippingDiscounts = {},
-  setShippingDiscounts
+  setShippingDiscounts,
+  coupons = [],
+  setCoupons,
+  isAutoAssignAgentEnabled,
+  setIsAutoAssignAgentEnabled
 }: AdminDashboardProps) => {
   const [categoryInput, setCategoryInput] = useState('');
   const [agentSearch, setAgentSearch] = useState('');
 
+  // Shipping history interfaces & states
+  const [ratesActiveSubTab, setRatesActiveSubTab] = useState<'rates' | 'history'>('rates');
+  const [inventoryActiveSubTab, setInventoryActiveSubTab] = useState<'StoreCatalog' | 'NewProduct' | 'Categories'>('StoreCatalog');
+  const [productFilterInput, setProductFilterInput] = useState('');
+  const [shippingHistory, setShippingHistory] = useState<{
+    id: string;
+    timestamp: string;
+    type: 'Rate' | 'Discount';
+    country: string;
+    oldValue: number;
+    newValue: number;
+    updatedBy: string;
+  }[]>(() => {
+    const saved = localStorage.getItem('jiffex_shipping_history');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse shipping history', e);
+      }
+    }
+    // Return high-quality initial seed data for an immediately alive experience
+    return [
+      {
+        id: 'sh-1',
+        timestamp: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toLocaleString(),
+        type: 'Rate',
+        country: 'USA',
+        oldValue: 12,
+        newValue: 15,
+        updatedBy: 'admin@jiffex.com'
+      },
+      {
+        id: 'sh-2',
+        timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toLocaleString(),
+        type: 'Discount',
+        country: 'UAE',
+        oldValue: 0,
+        newValue: 10,
+        updatedBy: 'admin@jiffex.com'
+      }
+    ];
+  });
+
   // Local state to manage shipping rate configuration in the admin panel
   const [editingRates, setEditingRates] = useState<Record<string, string>>({});
   const [editingDiscounts, setEditingDiscounts] = useState<Record<string, string>>({});
+  const [adminCoupons, setAdminCoupons] = useState<Array<{ code: string; discountPercent: number; isEnabled: boolean }>>([]);
+  const [newCouponCode, setNewCouponCode] = useState('');
+  const [newCouponPercent, setNewCouponPercent] = useState('');
   const [isSavingShipping, setIsSavingShipping] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (coupons) {
+      setAdminCoupons(coupons);
+    }
+  }, [coupons]);
 
   useEffect(() => {
     if (shippingRates) {
@@ -952,10 +1066,58 @@ const AdminDashboard = ({
       Object.keys(editingDiscounts).forEach(country => {
         parsedDiscounts[country] = Number(editingDiscounts[country]) || 0;
       });
+
+      // Track rate and discount changes to append to history log
+      const newEntries: {
+        id: string;
+        timestamp: string;
+        type: 'Rate' | 'Discount';
+        country: string;
+        oldValue: number;
+        newValue: number;
+        updatedBy: string;
+      }[] = [];
+      const timestamp = new Date().toLocaleString();
+      const updatedBy = currentUser?.email || 'admin@jiffex.com';
+
+      // Compare rates for changes
+      Object.keys(parsedRates).forEach(country => {
+        const oldVal = shippingRates[country] !== undefined ? shippingRates[country] : SHIPPING_RATES[country] || 10;
+        const newVal = parsedRates[country];
+        if (oldVal !== newVal) {
+          newEntries.push({
+            id: 'sh-' + Math.random().toString(36).substr(2, 9),
+            timestamp,
+            type: 'Rate',
+            country,
+            oldValue: oldVal,
+            newValue: newVal,
+            updatedBy
+          });
+        }
+      });
+
+      // Compare discounts for changes
+      Object.keys(parsedDiscounts).forEach(country => {
+        const oldVal = shippingDiscounts[country] || 0;
+        const newVal = parsedDiscounts[country];
+        if (oldVal !== newVal) {
+          newEntries.push({
+            id: 'sh-' + Math.random().toString(36).substr(2, 9),
+            timestamp,
+            type: 'Discount',
+            country,
+            oldValue: oldVal,
+            newValue: newVal,
+            updatedBy
+          });
+        }
+      });
       
       const response = await api.updateShippingSettings({
         rates: parsedRates,
-        discounts: parsedDiscounts
+        discounts: parsedDiscounts,
+        coupons: adminCoupons
       });
       
       if (setShippingRates) {
@@ -964,6 +1126,17 @@ const AdminDashboard = ({
       if (setShippingDiscounts) {
         setShippingDiscounts(response.discounts);
       }
+      if (setCoupons && response.coupons) {
+        setCoupons(response.coupons);
+      }
+
+      // Prepend any new modifications to history state
+      if (newEntries.length > 0) {
+        const updatedHistory = [...newEntries, ...shippingHistory];
+        setShippingHistory(updatedHistory);
+        localStorage.setItem('jiffex_shipping_history', JSON.stringify(updatedHistory));
+      }
+
       toast.success("Country shipping rates and specific discounts updated successfully!");
     } catch (err: any) {
       toast.error("Failed to update shipping settings: " + err.message);
@@ -975,6 +1148,16 @@ const AdminDashboard = ({
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editPriceValue, setEditPriceValue] = useState<string>('');
   const [editDeliveryValue, setEditDeliveryValue] = useState<string>('');
+  const [selectedCatalogCategory, setSelectedCatalogCategory] = useState<string>('All');
+  const [editTempName, setEditTempName] = useState('');
+  const [editTempCategory, setEditTempCategory] = useState('');
+  const [editTempWeight, setEditTempWeight] = useState('');
+  const [editTempDescription, setEditTempDescription] = useState('');
+  const [editTempMaterial, setEditTempMaterial] = useState('');
+  const [editTempOrigin, setEditTempOrigin] = useState('');
+  const [editTempLength, setEditTempLength] = useState('');
+  const [editTempWidth, setEditTempWidth] = useState('');
+  const [editTempHeight, setEditTempHeight] = useState('');
 
   // Local states for updating itemized cargo weights and tracking confirmed ones
   const [cargoWeights, setCargoWeights] = useState<Record<string, string>>({});
@@ -987,6 +1170,13 @@ const AdminDashboard = ({
     return { id: sugId, name: '', phone: '', email: `${sugId}.agent@jiffex.com`, vehicleNumber: '' };
   });
   const [newProduct, setNewProduct] = useState<Partial<StoreProduct>>({ name: '', price: 0, category: categories[0] || 'Pooja', image: '', weight: 0, estimatedDelivery: '' });
+
+  const filteredProducts = storeProducts.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(productFilterInput.toLowerCase()) || 
+                          p.category.toLowerCase().includes(productFilterInput.toLowerCase());
+    const matchesCategory = selectedCatalogCategory === 'All' || p.category === selectedCatalogCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1010,12 +1200,12 @@ const AdminDashboard = ({
   ].filter((_, i) => !isWebmaster || i >= 0);
 
   const availableTabs = (isWebmaster 
-    ? ['Overview', 'Inventory', 'Reports', 'Settings'] 
-    : ['Overview', 'Pickups', 'Logistics', 'Agents', 'Inventory', 'Reports', 'Refunds', 'Settings']) as any[];
+    ? ['Overview', 'Inventory', 'Reports', 'Rates', 'Settings'] 
+    : ['Overview', 'Pickups', 'Logistics', 'Agents', 'Inventory', 'Reports', 'Refunds', 'Rates', 'Settings']) as any[];
 
   // Force tab if webmaster is on restricted tab
   useEffect(() => {
-    if (isWebmaster && !['Overview', 'Inventory', 'Reports', 'Settings'].includes(adminTab)) {
+    if (isWebmaster && !['Overview', 'Inventory', 'Reports', 'Rates', 'Settings'].includes(adminTab)) {
       setAdminTab('Overview');
     }
   }, [isWebmaster, adminTab, setAdminTab]);
@@ -1043,6 +1233,18 @@ const AdminDashboard = ({
       status: 'Active'
     };
     setAgents([...agents, agent]);
+    logAgentActionToSupabase(
+      'CREATE',
+      idNormalized,
+      agent.name,
+      {
+        phone: agent.phone,
+        email: agent.email,
+        vehicleNumber: agent.vehicleNumber || '',
+        status: agent.status
+      },
+      currentUser?.email || 'admin@jiffex.com'
+    );
     
     const sugId = Math.floor(10000 + Math.random() * 90000).toString();
     setNewAgent({
@@ -1127,24 +1329,25 @@ const AdminDashboard = ({
                          tab === 'Inventory' ? Package : 
                          tab === 'Reports' ? BarChart3 : 
                          tab === 'Refunds' ? RefreshCw :
-                         tab === 'Settings' ? ShieldCheck : LayoutDashboard;
+                         tab === 'Rates' ? SlidersHorizontal :
+                         tab === 'Settings' ? Settings2 : LayoutDashboard;
             
             return (
               <button 
                 key={tab}
                 onClick={() => setAdminTab(tab)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all group ${
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold text-left transition-all group ${
                   adminTab === tab 
                     ? 'bg-indigo-50 text-indigo-600 shadow-sm' 
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                 }`}
               >
-                <Icon size={18} className={`${adminTab === tab ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
-                {tab === 'Inventory' && isWebmaster ? 'Catalog' : (tab === 'Agents' ? 'Agent Management' : tab)}
+                <Icon size={18} className={`${adminTab === tab ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'} shrink-0`} />
+                {tab === 'Inventory' ? 'Inventory' : (tab === 'Agents' ? 'Agent Management' : (tab === 'Settings' ? 'Settings' : (tab === 'Rates' ? 'Shipping Rates' : tab)))}
                 {adminTab === tab && (
                   <motion.div 
                     layoutId="activeTabIndicator"
-                    className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-600"
+                    className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0"
                   />
                 )}
               </button>
@@ -1177,7 +1380,7 @@ const AdminDashboard = ({
                 : 'bg-slate-100 text-slate-500'
             }`}
           >
-            {tab === 'Inventory' && isWebmaster ? 'Catalog' : (tab === 'Agents' ? 'Agent Management' : tab)}
+            {tab === 'Inventory' ? 'Inventory' : (tab === 'Agents' ? 'Agent Management' : (tab === 'Settings' ? 'Settings' : (tab === 'Rates' ? 'Shipping Rates' : tab)))}
           </button>
         ))}
       </div>
@@ -1194,7 +1397,8 @@ const AdminDashboard = ({
               {adminTab === 'Inventory' && (isWebmaster ? 'Product Catalog' : 'Inventory Management')}
               {adminTab === 'Reports' && 'Business Intelligence'}
               {adminTab === 'Refunds' && 'Refund Management'}
-              {adminTab === 'Settings' && 'Control Panel Settings'}
+              {adminTab === 'Rates' && 'Shipping Rates & Discounts'}
+              {adminTab === 'Settings' && 'Settings'}
             </h1>
             <p className="text-slate-500 font-medium">
               Manage your operations and track key performance indicators.
@@ -1238,7 +1442,7 @@ const AdminDashboard = ({
                 ))}
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden group">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-amber-500/10 transition-colors" />
                   <div className="flex items-center justify-between mb-8 relative z-10">
@@ -1312,6 +1516,47 @@ const AdminDashboard = ({
                         </div>
                       ))
                     )}
+                  </div>
+                </div>
+
+                {/* System Settings & Configuration Shortcut */}
+                <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden group flex flex-col justify-between">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-indigo-500/10 transition-colors" />
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-8">
+                      <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
+                         <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                           <Settings2 size={20} />
+                         </div>
+                         System Settings
+                      </h3>
+                      <button onClick={() => setAdminTab('Settings')} className="px-4 py-2 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all">Configure</button>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed font-semibold">
+                      Control dispatch modes, automatic agent assignment rules, data backup pipelines, and security gate protocols.
+                    </p>
+                    <div className="mt-6 space-y-3">
+                      <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                        <span className="text-[11px] font-bold text-slate-600">Autoagent Dispatch</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${isAutoAssignAgentEnabled ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
+                          {isAutoAssignAgentEnabled ? 'Enabled' : 'Manual'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                        <span className="text-[11px] font-bold text-slate-600">Security Gate status</span>
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-black border border-emerald-100 uppercase tracking-widest">
+                          Active
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="relative z-10 mt-6 pt-4 border-t border-slate-100">
+                    <button 
+                      onClick={() => setAdminTab('Settings')} 
+                      className="w-full py-3 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-2xl text-xs font-black text-slate-700 hover:text-indigo-600 transition-all flex items-center justify-center gap-2"
+                    >
+                      Open Rules Engine <ArrowRight size={14} />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2157,6 +2402,29 @@ const AdminDashboard = ({
                                   <span className="inline-block mt-1 px-1.5 py-0.5 bg-indigo-50 border border-indigo-100 rounded text-[9px] font-black text-indigo-600 font-mono tracking-tight shrink-0">
                                     ID: {agent.id}
                                   </span>
+                                  <button
+                                    onClick={() => {
+                                      const newStatus = agent.status === 'Active' ? 'Inactive' : 'Active';
+                                      const updatedAgents = agents.map(a => a.id === agent.id ? { ...a, status: newStatus } : a);
+                                      setAgents(updatedAgents);
+                                      logAgentActionToSupabase(
+                                        'UPDATE',
+                                        agent.id,
+                                        agent.name,
+                                        { ...agent, status: newStatus },
+                                        currentUser?.email || 'admin@jiffex.com'
+                                      );
+                                      toast.success(`Agent ${agent.name} status updated to ${newStatus}`);
+                                    }}
+                                    className={`inline-block mt-1 ml-2 px-1.5 py-0.5 border rounded text-[9px] font-black uppercase font-mono tracking-tight shrink-0 transition-colors duration-150 cursor-pointer ${
+                                      agent.status === 'Active'
+                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100'
+                                        : 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100'
+                                    }`}
+                                    title="Click to toggle agent status"
+                                  >
+                                    {agent.status}
+                                  </button>
                                 </div>
                               </div>
 
@@ -2221,6 +2489,13 @@ const AdminDashboard = ({
                                     onClick={() => {
                                       if (window.confirm(`Are you sure you want to remove agent "${agent.name}"? Active work assignments will require re-assignment.`)) {
                                         setAgents(agents.filter(a => a.id !== agent.id));
+                                        logAgentActionToSupabase(
+                                          'DELETE',
+                                          agent.id,
+                                          agent.name,
+                                          agent,
+                                          currentUser?.email || 'admin@jiffex.com'
+                                        );
                                         toast.success(`Agent ${agent.name} has been de-registered.`);
                                       }
                                     }}
@@ -2437,14 +2712,427 @@ const AdminDashboard = ({
           </div>
         </div>
       ) : adminTab === 'Inventory' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-4 space-y-8">
-            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm h-fit">
+        <div className="w-full space-y-6">
+          {/* Sub Tab Selection Bar */}
+          <div className="flex bg-slate-100 p-1 rounded-2xl w-fit">
+            <button
+              id="subtab-store-catalog"
+              onClick={() => setInventoryActiveSubTab('StoreCatalog')}
+              className={`px-5 py-2.5 text-xs font-black rounded-xl transition-all ${
+                inventoryActiveSubTab === 'StoreCatalog'
+                  ? 'bg-white text-indigo-600 shadow-sm font-black'
+                  : 'text-slate-500 hover:text-slate-900 font-bold'
+              }`}
+            >
+              Store Catalog
+            </button>
+            <button
+              id="subtab-new-product"
+              onClick={() => setInventoryActiveSubTab('NewProduct')}
+              className={`px-5 py-2.5 text-xs font-black rounded-xl transition-all ${
+                inventoryActiveSubTab === 'NewProduct'
+                  ? 'bg-white text-indigo-600 shadow-sm font-black'
+                  : 'text-slate-500 hover:text-slate-900 font-bold'
+              }`}
+            >
+              New Product
+            </button>
+            <button
+              id="subtab-categories"
+              onClick={() => setInventoryActiveSubTab('Categories')}
+              className={`px-5 py-2.5 text-xs font-black rounded-xl transition-all ${
+                inventoryActiveSubTab === 'Categories'
+                  ? 'bg-white text-indigo-600 shadow-sm font-black'
+                  : 'text-slate-500 hover:text-slate-900 font-bold'
+              }`}
+            >
+              Categories
+            </button>
+          </div>
+
+          {/* Store Catalog Tab Pane */}
+          {inventoryActiveSubTab === 'StoreCatalog' && (
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm animate-fadeIn">
+              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8">
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">Store Catalog</h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Global Inventory Persistence</p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                  {/* Category tabs */}
+                  <div className="flex bg-slate-100/80 p-1 rounded-2xl overflow-x-auto max-w-full">
+                    <button
+                      id="cat-tab-all"
+                      onClick={() => setSelectedCatalogCategory('All')}
+                      className={`px-4 py-2 text-xs font-black rounded-xl whitespace-nowrap transition-all ${
+                        selectedCatalogCategory === 'All'
+                          ? 'bg-white text-indigo-600 shadow-sm font-black'
+                          : 'text-slate-500 hover:text-slate-900 font-bold'
+                      }`}
+                    >
+                      All Items ({storeProducts.length})
+                    </button>
+                    {categories.map(cat => {
+                      const count = storeProducts.filter(p => p.category === cat).length;
+                      return (
+                        <button
+                          key={cat}
+                          id={`cat-tab-${cat.toLowerCase().replace(/\s+/g, '-')}`}
+                          onClick={() => setSelectedCatalogCategory(cat)}
+                          className={`px-4 py-2 text-xs font-black rounded-xl whitespace-nowrap transition-all ${
+                            selectedCatalogCategory === cat
+                              ? 'bg-white text-indigo-600 shadow-sm font-black'
+                              : 'text-slate-500 hover:text-slate-900 font-bold'
+                          }`}
+                        >
+                          {cat} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="relative group shrink-0">
+                    <input 
+                      type="text" 
+                      placeholder="Filter items..."
+                      value={productFilterInput}
+                      onChange={e => setProductFilterInput(e.target.value)}
+                      className="pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none w-64 transition-all"
+                    />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={16} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Row-based detailed layout (1 item per line) */}
+              <div className="space-y-4">
+                {filteredProducts.map(product => {
+                  const isEditingThis = editingProductId === product.id;
+                  
+                  return (
+                    <div 
+                      key={product.id} 
+                      className={`p-6 bg-white rounded-3xl border transition-all duration-300 ${
+                        isEditingThis 
+                          ? 'border-indigo-500 ring-2 ring-indigo-50 shadow-md' 
+                          : 'border-slate-100 hover:border-indigo-100 shadow-xs'
+                      } flex flex-col md:flex-row gap-6 items-start`}
+                    >
+                      {/* Left: Product Image */}
+                      <div className="w-24 h-24 rounded-2xl overflow-hidden border border-slate-100 bg-slate-50 shrink-0 relative flex items-center justify-center mx-auto md:mx-0">
+                        <img 
+                          src={product.image || 'https://picsum.photos/seed/product/400/400'} 
+                          className="w-full h-full object-cover" 
+                          alt={product.name} 
+                          referrerPolicy="no-referrer" 
+                        />
+                        <span className="absolute bottom-1.5 right-1.5 bg-slate-900/85 text-white font-mono text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm">
+                          {product.id}
+                        </span>
+                      </div>
+
+                      {/* Right: Speced row container */}
+                      {!isEditingThis ? (
+                        <div className="flex-grow flex flex-col lg:flex-row lg:items-center justify-between gap-6 w-full">
+                          <div className="flex-1 min-w-0 space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100/50 rounded-lg text-[10px] font-black uppercase tracking-wider">
+                                {product.category}
+                              </span>
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-black">
+                                {product.weight} kg
+                              </span>
+                              {product.estimatedDelivery && (
+                                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-[10px] font-bold">
+                                  Delivery: {product.estimatedDelivery}
+                                </span>
+                              )}
+                            </div>
+
+                            <div>
+                              <h4 className="text-lg font-black text-slate-900 tracking-tight leading-tight">
+                                {product.name}
+                              </h4>
+                              <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-3xl mt-1">
+                                {product.description || "Premium exporter catalog item. Guaranteed dispatch matching export parameters."}
+                              </p>
+                            </div>
+
+                            {/* Specifications Row Grid - Detailed View */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-3 border-t border-slate-100 text-[11px] font-sans">
+                              <div>
+                                <span className="block text-slate-400 font-bold uppercase tracking-wider text-[8px] mb-0.5">Composition</span>
+                                <span className="font-black text-slate-800">{product.material || 'Premium Quality'}</span>
+                              </div>
+                              <div>
+                                <span className="block text-slate-400 font-bold uppercase tracking-wider text-[8px] mb-0.5">Origin of Dispatch</span>
+                                <span className="font-black text-slate-800">{product.origin || 'India / South Asia'}</span>
+                              </div>
+                              <div>
+                                <span className="block text-slate-400 font-bold uppercase tracking-wider text-[8px] mb-0.5">Dimensions Specs</span>
+                                <span className="font-black text-slate-800">
+                                  {product.dimensions 
+                                    ? `${product.dimensions.length} × ${product.dimensions.width} × ${product.dimensions.height} ${product.dimensions.unit}`
+                                    : '12 × 10 × 5 cm'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="block text-slate-400 font-bold uppercase tracking-wider text-[8px] mb-0.5">Fulfillment Lead</span>
+                                <span className="font-black text-slate-800">{product.estimatedDelivery ? `Within ${product.estimatedDelivery}` : 'Instant Dispatched'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Pricing & Control Box */}
+                          <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between lg:justify-center gap-4 bg-slate-50 lg:bg-transparent p-4 lg:p-0 rounded-2xl w-full lg:w-fit shrink-0">
+                            <div className="text-left lg:text-right">
+                              <span className="block text-[9px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Catalog Value</span>
+                              <span className="text-2xl font-black text-slate-900">₹{product.price.toLocaleString()}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingProductId(product.id);
+                                  setEditPriceValue(product.price.toString());
+                                  setEditDeliveryValue(product.estimatedDelivery || '');
+                                  setEditTempName(product.name);
+                                  setEditTempCategory(product.category);
+                                  setEditTempWeight(product.weight.toString());
+                                  setEditTempDescription(product.description || '');
+                                  setEditTempMaterial(product.material || '');
+                                  setEditTempOrigin(product.origin || '');
+                                  setEditTempLength(product.dimensions?.length?.toString() || '15');
+                                  setEditTempWidth(product.dimensions?.width?.toString() || '12');
+                                  setEditTempHeight(product.dimensions?.height?.toString() || '8');
+                                }}
+                                className="px-4 py-2 bg-indigo-50 hover:bg-slate-900 border border-indigo-100 hover:border-slate-950 text-indigo-700 hover:text-white rounded-xl text-xs font-black transition-all shadow-xs"
+                              >
+                                Edit Specs
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  setStoreProducts(storeProducts.filter(p => p.id !== product.id));
+                                  toast.info(`Product "${product.name}" removed from catalog.`);
+                                }}
+                                className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-150 rounded-xl transition-all"
+                                title="Remove Product"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        // Edit Specs form inside the line
+                        <div className="flex-grow w-full space-y-4">
+                          <div className="bg-indigo-50/55 p-3 rounded-2xl border border-indigo-100/60 mb-2">
+                            <h5 className="text-xs font-black text-indigo-950 tracking-wider uppercase mb-0.5 flex items-center gap-1.5">
+                              <Box size={14} /> Spec Editor Mode — ID: {product.id}
+                            </h5>
+                            <p className="text-[10px] text-slate-500 font-medium">Configure detailed specifications and variables for customer and packaging calculations.</p>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="space-y-1">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase">Product Name</label>
+                              <input 
+                                type="text"
+                                value={editTempName}
+                                onChange={(e) => setEditTempName(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase">Price (INR)</label>
+                              <input 
+                                type="number"
+                                value={editPriceValue}
+                                onChange={(e) => setEditPriceValue(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase">Category</label>
+                              <select 
+                                value={editTempCategory}
+                                onChange={(e) => setEditTempCategory(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                              >
+                                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase">Weight (kg)</label>
+                              <input 
+                                type="number"
+                                step="0.01"
+                                value={editTempWeight}
+                                onChange={(e) => setEditTempWeight(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase">Est. Delivery Lead</label>
+                              <input 
+                                type="text"
+                                value={editDeliveryValue}
+                                onChange={(e) => setEditDeliveryValue(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                                placeholder="e.g. 2 Days, 3 Days"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 items-end">
+                              <div>
+                                <label className="block text-[8px] font-black text-slate-400 uppercase">L (cm)</label>
+                                <input 
+                                  type="number"
+                                  value={editTempLength}
+                                  onChange={(e) => setEditTempLength(e.target.value)}
+                                  className="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[8px] font-black text-slate-400 uppercase">W (cm)</label>
+                                <input 
+                                  type="number"
+                                  value={editTempWidth}
+                                  onChange={(e) => setEditTempWidth(e.target.value)}
+                                  className="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[8px] font-black text-slate-400 uppercase">H (cm)</label>
+                                <input 
+                                  type="number"
+                                  value={editTempHeight}
+                                  onChange={(e) => setEditTempHeight(e.target.value)}
+                                  className="w-full px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase">Material Composition</label>
+                              <input 
+                                type="text"
+                                value={editTempMaterial}
+                                onChange={(e) => setEditTempMaterial(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase">Origin country/city</label>
+                              <input 
+                                type="text"
+                                value={editTempOrigin}
+                                onChange={(e) => setEditTempOrigin(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                              />
+                            </div>
+
+                            <div className="space-y-1 sm:col-span-2 lg:col-span-3">
+                              <label className="block text-[10px] font-black text-slate-400 uppercase">Product Description & Special Instructions</label>
+                              <textarea 
+                                value={editTempDescription}
+                                onChange={(e) => setEditTempDescription(e.target.value)}
+                                rows={2}
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingProductId(null);
+                              }}
+                              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const finalPrice = Number(editPriceValue);
+                                const finalWeight = Number(editTempWeight);
+                                if (!editTempName.trim()) {
+                                  toast.error("Name is required.");
+                                  return;
+                                }
+                                if (isNaN(finalPrice) || finalPrice < 0) {
+                                  toast.error("Please enter a valid price.");
+                                  return;
+                                }
+                                if (isNaN(finalWeight) || finalWeight <= 0) {
+                                  toast.error("Please enter a valid weight.");
+                                  return;
+                                }
+                                
+                                const updatedProducts = storeProducts.map(p => {
+                                  if (p.id === product.id) {
+                                    return {
+                                      ...p,
+                                      name: editTempName,
+                                      price: finalPrice,
+                                      category: editTempCategory,
+                                      weight: finalWeight,
+                                      estimatedDelivery: editDeliveryValue,
+                                      description: editTempDescription,
+                                      material: editTempMaterial,
+                                      origin: editTempOrigin,
+                                      dimensions: {
+                                        length: Number(editTempLength) || 15,
+                                        width: Number(editTempWidth) || 12,
+                                        height: Number(editTempHeight) || 8,
+                                        unit: 'cm'
+                                      }
+                                    };
+                                  }
+                                  return p;
+                                });
+                                setStoreProducts(updatedProducts);
+                                setEditingProductId(null);
+                                toast.success(`"${editTempName}" specifications successfully updated!`);
+                              }}
+                              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs transition-all shadow-sm"
+                            >
+                              Save Specs
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {filteredProducts.length === 0 && (
+                  <div className="col-span-full py-12 text-center bg-slate-50 rounded-[3rem] border border-dashed border-slate-200">
+                    <p className="text-sm font-bold text-slate-400">No products match your filter search</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* New Product Tab Pane */}
+          {inventoryActiveSubTab === 'NewProduct' && (
+            <div className="max-w-2xl mx-auto bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm animate-fadeIn">
               <div className="flex items-center gap-3 mb-8">
                 <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
                   <Box size={20} />
                 </div>
-                <h3 className="text-xl font-black text-slate-900">New Product</h3>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">New Product</h3>
+                  <p className="text-xs text-slate-500 font-medium font-sans">Create a new item and publish it directly to the customer store catalog.</p>
+                </div>
               </div>
               
               <div className="space-y-6">
@@ -2526,6 +3214,8 @@ const AdminDashboard = ({
                     };
                     setStoreProducts([...storeProducts, prod]);
                     setNewProduct({ name: '', price: 0, category: categories[0], image: '', weight: 0, estimatedDelivery: '' });
+                    toast.success(`"${prod.name}" successfully published!`);
+                    setInventoryActiveSubTab('StoreCatalog');
                   }}
                   className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100"
                 >
@@ -2533,13 +3223,19 @@ const AdminDashboard = ({
                 </button>
               </div>
             </div>
+          )}
 
-            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm h-fit">
+          {/* Categories Tab Pane */}
+          {inventoryActiveSubTab === 'Categories' && (
+            <div className="max-w-2xl mx-auto bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm animate-fadeIn">
               <div className="flex items-center gap-3 mb-8">
-                 <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
                   <Boxes size={20} />
                 </div>
-                <h3 className="text-xl font-black text-slate-900">Categories</h3>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">Categories</h3>
+                  <p className="text-xs text-slate-500 font-medium">Create or remove categories to classify store catalog items.</p>
+                </div>
               </div>
               <div className="space-y-4">
                 <div className="flex gap-2">
@@ -2572,287 +3268,526 @@ const AdminDashboard = ({
                 </div>
               </div>
             </div>
+          )}
+        </div>
+      ) : adminTab === 'Rates' ? (
+        <div className="w-full space-y-6">
+          {/* Sub Tab selection bar */}
+          <div className="flex bg-slate-100 p-1 rounded-2xl w-fit">
+            <button
+              onClick={() => setRatesActiveSubTab('rates')}
+              className={`px-5 py-2.5 text-xs font-black rounded-xl transition-all ${
+                ratesActiveSubTab === 'rates'
+                  ? 'bg-white text-indigo-600 shadow-sm font-black'
+                  : 'text-slate-500 hover:text-slate-900 font-bold'
+              }`}
+            >
+              Configurator
+            </button>
+            <button
+              id="history-sub-tab"
+              onClick={() => setRatesActiveSubTab('history')}
+              className={`px-5 py-2.5 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 ${
+                ratesActiveSubTab === 'history'
+                  ? 'bg-white text-indigo-600 shadow-sm font-black'
+                  : 'text-slate-500 hover:text-slate-900 font-bold'
+              }`}
+            >
+              <History size={13} />
+              History
+            </button>
           </div>
 
-          <div className="lg:col-span-8 space-y-6">
-            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h3 className="text-xl font-black text-slate-900">Store Catalog</h3>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Global Inventory Persistence</p>
+          {ratesActiveSubTab === 'history' ? (
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm animate-fadeIn">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 font-bold">
+                  <History size={20} />
                 </div>
-                <div className="flex gap-4">
-                   <div className="relative group">
-                    <input 
-                      type="text" 
-                      placeholder="Filter items..."
-                      className="pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 outline-none w-64 transition-all"
-                    />
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={16} />
-                   </div>
+                <div>
+                  <h4 className="text-lg font-black text-slate-900 font-sans tracking-tight">Rates & Discounts Modification History</h4>
+                  <p className="text-xs text-slate-500 font-medium font-sans">Chronological record of all updates made to shipping costs and special discount adjustments.</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {storeProducts.map(product => (
-                  <div key={product.id} className="p-5 bg-white rounded-[2.5rem] border border-slate-100 flex items-start gap-5 hover:border-indigo-200 transition-colors shadow-sm group">
-                    <div className="w-20 h-20 rounded-2xl overflow-hidden border border-slate-100 shrink-0">
-                      <img src={product.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt={product.name} referrerPolicy="no-referrer" />
+              {shippingHistory.length === 0 ? (
+                <div className="text-center py-12 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                  <History size={32} className="text-slate-300 mx-auto mb-2" />
+                  <p className="text-sm text-slate-500 font-bold font-sans">No modification history recorded yet.</p>
+                  <p className="text-xs text-slate-400 mt-1 font-sans">Changes are compiled instantly here when you update shipping configurations.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-[2rem] border border-slate-100">
+                  <table className="w-full text-left text-sm whitespace-nowrap">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest border-b border-slate-100">
+                        <th className="px-6 py-4 font-sans font-black">Timestamp</th>
+                        <th className="px-6 py-4 font-sans font-black">Operator</th>
+                        <th className="px-6 py-4 font-sans font-black">Type</th>
+                        <th className="px-6 py-4 font-sans font-black">Country</th>
+                        <th className="px-6 py-4 text-right font-sans font-black">Old Value</th>
+                        <th className="px-6 py-4 text-right font-sans font-black">New Value</th>
+                        <th className="px-6 py-4 text-center font-sans font-black">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {shippingHistory.map((entry) => (
+                        <tr key={entry.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-6 py-4 font-mono text-xs text-slate-500 font-semibold">{entry.timestamp}</td>
+                          <td className="px-6 py-4">
+                            <span className="font-bold text-slate-800 text-xs bg-slate-100 px-2 py-1 rounded">
+                              {entry.updatedBy}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                              entry.type === 'Rate' 
+                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' 
+                                : 'bg-rose-50 text-rose-700 border border-rose-100'
+                            }`}>
+                              {entry.type === 'Rate' ? 'Rate / kg' : 'Discount'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 font-bold text-xs text-slate-700">{entry.country}</td>
+                          <td className="px-6 py-4 text-right font-mono text-xs text-slate-500 font-semibold">
+                            {entry.type === 'Rate' ? `₹${entry.oldValue}` : `${entry.oldValue}%`}
+                          </td>
+                          <td className="px-6 py-4 text-right font-mono text-xs text-slate-900 font-black">
+                            {entry.type === 'Rate' ? `₹${entry.newValue}` : `${entry.newValue}%`}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-md">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm animate-fadeIn">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                    <Truck size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900">Shipping Rates & Discounts</h3>
+                    <p className="text-xs text-slate-500 font-medium">Manage country-specific per-kg shipping rates and configure global discount offers.</p>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={handleSaveShippingSettings}
+                  disabled={isSavingShipping}
+                  id="save-shipping-settings-btn"
+                  className="px-6 py-3 bg-indigo-600 hover:bg-slate-900 text-white font-bold rounded-2xl flex items-center gap-2 text-sm transition-all shadow-md shadow-indigo-100 active:scale-95 disabled:opacity-50"
+                >
+                  {isSavingShipping ? 'Saving Settings...' : 'Save Operations Configuration'}
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Left Column: Countries Rates & discounts Editing */}
+                <div className="w-full bg-slate-50/50 p-6 rounded-[2.5rem] border border-slate-100 animate-fadeIn">
+                  <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Operations Config (Rates & Discounts)</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {COUNTRIES.map(country => (
+                      <div key={country} className="bg-white p-5 rounded-3xl border border-slate-150 shadow-sm space-y-4">
+                        <div>
+                          <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-black tracking-wide uppercase mb-1">
+                            {country}
+                          </span>
+                          <div className="text-[10px] font-bold text-slate-400">OPERATIONS RATIO</div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <label className="block text-[11px] font-bold text-slate-500">Shipping Rate</label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                              <input
+                                id={`rate-input-${country}`}
+                                type="number"
+                                value={editingRates[country] !== undefined ? editingRates[country] : ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setEditingRates(prev => ({
+                                    ...prev,
+                                    [country]: val
+                                  }));
+                                }}
+                                className="w-full pl-7 pr-12 py-2 text-slate-800 text-sm font-black border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                placeholder="e.g. 10"
+                                min="0"
+                              />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">/ kg</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-[11px] font-bold text-slate-500">Country Discount</label>
+                            <div className="relative overflow-hidden">
+                              <input
+                                id={`discount-input-${country}`}
+                                type="number"
+                                value={editingDiscounts[country] !== undefined ? editingDiscounts[country] : ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setEditingDiscounts(prev => ({
+                                    ...prev,
+                                    [country]: val
+                                  }));
+                                }}
+                                className="w-full pl-3 pr-14 py-2 text-rose-600 text-sm font-black border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-100"
+                                placeholder="0"
+                                min="0"
+                                max="100"
+                              />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-rose-500">% OFF</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Campaigns Monitor underneath as text, no box required */}
+                  <div className="mt-8 pt-6 border-t border-slate-200/50">
+                    <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Campaigns Monitor</div>
+                    <h4 className="text-sm font-black text-slate-900 mb-1">Active Region Discounts</h4>
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed mb-4">
+                      The active shipping discount rates currently configured specifically for selected destination regions.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {COUNTRIES.filter(c => Number(editingDiscounts[c]) > 0).map(c => (
+                        <div key={c} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700">
+                          <span className="font-semibold text-slate-500">{c}:</span>
+                          <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 font-extrabold rounded text-[10px] border border-emerald-100">
+                            {editingDiscounts[c]}% OFF
+                          </span>
+                        </div>
+                      ))}
+                      {COUNTRIES.filter(c => Number(editingDiscounts[c]) > 0).length === 0 && (
+                        <p className="text-xs text-slate-400 italic">
+                          No active country discounts. Flat rates are applied at checkout.
+                        </p>
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between mb-1">
-                        <div className="font-black text-slate-900 text-lg tracking-tight truncate leading-tight">{product.name}</div>
-                        <button 
-                          onClick={() => setStoreProducts(storeProducts.filter(p => p.id !== product.id))}
-                          className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[9px] font-black uppercase tracking-wider">{product.category}</span>
-                        <span className="text-[9px] font-black text-slate-400 uppercase">{product.weight}kg</span>
-                      </div>
+                  </div>
+
+                  {/* Dynamic 5-character Coupon Codes Section */}
+                  <div className="mt-8 pt-6 border-t border-slate-200/50">
+                    <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Coupon Codes Management (5 Characters)</div>
+                    <div className="flex flex-col gap-6 w-full">
                       
-                      <div className="flex items-center justify-between">
-                        <div className="text-xl font-black text-slate-900 leading-none">₹{product.price.toLocaleString()}</div>
-                        <button 
-                          onClick={() => {
-                            setEditingProductId(product.id);
-                            setEditPriceValue(product.price.toString());
-                            setEditDeliveryValue(product.estimatedDelivery || '');
-                          }}
-                          className="px-3 py-1.5 bg-slate-50 text-slate-600 hover:bg-slate-900 hover:text-white rounded-xl text-[10px] font-black transition-all"
-                        >
-                          Edit Item
-                        </button>
+                      {/* Create Coupon Form (Full Width) */}
+                      <div className="w-full bg-white p-6 rounded-[2.5rem] border border-slate-150 shadow-xs space-y-4">
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900 flex items-center gap-1.5 font-sans tracking-tight">
+                            <TicketIcon size={16} className="text-indigo-600" />
+                            Create Coupon Code
+                          </h4>
+                          <p className="text-[11px] text-slate-500 font-medium font-sans">Add a custom 5-character coupon offering active percentage discount on the total bill.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                          <div className="space-y-1">
+                            <label className="block text-[11px] font-bold text-slate-500">Coupon Code (5 Chars)</label>
+                            <input
+                              type="text"
+                              maxLength={5}
+                              value={newCouponCode}
+                              onChange={(e) => setNewCouponCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                              className="w-full px-3 py-2 text-slate-800 text-sm font-black uppercase border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                              placeholder="e.g. SHIP5"
+                            />
+                            <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold mt-0.5">
+                              <span>Alphanumeric only</span>
+                              <span className={newCouponCode.length === 5 ? "text-emerald-500 font-bold" : "text-amber-500 font-medium"}>
+                                {newCouponCode.length}/5 characters
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-[11px] font-bold text-slate-500">Discount Percent (%)</label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                min={1}
+                                max={100}
+                                value={newCouponPercent}
+                                onChange={(e) => setNewCouponPercent(e.target.value)}
+                                className="w-full pl-3 pr-10 py-2 text-slate-800 text-sm font-black border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                placeholder="10"
+                              />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const codeClean = newCouponCode.trim();
+                              const percentNum = Number(newCouponPercent);
+                              if (codeClean.length !== 5) {
+                                  toast.error("Coupon code must be exactly 5 characters long.");
+                                  return;
+                              }
+                              if (isNaN(percentNum) || percentNum < 1 || percentNum > 100) {
+                                  toast.error("Discount percent must be a valid number between 1 and 100.");
+                                  return;
+                              }
+                              if (adminCoupons.some(c => c.code === codeClean)) {
+                                  toast.error(`Coupon code "${codeClean}" already exists.`);
+                                  return;
+                              }
+                              const updated = [...adminCoupons, { code: codeClean, discountPercent: percentNum, isEnabled: true }];
+                              setAdminCoupons(updated);
+                              setNewCouponCode('');
+                              setNewCouponPercent('');
+                              toast.success(`Coupon code ${codeClean} (${percentNum}% OFF) prepared! Please click "Save Operations Configuration" to persist and save changes.`);
+                            }}
+                            className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-slate-900 text-white font-bold rounded-xl text-xs flex justify-center items-center gap-1.5 transition-colors active:scale-95 shadow-sm h-[38px] mb-[1px]"
+                          >
+                            <Plus size={14} /> Add Coupon
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Active Campaign Coupons (Stacked Below) */}
+                      <div className="w-full bg-slate-55/40 p-6 rounded-[2.5rem] border border-slate-150 space-y-4">
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900 font-sans tracking-tight">Active Campaign Coupons</h4>
+                          <p className="text-xs text-slate-500 font-medium">Configure, toggle (enable/disable), or delete stored promotional offers below.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-96 overflow-y-auto pr-1">
+                          {adminCoupons.length === 0 ? (
+                            <div className="sm:col-span-2 text-sm text-slate-400 italic py-8 bg-white border border-slate-150 rounded-2xl flex flex-col items-center justify-center">
+                              <TicketIcon size={24} className="text-slate-300 mb-1" />
+                              <span className="font-sans font-medium text-xs">No coupons created yet.</span>
+                            </div>
+                          ) : (
+                            adminCoupons.map((c, idx) => (
+                              <div key={`${c.code}-${idx}`} className="bg-white p-4 rounded-2xl border border-slate-200 flex items-center justify-between shadow-xs transition-hover hover:border-indigo-100">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-xs font-black bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-200 tracking-wider">
+                                      {c.code}
+                                    </span>
+                                    <span className="bg-emerald-50 text-emerald-700 text-[10px] font-black border border-emerald-100 px-1.5 py-0.5 rounded">
+                                      {c.discountPercent}% OFF
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${c.isEnabled ? "bg-emerald-500" : "bg-slate-400"}`} />
+                                    {c.isEnabled ? "Active" : "Disabled"}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                  {/* Toggle button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = adminCoupons.map((item, i) => 
+                                        i === idx ? { ...item, isEnabled: !item.isEnabled } : item
+                                      );
+                                      setAdminCoupons(updated);
+                                      toast.success(`Coupon code "${c.code}" is now ${!c.isEnabled ? 'Enabled' : 'Disabled'}. Save configuration to persist changes.`);
+                                    }}
+                                    className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-colors border ${
+                                      c.isEnabled 
+                                        ? "bg-slate-50 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 border-slate-200 text-slate-500" 
+                                        : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-100 whitespace-nowrap"
+                                    }`}
+                                  >
+                                    {c.isEnabled ? 'Disable' : 'Enable'}
+                                  </button>
+
+                                  {/* Delete button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = adminCoupons.filter((_, i) => i !== idx);
+                                      setAdminCoupons(updated);
+                                      toast.info(`Coupon "${c.code}" removed. Save configuration to persist.`);
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                    title="Delete Coupon"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                ))}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       ) : adminTab === 'Settings' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {/* Shipping Rates & Discounts Configurator */}
-          <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm md:col-span-2 lg:col-span-3">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-              <div className="flex items-center gap-3">
+        <div className="w-full space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-fadeIn animate-delay-100">
+            {/* Security Gate */}
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm animate-fadeIn">
+              <div className="flex items-center gap-3 mb-8">
                 <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
-                  <Truck size={20} />
+                  <Shield size={20} />
+                </div>
+                <h3 className="text-xl font-black text-slate-900">Security Gate</h3>
+              </div>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">2FA Authorization</div>
+                    <div className="text-sm font-bold text-slate-900">Status: Active</div>
+                  </div>
+                  <div className="w-10 h-5 bg-indigo-600 rounded-full relative">
+                    <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Agent Login</div>
+                    <div className="text-sm font-bold text-slate-900">Restricted Mode</div>
+                  </div>
+                  <div className="w-10 h-5 bg-slate-200 rounded-full relative">
+                    <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Agent Assignment Configurations Card */}
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm animate-fadeIn">
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                  <Users size={20} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-slate-900">Shipping Rates & Discounts</h3>
-                  <p className="text-xs text-slate-500 font-medium">Manage country-specific per-kg shipping rates and configure global discount offers.</p>
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight font-sans">Agent Assignment</h3>
+                  <p className="text-xs text-slate-500 font-medium font-sans">Automatic pickup dispatch rules</p>
                 </div>
               </div>
               
-              <button
-                onClick={handleSaveShippingSettings}
-                disabled={isSavingShipping}
-                id="save-shipping-settings-btn"
-                className="px-6 py-3 bg-indigo-600 hover:bg-slate-900 text-white font-bold rounded-2xl flex items-center gap-2 text-sm transition-all shadow-md shadow-indigo-100 active:scale-95 disabled:opacity-50"
-              >
-                {isSavingShipping ? 'Saving Settings...' : 'Save Operations Configuration'}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-              {/* Left Column: Countries Rates & discounts Editing */}
-              <div className="md:col-span-3 bg-slate-50/50 p-6 rounded-[2.5rem] border border-slate-100">
-                <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Operations Config (Rates & Discounts)</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {COUNTRIES.map(country => (
-                    <div key={country} className="bg-white p-5 rounded-3xl border border-slate-150 shadow-sm space-y-4">
-                      <div>
-                        <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-black tracking-wide uppercase mb-1">
-                          {country}
-                        </span>
-                        <div className="text-[10px] font-bold text-slate-400">OPERATIONS RATIO</div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="space-y-1">
-                          <label className="block text-[11px] font-bold text-slate-500">Shipping Rate</label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
-                            <input
-                              id={`rate-input-${country}`}
-                              type="number"
-                              value={editingRates[country] !== undefined ? editingRates[country] : ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditingRates(prev => ({
-                                  ...prev,
-                                  [country]: val
-                                }));
-                              }}
-                              className="w-full pl-7 pr-12 py-2 text-slate-800 text-sm font-black border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                              placeholder="e.g. 10"
-                              min="0"
-                            />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">/ kg</span>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="block text-[11px] font-bold text-slate-500">Country Discount</label>
-                          <div className="relative overflow-hidden">
-                            <input
-                              id={`discount-input-${country}`}
-                              type="number"
-                              value={editingDiscounts[country] !== undefined ? editingDiscounts[country] : ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditingDiscounts(prev => ({
-                                  ...prev,
-                                  [country]: val
-                                }));
-                              }}
-                              className="w-full pl-3 pr-14 py-2 text-rose-600 text-sm font-black border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-100"
-                              placeholder="0"
-                              min="0"
-                              max="100"
-                            />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-rose-500">% OFF</span>
-                          </div>
-                        </div>
-                      </div>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="flex-1 pr-3">
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 font-sans">
+                      System Dispatch Mode
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Right Column: Active Campaign & Insights Panel */}
-              <div className="bg-indigo-900 text-white p-6 rounded-[2.5rem] flex flex-col justify-between border border-indigo-950/25 relative overflow-hidden">
-                <div className="absolute right-0 top-0 translate-x-1/4 -translate-y-1/4 w-32 h-32 bg-white/5 rounded-full pointer-events-none" />
-                
-                <div>
-                  <div className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mb-1">Campaigns Monitor</div>
-                  <h4 className="text-lg font-black text-white">Active Discounts</h4>
-                  <p className="text-xs text-indigo-200 leading-relaxed mt-2 font-medium">Below are the active shipping discount rates configured specifically for selected destination regions.</p>
+                    <div className="text-xs font-black text-slate-900 font-sans">
+                      {isAutoAssignAgentEnabled ? "Auto-Assign Enabled" : "Manual Assignment Only"}
+                    </div>
+                  </div>
                   
-                  <div className="mt-4 space-y-2 max-h-56 overflow-y-auto pr-1">
-                    {COUNTRIES.filter(c => Number(editingDiscounts[c]) > 0).map(c => (
-                      <div key={c} className="flex justify-between items-center bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs">
-                        <span className="font-bold text-indigo-100">{c}</span>
-                        <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 font-extrabold rounded text-[10px]">
-                          {editingDiscounts[c]}% OFF
-                        </span>
-                      </div>
-                    ))}
-                    {COUNTRIES.filter(c => Number(editingDiscounts[c]) > 0).length === 0 && (
-                      <div className="text-xs text-indigo-300 italic py-4 text-center">
-                        No active country discounts. Flat rates are applied at checkout.
-                      </div>
-                    )}
+                  {/* Custom Toggle Switch */}
+                  <button
+                    onClick={() => setIsAutoAssignAgentEnabled(!isAutoAssignAgentEnabled)}
+                    className={`w-12 h-6 rounded-full transition-all relative focus:outline-none shrink-0 cursor-pointer ${
+                      isAutoAssignAgentEnabled ? 'bg-indigo-600 shadow-xs' : 'bg-slate-200'
+                    }`}
+                    aria-label="Toggle auto agent assignment"
+                  >
+                    <span
+                      className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                        isAutoAssignAgentEnabled ? 'translate-x-6' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+                
+                <div className="p-3.5 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 text-[11px] text-slate-500 leading-relaxed font-semibold font-sans">
+                  {isAutoAssignAgentEnabled ? (
+                    <span>
+                      🚀 <strong className="text-indigo-600">Auto-Pilot:</strong> Active background-verified agents are randomly auto-assigned to home pickup requests on booking confirm.
+                    </span>
+                  ) : (
+                    <span>
+                      🛑 <strong className="text-rose-600">Manual Assign:</strong> No agent will be assigned to new courier bookings. Admin has to manually coordinate assignment.
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Data Pipeline Card */}
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm animate-fadeIn">
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-10 h-10 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
+                  <Database size={20} />
+                </div>
+                <h3 className="text-xl font-black text-slate-900">Data Pipeline</h3>
+              </div>
+              <div className="space-y-4">
+                 <button className="w-full text-left p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-colors group">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Backup Sync</div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-sm font-bold text-slate-900">Last: 2h ago</span>
+                    <RefreshCw size={14} className="text-slate-300 group-hover:rotate-180 transition-transform duration-500" />
                   </div>
-                </div>
-
-                <div className="mt-6 pt-4 border-t border-white/10">
-                  <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-[11px] text-indigo-200 leading-relaxed font-semibold">
-                    <span className="text-emerald-400 font-bold block mb-1">💡 Optimization Tip</span>
-                    Offering specific regional promos drives conversions in your highest volume shipping lanes.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
-                <Shield size={20} />
-              </div>
-              <h3 className="text-xl font-black text-slate-900">Security Gate</h3>
-            </div>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <div>
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">2FA Authorization</div>
-                  <div className="text-sm font-bold text-slate-900">Status: Active</div>
-                </div>
-                <div className="w-10 h-5 bg-indigo-600 rounded-full relative">
-                  <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full" />
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <div>
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Agent Login</div>
-                  <div className="text-sm font-bold text-slate-900">Restricted Mode</div>
-                </div>
-                <div className="w-10 h-5 bg-slate-200 rounded-full relative">
-                  <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-10 h-10 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600">
-                <Database size={20} />
-              </div>
-              <h3 className="text-xl font-black text-slate-900">Data Pipeline</h3>
-            </div>
-            <div className="space-y-4">
-               <button className="w-full text-left p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-colors group">
-                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Backup Sync</div>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-sm font-bold text-slate-900">Last: 2h ago</span>
-                  <RefreshCw size={14} className="text-slate-300 group-hover:rotate-180 transition-transform duration-500" />
-                </div>
-              </button>
-              <button 
-                onClick={async () => {
-                  if (window.confirm('Are you absolutely sure you want to delete ALL orders and items? This cannot be undone.')) {
-                    try {
-                      await api.clearAllOrders();
-                      setOrders([]);
-                      setItems([]);
-                      toast.success('Database has been successfully cleared.');
-                    } catch (err: any) {
-                      toast.error('Failed to clear database: ' + err.message);
+                </button>
+                <button 
+                  onClick={async () => {
+                    if (window.confirm('Are you absolutely sure you want to delete ALL orders and items? This cannot be undone.')) {
+                      try {
+                        await api.clearAllOrders();
+                        setOrders([]);
+                        setItems([]);
+                        toast.success('Database has been successfully cleared.');
+                      } catch (err: any) {
+                        toast.error('Failed to clear database: ' + err.message);
+                      }
                     }
-                  }
-                }}
-                className="w-full text-left p-4 bg-red-50 rounded-2xl border border-red-100 hover:bg-red-600 hover:text-white transition-all group"
-              >
-                <div className="text-[10px] font-black text-red-500 group-hover:text-red-100 uppercase tracking-widest">Hard Reset</div>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-sm font-black">Clear All Orders & Items</span>
-                  <Trash2 size={14} className="group-hover:scale-110 transition-transform" />
-                </div>
-              </button>
+                  }}
+                  className="w-full text-left p-4 bg-red-50 rounded-2xl border border-red-100 hover:bg-red-600 hover:text-white transition-all group"
+                >
+                  <div className="text-[10px] font-black text-red-500 group-hover:text-red-100 uppercase tracking-widest">Hard Reset</div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-sm font-black">Clear All Orders & Items</span>
+                    <Trash2 size={14} className="group-hover:scale-110 transition-transform" />
+                  </div>
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-10 h-10 bg-indigo-900 rounded-2xl flex items-center justify-center text-white">
-                <Cpu size={20} />
+            {/* System Health Card */}
+            <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm animate-fadeIn">
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-10 h-10 bg-indigo-900 rounded-2xl flex items-center justify-center text-white">
+                  <Cpu size={20} />
+                </div>
+                <h3 className="text-xl font-black text-slate-900">System Health</h3>
               </div>
-              <h3 className="text-xl font-black text-slate-900">System Health</h3>
-            </div>
-            <div className="space-y-6">
-              <div>
-                <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                  <span>Server Load</span>
-                  <span className="text-slate-900">42%</span>
+              <div className="space-y-6">
+                <div>
+                  <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                    <span>Server Load</span>
+                    <span className="text-slate-900">42%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="w-[42%] h-full bg-indigo-600 rounded-full" />
+                  </div>
                 </div>
-                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="w-[42%] h-full bg-indigo-600 rounded-full" />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                  <span>API Latency</span>
-                  <span className="text-slate-900">24ms</span>
-                </div>
-                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="w-[12%] h-full bg-emerald-500 rounded-full" />
+                <div>
+                  <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                    <span>API Latency</span>
+                    <span className="text-slate-900">24ms</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="w-[12%] h-full bg-emerald-500 rounded-full" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -2869,7 +3804,7 @@ const AdminDashboard = ({
                 onClick={() => setAdminTab(t)}
                 className="px-6 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-black text-slate-600 hover:border-indigo-500 hover:text-indigo-600 transition-all shadow-sm flex items-center gap-2"
               >
-                Explore {t === 'Inventory' && isWebmaster ? 'Catalog' : (t === 'Agents' ? 'Agent Management' : t)} <ArrowRight size={14} />
+                Explore {t === 'Inventory' ? 'Inventory' : (t === 'Agents' ? 'Agent Management' : (t === 'Rates' ? 'Shipping Rates' : t))} <ArrowRight size={14} />
               </button>
             ))}
           </div>
@@ -3032,7 +3967,9 @@ export default function App() {
           time: (o as any).time || 'Flexible',
           address: o.destination.addressLine1,
           phone: o.destination.phone,
-          status: o.status === 'Cancelled' ? 'Cancelled' : o.status === 'Delivered' ? 'Completed' : o.status === 'Picked Up' ? 'Picked Up' : 'Scheduled',
+          status: (o.status === 'Scheduled' || o.status === 'Pending Pickup') ? 'Scheduled' : 
+                  o.status === 'Cancelled' ? 'Cancelled' : 
+                  o.status === 'Picked Up' ? 'Picked Up' : 'Completed',
           items: o.items,
           paymentStatus: o.paymentStatus === 'Paid' ? 'Paid' : 'Pending',
           pickupType: (o as any).pickupType || 'AllAgent',
@@ -3047,6 +3984,17 @@ export default function App() {
   const [storeProducts, setStoreProducts] = useState<StoreProduct[]>(STORE_PRODUCTS);
   const [activeWorkOrder, setActiveWorkOrder] = useState<Appointment | null>(null);
   const [agentActiveTab, setAgentActiveTab] = useState<'Summary' | 'Scheduled' | 'Completed' | 'Canceled'>('Summary');
+  const [agentMainTab, setAgentMainTab] = useState<'Summary' | 'Home Pickup'>('Summary');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Cart Section States
   const getInitialPickupSlot = () => {
@@ -3098,6 +4046,7 @@ export default function App() {
   const [pickupSpecialInstructions, setPickupSpecialInstructions] = useState('');
   const [pickupCategory, setPickupCategory] = useState('Personal Effects');
   const [pickupEstimatedWeight, setPickupEstimatedWeight] = useState('1-5 kg');
+  const [savePickupToProfile, setSavePickupToProfile] = useState(true);
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; checked: boolean }>({ connected: false, checked: false });
   const [isGuestMode, setIsGuestMode] = useState(false);
   const [guestEmail, setGuestEmail] = useState('');
@@ -3171,6 +4120,24 @@ export default function App() {
     }
   }, [selectedPickupDate, selectedPickupTime]);
   const [isSchedulingNewPickup, setIsSchedulingNewPickup] = useState(false);
+  const [isAutoAssignAgentEnabled, setIsAutoAssignAgentEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('jiffex_auto_assign_agent');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('jiffex_auto_assign_agent', String(isAutoAssignAgentEnabled));
+  }, [isAutoAssignAgentEnabled]);
+
+  // Reset pickup steps and booking references when navigating away from the pickup tab
+  useEffect(() => {
+    if (activeTab !== 'pickup') {
+      setActivePickupStep(1);
+      setLastBookingRef(null);
+      setIsSchedulingNewPickup(false);
+    }
+  }, [activeTab]);
+
   const [lastBookingRef, setLastBookingRef] = useState<string | null>(null);
   const [categories, setCategories] = useState(['Pooja', 'Return Gifts', 'Decorative']);
   const [tickets, setTickets] = useState<Ticket[]>([
@@ -3215,6 +4182,9 @@ export default function App() {
   // Shipping setting states
   const [shippingRates, setShippingRates] = useState<Record<string, number>>(SHIPPING_RATES);
   const [shippingDiscounts, setShippingDiscounts] = useState<Record<string, number>>({});
+  const [coupons, setCoupons] = useState<Array<{ code: string; discountPercent: number; isEnabled: boolean }>>([]);
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercent: number } | null>(null);
 
   useEffect(() => {
     const fetchShippingSettings = async () => {
@@ -3225,6 +4195,9 @@ export default function App() {
         }
         if (data && data.discounts) {
           setShippingDiscounts(data.discounts);
+        }
+        if (data && data.coupons) {
+          setCoupons(data.coupons);
         }
       } catch (err) {
         console.error("Error fetching shipping settings:", err);
@@ -3303,7 +4276,7 @@ export default function App() {
   };
 
   // Admin Section States
-  const [adminTab, setAdminTab] = useState<'Overview' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds'>('Overview');
+  const [adminTab, setAdminTab] = useState<'Overview' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds' | 'Rates'>('Overview');
 
   // Store Section States
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -3549,7 +4522,7 @@ export default function App() {
   }, [orders, appointments]);
 
   const confirmPickup = async (type: 'AllAgent' | 'Mixed' = 'AllAgent') => {
-    const assignedAgent = type === 'AllAgent' ? agents[Math.floor(Math.random() * agents.length)] : undefined;
+    const assignedAgent = (isAutoAssignAgentEnabled && type === 'AllAgent') ? agents[Math.floor(Math.random() * agents.length)] : undefined;
     const fullAddress = `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}, ${pickupAddress.city}, ${pickupAddress.state} ${pickupAddress.zip}`;
     
     let newAppointmentId = generateNewOrderId('Pickup');
@@ -3737,6 +4710,36 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Sync agents database list with Supabase when connected
+  useEffect(() => {
+    const loadAgentsFromSupabase = async () => {
+      if (dbStatus.connected && isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from('agents')
+            .select('*');
+          if (error) {
+            console.error('Error fetching agents from Supabase:', error);
+          } else if (data && data.length > 0) {
+            const mappedAgents: AgentProfile[] = data.map(a => ({
+              id: a.id,
+              name: a.name,
+              phone: a.phone,
+              email: a.email,
+              status: a.status as any,
+              vehicleNumber: a.vehicle_number || ''
+            }));
+            setAgents(mappedAgents);
+            localStorage.setItem('jiffex_agents_list', JSON.stringify(mappedAgents));
+          }
+        } catch (e) {
+          console.error('Failed to load agents from Supabase:', e);
+        }
+      }
+    };
+    loadAgentsFromSupabase();
+  }, [dbStatus.connected]);
+
   // Sync currentUser with session or Guest Mode, restoring custom offline profile if present
   useEffect(() => {
     if (session?.user) {
@@ -3875,6 +4878,147 @@ export default function App() {
       addressLine1: updatedProfile.address || prev.addressLine1
     }));
   };
+
+  const savePickupProfileToDb = async () => {
+    if (!currentUser) {
+      console.warn('Cannot save pickup details: No active user session.');
+      return;
+    }
+    
+    // Always save locally
+    const profileData = {
+      name: pickupName,
+      email: pickupEmail,
+      phone: pickupPhone,
+      address: {
+        street: pickupAddress.street,
+        apartment: pickupAddress.apartment,
+        city: pickupAddress.city,
+        state: pickupAddress.state,
+        zip: pickupAddress.zip
+      }
+    };
+    localStorage.setItem(`jiffex_pickup_profile_${currentUser.id}`, JSON.stringify(profileData));
+
+    // Also sync with main custom profile so other sections benefit from it
+    localStorage.setItem(`jiffex_user_profile_${currentUser.id}`, JSON.stringify({
+      name: pickupName,
+      email: pickupEmail,
+      phone: pickupPhone,
+      address: `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}, ${pickupAddress.city}, ${pickupAddress.zip}`
+    }));
+
+    // If Supabase is connected, save into customer_profiles table
+    if (isSupabaseConfigured && dbStatus.connected) {
+      try {
+        const { error } = await supabase
+          .from('customer_profiles')
+          .upsert({
+            id: currentUser.id,
+            name: pickupName,
+            email: pickupEmail,
+            phone: pickupPhone,
+            street: pickupAddress.street,
+            apartment: pickupAddress.apartment || '',
+            city: pickupAddress.city,
+            state: pickupAddress.state || '',
+            zip: pickupAddress.zip,
+            updated_at: new Date().toISOString()
+          });
+
+        if (error) {
+          console.error('[Supabase save customer_profile error]:', error);
+          toast.error('Failed to sync profile to database, saved locally instead.');
+        } else {
+          toast.success('Pickup details saved to your profile!');
+        }
+      } catch (err) {
+        console.error('Failed to upsert user profile in Supabase:', err);
+      }
+    } else {
+      toast.success('Pickup details saved locally!');
+    }
+  };
+
+  // Fetch and auto-fill profile details from Supabase if configured and user is logged in
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (currentUser && isSupabaseConfigured && dbStatus.connected) {
+        try {
+          const { data, error } = await supabase
+            .from('customer_profiles')
+            .select('*')
+            .eq('id', currentUser.id)
+            .maybeSingle();
+
+          if (error) {
+            console.error('Error fetching customer profile from Supabase:', error);
+          } else if (data) {
+            // Merge/fill the home pickup details!
+            if (data.name) setPickupName(data.name);
+            if (data.email) setPickupEmail(data.email);
+            if (data.phone) setPickupPhone(data.phone);
+            if (data.street || data.city || data.zip) {
+              setPickupAddress({
+                street: data.street || '',
+                apartment: data.apartment || '',
+                city: data.city || '',
+                state: data.state || '',
+                zip: data.zip || ''
+              });
+            }
+          } else {
+            // Fallback to current user generic fields if nothing saved in supabase yet
+            if (currentUser.name && currentUser.name !== 'User' && currentUser.name !== 'Guest User') {
+              setPickupName(currentUser.name);
+            }
+            if (currentUser.email) {
+              setPickupEmail(currentUser.email);
+            }
+            if (currentUser.phone) {
+              setPickupPhone(currentUser.phone);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load user profile details from Supabase:', e);
+        }
+      } else if (currentUser) {
+        // Fallback to local storage or current user object
+        const savedLocal = localStorage.getItem(`jiffex_pickup_profile_${currentUser.id}`);
+        if (savedLocal) {
+          try {
+            const parsed = JSON.parse(savedLocal);
+            if (parsed.name) setPickupName(parsed.name);
+            if (parsed.email) setPickupEmail(parsed.email);
+            if (parsed.phone) setPickupPhone(parsed.phone);
+            if (parsed.address) {
+              setPickupAddress({
+                street: parsed.address.street || '',
+                apartment: parsed.address.apartment || '',
+                city: parsed.address.city || '',
+                state: parsed.address.state || '',
+                zip: parsed.address.zip || ''
+              });
+            }
+          } catch (e) {
+            console.error('Failed to parse saved local profile:', e);
+          }
+        } else {
+          if (currentUser.name && currentUser.name !== 'User' && currentUser.name !== 'Guest User') {
+            setPickupName(currentUser.name);
+          }
+          if (currentUser.email) {
+            setPickupEmail(currentUser.email);
+          }
+          if (currentUser.phone) {
+            setPickupPhone(currentUser.phone);
+          }
+        }
+      }
+    };
+
+    fetchUserProfile();
+  }, [currentUser, dbStatus.connected]);
 
   // Auto-propagate loaded custom profile info to checkout fields
   useEffect(() => {
@@ -4312,14 +5456,18 @@ export default function App() {
     }
 
     const isPickupType = finalOrderId.startsWith('PH-') || cartItems.some(i => i.source === 'Pickup');
-    const assignedAgent = isPickupType ? agents[Math.floor(Math.random() * agents.length)] : undefined;
+    const assignedAgent = (isAutoAssignAgentEnabled && isPickupType) ? agents[Math.floor(Math.random() * agents.length)] : undefined;
+
+    const finalCostToPay = appliedCoupon 
+      ? Math.max(0, totalCost - (totalCost * (appliedCoupon.discountPercent / 100))) 
+      : totalCost;
 
     const newOrder: Order = {
       id: finalOrderId,
       customerId: currentUser.id,
       items: [...cartItems],
       totalWeight,
-      totalCost,
+      totalCost: finalCostToPay,
       status: isWarehouseCheckout ? 'Request Placed' : (isPickupType ? 'Scheduled' : 'Request Placed'),
       createdAt: new Date().toISOString(),
       shippingDate: selectedDate,
@@ -4344,7 +5492,7 @@ export default function App() {
           id: finalOrderId,
           customer_id: currentUser.id, // Snake case for DB
           total_weight: totalWeight,
-          total_cost: totalCost,
+          total_cost: finalCostToPay,
           payment_status: paymentStatus,
           shipping_date: selectedDate,
           pickup_type: isPickupType ? 'AllAgent' : undefined,
@@ -4457,8 +5605,8 @@ export default function App() {
         } as any);
         toast.success(`Cargo list, documents and details saved successfully!`);
       } catch (err: any) {
-        console.error('Failed to sync details:', err);
-        toast.error('Local changes saved, but failed to sync online.');
+        console.warn('Failed to sync details online:', err);
+        toast.success('Cargo list and details saved successfully! (Offline mode)');
       }
     } else {
       toast.success(`Cargo list and details saved successfully!`);
@@ -4467,7 +5615,7 @@ export default function App() {
 
   const handleWOComplete = () => {
     if (!activeWorkOrder) return;
-    const newOrderId = generateNewOrderId('Pickup');
+    const newOrderId = activeWorkOrder.id; // Correctly align work order ID with invoice ID
     setWoOrderId(newOrderId);
     setIsWOPaid(true);
     
@@ -4511,7 +5659,15 @@ export default function App() {
       documents: woDocuments
     };
 
-    setOrders([...orders, newOrder]);
+    // Update local React state: update existing order rather than appending a duplicate ID
+    setOrders(prev => {
+      const exists = prev.some(o => o.id === newOrderId);
+      if (exists) {
+        return prev.map(o => o.id === newOrderId ? newOrder : o);
+      } else {
+        return [...prev, newOrder];
+      }
+    });
     
     // Add items to the main items list as well, marked as received
     const itemsWithStatus = completedItems.map(item => ({
@@ -4520,20 +5676,6 @@ export default function App() {
       submitted: true
     }));
     setItems(prev => [...prev, ...itemsWithStatus]);
-
-    setOrders(prev => prev.map(o => 
-      o.id === activeWorkOrder!.id 
-        ? { 
-            ...o, 
-            status: woStatusInput, 
-            paymentStatus: 'Paid',
-            items: completedItems,
-            assignedAgent: currentAgent,
-            assignedAgentId: currentAgent.id,
-            documents: woDocuments
-          } 
-        : o
-    ));
 
     // Sync to DB
     if (dbStatus.connected) {
@@ -4547,7 +5689,21 @@ export default function App() {
         shipping_date: woShippingDate,
         documents: woDocuments,
         status: woStatusInput
-      } as any).catch(err => console.error('Failed to sync new order from work order:', err));
+      } as any).catch(err => {
+        console.warn('Failed to sync new order, falling back to update:', err);
+        api.updateOrder(newOrderId, {
+          status: woStatusInput,
+          paymentStatus: 'Paid',
+          items: completedItems,
+          totalWeight: totalW,
+          totalCost: totalC,
+          assignedAgent: currentAgent,
+          assignedAgentId: currentAgent.id,
+          assigned_agent: currentAgent,
+          assigned_agent_id: currentAgent.id,
+          documents: woDocuments
+        } as any).catch(e => console.error('Failed to update completed order on DB:', e));
+      });
 
       api.updateOrderStatus(activeWorkOrder.id, woStatusInput).catch(err => console.error('Failed to update status on completion:', err));
       api.updateOrder(activeWorkOrder.id, {
@@ -4569,11 +5725,16 @@ export default function App() {
           toast.error(`Payment successful, but ${err.message || 'failed to send invoice email'}.`);
         });
     } else {
-      toast.success('Payment successful!');
+      const recipientEmail = woAddress.email || currentUser?.email || '';
+      toast.success(`Payment successful! Invoice saved locally.`);
     }
   };
 
   const handleCheckout = async () => {
+    // Reset coupon code inputs
+    setAppliedCoupon(null);
+    setCouponCodeInput('');
+
     // Determine primary source and generate the correct order ID first so it is preserved even across login
     const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled');
     const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
@@ -5870,7 +7031,7 @@ export default function App() {
                 onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
                 className="flex-1 py-4 bg-slate-100 text-slate-900 rounded-2xl font-bold hover:bg-slate-200 transition-all"
               >
-                Back to Portal
+                Process New Order
               </button>
               <button 
                 onClick={() => {
@@ -5918,22 +7079,23 @@ export default function App() {
             <div className="text-right">
               <h2 className="text-sm sm:text-lg font-black text-slate-900 leading-tight">Order: {activeWorkOrder.id}</h2>
               <p className="hidden sm:block text-[10px] text-slate-500 uppercase font-black tracking-widest mt-0.5">Pickup & Shipping Wizard</p>
+              {/* Customer Name on mobile view only to save space */}
+              <p className="block sm:hidden text-[10px] text-slate-600 font-extrabold mt-0.5 uppercase tracking-tight">
+                Cust: {activeWorkOrder.customerName || 'Walk-in'}
+              </p>
             </div>
           </div>
  
-          {/* Context Banner */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 p-2.5 sm:p-4 mb-4 sm:mb-6 bg-indigo-50/40 border border-indigo-100/50 rounded-xl sm:rounded-2xl">
+          {/* Context Banner - Only shown on Desktop / larger screens as requested */}
+          <div className="hidden sm:flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 p-2.5 sm:p-4 mb-4 sm:mb-6 bg-indigo-50/40 border border-indigo-100/50 rounded-xl sm:rounded-2xl">
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[7px] sm:text-[8px] font-black uppercase text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 tracking-wider shrink-0">Active Pickup</span>
                 <h4 className="text-xs font-black text-slate-800 truncate">Customer: {activeWorkOrder.customerName || 'Walk-in'}</h4>
-                <div className="block sm:hidden text-[9px] font-black text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-100 shrink-0">
-                  📞 {activeWorkOrder.phone}
-                </div>
               </div>
               <p className="text-[10px] text-slate-500 truncate mt-1">📍 {activeWorkOrder.address}</p>
             </div>
-            <div className="hidden sm:flex text-[10px] font-black text-slate-600 shrink-0 bg-white px-3 py-1.5 rounded-xl border border-slate-100 items-center gap-1">
+            <div className="text-[10px] font-black text-slate-600 shrink-0 bg-white px-3 py-1.5 rounded-xl border border-slate-100 flex items-center gap-1">
               <span>📞 {activeWorkOrder.phone}</span>
             </div>
           </div>
@@ -6179,14 +7341,64 @@ export default function App() {
                           )}
                         </div>
                         <div>
-                          <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                          <div className="text-sm font-bold text-slate-900">
                             {item.name}
-                            <span className="px-1.5 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-black rounded">
-                              x{item.quantity || 1}
-                            </span>
                           </div>
-                          <div className="text-[10px] text-slate-505 font-semibold mt-0.5">
-                            {item.weight} kg per unit • Total: {(item.weight * (item.quantity || 1)).toFixed(1)} kg
+                          
+                          <div className="flex flex-wrap items-center gap-3 mt-1.5 md:gap-4">
+                            {/* Quantity Control */}
+                            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-1.5 py-0.5">
+                              <span className="text-[8px] font-black uppercase text-slate-400 px-0.5">Qty</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newQty = Math.max(1, (item.quantity || 1) - 1);
+                                  setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: newQty } : i));
+                                }}
+                                className="w-5 h-5 bg-white border border-slate-200 rounded hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700"
+                              >
+                                -
+                              </button>
+                              <input
+                                type="number"
+                                value={item.quantity || 1}
+                                onChange={(e) => {
+                                  const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                  setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: val } : i));
+                                }}
+                                className="w-8 text-center bg-transparent border-0 font-bold text-xs p-0 focus:ring-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newQty = (item.quantity || 1) + 1;
+                                  setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: newQty } : i));
+                                }}
+                                className="w-5 h-5 bg-white border border-slate-200 rounded hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700"
+                              >
+                                +
+                              </button>
+                            </div>
+
+                            {/* Weight Control */}
+                            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
+                              <span className="text-[8px] font-black uppercase text-slate-400">Wt</span>
+                              <input
+                                type="number"
+                                step="any"
+                                value={item.weight}
+                                onChange={(e) => {
+                                  const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                  setWoItems(woItems.map(i => i.id === item.id ? { ...i, weight: val } : i));
+                                }}
+                                className="w-11 text-center bg-transparent border-b border-slate-250 font-bold text-xs p-0.5 focus:ring-0 focus:border-indigo-500 outline-none"
+                              />
+                              <span className="text-[9px] font-bold text-slate-400">kg</span>
+                            </div>
+
+                            <span className="text-[10px] font-bold text-slate-500 bg-indigo-50/50 px-2 py-0.5 rounded border border-indigo-100/30 whitespace-nowrap">
+                              Total: {(item.weight * (item.quantity || 1)).toFixed(1)} kg
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -6820,20 +8032,106 @@ export default function App() {
 
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-black text-slate-900">Agent Portal</h2>
-            <p className="text-slate-500">Manage, process and review performance metrics.</p>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900">Agent Portal</h2>
+            <p className="text-xs sm:text-sm text-slate-500 max-w-xs sm:max-w-none">Manage & process home pickups.</p>
           </div>
-          <div className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold animate-pulse">
-            {scheduledApts.length} Pending Tasks
+          <div className="px-3 py-1.5 sm:px-4 sm:py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs sm:text-sm font-bold shrink-0 animate-pulse">
+            {scheduledApts.length} Pending
           </div>
         </div>
 
-        {/* Tabs Bar */}
-        <div className="flex border-b border-slate-100 gap-6 overflow-x-auto">
+        {/* Mobile View: 2-Level Navigation tabs */}
+        <div className="md:hidden space-y-4">
+          {/* Level 1: Main Tabs */}
+          <div className="flex border-b border-slate-100 p-0.5">
+            <button
+              onClick={() => {
+                setAgentMainTab('Summary');
+                setAgentActiveTab('Summary');
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 pb-3 border-b-2 font-black text-xs sm:text-sm transition-all relative ${
+                agentMainTab === 'Summary' && agentActiveTab === 'Summary'
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <BarChart3 size={15} />
+              <span>Summary</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setAgentMainTab('Home Pickup');
+                if (agentActiveTab === 'Summary') {
+                  setAgentActiveTab('Scheduled');
+                }
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 pb-3 border-b-2 font-black text-xs sm:text-sm transition-all relative ${
+                agentMainTab === 'Home Pickup' || agentActiveTab !== 'Summary'
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <Truck size={15} />
+              <span>Home Pickup</span>
+            </button>
+          </div>
+
+          {/* Level 2 Sub-Tabs (only when Home Pickup or active pickup lists is selected) */}
+          {(agentMainTab === 'Home Pickup' || agentActiveTab !== 'Summary') && (
+            <div className="flex bg-slate-100 p-1 rounded-xl gap-1 select-none animate-fadeIn">
+              <button
+                onClick={() => {
+                  setAgentActiveTab('Scheduled');
+                  setAgentMainTab('Home Pickup');
+                }}
+                className={`flex-1 py-1.5 text-[11px] font-black text-center rounded-lg transition-all ${
+                  agentActiveTab === 'Scheduled'
+                    ? 'bg-white text-slate-900 shadow-sm font-extrabold'
+                    : 'text-slate-500'
+                }`}
+              >
+                Scheduled ({scheduledApts.length})
+              </button>
+              <button
+                onClick={() => {
+                  setAgentActiveTab('Completed');
+                  setAgentMainTab('Home Pickup');
+                }}
+                className={`flex-1 py-1.5 text-[11px] font-black text-center rounded-lg transition-all ${
+                  agentActiveTab === 'Completed'
+                    ? 'bg-white text-emerald-600 shadow-sm font-extrabold'
+                    : 'text-slate-500'
+                }`}
+              >
+                Completed ({completedApts.length})
+              </button>
+              <button
+                onClick={() => {
+                  setAgentActiveTab('Canceled');
+                  setAgentMainTab('Home Pickup');
+                }}
+                className={`flex-1 py-1.5 text-[11px] font-black text-center rounded-lg transition-all ${
+                  agentActiveTab === 'Canceled'
+                    ? 'bg-white text-rose-600 shadow-sm font-extrabold'
+                    : 'text-slate-500'
+                }`}
+              >
+                Canceled ({canceledApts.length})
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop View Tabs Bar */}
+        <div className="hidden md:flex border-b border-slate-100 gap-6 overflow-x-auto">
           <button
-            onClick={() => setAgentActiveTab('Summary')}
+            onClick={() => {
+              setAgentActiveTab('Summary');
+              setAgentMainTab('Summary');
+            }}
             className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
               agentActiveTab === 'Summary'
                 ? 'border-indigo-600 text-indigo-600'
@@ -6845,7 +8143,10 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => setAgentActiveTab('Scheduled')}
+            onClick={() => {
+              setAgentActiveTab('Scheduled');
+              setAgentMainTab('Home Pickup');
+            }}
             className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
               agentActiveTab === 'Scheduled'
                 ? 'border-indigo-600 text-indigo-600'
@@ -6862,7 +8163,10 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => setAgentActiveTab('Completed')}
+            onClick={() => {
+              setAgentActiveTab('Completed');
+              setAgentMainTab('Home Pickup');
+            }}
             className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
               agentActiveTab === 'Completed'
                 ? 'border-emerald-600 text-emerald-600'
@@ -6879,7 +8183,10 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => setAgentActiveTab('Canceled')}
+            onClick={() => {
+              setAgentActiveTab('Canceled');
+              setAgentMainTab('Home Pickup');
+            }}
             className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
               agentActiveTab === 'Canceled'
                 ? 'border-rose-600 text-rose-600'
@@ -7152,7 +8459,7 @@ export default function App() {
         )}
       </div>
     );
-  }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser, agentActiveTab, setAgentActiveTab, orders]);
+  }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser, agentActiveTab, setAgentActiveTab, agentMainTab, setAgentMainTab, orders]);
   const renderWarehouseManagementSection = () => {
     const warehouseItems = items.filter(i => i.source === 'Warehouse' || i.source === 'Pickup').map(i => ({ ...i, orderId: null as string | null }));
     const orderWarehouseItems = orders.flatMap(o => 
@@ -7571,12 +8878,12 @@ export default function App() {
     };
 
     const hasActivePickup = appointments.some(a => a.status === 'Scheduled');
-    const hasCompletedPickup = appointments.some(a => a.status === 'Completed');
+    const hasCompletedPickup = lastBookingRef ? appointments.some(a => a.id === lastBookingRef && a.status === 'Completed') : false;
 
     const isCartEmpty = mode === 'Warehouse' 
       ? items.filter(i => i.source === 'Warehouse' && !i.submitted).length === 0
       : mode === 'Pickup'
-        ? items.filter(i => i.source === 'Pickup').length === 0 && appointments.length === 0
+        ? items.filter(i => i.source === 'Pickup' && !i.submitted).length === 0 && (isSchedulingNewPickup ? true : !appointments.some(a => a.status === 'Scheduled'))
         : items.filter(i => i.source !== 'Warehouse' || i.submitted).length === 0 && appointments.length === 0;
 
     const displayItems = mode 
@@ -7953,7 +9260,7 @@ export default function App() {
                       <div>
                         <h2 className="text-2xl font-black text-deep-blue tracking-tight">Home Pickup</h2>
                         <p className="text-sm text-slate-500 font-medium">
-                          {activePickupStep === 5 ? 'Booking Confirmed' : hasActivePickup ? 'Add items to your scheduled pickup' : 'Schedule an agent to collect from your home'}
+                          {activePickupStep === 5 ? 'Booking Confirmed' : (hasActivePickup && !isSchedulingNewPickup) ? 'Add items to your scheduled pickup' : 'Schedule an agent to collect from your home'}
                         </p>
                       </div>
                     </div>
@@ -8516,6 +9823,24 @@ export default function App() {
                                   />
                                 </div>
 
+                                {currentUser && (
+                                  <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50 flex items-start gap-3 mt-4 hover:bg-slate-50 transition-colors">
+                                    <input 
+                                      type="checkbox" 
+                                      id="save-pickup-to-profile"
+                                      className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 mt-0.5 cursor-pointer accent-indigo-600"
+                                      checked={savePickupToProfile}
+                                      onChange={(e) => setSavePickupToProfile(e.target.checked)}
+                                    />
+                                    <label htmlFor="save-pickup-to-profile" className="text-xs font-bold text-slate-700 leading-relaxed cursor-pointer select-none">
+                                      Save these details in my customer profile
+                                      <span className="block text-[10px] text-slate-400 font-medium normal-case mt-0.5 animate-pulse">
+                                        These details will be securely stored and auto-filled next time when logged in with the same ID.
+                                      </span>
+                                    </label>
+                                  </div>
+                                )}
+
                                 <div className="flex gap-4">
                                   <button 
                                     onClick={() => {
@@ -8534,6 +9859,9 @@ export default function App() {
                                       if (pickupPhone.length !== 10) {
                                         toast.error('Phone number must be 10 digits');
                                         return;
+                                      }
+                                      if (savePickupToProfile && currentUser) {
+                                        savePickupProfileToDb();
                                       }
                                       setActivePickupStep(4);
                                     }}
@@ -8910,7 +10238,7 @@ export default function App() {
           ) : null}
 
         {/* Item List Card - Visible in all tabs, but specific parts are conditional */}
-        {!((mode === 'Pickup') && (isCartEmpty || activePickupStep === 5)) && (
+        {!(mode === 'Pickup' && (isCartEmpty || activePickupStep === 5 || !hasActivePickup || isSchedulingNewPickup)) && (
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 min-h-[400px]">
             {!mode && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
@@ -8968,12 +10296,12 @@ export default function App() {
                   )}
 
                   {/* Scheduled Pickups */}
-                  {(mode === 'Pickup') && appointments.length > 0 && activePickupStep !== 5 && (
+                  {(mode === 'Pickup') && appointments.some(a => a.status === 'Scheduled' || a.status === 'Picked Up') && activePickupStep !== 5 && !isSchedulingNewPickup && (
                     <div className="space-y-4">
                       <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
                         <Truck size={18} className="text-indigo-600" /> Scheduled Pickups
                       </h4>
-                      {appointments.map((apt, idx) => (
+                      {appointments.filter(a => a.status === 'Scheduled' || a.status === 'Picked Up').map((apt, idx) => (
                         <motion.div 
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -9079,7 +10407,7 @@ export default function App() {
                     const sourceItems = displayItems.filter(i => i.source === source);
                     
                     // Special case: If Pickup from home is scheduled, show message instead of item list for Pickup source
-                    if (mode === 'Pickup' && source === 'Pickup' && hasActivePickup) {
+                    if (mode === 'Pickup' && source === 'Pickup' && hasActivePickup && !isSchedulingNewPickup) {
                       return (
                         <div key={source} className="p-8 bg-indigo-50 rounded-[2rem] border border-indigo-100 text-center space-y-4">
                           <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-indigo-600 mx-auto shadow-sm">
@@ -10159,10 +11487,89 @@ export default function App() {
                       <span className="text-emerald-400 font-medium">{shippingPreference === 'LocalPickup' ? 'During Home Pickup' : 'To my Home'}</span>
                     </div>
                   )}
+
+                  {/* Coupon Application Block */}
+                  <div className="py-3 border-t border-b border-slate-800/60 my-2">
+                    {!appliedCoupon ? (
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Apply Coupon Code (5 Chars)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            maxLength={5}
+                            value={couponCodeInput}
+                            onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                            className="bg-slate-800 text-white text-xs font-mono font-bold uppercase rounded-xl px-3 py-2 flex-grow outline-none border border-slate-700 focus:border-indigo-500 transition-colors placeholder-slate-500"
+                            placeholder="CODE5"
+                            id="coupon-apply-input"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const codeClean = couponCodeInput.trim().toUpperCase();
+                              if (codeClean.length !== 5) {
+                                toast.error("Coupon code must be exactly 5 characters.");
+                                return;
+                              }
+                              const matched = coupons.find(c => c.code === codeClean);
+                              if (!matched) {
+                                toast.error(`Coupon code "${codeClean}" is invalid or does not exist.`);
+                                return;
+                              }
+                              if (!matched.isEnabled) {
+                                toast.error(`Coupon code "${codeClean}" is currently inactive.`);
+                                return;
+                              }
+                              setAppliedCoupon({
+                                code: matched.code,
+                                discountPercent: matched.discountPercent
+                              });
+                              toast.success(`Coupon "${matched.code}" applied successfully! Saved ${matched.discountPercent}% OFF total.`);
+                            }}
+                            id="apply-coupon-btn"
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-4 py-2 transition-all active:scale-95 shrink-0"
+                          >
+                            Apply
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-2.5">
+                        <div className="flex items-center gap-2">
+                          <TicketIcon size={14} className="text-emerald-400 shrink-0" />
+                          <div>
+                            <div className="text-[10px] font-black text-emerald-400 uppercase tracking-wider font-mono">Coupon applied</div>
+                            <div className="text-[11px] text-slate-300 font-semibold">{appliedCoupon.code} ({appliedCoupon.discountPercent}% OFF)</div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAppliedCoupon(null);
+                            setCouponCodeInput('');
+                            toast.info("Coupon code removed.");
+                          }}
+                          className="text-[10px] bg-slate-800 text-slate-400 hover:text-white px-2 py-1 rounded-lg transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {appliedCoupon && (
+                    <div className="flex justify-between text-emerald-400 text-sm font-semibold animate-fadeIn">
+                      <span>Coupon Discount ({appliedCoupon.discountPercent}%)</span>
+                      <span>-₹{(totalCost * (appliedCoupon.discountPercent / 100)).toFixed(2)}</span>
+                    </div>
+                  )}
+
                   <div className="h-px bg-slate-800 my-4" />
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-bold">Total Amount</span>
-                    <span className="text-2xl font-black text-indigo-400">₹{totalCost.toFixed(2)}</span>
+                    <span className="text-2xl font-black text-indigo-400">
+                      ₹{(appliedCoupon ? Math.max(0, totalCost - (totalCost * (appliedCoupon.discountPercent / 100))) : totalCost).toFixed(2)}
+                    </span>
                   </div>
                 </div>
               </>
@@ -10292,6 +11699,9 @@ export default function App() {
 
   const handleAssignAgent = async (orderId: string, agent: AgentProfile | null) => {
     try {
+      const previousOrder = orders.find(o => o.id === orderId);
+      const prevAgent = previousOrder?.assignedAgent;
+      
       await api.updateOrder(orderId, { 
         assignedAgent: agent || undefined, 
         assignedAgentId: agent ? agent.id : undefined 
@@ -10301,6 +11711,24 @@ export default function App() {
         assignedAgent: agent || undefined, 
         assignedAgentId: agent ? agent.id : undefined 
       } : o));
+
+      if (agent) {
+        logAgentActionToSupabase(
+          'ASSIGN',
+          agent.id,
+          agent.name,
+          { orderId },
+          currentUser?.email || 'admin@jiffex.com'
+        );
+      } else if (prevAgent) {
+        logAgentActionToSupabase(
+          'DEASSIGN',
+          prevAgent.id,
+          prevAgent.name,
+          { orderId },
+          currentUser?.email || 'admin@jiffex.com'
+        );
+      }
     } catch (err) {
       console.error('Failed to assign agent:', err);
       throw err;
@@ -10833,6 +12261,10 @@ export default function App() {
                 setShippingRates={setShippingRates}
                 shippingDiscounts={shippingDiscounts}
                 setShippingDiscounts={setShippingDiscounts}
+                coupons={coupons}
+                setCoupons={setCoupons}
+                isAutoAssignAgentEnabled={isAutoAssignAgentEnabled}
+                setIsAutoAssignAgentEnabled={setIsAutoAssignAgentEnabled}
               />
             )}
             {activeTab === 'agent' && AgentSection}

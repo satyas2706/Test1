@@ -12,6 +12,45 @@ import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
+// Robust Environment Variables Sanitizer (strips surrounding spaces/quotes, handles Google App Password formatting)
+if (process.env.SMTP_HOST) {
+  process.env.SMTP_HOST = process.env.SMTP_HOST.trim().replace(/^['"]|['"]$/g, '');
+}
+if (process.env.SMTP_PORT) {
+  process.env.SMTP_PORT = process.env.SMTP_PORT.trim().replace(/^['"]|['"]$/g, '');
+}
+if (process.env.SMTP_USER) {
+  process.env.SMTP_USER = process.env.SMTP_USER.trim().replace(/^['"]|['"]$/g, '');
+}
+if (process.env.SMTP_FROM) {
+  process.env.SMTP_FROM = process.env.SMTP_FROM.trim().replace(/^['"]|['"]$/g, '');
+}
+if (process.env.SMTP_PASS) {
+  let cleanedPass = process.env.SMTP_PASS.trim().replace(/^['"]|['"]$/g, '');
+  const host = (process.env.SMTP_HOST || "").toLowerCase();
+  if (host.includes("gmail") || host.includes("googlemail")) {
+    const spaceLessPass = cleanedPass.replace(/\s+/g, '');
+    if (spaceLessPass.length === 16) {
+      console.log("[SMTP Sanitizer] Automatically trimmed internal spaces from 16-character Gmail App Password.");
+      cleanedPass = spaceLessPass;
+    }
+  }
+  process.env.SMTP_PASS = cleanedPass;
+}
+
+if (process.env.TWILIO_ACCOUNT_SID) {
+  process.env.TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID.trim().replace(/^['"]|['"]$/g, '');
+}
+if (process.env.TWILIO_AUTH_TOKEN) {
+  process.env.TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN.trim().replace(/^['"]|['"]$/g, '');
+}
+if (process.env.TWILIO_PHONE_NUMBER) {
+  process.env.TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER.trim().replace(/^['"]|['"]$/g, '');
+}
+if (process.env.TWILIO_WHATSAPP_NUMBER) {
+  process.env.TWILIO_WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER.trim().replace(/^['"]|['"]$/g, '');
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -42,6 +81,23 @@ const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_T
   ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) 
   : null;
 
+// Secure debugging utility for loaded SMTP parameters
+console.log("=== SMTP Environment Checklist ===");
+console.log("SMTP_HOST:", process.env.SMTP_HOST ? `"${process.env.SMTP_HOST}"` : "NOT CONFIGURED");
+console.log("SMTP_PORT:", process.env.SMTP_PORT ? `"${process.env.SMTP_PORT}"` : "NOT CONFIGURED (defaults to 587)");
+console.log("SMTP_USER:", process.env.SMTP_USER ? `"${process.env.SMTP_USER}"` : "NOT CONFIGURED");
+console.log("SMTP_FROM:", process.env.SMTP_FROM ? `"${process.env.SMTP_FROM}"` : "NOT CONFIGURED");
+if (process.env.SMTP_PASS) {
+  const pass = process.env.SMTP_PASS;
+  const maskedPass = pass.length > 4 
+    ? pass.substring(0, 2) + "*".repeat(pass.length - 4) + pass.substring(pass.length - 2)
+    : "*".repeat(pass.length);
+  console.log(`SMTP_PASS: "${maskedPass}" (Length: ${pass.length} characters)`);
+} else {
+  console.log("SMTP_PASS: NOT CONFIGURED");
+}
+console.log("=================================");
+
 const mailTransporter = process.env.SMTP_HOST 
   ? nodemailer.createTransport({
       host: process.env.SMTP_HOST,
@@ -58,11 +114,46 @@ if (mailTransporter) {
   console.log("Email service (SMTP) configured. Testing connection asynchronously...");
   mailTransporter.verify((error: any) => {
     if (error) {
-      console.error("[SMTP] Connection Error:", error.message);
+      console.error("[SMTP] Connection Error:", formatSmtpError(error, "SMTP Initialization"));
     } else {
       console.log("[SMTP] Server is ready.");
     }
   });
+}
+
+// SMTP Error Formatting Helper for detailed, actionable feedback
+function formatSmtpError(err: any, prefix: string): string {
+  const message = err?.message || String(err || "");
+  if (message.includes("535") || message.includes("BadCredentials") || message.includes("Username and Password not accepted")) {
+    const smtpUser = process.env.SMTP_USER || "";
+    const smtpFrom = process.env.SMTP_FROM || "";
+    
+    let mismatchWarning = "";
+    if (smtpUser && smtpFrom) {
+      // Extract email addresses if they are formatted like "Name <email@domain.com>"
+      const extractEmail = (str: string) => {
+        const match = str.match(/<([^>]+)>/);
+        return (match ? match[1] : str).trim().toLowerCase();
+      };
+      
+      const parsedUser = extractEmail(smtpUser);
+      const parsedFrom = extractEmail(smtpFrom);
+      
+      if (parsedUser && parsedFrom && parsedUser !== parsedFrom) {
+        mismatchWarning = `\n\n⚠️ SENDER EMAIL MISMATCH WARNING: Your SMTP_USER ("${parsedUser}") and SMTP_FROM ("${parsedFrom}") do not match! Gmail requires you to authenticate using the exact Google Account username you are sending from. If your App Password was generated for "${parsedFrom}", please make sure SMTP_USER is set to "${parsedFrom}".`;
+      }
+    }
+    
+    return `${prefix} Error: SMTP Login Failed (Gmail 535 Bad Credentials). Run-time checklist:
+1. Google SMTP requires a 16-character "App Password" (not your normal password/password with spaces).
+2. Your current SMTP_PASS length is ${process.env.SMTP_PASS?.length || 0} characters.
+To resolve this:
+  a. Enable 2-Step Verification in your Google Account settings.
+  b. Search for "App Passwords" in your Google Account.
+  c. Generate a new App Password named "JiffEX Mail".
+  d. Paste the 16-character code as "SMTP_PASS" in server secrets and restart the dev server.${mismatchWarning}`;
+  }
+  return `${prefix} Error: ${message}`;
 }
 
 // Notification Helper
@@ -365,12 +456,24 @@ const getShippingSettings = () => {
           parsed.discounts[country] = parsed.discountPercent || 0;
         });
       }
+      if (!parsed.coupons) {
+        parsed.coupons = [
+          { code: "SHIP5", discountPercent: 5, isEnabled: true },
+          { code: "BOOST", discountPercent: 12, isEnabled: false }
+        ];
+      }
       return parsed;
     }
   } catch (err) {
     console.error("Error reading shipping settings:", err);
   }
-  return DEFAULT_SHIPPING_SETTINGS;
+  return {
+    ...DEFAULT_SHIPPING_SETTINGS,
+    coupons: [
+      { code: "SHIP5", discountPercent: 5, isEnabled: true },
+      { code: "BOOST", discountPercent: 12, isEnabled: false }
+    ]
+  };
 };
 
 const saveShippingSettings = (settings: any) => {
@@ -388,7 +491,7 @@ app.get("/api/settings/shipping", (req, res) => {
 });
 
 app.post("/api/settings/shipping", (req, res) => {
-  const { rates, discounts } = req.body;
+  const { rates, discounts, coupons } = req.body;
   const current = getShippingSettings();
   
   if (rates) {
@@ -401,6 +504,16 @@ app.post("/api/settings/shipping", (req, res) => {
       sanitizedDiscounts[country] = Number(discounts[country]) || 0;
     });
     current.discounts = { ...current.discounts, ...sanitizedDiscounts };
+  }
+  if (Array.isArray(coupons)) {
+    // Sanitize coupons
+    current.coupons = coupons
+      .map((c: any) => ({
+        code: String(c.code).trim().toUpperCase().substring(0, 5),
+        discountPercent: Math.max(0, Math.min(100, Number(c.discountPercent) || 0)),
+        isEnabled: Boolean(c.isEnabled)
+      }))
+      .filter((c: any) => c.code.length === 5);
   }
   
   saveShippingSettings(current);
@@ -668,13 +781,13 @@ app.patch("/api/orders/:orderId", async (req, res) => {
       .from('orders')
       .select('*')
       .eq('id', orderId)
-      .single();
+      .maybeSingle();
       
-    if (getError || !currentOrder) {
-      throw getError || new Error("Order not found");
+    if (getError) {
+      throw getError;
     }
     
-    let parsedDestination = currentOrder.destination || {};
+    let parsedDestination = currentOrder?.destination || {};
     if (typeof parsedDestination === 'string') {
       try {
         parsedDestination = JSON.parse(parsedDestination);
@@ -700,8 +813,9 @@ app.patch("/api/orders/:orderId", async (req, res) => {
       address: updates.address || parsedDestination.address
     };
 
-    // Filter down to only columns that are guaranteed to exist in the orders postgres schema
+    // Filter down down columns
     const databaseUpdates: any = {
+      id: orderId,
       destination: mergedDestination
     };
 
@@ -725,6 +839,23 @@ app.patch("/api/orders/:orderId", async (req, res) => {
     }
     if (updates.shippingDate !== undefined || updates.shipping_date !== undefined) {
       databaseUpdates.shipping_date = updates.shippingDate !== undefined ? updates.shippingDate : updates.shipping_date;
+    }
+
+    if (!currentOrder) {
+      console.log(`[SUPABASE] Order ${orderId} not found in DB. Inserting as new order on Agent Update.`);
+      // Set defaults for insert
+      databaseUpdates.status = databaseUpdates.status || 'Pending Pickup';
+      databaseUpdates.payment_status = databaseUpdates.payment_status || 'Pending';
+      const { data: insertedOrder, error: insertError } = await supabase
+        .from('orders')
+        .insert(databaseUpdates)
+        .select()
+        .single();
+      if (insertError) {
+        console.warn(`[SUPABASE] Upsert-insert failed: ${insertError.message}`);
+        throw insertError;
+      }
+      return res.json(insertedOrder);
     }
 
     console.log(`[SUPABASE] Updating schema-compliant order ${orderId}`);
@@ -861,6 +992,125 @@ app.patch("/api/orders/:orderId/status", async (req, res) => {
   }
 });
 
+// API: Get Loaded SMTP Configuration Status (secure masked format)
+app.get("/api/admin/smtp-status", (req, res) => {
+  const host = process.env.SMTP_HOST || "";
+  const port = process.env.SMTP_PORT || "";
+  const user = process.env.SMTP_USER || "";
+  const from = process.env.SMTP_FROM || "";
+  const pass = process.env.SMTP_PASS || "";
+
+  const mask = (str: string, isEmail = false) => {
+    if (!str) return "NOT CONFIGURED";
+    if (isEmail) {
+      const parts = str.split("@");
+      if (parts.length === 2) {
+        const name = parts[0];
+        const domain = parts[1];
+        const visibleName = name.length > 2 ? name.substring(0, 2) + "*".repeat(name.length - 2) : "*".repeat(name.length);
+        return visibleName + "@" + domain;
+      }
+    }
+    if (str.length > 4) {
+      return str.substring(0, 2) + "*".repeat(str.length - 4) + str.substring(str.length - 2);
+    }
+    return "*".repeat(str.length);
+  };
+
+  res.json({
+    SMTP_HOST: host ? host : "NOT CONFIGURED",
+    SMTP_PORT: port ? port : "NOT CONFIGURED (defaults to 587)",
+    SMTP_USER: user ? mask(user, true) : "NOT CONFIGURED",
+    SMTP_FROM: from ? mask(from, true) : "NOT CONFIGURED",
+    SMTP_PASS_MASKED: pass ? mask(pass) : "NOT CONFIGURED",
+    SMTP_PASS_LENGTH: pass ? pass.length : 0,
+    twilioSidConfigured: !!process.env.TWILIO_ACCOUNT_SID,
+    twilioPhoneConfigured: !!process.env.TWILIO_PHONE_NUMBER
+  });
+});
+
+// API: Dynamics test SMTP connection
+app.post("/api/smtp/test", async (req, res) => {
+  const { host, port, user, pass, from } = req.body;
+  if (!host || !user || !pass || !from) {
+    return res.status(400).json({ error: "Missing required fields for SMTP test" });
+  }
+
+  let cleanedHost = host.trim().replace(/^['"]|['"]$/g, '');
+  let cleanedPort = (port || "").toString().trim().replace(/^['"]|['"]$/g, '');
+  let cleanedUser = user.trim().replace(/^['"]|['"]$/g, '');
+  let cleanedFrom = from.trim().replace(/^['"]|['"]$/g, '');
+  let cleanedPass = pass.trim().replace(/^['"]|['"]$/g, '');
+
+  if (cleanedHost.toLowerCase().includes("gmail") || cleanedHost.toLowerCase().includes("googlemail")) {
+    if (!cleanedUser.includes("@")) {
+      cleanedUser = `${cleanedUser}@gmail.com`;
+    }
+    // Automatically eliminate space formatting from Gmail App Password if length matches
+    const spaceLessPass = cleanedPass.replace(/\s+/g, '');
+    if (spaceLessPass.length === 16) {
+      cleanedPass = spaceLessPass;
+    }
+  }
+
+  try {
+    console.log(`[SMTP Test] Verifying SMTP connection to ${cleanedHost}:${cleanedPort || '587'} as ${cleanedUser}...`);
+    const tempTransporter = nodemailer.createTransport({
+      host: cleanedHost,
+      port: Number(cleanedPort) || 587,
+      secure: Number(cleanedPort) === 465,
+      auth: {
+        user: cleanedUser,
+        pass: cleanedPass
+      }
+    });
+
+    await tempTransporter.verify();
+    
+    console.log(`[SMTP Test] Connection verified! Sending a test email to ${cleanedUser}...`);
+    await tempTransporter.sendMail({
+      from: cleanedFrom,
+      to: cleanedUser,
+      subject: "JiffEX SMTP Diagnostic Test Successful!",
+      html: `
+        <div style="font-family: sans-serif; padding: 24px; max-width: 600px; border: 1px solid #4f46e5; border-radius: 16px;">
+          <h2 style="color: #4f46e5; margin-top: 0;">🎉 SMTP Connection Successful!</h2>
+          <p>Your JiffEX notification server has successfully authenticated and is ready to send notifications.</p>
+          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <tr>
+              <td style="padding: 6px 0; color: #666; width: 120px;"><strong>SMTP Host:</strong></td>
+              <td style="padding: 6px 0; color: #111;">${cleanedHost}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #666;"><strong>SMTP Port:</strong></td>
+              <td style="padding: 6px 0; color: #111;">${cleanedPort || "587"}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #666;"><strong>SMTP User:</strong></td>
+              <td style="padding: 6px 0; color: #111;">${cleanedUser}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #666;"><strong>SMTP From:</strong></td>
+              <td style="padding: 6px 0; color: #111;">${cleanedFrom}</td>
+            </tr>
+          </table>
+          <p style="font-size: 12px; color: #999; margin-top: 24px;">This diagnostic test is complete. You can close this email.</p>
+        </div>
+      `
+    });
+
+    console.log(`[SMTP Test] Test email successfully sent to ${cleanedUser}`);
+    return res.json({ success: true, message: "SMTP Connection is working perfectly! A test email has been delivered to your inbox." });
+  } catch (err: any) {
+    console.error(`[SMTP Test] Verification failed:`, err);
+    return res.status(500).json({ 
+      error: formatSmtpError(err, "SMTP Verification Failed"),
+      message: err.message
+    });
+  }
+});
+
 // API: Simulate Delivery Notifications
 app.post("/api/notifications/simulate", async (req, res) => {
   res.json({ success: true });
@@ -960,7 +1210,7 @@ www.jiffex.com
   } catch (err: any) {
     console.error(`[Invoice PDF] CRITICAL ERROR for order ${order?.id}:`, err);
     res.status(500).json({ 
-      error: `Invoice Email Error: ${err.message}`,
+      error: formatSmtpError(err, "Invoice Email"),
       details: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
   }
@@ -1055,7 +1305,7 @@ The JiffEX Team
   } catch (err: any) {
     console.error(`[Order Confirmation] CRITICAL ERROR for order ${order?.id}:`, err);
     res.status(500).json({ 
-      error: `Confirmation Email Error: ${err.message}`,
+      error: formatSmtpError(err, "Confirmation Email"),
       details: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
   }
