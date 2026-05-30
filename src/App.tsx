@@ -20,6 +20,7 @@ import {
   AlertTriangle, 
   Sparkles,
   TrendingUp,
+  Banknote,
   CheckCircle,
   AlertCircle,
   PieChart as PieChartIcon,
@@ -83,6 +84,7 @@ import {
   Warehouse,
   Menu,
   Save,
+  Pencil,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -3848,6 +3850,11 @@ const getSafeOrderTotalWeight = (order: any): number => {
     if (calculatedSum > 0) return Number(calculatedSum.toFixed(2));
   }
   
+  // When pickup is not started (Scheduled or Pending Pickup) and we have no final weighed items yet, show 0 kg as actual weight
+  if (order.status === 'Scheduled' || order.status === 'Pending Pickup' || order.status === 'Pending') {
+    return 0;
+  }
+  
   const dbWeight = parseFloat(order.totalWeight || order.total_weight || 0);
   if (!isNaN(dbWeight) && dbWeight > 0) return dbWeight;
   
@@ -4331,18 +4338,19 @@ export default function App() {
   const [isWOPaid, setIsWOPaid] = useState(false);
   const [woStep, setWoStep] = useState<number>(1);
 
-  // Auto-scroll to top when a step is changed
+  // Auto-scroll to top when a step is changed or payment is processed
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     const scrollableElements = document.querySelectorAll('.overflow-y-auto, [style*="overflow-y: auto"], [style*="overflow-y: scroll"]');
     scrollableElements.forEach(el => {
       el.scrollTo({ top: 0, behavior: 'smooth' });
     });
-  }, [woStep]);
+  }, [woStep, isWOPaid]);
   const [woStatusInput, setWoStatusInput] = useState<ShippingStatus>('Picked Up');
   const [woOrderId, setWoOrderId] = useState<string | null>(null);
-  const [woPaymentMethod, setWoPaymentMethod] = useState<'card' | 'phonepe'>('card');
+  const [woPaymentMethod, setWoPaymentMethod] = useState<'card' | 'phonepe' | 'cash'>('card');
   const [woShippingDate, setWoShippingDate] = useState<string>(SHIPPING_DATES[0]);
+  const [woIsEditingItems, setWoIsEditingItems] = useState<boolean>(false);
   const [woDocuments, setWoDocuments] = useState<{ id: string; name: string; image: string; type: string; uploadedAt: string }[]>([]);
   const [woDocName, setWoDocName] = useState('');
   const [woDocType, setWoDocType] = useState('Govt ID Proof');
@@ -4384,11 +4392,13 @@ export default function App() {
         setWoStatusInput('Picked Up');
       }
       setIsWOPaid(correspondingOrder?.paymentStatus === 'Paid');
+      setWoIsEditingItems(false);
     } else {
       setWoItems([]);
       setWoDocuments([]);
       setIsWOPaid(false);
       setWoStatusInput('Picked Up');
+      setWoIsEditingItems(false);
       setWoItemName('');
       setWoItemWeight(1);
       setWoItemQuantity(1);
@@ -5084,10 +5094,11 @@ export default function App() {
   useEffect(() => {
     if (!currentUser || !dbStatus.connected) return;
 
-    const isAdmin = ['admin', 'webmaster', 'customer_service'].includes(currentUser.role);
-    const filterStr = isAdmin ? undefined : `customer_id=eq.${currentUser.id}`;
+    const roleLower = (currentUser.role || '').toLowerCase();
+    const isPrivileged = ['admin', 'webmaster', 'customer_service', 'agent'].includes(roleLower);
+    const filterStr = isPrivileged ? undefined : `customer_id=eq.${currentUser.id}`;
 
-    console.log(`[Realtime] Subscribing to order updates. Admin: ${isAdmin}, User: ${currentUser.id}`);
+    console.log(`[Realtime] Subscribing to order updates. Privileged: ${isPrivileged}, User: ${currentUser.id}`);
     
     // Create a channel for order updates
     const channel = supabase
@@ -5109,13 +5120,13 @@ export default function App() {
                if (prev.some(o => o.id === newOrder.id)) return prev;
                return [newOrder, ...prev];
             });
-            if (isAdmin) {
+            if (isPrivileged) {
               toast.success(`New order received: #${newOrder.id.slice(0, 8)}`);
             }
           } else if (payload.eventType === 'UPDATE') {
             const updatedOrder = normalizeOrder(payload.new);
             setOrders(prev => prev.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o));
-            if (!isAdmin || updatedOrder.customerId === currentUser.id) {
+            if (!isPrivileged || updatedOrder.customerId === currentUser.id) {
                toast.info(`Order #${updatedOrder.id.slice(0, 8)} status updated to: ${updatedOrder.status}`);
             }
           } else if (payload.eventType === 'DELETE') {
@@ -5134,21 +5145,39 @@ export default function App() {
     };
   }, [currentUser, dbStatus.connected, normalizeOrder]);
 
-  // Fetch orders when currentUser or activeTab changes
+  // Fetch orders when currentUser or activeTab changes, with fast-polling for agents/admins
   useEffect(() => {
     if (dbStatus.checked) {
       const uId = currentUser?.id || 'guest-user';
-      const isAdminRole = currentUser ? ['admin', 'webmaster', 'customer_service'].includes(currentUser.role) : false;
+      const roleLower = (currentUser?.role || '').toLowerCase();
+      const isAdminRole = currentUser ? ['admin', 'webmaster', 'customer_service'].includes(roleLower) : false;
+      const isAgentRole = roleLower === 'agent';
       
       const processOrders = (data: any[]) => {
-        const normalized = data.map(normalizeOrder);
-        setOrders(normalized);
+        const normalized = data.map(normalizeOrder) as any[];
+        setOrders(prev => {
+          if (prev.length === normalized.length && 
+              prev.every((o: any, idx: number) => o.id === normalized[idx].id && o.status === normalized[idx].status && o.paymentStatus === normalized[idx].paymentStatus)) {
+            return prev;
+          }
+          return normalized;
+        });
       };
 
-      if ((isAdminRole && activeTab === 'admin') || activeTab === 'agent') {
-        api.getAllOrders().then(processOrders).catch(console.error);
-      } else if (activeTab === 'history' || activeTab === 'home' || activeTab === 'pickup') {
-        api.getOrders(uId).then(processOrders).catch(console.error);
+      const fetchOrders = () => {
+        if ((isAdminRole && activeTab === 'admin') || activeTab === 'agent' || isAgentRole) {
+          api.getAllOrders().then(processOrders).catch(console.error);
+        } else if (activeTab === 'history' || activeTab === 'home' || activeTab === 'pickup') {
+          api.getOrders(uId).then(processOrders).catch(console.error);
+        }
+      };
+
+      fetchOrders();
+
+      // For Agent, Admin, or Support roles, poll every 3 seconds to ensure instant reflection
+      if (isAdminRole || isAgentRole || activeTab === 'agent' || activeTab === 'admin') {
+        const intervalId = setInterval(fetchOrders, 3000);
+        return () => clearInterval(intervalId);
       }
     }
   }, [currentUser, activeTab, dbStatus.checked, normalizeOrder]);
@@ -6510,8 +6539,12 @@ export default function App() {
                         </div>
                       )}
                     </div>
-                    <div className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold uppercase tracking-widest">
-                      {order.status}
+                    <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                      order.status === 'Picked Up' || order.status === 'Order Picked Up'
+                        ? 'bg-emerald-100 text-emerald-700' 
+                        : 'bg-indigo-100 text-indigo-700'
+                    }`}>
+                      {order.status === 'Picked Up' || order.status === 'Order Picked Up' ? 'Order Picked Up' : order.status}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4 bg-white p-4 rounded-xl border border-slate-100">
@@ -6939,17 +6972,48 @@ export default function App() {
           </div>
 
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
-            <div className="flex justify-between items-start">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
               <div>
                 <h3 className="text-xl font-black text-slate-900">Invoice Summary</h3>
                 <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {woOrderId}</p>
               </div>
-              <div className="flex gap-2">
-                <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400" title="Print Invoice">
-                  <Printer size={20} />
+              <div className="flex items-center gap-2 flex-wrap">
+                <button 
+                  onClick={() => {
+                    const message = `*JiffEX Work Order Invoice*\n\nOrder ID: ${woOrderId}\nCustomer: ${woAddress.fullName}\nTotal Amount: ₹${woTotalCost.toFixed(2)}\nDestination: ${woAddress.country}\nStatus: Processed & Paid\n\nThank you for choosing JiffEX!`;
+                    sendWhatsApp(woAddress.phone, message);
+                  }}
+                  className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors flex items-center gap-1.5 text-xs font-bold font-sans"
+                  title="WhatsApp Invoice"
+                >
+                  <MessageCircle size={18} />
+                  <span>WhatsApp Invoice</span>
                 </button>
-                <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400" title="Share Invoice">
-                  <Share size={20} />
+                <button 
+                  onClick={() => {
+                    const summary = `JiffEX Invoice\nOrder ID: ${woOrderId}\nDestination: ${woAddress.fullName}, ${woAddress.country}\nTotal Weight: ${woTotalWeight.toFixed(1)} kg\nTotal: ₹${woTotalCost.toFixed(2)}`;
+                    if (navigator.share) {
+                      navigator.share({
+                        title: 'JiffEX Invoice',
+                        text: summary,
+                      }).catch(console.error);
+                    } else {
+                      navigator.clipboard.writeText(summary);
+                      toast.success('Invoice Summary copied to clipboard!');
+                    }
+                  }}
+                  className="p-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 transition-colors rounded-xl flex items-center gap-1.5 text-xs font-bold font-sans"
+                  title="Share Summary"
+                >
+                  <Share size={18} />
+                  <span>Share Summary</span>
+                </button>
+                <button 
+                  onClick={() => window.print()}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors rounded-xl"
+                  title="Print Invoice"
+                >
+                  <Printer size={18} />
                 </button>
               </div>
             </div>
@@ -7026,37 +7090,12 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 pt-4">
+            <div className="flex justify-center pt-4">
               <button 
                 onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
-                className="flex-1 py-4 bg-slate-100 text-slate-900 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                className="max-w-md w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black transition-all text-sm shadow-md cursor-pointer"
               >
                 Process New Order
-              </button>
-              <button 
-                onClick={() => {
-                  const message = `*JiffEX Work Order Invoice*\n\nOrder ID: ${woOrderId}\nCustomer: ${woAddress.fullName}\nTotal Amount: ₹${woTotalCost.toFixed(2)}\nDestination: ${woAddress.country}\nStatus: Processed & Paid\n\nThank you for choosing JiffEX!`;
-                  sendWhatsApp(woAddress.phone, message);
-                }}
-                className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-200"
-              >
-                <MessageCircle size={20} /> WhatsApp Invoice
-              </button>
-              <button 
-                onClick={() => {
-                  const summary = `JiffEX Invoice\nOrder ID: ${woOrderId}\nDestination: ${woAddress.fullName}, ${woAddress.country}\nTotal Weight: ${woTotalWeight.toFixed(1)} kg\nTotal: ₹${woTotalCost.toFixed(2)}`;
-                  if (navigator.share) {
-                    navigator.share({
-                      title: 'JiffEX Invoice',
-                      text: summary,
-                    }).catch(console.error);
-                  } else {
-                    toast.success('Invoice Summary copied to clipboard!');
-                  }
-                }}
-                className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
-              >
-                Share Summary <Share size={20} />
               </button>
             </div>
           </div>
@@ -7310,7 +7349,28 @@ export default function App() {
               })()}
 
               {/* Collected List items list */}
-              <div className="mt-4 space-y-2">
+              <div className="mt-5 space-y-2">
+                <div className="flex items-center justify-between pb-1">
+                  <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest flex items-center gap-1.5">
+                    <Boxes size={12} className="text-indigo-600/70" /> Collected Items List
+                  </span>
+                  {woItems.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setWoIsEditingItems(!woIsEditingItems)}
+                      className={`px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 text-[10px] font-extrabold cursor-pointer h-7 ${
+                        woIsEditingItems 
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' 
+                          : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                      id="wo-edit-list-btn"
+                    >
+                      <Pencil size={10} />
+                      <span>{woIsEditingItems ? 'Done' : 'Edit'}</span>
+                    </button>
+                  )}
+                </div>
+
                 {woItems.length === 0 ? (
                   <div className="text-center py-8 text-slate-400 font-medium text-xs bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
                     No items added yet. Enter items details above to start collecting.
@@ -7321,22 +7381,36 @@ export default function App() {
                       <div className="flex items-center gap-3">
                         <div 
                           onClick={() => {
-                            setCapturingItemId(item.id);
-                            document.getElementById('universal-wo-camera')?.click();
+                            if (woIsEditingItems) {
+                              setCapturingItemId(item.id);
+                              document.getElementById('universal-wo-camera')?.click();
+                            }
                           }}
-                          className="w-12 h-12 rounded-xl bg-slate-50 border border-dashed border-slate-250 font-bold overflow-hidden shrink-0 flex items-center justify-center cursor-pointer transition-all hover:border-indigo-400 group relative"
+                          className={`w-12 h-12 rounded-xl bg-slate-50 border overflow-hidden shrink-0 flex items-center justify-center transition-all ${
+                            woIsEditingItems 
+                              ? 'border-dashed border-slate-250 cursor-pointer hover:border-indigo-400 group relative' 
+                              : 'border-slate-150'
+                          }`}
                         >
                           {item.image ? (
                             <>
                               <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                <Camera size={14} className="text-white" />
-                              </div>
+                              {woIsEditingItems && (
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <Camera size={14} className="text-white" />
+                                </div>
+                              )}
                             </>
                           ) : (
-                            <div className="flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600">
-                              <Camera size={18} className="text-indigo-500 animate-pulse" />
-                              <span className="text-[7px] text-slate-400 font-black tracking-tighter uppercase mt-0.5">TAP SNAP</span>
+                            <div className="flex flex-col items-center justify-center text-slate-400">
+                              {woIsEditingItems ? (
+                                <>
+                                  <Camera size={18} className="text-indigo-500 animate-pulse" />
+                                  <span className="text-[7px] text-slate-400 font-black tracking-tighter uppercase mt-0.5">TAP SNAP</span>
+                                </>
+                              ) : (
+                                <Package size={20} className="text-slate-300" />
+                              )}
                             </div>
                           )}
                         </div>
@@ -7347,56 +7421,70 @@ export default function App() {
                           
                           <div className="flex flex-wrap items-center gap-3 mt-1.5 md:gap-4">
                             {/* Quantity Control */}
-                            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-1.5 py-0.5">
-                              <span className="text-[8px] font-black uppercase text-slate-400 px-0.5">Qty</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newQty = Math.max(1, (item.quantity || 1) - 1);
-                                  setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: newQty } : i));
-                                }}
-                                className="w-5 h-5 bg-white border border-slate-200 rounded hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700"
-                              >
-                                -
-                              </button>
-                              <input
-                                type="number"
-                                value={item.quantity || 1}
-                                onChange={(e) => {
-                                  const val = Math.max(1, parseInt(e.target.value, 10) || 1);
-                                  setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: val } : i));
-                                }}
-                                className="w-8 text-center bg-transparent border-0 font-bold text-xs p-0 focus:ring-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newQty = (item.quantity || 1) + 1;
-                                  setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: newQty } : i));
-                                }}
-                                className="w-5 h-5 bg-white border border-slate-200 rounded hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700"
-                              >
-                                +
-                              </button>
-                            </div>
+                            {woIsEditingItems ? (
+                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-1.5 py-0.5">
+                                <span className="text-[8px] font-black uppercase text-slate-400 px-0.5">Qty</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newQty = Math.max(1, (item.quantity || 1) - 1);
+                                    setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: newQty } : i));
+                                  }}
+                                  className="w-5 h-5 bg-white border border-slate-200 rounded hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700"
+                                >
+                                  -
+                                </button>
+                                <input
+                                  type="number"
+                                  value={item.quantity || 1}
+                                  onChange={(e) => {
+                                    const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                    setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: val } : i));
+                                  }}
+                                  className="w-8 text-center bg-transparent border-0 font-bold text-xs p-0 focus:ring-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newQty = (item.quantity || 1) + 1;
+                                    setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: newQty } : i));
+                                  }}
+                                  className="w-5 h-5 bg-white border border-slate-200 rounded hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 bg-slate-50/70 border border-slate-150 rounded-lg px-2 py-0.5 text-xs">
+                                <span className="text-[8px] font-extrabold uppercase text-slate-450">Qty:</span>
+                                <span className="font-bold text-slate-800">{item.quantity || 1}</span>
+                              </div>
+                            )}
 
                             {/* Weight Control */}
-                            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
-                              <span className="text-[8px] font-black uppercase text-slate-400">Wt</span>
-                              <input
-                                type="number"
-                                step="any"
-                                value={item.weight}
-                                onChange={(e) => {
-                                  const val = Math.max(0, parseFloat(e.target.value) || 0);
-                                  setWoItems(woItems.map(i => i.id === item.id ? { ...i, weight: val } : i));
-                                }}
-                                className="w-11 text-center bg-transparent border-b border-slate-250 font-bold text-xs p-0.5 focus:ring-0 focus:border-indigo-500 outline-none"
-                              />
-                              <span className="text-[9px] font-bold text-slate-400">kg</span>
-                            </div>
+                            {woIsEditingItems ? (
+                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
+                                <span className="text-[8px] font-black uppercase text-slate-400">Wt</span>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={item.weight}
+                                  onChange={(e) => {
+                                    const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                    setWoItems(woItems.map(i => i.id === item.id ? { ...i, weight: val } : i));
+                                  }}
+                                  className="w-11 text-center bg-transparent border-b border-slate-250 font-bold text-xs p-0.5 focus:ring-0 focus:border-indigo-500 outline-none"
+                                />
+                                <span className="text-[9px] font-bold text-slate-400">kg</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 bg-slate-50/70 border border-slate-150 rounded-lg px-2 py-0.5 text-xs">
+                                <span className="text-[8px] font-extrabold uppercase text-slate-450">Wt:</span>
+                                <span className="font-bold text-slate-800">{item.weight} kg</span>
+                              </div>
+                            )}
 
-                            <span className="text-[10px] font-bold text-slate-500 bg-indigo-50/50 px-2 py-0.5 rounded border border-indigo-100/30 whitespace-nowrap">
+                            <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100/30 whitespace-nowrap">
                               Total: {(item.weight * (item.quantity || 1)).toFixed(1)} kg
                             </span>
                           </div>
@@ -7404,24 +7492,30 @@ export default function App() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setCapturingItemId(item.id);
-                            document.getElementById('universal-wo-camera')?.click();
-                          }}
-                          className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-all cursor-pointer"
-                        >
-                          <Camera size={15} />
-                        </button>
-                        
-                        <button 
-                          type="button"
-                          onClick={() => setWoItems(woItems.filter(i => i.id !== item.id))}
-                          className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 flex items-center justify-center transition-all cursor-pointer"
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        {woIsEditingItems ? (
+                          <>
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                setCapturingItemId(item.id);
+                                document.getElementById('universal-wo-camera')?.click();
+                              }}
+                              className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-all cursor-pointer"
+                              title="Snap Photo"
+                            >
+                              <Camera size={15} />
+                            </button>
+                            
+                            <button 
+                              type="button"
+                              onClick={() => setWoItems(woItems.filter(i => i.id !== item.id))}
+                              className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 flex items-center justify-center transition-all cursor-pointer"
+                              title="Delete Item"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </>
+                        ) : null}
                       </div>
                     </div>
                   ))
@@ -7638,6 +7732,17 @@ export default function App() {
                   </div>
                 )}
               </div>
+
+              <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-100 mt-4">
+                <span className="text-[10px] text-slate-400 font-bold">Keep KYC documents synchronized with servers.</span>
+                <button
+                  type="button"
+                  onClick={handleWOSaveDetails}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer"
+                >
+                  <Save size={14} /> Save KYC Progress
+                </button>
+              </div>
             </div>
           )}
 
@@ -7721,6 +7826,17 @@ export default function App() {
                   </select>
                 </div>
               </div>
+
+              <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-100 mt-6 max-w-xl">
+                <span className="text-[10px] text-slate-400 font-bold">Keep destination parameters synchronized with servers.</span>
+                <button
+                  type="button"
+                  onClick={handleWOSaveDetails}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer"
+                >
+                  <Save size={14} /> Save Destination Details
+                </button>
+              </div>
             </div>
           )}
 
@@ -7752,43 +7868,28 @@ export default function App() {
                   </div>
                 </div>
 
-                <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><Sparkles size={11} className="text-indigo-600" /> Update Completion Status</h4>
-                  <p className="text-[10px] text-slate-550 mb-2 leading-relaxed">Choose status assigned to receipt lists.</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button 
-                      type="button"
-                      onClick={() => setWoStatusInput('Picked Up')}
-                      className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-                        woStatusInput === 'Picked Up' 
-                          ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
-                          : 'border-slate-100 hover:border-slate-200 text-slate-500 bg-white'
-                      }`}
-                    >
-                      <PackageCheck size={20} className={woStatusInput === 'Picked Up' ? "text-indigo-600" : "text-slate-400"} />
-                      <span className="text-xs font-black mt-1.5">Picked Up</span>
-                      <span className="text-[8px] opacity-75 mt-0.5">Doorstep cargo loaded</span>
-                    </button>
-                    
-                    <button 
-                      type="button"
-                      onClick={() => setWoStatusInput('Received at Warehouse')}
-                      className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-                        woStatusInput === 'Received at Warehouse' 
-                          ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
-                          : 'border-slate-100 hover:border-slate-200 text-slate-500 bg-white'
-                      }`}
-                    >
-                      <Warehouse size={18} className={woStatusInput === 'Received at Warehouse' ? "text-indigo-600" : "text-slate-400"} />
-                      <span className="text-xs font-black mt-2">At Warehouse</span>
-                      <span className="text-[8px] opacity-75 mt-0.5">High hub distribution</span>
-                    </button>
-                  </div>
-                </div>
+                {/* Note: Update Completion status is not required for Agent login */}
 
                 <div>
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><CreditCard size={11} className="text-emerald-600" /> Payment Method</h4>
                   <div className="space-y-3">
+                    <div 
+                      onClick={() => setWoPaymentMethod('cash')}
+                      className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
+                      id="wo-payment-cash"
+                    >
+                      <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center text-white shrink-0">
+                        <Banknote size={18} />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-bold">Cash On Delivery (Cash)</div>
+                        <div className="text-[10px] text-slate-500">Pay cash at doorstep</div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                        {woPaymentMethod === 'cash' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                      </div>
+                    </div>
+
                     <div 
                       onClick={() => setWoPaymentMethod('phonepe')}
                       className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
@@ -7915,15 +8016,15 @@ export default function App() {
         </div>
       </div>
     );
-  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, woAddress, address, currentUser, handleWOSaveDetails, woStatusInput, setWoStatusInput, woStep, setWoStep]);
+  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, woAddress, address, currentUser, handleWOSaveDetails, woStatusInput, setWoStatusInput, woStep, setWoStep, woIsEditingItems, setWoIsEditingItems]);
 
   const AgentSection = useMemo(() => {
     if (!currentUser) return null;
     
     const agentId = currentUser.id.toUpperCase();
-    const scheduledApts = appointments.filter(a => a.status === 'Scheduled' && a.assignedAgentId && a.assignedAgentId.toUpperCase() === agentId);
-    const completedApts = appointments.filter(a => (a.status === 'Completed' || a.status === 'Picked Up') && a.assignedAgentId && a.assignedAgentId.toUpperCase() === agentId);
-    const canceledApts = appointments.filter(a => a.status === 'Cancelled' && a.assignedAgentId && a.assignedAgentId.toUpperCase() === agentId);
+    const scheduledApts = appointments.filter(a => a.status === 'Scheduled' || a.status === 'Pending Pickup');
+    const completedApts = appointments.filter(a => a.status === 'Completed' || a.status === 'Picked Up');
+    const canceledApts = appointments.filter(a => a.status === 'Cancelled');
 
     const displayedApts = 
       agentActiveTab === 'Scheduled' ? scheduledApts : 
@@ -7931,10 +8032,7 @@ export default function App() {
       agentActiveTab === 'Canceled' ? canceledApts : [];
 
     // Real dynamic stats calculation
-    const agentOrders = orders.filter(o => {
-      const aid = o.assignedAgentId || o.assigned_agent_id || (o as any).destination?.assignedAgentId || (o as any).destination?.assigned_agent_id;
-      return aid && aid.toUpperCase() === agentId;
-    });
+    const agentOrders = orders;
 
     const totalWeightCollected = agentOrders.reduce((sum, o) => {
       if (['Picked Up', 'Delivered', 'Received at Warehouse', 'In Warehouse', 'Ready to Ship', 'In Transit', 'Out for Delivery'].includes(o.status)) {
@@ -8429,6 +8527,10 @@ export default function App() {
                     <div className="flex items-center gap-2 text-sm">
                       <UserIcon size={14} className="text-slate-400" />
                       <span className="font-bold text-indigo-600">{apt.phone}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                      <Truck size={14} className="text-slate-400" />
+                      <span>Agent: <strong className="text-slate-700">{apt.assignedAgent?.name || 'Unassigned / Any Agent'}</strong></span>
                     </div>
                   </div>
 
