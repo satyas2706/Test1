@@ -3888,9 +3888,24 @@ export default function App() {
   const [navbarTrackingId, setNavbarTrackingId] = useState('');
 
   const navigateTo = (tab: Tab) => {
-    if (tab === 'pickup' && appointments.some(a => a.status === 'Scheduled') && !isSchedulingNewPickup) {
-      setShowPickupInProgressModal(true);
-      return;
+    if (tab === 'pickup') {
+      if (!currentUser) {
+        // Automatically start fresh for another customer if not signed in
+        setPickupName('');
+        setPickupEmail('');
+        setPickupPhone('');
+        setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
+        setPickupLanguage('English');
+        setPickupSpecialInstructions('');
+        setPickupCategory('Personal Effects');
+        setPickupEstimatedWeight('1-5 kg');
+        setActivePickupStep(1);
+        setLastBookingRef(null);
+        setIsSchedulingNewPickup(true);
+      } else if (appointments.some(a => a.status === 'Scheduled') && !isSchedulingNewPickup) {
+        setShowPickupInProgressModal(true);
+        return;
+      }
     }
     if (tab !== activeTab) {
       setTabHistory(prev => [...prev, tab]);
@@ -4531,7 +4546,12 @@ export default function App() {
     return finalId;
   }, [orders, appointments]);
 
-  const confirmPickup = async (type: 'AllAgent' | 'Mixed' = 'AllAgent') => {
+  const confirmPickup = async (
+    type: 'AllAgent' | 'Mixed' = 'AllAgent',
+    overrideCustomerId?: string,
+    overrideEmail?: string,
+    overrideName?: string
+  ) => {
     const assignedAgent = (isAutoAssignAgentEnabled && type === 'AllAgent') ? agents[Math.floor(Math.random() * agents.length)] : undefined;
     const fullAddress = `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}, ${pickupAddress.city}, ${pickupAddress.state} ${pickupAddress.zip}`;
     
@@ -4559,10 +4579,14 @@ export default function App() {
     }
     if (estWeight === 0) estWeight = 3;
 
+    const resolvedCustomerId = overrideCustomerId || currentUser?.id || 'guest-user';
+    const resolvedName = pickupName || overrideName || currentUser?.name || 'Guest User';
+    const resolvedEmail = pickupEmail || overrideEmail || currentUser?.email || '';
+
     // Create new order which will derive the appointment
     const newOrder: Order = {
       id: newAppointmentId,
-      customerId: currentUser?.id || 'guest-user',
+      customerId: resolvedCustomerId,
       items: [],
       totalWeight: estWeight,
       totalCost: 0,
@@ -4570,8 +4594,8 @@ export default function App() {
       createdAt: new Date().toISOString(),
       shippingDate: selectedPickupDate,
       destination: {
-        fullName: pickupName || currentUser?.name || 'Guest User',
-        email: pickupEmail || currentUser?.email || '',
+        fullName: resolvedName,
+        email: resolvedEmail,
         phone: pickupPhone,
         addressLine1: fullAddress,
         city: pickupAddress.city,
@@ -4586,13 +4610,13 @@ export default function App() {
       languagePreference: pickupLanguage,
       itemType: pickupItemType,
       vehicleType: pickupVehicleType,
-      customerName: pickupName
+      customerName: resolvedName
     } as any;
     
     setOrders([...orders, newOrder]);
 
     // Send confirmation email
-    const recipientEmail = pickupEmail || currentUser?.email;
+    const recipientEmail = resolvedEmail;
     if (recipientEmail && recipientEmail.includes('@') && recipientEmail !== 'user@example.com') {
       api.sendOrderConfirmationEmail(recipientEmail, newOrder, COMPANY_DETAILS)
         .then(() => toast.success(`Confirmation email sent to ${recipientEmail}`))
@@ -4612,7 +4636,7 @@ export default function App() {
       try {
         const orderData = {
           ...newOrder,
-          customer_id: currentUser?.id || 'guest-user',
+          customer_id: resolvedCustomerId,
           total_weight: newOrder.totalWeight || 3,
           total_cost: 0,
           destination: newOrder.destination,
@@ -4635,6 +4659,9 @@ export default function App() {
     setPickupPhone('');
     setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
     setPickupLanguage('English');
+    setPickupSpecialInstructions('');
+    setPickupCategory('Personal Effects');
+    setPickupEstimatedWeight('1-5 kg');
   };
 
   const cancelPickup = (id: string) => {
@@ -12586,10 +12613,17 @@ export default function App() {
                   // Auto-redirect based on role for smoother testing
                   const isAdmin = email === 'admin@jiffex.com';
                   const isAgent = email.toLowerCase().endsWith('.agent@jiffex.com') || email === 'agent@jiffex.com';
-                  if (isAdmin) navigateTo('admin');
-                  else if (isAgent) navigateTo('agent');
-                  else if (loginTriggerSource === 'pickup') navigateTo('pickup');
-                  else if (loginTriggerSource === 'checkout') navigateTo('finalize');
+                  if (isAdmin) {
+                    navigateTo('admin');
+                  } else if (isAgent) {
+                    navigateTo('agent');
+                  } else if (loginTriggerSource === 'pickup') {
+                    // Start guest/member session and direct synchronous confirmation to next step (Step 5)
+                    const guestId = email ? `guest_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : 'guest-user';
+                    confirmPickup('AllAgent', guestId, email, name || pickupName);
+                  } else if (loginTriggerSource === 'checkout') {
+                    navigateTo('finalize');
+                  }
                 }} />
               </div>
             </motion.div>
