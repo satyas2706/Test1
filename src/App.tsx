@@ -3902,7 +3902,7 @@ export default function App() {
         setActivePickupStep(1);
         setLastBookingRef(null);
         setIsSchedulingNewPickup(true);
-      } else if (appointments.some(a => a.status === 'Scheduled') && !isSchedulingNewPickup) {
+      } else if (appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)) && !isSchedulingNewPickup) {
         setShowPickupInProgressModal(true);
         return;
       }
@@ -3983,12 +3983,12 @@ export default function App() {
         const resolvedAgent = agentId ? agents.find(a => a.id === agentId) : undefined;
         return {
           id: o.id,
-          customerId: o.customerId,
-          customerName: o.customerName || o.destination.fullName,
+          customerId: o.customerId || (o as any).customer_id,
+          customerName: o.customerName || o.destination?.fullName || '',
           date: o.shippingDate || (o as any).date || o.createdAt?.split('T')[0],
           time: (o as any).time || 'Flexible',
-          address: o.destination.addressLine1,
-          phone: o.destination.phone,
+          address: o.destination?.addressLine1 || '',
+          phone: o.destination?.phone || '',
           status: (o.status === 'Scheduled' || o.status === 'Pending Pickup') ? 'Scheduled' : 
                   o.status === 'Cancelled' ? 'Cancelled' : 
                   o.status === 'Picked Up' ? 'Picked Up' : 'Completed',
@@ -3999,7 +3999,8 @@ export default function App() {
           assignedAgentId: resolvedAgent ? resolvedAgent.id : undefined,
           languagePreference: (o as any).languagePreference,
           itemType: (o as any).itemType,
-          vehicleType: (o as any).vehicleType
+          vehicleType: (o as any).vehicleType,
+          email: o.destination?.email || (o as any).email || ''
         };
       }) as Appointment[];
   }, [orders, agents]);
@@ -4161,6 +4162,12 @@ export default function App() {
   }, [activeTab]);
 
   const [lastBookingRef, setLastBookingRef] = useState<string | null>(null);
+  const userAppointments = useMemo(() => {
+    return appointments.filter(a => currentUser 
+      ? (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)
+      : (lastBookingRef ? a.id === lastBookingRef : false)
+    );
+  }, [appointments, currentUser, lastBookingRef]);
   const [categories, setCategories] = useState(['Pooja', 'Return Gifts', 'Decorative']);
   const [tickets, setTickets] = useState<Ticket[]>([
     {
@@ -5224,8 +5231,12 @@ export default function App() {
   }, [cartItems]);
 
   const hasAllAgentPickup = useMemo(() => {
-    return appointments.some(a => a.status === 'Scheduled' && a.pickupType === 'AllAgent');
-  }, [appointments]);
+    return appointments.some(a => a.status === 'Scheduled' && a.pickupType === 'AllAgent' && (
+      currentUser 
+        ? (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)
+        : (lastBookingRef ? a.id === lastBookingRef : false)
+    ));
+  }, [appointments, currentUser, lastBookingRef]);
 
   const totalCost = useMemo(() => {
     const rate = shippingRates[address.country] || 10;
@@ -5479,7 +5490,7 @@ export default function App() {
 
   const handleFinalPayment = async () => {
     if (!currentUser) return;
-    const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled');
+    const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone));
     const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
     
     // Determine payment status based on pickup and shipping preference
@@ -5792,7 +5803,9 @@ export default function App() {
     setCouponCodeInput('');
 
     // Determine primary source and generate the correct order ID first so it is preserved even across login
-    const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled');
+    const hasScheduledPickup = currentUser 
+      ? appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone))
+      : (lastBookingRef ? appointments.some(a => a.id === lastBookingRef && a.status === 'Scheduled') : false);
     const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
 
     let source: 'Store' | 'Warehouse' | 'Pickup' = 'Store';
@@ -9006,14 +9019,19 @@ export default function App() {
       toast.success('Warehouse address copied to clipboard!');
     };
 
-    const hasActivePickup = appointments.some(a => a.status === 'Scheduled');
+    const hasActivePickup = currentUser 
+      ? appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone))
+      : (lastBookingRef ? appointments.some(a => a.id === lastBookingRef && a.status === 'Scheduled') : false);
+    const activePickup = currentUser 
+      ? appointments.find(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone))
+      : (lastBookingRef ? appointments.find(a => a.id === lastBookingRef && a.status === 'Scheduled') : undefined);
     const hasCompletedPickup = lastBookingRef ? appointments.some(a => a.id === lastBookingRef && a.status === 'Completed') : false;
 
     const isCartEmpty = mode === 'Warehouse' 
       ? items.filter(i => i.source === 'Warehouse' && !i.submitted).length === 0
       : mode === 'Pickup'
-        ? items.filter(i => i.source === 'Pickup' && !i.submitted).length === 0 && (isSchedulingNewPickup ? true : !appointments.some(a => a.status === 'Scheduled'))
-        : items.filter(i => i.source !== 'Warehouse' || i.submitted).length === 0 && appointments.length === 0;
+        ? items.filter(i => i.source === 'Pickup' && !i.submitted).length === 0 && (isSchedulingNewPickup ? true : !hasActivePickup)
+        : items.filter(i => i.source !== 'Warehouse' || i.submitted).length === 0 && !hasActivePickup;
 
     const displayItems = mode 
       ? (mode === 'Warehouse' 
@@ -9353,7 +9371,7 @@ export default function App() {
                 <div className="space-y-1">
                   <h4 className="text-lg font-black text-slate-900">Home Pickup Scheduled</h4>
                   <p className="text-sm text-slate-600 font-medium leading-relaxed">
-                    Your pickup is confirmed for <span className="text-indigo-600 font-bold">{appointments.find(a => a.status === 'Scheduled')?.date}</span> at <span className="text-indigo-600 font-bold">{appointments.find(a => a.status === 'Scheduled')?.time}</span>. 
+                    Your pickup is confirmed for <span className="text-indigo-600 font-bold">{activePickup?.date}</span> at <span className="text-indigo-600 font-bold">{activePickup?.time}</span>. 
                     Since you have opted for Home Pickup, item collection, weighing, and payment processing will be handled by our agent at your doorstep. <span className="font-bold">Final billing will be done at your home during pickup.</span> Once processed at our warehouse, you can track the full details in <span className="text-indigo-600 font-bold">My Orders</span>.
                   </p>
                 </div>
@@ -9488,7 +9506,7 @@ export default function App() {
                                 <div>
                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Scheduled For</p>
                                   <p className="text-sm font-black text-slate-900">
-                                    {appointments.find(a => a.status === 'Scheduled')?.date} at {appointments.find(a => a.status === 'Scheduled')?.time}
+                                    {activePickup?.date} at {activePickup?.time}
                                   </p>
                                 </div>
                               </div>
@@ -9499,7 +9517,7 @@ export default function App() {
                                 <div>
                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Address</p>
                                   <p className="text-sm font-black text-slate-900 truncate max-w-[200px]">
-                                    {appointments.find(a => a.status === 'Scheduled')?.address.street}
+                                    {activePickup?.address}
                                   </p>
                                 </div>
                               </div>
@@ -10126,7 +10144,7 @@ export default function App() {
                           
                           <div className="space-y-3">
                             <h2 className="text-4xl font-black text-slate-900 tracking-tight">
-                              Thanks, {appointments.find(a => a.id === lastBookingRef)?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 'there'}! Your pickup is confirmed.
+                              Thanks, {activePickup?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 'there'}! Your pickup is confirmed.
                             </h2>
                             <p className="text-lg text-slate-500 max-w-lg mx-auto leading-relaxed font-medium">
                               Our agent will arrive at your selected time to collect your items. You can still <button onClick={() => navigateTo('store')} className="text-indigo-600 font-bold hover:underline">add products from our shop</button> before shipping.
@@ -10138,11 +10156,11 @@ export default function App() {
                               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Booking ref</p>
                               <div className="flex items-center justify-center gap-3">
                                 <p className="text-3xl font-black text-deep-blue tracking-wider">
-                                  {lastBookingRef || appointments.find(a => a.status === 'Scheduled')?.id}
+                                  {lastBookingRef || activePickup?.id}
                                 </p>
                                 <button 
                                   onClick={() => {
-                                    const ref = lastBookingRef || appointments.find(a => a.status === 'Scheduled')?.id;
+                                    const ref = lastBookingRef || activePickup?.id;
                                     if (ref) {
                                       navigator.clipboard.writeText(ref);
                                       toast.success('Booking reference copied!');
@@ -10159,7 +10177,7 @@ export default function App() {
                             <div className="flex flex-col items-center gap-3">
                               <button 
                                 onClick={() => {
-                                  const ref = lastBookingRef || appointments.find(a => a.status === 'Scheduled')?.id;
+                                  const ref = lastBookingRef || activePickup?.id;
                                   if (ref) {
                                     setNavbarTrackingId(ref);
                                     navigateTo('track');
@@ -10172,7 +10190,7 @@ export default function App() {
                               
                               <button 
                                 onClick={() => {
-                                  const ref = lastBookingRef || appointments.find(a => a.status === 'Scheduled')?.id;
+                                  const ref = lastBookingRef || activePickup?.id;
                                   if (ref) {
                                     const message = `*JiffEX Pickup Confirmation*\n\nBooking Reference: ${ref}\nDestination: India\nStatus: Confirmed\n\nTrack your shipment at: ${window.location.origin}?tab=track&id=${ref}\n\nThank you for choosing JiffEX!`;
                                     sendWhatsApp(pickupPhone, message);
@@ -10425,12 +10443,12 @@ export default function App() {
                   )}
 
                   {/* Scheduled Pickups */}
-                  {(mode === 'Pickup') && appointments.some(a => a.status === 'Scheduled' || a.status === 'Picked Up') && activePickupStep !== 5 && !isSchedulingNewPickup && (
+                  {(mode === 'Pickup') && userAppointments.some(a => a.status === 'Scheduled' || a.status === 'Picked Up') && activePickupStep !== 5 && !isSchedulingNewPickup && (
                     <div className="space-y-4">
                       <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
                         <Truck size={18} className="text-indigo-600" /> Scheduled Pickups
                       </h4>
-                      {appointments.filter(a => a.status === 'Scheduled' || a.status === 'Picked Up').map((apt, idx) => (
+                      {userAppointments.filter(a => a.status === 'Scheduled' || a.status === 'Picked Up').map((apt, idx) => (
                         <motion.div 
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -10725,9 +10743,9 @@ export default function App() {
           )}
               
               {/* Action Buttons - Only show in My Cart tab (!mode) */}
-              {!mode && (displayItems.length > 0 || appointments.length > 0) && !hasCompletedPickup && (
+              {!mode && (displayItems.length > 0 || hasActivePickup) && !hasCompletedPickup && (
                 <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col gap-6">
-                  {appointments.some(a => a.status === 'Scheduled') && !displayItems.some(i => i.source === 'Warehouse') && (
+                  {hasActivePickup && !displayItems.some(i => i.source === 'Warehouse') && (
                     <div className="p-5 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-start gap-4">
                       <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-sm">
                         <Home size={20} />
@@ -10741,15 +10759,15 @@ export default function App() {
                     <button 
                       onClick={handleCheckout}
                       className={`flex-1 py-5 px-8 rounded-2xl font-bold transition-all shadow-2xl flex items-center justify-center gap-2 group ${
-                        appointments.some(a => a.status === 'Scheduled') && displayItems.length === 0
+                        hasActivePickup && displayItems.length === 0
                           ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                           : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/20'
                       }`}
                     >
-                      {appointments.some(a => a.status === 'Scheduled') 
+                      {hasActivePickup 
                         ? (displayItems.length > 0 ? 'Confirm Order' : 'Checkout')
                         : (currentUser ? 'Checkout' : 'Sign in to Checkout')} 
-                      <ArrowRight size={20} className={appointments.some(a => a.status === 'Scheduled') && displayItems.length === 0 ? '' : 'group-hover:translate-x-1 transition-transform'} />
+                      <ArrowRight size={20} className={hasActivePickup && displayItems.length === 0 ? '' : 'group-hover:translate-x-1 transition-transform'} />
                     </button>
                   </div>
                 </div>
@@ -10829,7 +10847,9 @@ export default function App() {
       }
     });
 
-    const hasActivePickup = appointments.some(a => a.status === 'Scheduled');
+    const hasActivePickup = currentUser 
+      ? appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone))
+      : (lastBookingRef ? appointments.some(a => a.id === lastBookingRef && a.status === 'Scheduled') : false);
 
     const ShopHeroSlider = () => {
       const [currentSlide, setCurrentSlide] = useState(0);
@@ -11266,7 +11286,7 @@ export default function App() {
         </div>
       </div>
     );
-  }, [selectedCategory, searchQuery, sortBy, minPrice, maxPrice, showFilters, addItem, removeStoreItem, handleCheckout, items, storeProducts, currentUser, showJiffySuggestion, setActiveTab, appointments]);
+  }, [selectedCategory, searchQuery, sortBy, minPrice, maxPrice, showFilters, addItem, removeStoreItem, handleCheckout, items, storeProducts, currentUser, showJiffySuggestion, setActiveTab, appointments, lastBookingRef]);
 
   const FinalizeSection = useMemo(() => {
     if (!currentUser) return null;
@@ -11274,7 +11294,7 @@ export default function App() {
     const isWarehouseCheckout = orderId ? orderId.startsWith('SW-') : cartItems.some(i => i.source === 'Warehouse');
 
     if (isPaid) {
-      const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled');
+      const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone));
       const isPayAtHome = hasScheduledPickup && shippingPreference === 'International';
       
       return (
@@ -11332,7 +11352,7 @@ export default function App() {
           {!isWarehouseCheckout && <CheckoutProgressTracker />}
           
           {/* Shipping Preference Selection */}
-          {!isWarehouseCheckout && appointments.some(a => a.status === 'Scheduled') && cartItems.length > 0 && (
+          {!isWarehouseCheckout && appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)) && cartItems.length > 0 && (
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
                 <Truck className="text-indigo-600" /> How should we deliver your shop items?
@@ -11512,7 +11532,7 @@ export default function App() {
 
           {/* Payment */}
           {!isWarehouseCheckout && (
-            (!appointments.some(a => a.status === 'Scheduled') || shippingPreference === 'LocalPickup') ? (
+            (!appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)) || shippingPreference === 'LocalPickup') ? (
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
                   <CreditCard className="text-emerald-600" /> Payment Method
@@ -11610,7 +11630,7 @@ export default function App() {
                     <span>Items Cost</span>
                     <span className="text-white font-medium">₹{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
                   </div>
-                  {appointments.some(a => a.status === 'Scheduled') && (
+                  {appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)) && (
                     <div className="flex justify-between text-slate-400 text-sm">
                       <span>Shop Item Delivery</span>
                       <span className="text-emerald-400 font-medium">{shippingPreference === 'LocalPickup' ? 'During Home Pickup' : 'To my Home'}</span>
@@ -11718,7 +11738,7 @@ export default function App() {
             >
               {isWarehouseCheckout 
                 ? 'Confirm Shipment Request'
-                : (appointments.some(a => a.status === 'Scheduled') && shippingPreference === 'International') 
+                : (appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)) && shippingPreference === 'International') 
                   ? 'Confirm Order (Pay at Home)' 
                   : 'Confirm & Pay'
               }
