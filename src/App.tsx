@@ -7261,7 +7261,7 @@ export default function App() {
                     <input 
                       type="text" 
                       placeholder="e.g., File bundle, Parcel box, Clothes..."
-                      className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold placeholder:text-slate-350"
+                      className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-xs font-semibold placeholder:text-slate-350"
                       value={woItemName}
                       onChange={(e) => setWoItemName(e.target.value)}
                     />
@@ -7275,7 +7275,7 @@ export default function App() {
                         type="number" 
                         placeholder="e.g., 2.5"
                         step="any"
-                        className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold text-center"
+                        className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-xs font-semibold text-center"
                         value={woItemWeight || ''}
                         onChange={(e) => {
                           const val = e.target.value === '' ? 0 : Number(e.target.value);
@@ -7289,7 +7289,7 @@ export default function App() {
                       <input 
                         type="number" 
                         placeholder="Qty"
-                        className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold text-center"
+                        className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-xs font-semibold text-center"
                         value={woItemQuantity || ''}
                         onChange={(e) => {
                           const val = e.target.value === '' ? 1 : Math.max(1, parseInt(e.target.value, 10));
@@ -7633,7 +7633,7 @@ export default function App() {
                     <input 
                       type="text" 
                       placeholder="e.g., Aadhar card number or custom label"
-                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold placeholder:text-slate-350"
+                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-xs font-semibold placeholder:text-slate-350"
                       value={woDocName}
                       onChange={(e) => setWoDocName(e.target.value)}
                     />
@@ -7788,7 +7788,7 @@ export default function App() {
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Recipient Full Name</label>
                   <input 
                     type="text" 
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
                     value={woAddress.fullName}
                     onChange={e => setWoAddress({...woAddress, fullName: e.target.value})}
                   />
@@ -7798,7 +7798,7 @@ export default function App() {
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Email ID</label>
                     <input 
                       type="email" 
-                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
                       value={woAddress.email}
                       onChange={e => setWoAddress({...woAddress, email: e.target.value})}
                     />
@@ -7807,7 +7807,7 @@ export default function App() {
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Recipient Phone</label>
                     <input 
                       type="tel" 
-                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
                       value={woAddress.phone}
                       onChange={e => setWoAddress({...woAddress, phone: e.target.value})}
                     />
@@ -7817,7 +7817,7 @@ export default function App() {
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Address Line 1</label>
                   <input 
                     type="text" 
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
                     value={woAddress.addressLine1}
                     onChange={e => setWoAddress({...woAddress, addressLine1: e.target.value})}
                   />
@@ -7827,7 +7827,7 @@ export default function App() {
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">City</label>
                     <input 
                       type="text" 
-                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
                       value={woAddress.city}
                       onChange={e => setWoAddress({...woAddress, city: e.target.value})}
                     />
@@ -7836,7 +7836,7 @@ export default function App() {
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Zip Code</label>
                     <input 
                       type="text" 
-                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
                       value={woAddress.zipCode}
                       onChange={e => setWoAddress({...woAddress, zipCode: e.target.value})}
                     />
@@ -7845,7 +7845,7 @@ export default function App() {
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Destination Country</label>
                   <select 
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
                     value={woAddress.country}
                     onChange={e => setWoAddress({...woAddress, country: e.target.value})}
                   >
