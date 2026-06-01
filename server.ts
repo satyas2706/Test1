@@ -55,8 +55,8 @@ const app = express();
 const PORT = 3000;
 
 // Initialize Supabase Client
-const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
 if (supabase) {
@@ -438,6 +438,14 @@ app.get("/api/health", async (req, res) => {
     status: "ok",
     supabaseConnected: !!supabase,
     emailConfigured: !!mailTransporter && !!process.env.SMTP_FROM
+  });
+});
+
+// Runtime Supabase configuration API for production environments (e.g. Render)
+app.get("/api/supabase-config", (req, res) => {
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "",
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || ""
   });
 });
 

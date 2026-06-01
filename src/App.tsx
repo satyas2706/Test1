@@ -126,7 +126,7 @@ import {
   COMPANY_DETAILS
 } from './constants';
 import { api } from './services/api';
-import { supabase, isSupabaseConfigured } from './lib/supabase';
+import { supabase, isSupabaseConfigured, updateSupabaseConfig } from './lib/supabase';
 import { Login } from './components/Login';
 import { Session } from '@supabase/supabase-js';
 import AccountSection from './components/sections/AccountSection';
@@ -4372,7 +4372,7 @@ export default function App() {
   const [woOrderId, setWoOrderId] = useState<string | null>(null);
   const [woPaymentMethod, setWoPaymentMethod] = useState<'card' | 'phonepe' | 'cash'>('card');
   const [woShippingDate, setWoShippingDate] = useState<string>(SHIPPING_DATES[0]);
-  const [woIsEditingItems, setWoIsEditingItems] = useState<boolean>(false);
+  const [woIsEditingItems, setWoIsEditingItems] = useState<boolean>(true);
   const [woDocuments, setWoDocuments] = useState<{ id: string; name: string; image: string; type: string; uploadedAt: string }[]>([]);
   const [woDocName, setWoDocName] = useState('');
   const [woDocType, setWoDocType] = useState('Govt ID Proof');
@@ -4414,13 +4414,13 @@ export default function App() {
         setWoStatusInput('Picked Up');
       }
       setIsWOPaid(correspondingOrder?.paymentStatus === 'Paid');
-      setWoIsEditingItems(false);
+      setWoIsEditingItems(true);
     } else {
       setWoItems([]);
       setWoDocuments([]);
       setIsWOPaid(false);
       setWoStatusInput('Picked Up');
-      setWoIsEditingItems(false);
+      setWoIsEditingItems(true);
       setWoItemName('');
       setWoItemWeight(1);
       setWoItemQuantity(1);
@@ -4735,23 +4735,57 @@ export default function App() {
 
   // Check backend health and Supabase connection
   useEffect(() => {
-    // Auth Listener
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthLoading(false);
-    });
+    let subscription: any;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
+    const initializeSupabaseAndAuth = async () => {
+      try {
+        // Fetch runtime Supabase configuration from the server
+        const configRes = await fetch('/api/supabase-config');
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          if (configData.supabaseUrl && configData.supabaseAnonKey) {
+            updateSupabaseConfig(configData.supabaseUrl, configData.supabaseAnonKey);
+          }
+        }
+      } catch (err) {
+        console.warn('Unable to reach runtime configuration api:', err);
+      }
 
-    api.checkHealth()
-      .then(res => {
+      // Check backend health
+      try {
+        const res = await api.checkHealth();
         setDbStatus({ connected: res.supabaseConnected, checked: true });
-      })
-      .catch(() => setDbStatus({ connected: false, checked: true }));
+      } catch (err) {
+        setDbStatus({ connected: false, checked: true });
+      }
 
-    return () => subscription.unsubscribe();
+      // Initialize auth session
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setAuthLoading(false);
+      } catch (err) {
+        console.warn('Supabase auth getSession error:', err);
+        setAuthLoading(false);
+      }
+
+      try {
+        const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+          setSession(session);
+        });
+        subscription = data.subscription;
+      } catch (err) {
+        console.warn('Supabase auth onAuthStateChange error:', err);
+      }
+    };
+
+    initializeSupabaseAndAuth();
+
+    return () => {
+      if (subscription?.unsubscribe) {
+        subscription.unsubscribe();
+      }
+    };
   }, []);
 
   // Sync agents database list with Supabase when connected
@@ -7298,17 +7332,33 @@ export default function App() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 truncate">Quantity</label>
-                      <input 
-                        type="number" 
-                        placeholder="Qty"
-                        className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-xs font-semibold text-center"
-                        value={woItemQuantity || ''}
-                        onChange={(e) => {
-                          const val = e.target.value === '' ? 1 : Math.max(1, parseInt(e.target.value, 10));
-                          setWoItemQuantity(val);
-                        }}
-                      />
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 truncate text-center">Quantity</label>
+                      <div className="flex items-center bg-white border border-slate-200 rounded-xl px-1 sm:px-1.5 h-[38px] justify-between">
+                        <button
+                          type="button"
+                          onClick={() => setWoItemQuantity(q => Math.max(1, q - 1))}
+                          className="w-6 h-6 sm:w-7 sm:h-7 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700 cursor-pointer active:scale-95 transition-transform"
+                        >
+                          -
+                        </button>
+                        <input 
+                          type="number" 
+                          placeholder="Qty"
+                          className="w-10 sm:w-12 text-center bg-transparent border-0 font-bold text-sm sm:text-base p-0 focus:ring-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          value={woItemQuantity || ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value, 10));
+                            setWoItemQuantity(val === '' ? 1 : val);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setWoItemQuantity(q => q + 1)}
+                          className="w-6 h-6 sm:w-7 sm:h-7 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700 cursor-pointer active:scale-95 transition-transform"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
 
                     <div>
