@@ -5158,7 +5158,7 @@ export default function App() {
     };
   }, []);
 
-  // Real-time Order Updates (Supabase Realtime)
+  // Real-time Order and Item Updates (Supabase Realtime)
   useEffect(() => {
     if (!currentUser || !dbStatus.connected) return;
 
@@ -5166,7 +5166,7 @@ export default function App() {
     const isPrivileged = ['admin', 'webmaster', 'customer_service', 'agent'].includes(roleLower);
     const filterStr = isPrivileged ? undefined : `customer_id=eq.${currentUser.id}`;
 
-    console.log(`[Realtime] Subscribing to order updates. Privileged: ${isPrivileged}, User: ${currentUser.id}`);
+    console.log(`[Realtime] Subscribing to order & item updates. Privileged: ${isPrivileged}, User: ${currentUser.id}`);
     
     // Create a channel for order updates
     const channel = supabase
@@ -5208,8 +5208,41 @@ export default function App() {
         }
       });
 
+    // Create a channel for items updates
+    const itemsChannel = supabase
+      .channel('public:items:all')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'items',
+        },
+        (payload) => {
+          console.log('[Realtime] Item Change Detected:', payload);
+          if (payload.eventType === 'INSERT') {
+            const newItem = payload.new as ShippingItem;
+            setItems(prev => {
+              if (prev.some(i => i.id === newItem.id)) return prev;
+              return [...prev, newItem];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedItem = payload.new as ShippingItem;
+            setItems(prev => prev.map(i => i.id === updatedItem.id ? { ...i, ...updatedItem } : i));
+          } else if (payload.eventType === 'DELETE') {
+            setItems(prev => prev.filter(i => i.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Realtime] Successfully subscribed to items updates');
+        }
+      });
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(itemsChannel);
     };
   }, [currentUser, dbStatus.connected, normalizeOrder]);
 
@@ -5249,6 +5282,27 @@ export default function App() {
       }
     }
   }, [currentUser, activeTab, dbStatus.checked, normalizeOrder]);
+
+  // Fetch items from database when currentUser or activeTab changes, supporting admin views
+  useEffect(() => {
+    if (dbStatus.checked) {
+      const uId = currentUser?.id || 'guest-user';
+      const roleLower = (currentUser?.role || '').toLowerCase();
+      const isAdminOrAgent = currentUser ? ['admin', 'webmaster', 'customer_service', 'agent'].includes(roleLower) : false;
+      const fetchId = isAdminOrAgent ? 'all' : uId;
+
+      api.fetchItems(fetchId)
+        .then(data => {
+          setItems(prev => {
+            if (prev.length === data.length && prev.every((item, idx) => item.id === data[idx].id && item.status === data[idx].status && item.weight === data[idx].weight)) {
+              return prev;
+            }
+            return data;
+          });
+        })
+        .catch(err => console.error('Failed to load items from server:', err));
+    }
+  }, [currentUser, activeTab, dbStatus.checked]);
 
   // Scroll to top when major state changes
   useEffect(() => {

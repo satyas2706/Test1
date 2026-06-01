@@ -593,19 +593,24 @@ app.post("/api/products", async (req, res) => {
 
 // Example API: Get all items for a user
 app.get("/api/items/:userId", async (req, res) => {
+  const { userId } = req.params;
   if (!supabase) {
+    if (userId === 'all') {
+      return res.json(memItems);
+    }
     const userItems = memItems.filter(i => {
       const uId = i.user_id || i.userId || i.customer_id || i.customerId;
-      return String(uId) === String(req.params.userId);
+      return String(uId) === String(userId);
     });
     return res.json(userItems);
   }
 
   try {
-    const { data, error } = await supabase
-      .from('items')
-      .select('*')
-      .eq('user_id', req.params.userId);
+    let query = supabase.from('items').select('*');
+    if (userId !== 'all') {
+      query = query.eq('user_id', userId);
+    }
+    const { data, error } = await query;
     if (error) throw error;
     res.json(data || []);
   } catch (err: any) {
@@ -1823,7 +1828,218 @@ app.get("/api/orders/:customerId", async (req, res) => {
   }
 });
 
+async function seedDatabaseIfEmpty() {
+  if (!supabase) return;
+  try {
+    console.log("[Supabase Seeder] Checking if database requires seeding...");
+
+    // 1. Seed Products if empty
+    const { data: existingProducts, error: pError } = await supabase.from('products').select('id').limit(1);
+    if (!pError && (!existingProducts || existingProducts.length === 0)) {
+       console.log("[Supabase Seeder] Products table is empty, seeding default products...");
+       const defaultProducts = [
+         {
+           name: 'Brass Diya Set',
+           price: 25,
+           category: 'Pooja',
+           image: 'https://picsum.photos/seed/diya/400/400',
+           weight: 0.5,
+           description: 'This exquisite handcrafted Brass Diya (Oil Lamp) set is a perfect addition to your spiritual space. Made from high-quality solid brass, it features intricate traditional engravings that reflect elegance and devotion.',
+           dimensions: { length: 12, width: 8, height: 6, unit: 'cm' },
+           material: 'Solid Brass',
+           origin: 'Moradabad, India',
+           estimated_delivery: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+         },
+         {
+           name: 'Sandalwood Incense Sticks',
+           price: 10,
+           category: 'Pooja',
+           image: 'https://picsum.photos/seed/incense/400/400',
+           weight: 0.2,
+           description: 'Immerse yourself in the calming aroma of pure Sandalwood. These premium incense sticks are hand-rolled using natural resins and essential oils. Perfect for meditation, yoga, or creating a peaceful home environment.',
+           dimensions: { length: 20, width: 2, height: 2, unit: 'cm' },
+           material: 'Natural Resins & Sandalwood Oil',
+           origin: 'Mysore, India',
+           estimated_delivery: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+         },
+         {
+           name: 'Handcrafted Elephant Statue',
+           price: 45,
+           category: 'Decorative',
+           image: 'https://picsum.photos/seed/elephant/400/400',
+           weight: 1.2,
+           description: 'A majestic statement piece for your home decor. This elephant statue is meticulously hand-carved by skilled artisans using premium sustainable wood. The intricate details capture the grandeur of the Indian elephant.',
+           dimensions: { length: 25, width: 12, height: 20, unit: 'cm' },
+           material: 'Sheesham Wood',
+           origin: 'Saharanpur, India',
+           estimated_delivery: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+         },
+         {
+           name: 'Copper Kalash',
+           price: 30,
+           category: 'Pooja',
+           image: 'https://picsum.photos/seed/kalash/400/400',
+           weight: 0.8,
+           description: 'A traditional Copper Kalash, essential for Vedic rituals and pooja ceremonies. Crafted from high-purity hammered copper, it retains water purity and adds a spiritual touch to your altar.',
+           dimensions: { length: 15, width: 15, height: 18, unit: 'cm' },
+           material: '100% Pure Copper',
+           origin: 'Pune, India',
+           estimated_delivery: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+         },
+         {
+           name: 'Silver Plated Pooja Thali',
+           price: 55,
+           category: 'Pooja',
+           image: 'https://picsum.photos/seed/thali/400/400',
+           weight: 1.5,
+           description: 'A luxurious silver-plated Thali set for special occasions and weddings. The set includes a beautiful large plate, intricate bowls, and a traditional diya. Finished with a tarnish-resistant coating for long-lasting shine.',
+           dimensions: { length: 32, width: 32, height: 4, unit: 'cm' },
+           material: 'Silver Plated Steel',
+           origin: 'Delhi, India',
+           estimated_delivery: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+         },
+         {
+           name: 'Ganesh Idol (Eco-friendly)',
+           price: 15,
+           category: 'Pooja',
+           image: 'https://picsum.photos/seed/ganesh/400/400',
+           weight: 0.4,
+           description: 'Bring home the remover of obstacles. This eco-friendly Ganesh idol is handcrafted from natural clay and painted with non-toxic, organic pigments. It dissolves harmlessly in water, making it perfect for rituals.',
+           dimensions: { length: 10, width: 8, height: 15, unit: 'cm' },
+           material: 'Natural Clay',
+           origin: 'Maharashtra, India',
+           estimated_delivery: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+         }
+       ];
+       const { error: pInsError } = await supabase.from('products').insert(defaultProducts);
+       if (pInsError) {
+         console.error("[Supabase Seeder] Failed to seed products:", pInsError);
+       } else {
+         console.log("[Supabase Seeder] Products seeded successfully!");
+       }
+    }
+
+    // 2. Seed Agents if empty
+    const { data: existingAgents, error: aError } = await supabase.from('agents').select('id').limit(1);
+    if (!aError && (!existingAgents || existingAgents.length === 0)) {
+       console.log("[Supabase Seeder] Agents table is empty, seeding default agents...");
+       const defaultAgents = [
+         { id: '10001', name: 'Rahul Sharma', phone: '+91 98765 43210', email: '10001.agent@jiffex.com', status: 'Active', vehicle_number: 'KA-01-AB-1234' },
+         { id: '10002', name: 'Priya Patel', phone: '+91 87654 32109', email: '10002.agent@jiffex.com', status: 'Active', vehicle_number: 'MH-02-CD-5678' },
+         { id: '12345', name: 'Test Agent (You)', phone: '+91 00000 00000', email: '12345.agent@jiffex.com', status: 'Active', vehicle_number: 'TEST-001' }
+       ];
+       const { error: aInsError } = await supabase.from('agents').insert(defaultAgents);
+       if (aInsError) {
+         console.error("[Supabase Seeder] Failed to seed agents:", aInsError);
+       } else {
+         console.log("[Supabase Seeder] Agents seeded successfully!");
+       }
+    }
+
+    // 3. Seed Items if empty
+    const { data: existingItems, error: iError } = await supabase.from('items').select('id').limit(1);
+    if (!iError && (!existingItems || existingItems.length === 0)) {
+       console.log("[Supabase Seeder] Items table is empty, seeding default items...");
+       const item1Id = crypto.randomUUID();
+       const item2Id = crypto.randomUUID();
+       const defaultItems = [
+         {
+           id: item1Id,
+           user_id: 'guest-user',
+           name: 'Diwali Return Gifts',
+           weight: 4.5,
+           status: 'Pending Pickup',
+           source: 'Pickup',
+           price: 0,
+         },
+         {
+           id: item2Id,
+           user_id: 'guest-user',
+           name: 'Premium Leather Boots',
+           weight: 2.1,
+           status: 'Received at Warehouse',
+           source: 'Warehouse',
+           price: 0,
+         }
+       ];
+       const { error: iInsError } = await supabase.from('items').insert(defaultItems);
+       if (iInsError) {
+         console.error("[Supabase Seeder] Failed to seed items:", iInsError);
+       } else {
+         console.log("[Supabase Seeder] Items seeded successfully!");
+         
+         // 4. Seed Orders if empty (referencing the items seeded)
+         const { data: existingOrders, error: oError } = await supabase.from('orders').select('id').limit(1);
+         if (!oError && (!existingOrders || existingOrders.length === 0)) {
+            console.log("[Supabase Seeder] Orders table is empty, seeding default orders...");
+            const defaultOrders = [
+              {
+                id: 'JX-PH-10001',
+                customer_id: 'guest-user',
+                items: [
+                  { id: item1Id, name: 'Diwali Return Gifts', weight: 4.5, status: 'Pending Pickup', source: 'Pickup' }
+                ],
+                total_weight: 4.5,
+                total_cost: 2200,
+                status: 'Scheduled',
+                destination: {
+                  fullName: 'John Doe',
+                  email: 'john.doe@example.com',
+                  phone: '+1 555 123 4567',
+                  addressLine1: '123 Maple Street',
+                  city: 'San Jose',
+                  state: 'CA',
+                  zipCode: '95112',
+                  country: 'USA',
+                  pickupType: 'AllAgent',
+                  assignedAgentId: '10001'
+                },
+                payment_status: 'Pending',
+                shipping_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+              },
+              {
+                id: 'JX-WH-10001',
+                customer_id: 'guest-user',
+                items: [
+                  { id: item2Id, name: 'Premium Leather Boots', weight: 2.1, status: 'Received at Warehouse', source: 'Warehouse' }
+                ],
+                total_weight: 2.1,
+                total_cost: 1530,
+                status: 'Picked Up',
+                destination: {
+                  fullName: 'Jane Smith',
+                  email: 'jane.smith@example.com',
+                  phone: '+44 20 7946 0958',
+                  addressLine1: '45 Parliament Street',
+                  city: 'London',
+                  state: 'London',
+                  zipCode: 'SW1A 2NH',
+                  country: 'UK',
+                  pickupType: 'AllAgent',
+                  assignedAgentId: '10002'
+                },
+                payment_status: 'Paid',
+                shipping_date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+              }
+            ];
+            const { error: oInsError } = await supabase.from('orders').insert(defaultOrders);
+            if (oInsError) {
+              console.error("[Supabase Seeder] Failed to seed orders:", oInsError);
+            } else {
+              console.log("[Supabase Seeder] Orders seeded successfully!");
+            }
+         }
+       }
+    }
+  } catch (err: any) {
+    console.error("[Supabase Seeder] Error during seeding:", err.message);
+  }
+}
+
 async function startServer() {
+  console.log("[Server Initialization] Seeding Supabase database if empty...");
+  await seedDatabaseIfEmpty();
+
   console.log("Configuring Vite middleware...");
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
