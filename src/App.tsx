@@ -4651,7 +4651,12 @@ export default function App() {
           shipping_date: selectedPickupDate
         } as any;
 
-        await api.createOrder(orderData);
+        const savedOrder = await api.createOrder(orderData);
+        if (savedOrder && savedOrder.id && savedOrder.id !== newOrder.id) {
+          console.log(`[Pickup] Self-healed unique ID from backend: ${savedOrder.id}`);
+          setLastBookingRef(savedOrder.id);
+          setOrders(prev => prev.map(o => o.id === newOrder.id ? { ...o, id: savedOrder.id } : o));
+        }
       } catch (err) {
         console.error('Failed to sync pickup to DB:', err);
       }
@@ -5266,9 +5271,9 @@ export default function App() {
       };
 
       const fetchOrders = () => {
-        if ((isAdminRole && activeTab === 'admin') || activeTab === 'agent' || isAgentRole) {
+        if (isAdminRole || isAgentRole) {
           api.getAllOrders().then(processOrders).catch(console.error);
-        } else if (activeTab === 'history' || activeTab === 'home' || activeTab === 'pickup') {
+        } else {
           api.getOrders(uId).then(processOrders).catch(console.error);
         }
       };
@@ -5310,9 +5315,23 @@ export default function App() {
   }, [activeTab, activeWorkOrder, isPaid]);
 
   // --- Helpers ---
+  const orderedItemIds = useMemo(() => {
+    const ids = new Set<string>();
+    orders.forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach(item => {
+          if (item && item.id) {
+            ids.add(item.id);
+          }
+        });
+      }
+    });
+    return ids;
+  }, [orders]);
+
   const cartItems = useMemo(() => {
-    return items.filter(i => i.source !== 'Warehouse' || i.submitted);
-  }, [items]);
+    return items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
+  }, [items, orderedItemIds]);
 
   const totalWeight = useMemo(() => {
     return cartItems.reduce((sum, item) => sum + (item.weight || 0), 0);
@@ -5337,7 +5356,7 @@ export default function App() {
   }, [cartItems, totalWeight, address.country, shippingRates, shippingDiscounts]);
 
   const minPickupDate = useMemo(() => {
-    const storeItems = items.filter(i => i.source === 'Store' && i.estimatedDelivery);
+    const storeItems = items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Store' && i.estimatedDelivery);
     if (storeItems.length === 0) return null;
     
     let latestDate = new Date(0);
@@ -5348,7 +5367,7 @@ export default function App() {
       }
     });
     return latestDate;
-  }, [items]);
+  }, [items, orderedItemIds]);
 
   const filteredPickupSlots = useMemo(() => {
     if (!minPickupDate) return PICKUP_SLOTS;
@@ -5579,7 +5598,7 @@ export default function App() {
   const handleFinalPayment = async () => {
     if (!currentUser) return;
     const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone));
-    const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
+    const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
     
     // Determine payment status based on pickup and shipping preference
     const isPayAtHome = hasScheduledPickup && shippingPreference === 'International';
@@ -5642,7 +5661,7 @@ export default function App() {
     // Sync to DB
     if (dbStatus.connected) {
       try {
-        await api.createOrder({
+        const savedOrder = await api.createOrder({
           ...newOrder,
           id: finalOrderId,
           customer_id: currentUser.id, // Snake case for DB
@@ -5655,17 +5674,25 @@ export default function App() {
           assigned_agent_id: assignedAgent?.id
         } as any);
 
+        let finalSavedOrder = newOrder;
+        if (savedOrder && savedOrder.id && savedOrder.id !== finalOrderId) {
+          console.log(`[Order] Self-healed unique ID from backend: ${savedOrder.id}`);
+          setOrderId(savedOrder.id);
+          finalSavedOrder = { ...newOrder, id: savedOrder.id };
+          setOrders(prev => prev.map(o => o.id === finalOrderId ? finalSavedOrder : o));
+        }
+
         // Automatically send invoice email with PDF
         const recipientEmail = address.email || currentUser.email;
         if (isWarehouseCheckout) {
-          await api.sendOrderConfirmationEmail(recipientEmail, newOrder, COMPANY_DETAILS);
+          await api.sendOrderConfirmationEmail(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
           toast.success(`Shipment request confirmed! Confirmation sent to ${recipientEmail}.`);
         } else if (isPayAtHome) {
           // Send a special "Pay at Home" confirmation email
-          await api.sendOrderConfirmationEmail(recipientEmail, newOrder, COMPANY_DETAILS);
+          await api.sendOrderConfirmationEmail(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
           toast.success(`Order confirmed! Confirmation sent to ${recipientEmail}. Final billing will be done at your home.`);
         } else {
-          await api.sendInvoicePDF(recipientEmail, newOrder, COMPANY_DETAILS);
+          await api.sendInvoicePDF(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
           toast.success(`Payment successful! Invoice sent to ${recipientEmail}`);
         }
       } catch (err: any) {
@@ -5894,16 +5921,16 @@ export default function App() {
     const hasScheduledPickup = currentUser 
       ? appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone))
       : (lastBookingRef ? appointments.some(a => a.id === lastBookingRef && a.status === 'Scheduled') : false);
-    const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
+    const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
 
     let source: 'Store' | 'Warehouse' | 'Pickup' = 'Store';
     
     if (hasScheduledPickup && cartItems.length > 0) {
       source = (cartItems[0]?.source || 'Pickup') as any;
     } else {
-      const warehouseItems = items.filter(i => i.source === 'Warehouse' && i.submitted);
-      const storeItems = items.filter(i => i.source === 'Store');
-      const pickupItems = items.filter(i => i.source === 'Pickup');
+      const warehouseItems = items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Warehouse' && i.submitted);
+      const storeItems = items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Store');
+      const pickupItems = items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Pickup');
       
       if (warehouseItems.length > 0) source = 'Warehouse';
       else if (pickupItems.length > 0) source = 'Pickup';
@@ -8707,7 +8734,7 @@ export default function App() {
     );
   }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser, agentActiveTab, setAgentActiveTab, agentMainTab, setAgentMainTab, orders]);
   const renderWarehouseManagementSection = () => {
-    const warehouseItems = items.filter(i => i.source === 'Warehouse' || i.source === 'Pickup').map(i => ({ ...i, orderId: null as string | null }));
+    const warehouseItems = items.filter(i => !orderedItemIds.has(i.id) && (i.source === 'Warehouse' || i.source === 'Pickup')).map(i => ({ ...i, orderId: null as string | null }));
     const orderWarehouseItems = orders.flatMap(o => 
       o.items.filter(i => (i.source === 'Warehouse' || i.source === 'Pickup') && o.status !== 'Delivered' && o.status !== 'Cancelled')
         .map(i => ({ ...i, orderId: o.id }))
@@ -9132,16 +9159,16 @@ export default function App() {
     const hasCompletedPickup = lastBookingRef ? appointments.some(a => a.id === lastBookingRef && a.status === 'Completed') : false;
 
     const isCartEmpty = mode === 'Warehouse' 
-      ? items.filter(i => i.source === 'Warehouse' && !i.submitted).length === 0
+      ? items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Warehouse' && !i.submitted).length === 0
       : mode === 'Pickup'
-        ? items.filter(i => i.source === 'Pickup' && !i.submitted).length === 0 && (isSchedulingNewPickup ? true : !hasActivePickup)
-        : items.filter(i => i.source !== 'Warehouse' || i.submitted).length === 0 && !hasActivePickup;
+        ? items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Pickup' && !i.submitted).length === 0 && (isSchedulingNewPickup ? true : !hasActivePickup)
+        : items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true).length === 0 && !hasActivePickup;
 
     const displayItems = mode 
       ? (mode === 'Warehouse' 
-          ? items.filter(i => i.source === 'Warehouse' && !i.submitted)
-          : items.filter(i => i.source === mode))
-      : items.filter(i => i.source !== 'Warehouse' || i.submitted);
+          ? items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Warehouse' && !i.submitted)
+          : items.filter(i => !orderedItemIds.has(i.id) && i.source === mode))
+      : items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
 
     const displayWeight = displayItems.reduce((sum, item) => sum + (item.weight || 0), 0);
     const hasTBDWeight = displayItems.some(i => i.weight === 0);
@@ -11394,7 +11421,7 @@ export default function App() {
 
   const FinalizeSection = useMemo(() => {
     if (!currentUser) return null;
-    const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
+    const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
     const isWarehouseCheckout = orderId ? orderId.startsWith('SW-') : cartItems.some(i => i.source === 'Warehouse');
 
     if (isPaid) {
@@ -11863,7 +11890,7 @@ export default function App() {
         </div>
       </div>
     );
-  }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser?.id, handleFinalPayment, shippingPreference, appointments, pickupAddress, pickupName, pickupPhone]);
+  }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser?.id, handleFinalPayment, shippingPreference, appointments, pickupAddress, pickupName, pickupPhone, orderedItemIds]);
 
   if (authLoading) {
     return (

@@ -712,29 +712,63 @@ app.post("/api/orders", async (req, res) => {
       shipping_date: req.body.shipping_date || req.body.shippingDate,
     };
 
-    // Pre-populate in-memory fallback list and cache so it is immediately visible even if DB is slow or times out
-    const preOrder = { ...databaseOrderData, id: finalId, created_at: new Date().toISOString() };
-    const mIdx = memOrders.findIndex(o => o.id === finalId);
-    if (mIdx > -1) {
-      memOrders[mIdx] = { ...memOrders[mIdx], ...preOrder };
-    } else {
-      memOrders.unshift(preOrder);
-    }
-    const trPreOrder = transformDbOrder(preOrder);
-    const cIdx = cachedAllOrders.findIndex(o => o.id === finalId);
-    if (cIdx > -1) {
-      cachedAllOrders[cIdx] = { ...cachedAllOrders[cIdx], ...trPreOrder };
-    } else {
-      cachedAllOrders.unshift(trPreOrder);
-    }
+    let currentId = finalId;
+    let insertSuccess = false;
+    let savedData: any = null;
+    let lastError: any = null;
 
-    console.log(`[SUPABASE] Inserting schema-compliant order with ID: ${finalId}`);
-    const { data, error } = await supabase.from('orders').insert(databaseOrderData).select().single();
-    if (error) {
-      console.warn(`[SUPABASE] Schema insert failed, retrying with full object just in case. Error: ${error.message}`);
-      
-      const fullOrderData = {
+    const isDuplicateKeyError = (err: any) => {
+      if (!err) return false;
+      const msg = String(err.message || '').toLowerCase();
+      const details = String(err.details || '').toLowerCase();
+      return err.code === '23505' || msg.includes('duplicate key') || msg.includes('violates unique constraint') || details.includes('already exists');
+    };
+
+    // Helper to increment standard format: PREFIX-xxxxx
+    const incrementSequentialId = (idStr: string): string => {
+      if (!idStr) return crypto.randomUUID();
+      const parts = idStr.split('-');
+      if (parts.length >= 2) {
+        const prefix = parts[0];
+        const seqStr = parts[1];
+        const s = parseInt(seqStr, 10);
+        if (!isNaN(s)) {
+          const nextSeqNum = s + 1;
+          const seq = nextSeqNum.toString().padStart(seqStr.length, '0');
+          return `${prefix}-${seq}`;
+        }
+      }
+      return `${idStr}-${Math.floor(Math.random() * 1000)}`;
+    };
+
+    // Try up to 15 times if we keep hitting duplicate key error
+    for (let attempt = 1; attempt <= 15; attempt++) {
+      const currentOrderData = {
         ...databaseOrderData,
+        id: currentId,
+      };
+
+      console.log(`[SUPABASE] Attempt ${attempt}: Inserting order with ID: ${currentId}`);
+      const { data, error } = await supabase.from('orders').insert(currentOrderData).select().single();
+      
+      if (!error) {
+        savedData = data;
+        insertSuccess = true;
+        break;
+      }
+
+      lastError = error;
+      
+      if (isDuplicateKeyError(error)) {
+        console.warn(`[SUPABASE] Attempt ${attempt} failed with duplicate key for ID ${currentId}. Incrementing ID and retrying...`);
+        currentId = incrementSequentialId(currentId);
+        continue;
+      }
+
+      // If it's a structural schema mismatch or any other error, let's try the fallback full representation
+      console.warn(`[SUPABASE] Attempt ${attempt} failed with error: ${error.message}. Testing fallback schema representation...`);
+      const fullOrderData = {
+        ...currentOrderData,
         pickup_type: req.body.pickup_type || req.body.pickupType,
         assigned_agent: req.body.assigned_agent || req.body.assignedAgent,
         assigned_agent_id: req.body.assigned_agent_id || req.body.assignedAgentId,
@@ -749,10 +783,56 @@ app.post("/api/orders", async (req, res) => {
       };
 
       const { data: fbData, error: fbError } = await supabase.from('orders').insert(fullOrderData).select().single();
-      if (fbError) throw fbError;
-      return res.json(fbData);
+      if (!fbError) {
+        savedData = fbData;
+        insertSuccess = true;
+        break;
+      }
+      
+      lastError = fbError;
+      if (isDuplicateKeyError(fbError)) {
+        console.warn(`[SUPABASE] Schema fallback failed with duplicate key for ID ${currentId}. Incrementing ID and retrying...`);
+        currentId = incrementSequentialId(currentId);
+        continue;
+      }
+      
+      // If it is another type of error, stop retrying unless we have custom behavior
+      break;
     }
-    res.json(data);
+
+    if (!insertSuccess) {
+      throw lastError || new Error("Failed to insert order after all attempts");
+    }
+
+    const finalInsertedId = savedData?.id || currentId;
+
+    // Pre-populate in-memory fallback list and cache with the ACTUAL INSERTED ID
+    const preOrder = { ...databaseOrderData, id: finalInsertedId, created_at: savedData?.created_at || new Date().toISOString() };
+    
+    // Clear any previous stale entries of finalId if they were wrong
+    if (finalInsertedId !== finalId) {
+      const oldIdx = memOrders.findIndex(o => o.id === finalId);
+      if (oldIdx > -1) memOrders.splice(oldIdx, 1);
+      
+      const oldCachedIdx = cachedAllOrders.findIndex(o => o.id === finalId);
+      if (oldCachedIdx > -1) cachedAllOrders.splice(oldCachedIdx, 1);
+    }
+
+    const mIdx = memOrders.findIndex(o => o.id === finalInsertedId);
+    if (mIdx > -1) {
+      memOrders[mIdx] = { ...memOrders[mIdx], ...preOrder };
+    } else {
+      memOrders.unshift(preOrder);
+    }
+    const trPreOrder = transformDbOrder(preOrder);
+    const cIdx = cachedAllOrders.findIndex(o => o.id === finalInsertedId);
+    if (cIdx > -1) {
+      cachedAllOrders[cIdx] = { ...cachedAllOrders[cIdx], ...trPreOrder };
+    } else {
+      cachedAllOrders.unshift(trPreOrder);
+    }
+
+    res.json(savedData);
   } catch (err: any) {
     console.error("Create Order Error:", err.message);
     res.status(500).json({ error: err.message });
@@ -1614,12 +1694,14 @@ app.get("/api/orders/next-seq/:prefix", async (req, res) => {
   
   if (supabase) {
     try {
-      // Order and limit to avoid full-table scans that timeout when table is large
+      // Direct prefix-matching query sorting alphabetically descending so the highest sequence is guaranteed within the first few results
       const { data, error } = await supabase
         .from('orders')
         .select('id')
-        .order('created_at', { ascending: false })
-        .limit(200);
+        .ilike('id', `${prefix}-%`)
+        .order('id', { ascending: false })
+        .limit(20);
+        
       if (!error && data) {
         data.forEach((o: any) => {
           if (o.id && o.id.startsWith(prefix)) {
