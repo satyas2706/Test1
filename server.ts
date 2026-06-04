@@ -96,7 +96,8 @@ console.log("Memory OTP store initialized.");
 // In-memory data store for fallback when Supabase is disconnected
 const memOrders: any[] = [];
 const memItems: any[] = [];
-console.log("Memory Orders and Items stores initialized.");
+const memPickups: any[] = [];
+console.log("Memory Orders, Items, and Pickups stores initialized.");
 
 // Notification Clients
 const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN 
@@ -1864,6 +1865,144 @@ const deduplicateOrders = (ordersList: any[]) => {
 
   return cleanList;
 };
+
+// API: Get all pickups from Supabase (or fallback to memory store)
+app.get("/api/pickups", async (req, res) => {
+  if (!supabase) {
+    return res.json(memPickups);
+  }
+  try {
+    const { data, error } = await supabase
+      .from('pickups')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err: any) {
+    console.error("[SUPABASE GET PICKUPS ERROR]:", err.message);
+    res.json(memPickups);
+  }
+});
+
+// API: Create or update a pickup
+app.post("/api/pickups", async (req, res) => {
+  const pickup = req.body;
+  const id = pickup.id || crypto.randomUUID();
+  const dbPickup = {
+    id,
+    customer_id: pickup.customer_id || pickup.customerId,
+    customer_name: pickup.customer_name || pickup.customerName,
+    email: pickup.email,
+    phone: pickup.phone,
+    status: pickup.status || 'Scheduled',
+    pickup_date: pickup.pickup_date || pickup.pickupDate || pickup.date,
+    pickup_time: pickup.pickup_time || pickup.pickupTime || pickup.time || 'Flexible',
+    address: pickup.address,
+    items: pickup.items || [],
+    payment_status: pickup.payment_status || pickup.paymentStatus || 'Pending',
+    pickup_type: pickup.pickup_type || pickup.pickupType || 'AllAgent',
+    assigned_agent_id: pickup.assigned_agent_id || pickup.assignedAgentId,
+    language_preference: pickup.language_preference || pickup.languagePreference,
+    item_type: pickup.item_type || pickup.itemType,
+    vehicle_type: pickup.vehicle_type || pickup.vehicleType
+  };
+
+  const idx = memPickups.findIndex(p => p.id === id);
+  if (idx > -1) {
+    memPickups[idx] = dbPickup;
+  } else {
+    memPickups.push(dbPickup);
+  }
+
+  if (!supabase) {
+    return res.json(dbPickup);
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('pickups')
+      .upsert(dbPickup)
+      .select()
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    console.error("[SUPABASE INSERT PICKUP ERROR]:", err.message);
+    res.json(dbPickup);
+  }
+});
+
+// API: Patch/Update an existing pickup (e.g., status, assigned agent)
+app.patch("/api/pickups/:id", async (req, res) => {
+  const { id } = req.params;
+  const updates = req.body;
+
+  // DB Format mapping
+  const mappedUpdates: any = {};
+  if (updates.status !== undefined) mappedUpdates.status = updates.status;
+  if (updates.paymentStatus !== undefined || updates.payment_status !== undefined) {
+    mappedUpdates.payment_status = updates.paymentStatus || updates.payment_status;
+  }
+  if (updates.assignedAgentId !== undefined || updates.assigned_agent_id !== undefined) {
+    mappedUpdates.assigned_agent_id = updates.assignedAgentId || updates.assigned_agent_id;
+  }
+  if (updates.pickupDate !== undefined || updates.pickup_date !== undefined) {
+    mappedUpdates.pickup_date = updates.pickupDate || updates.pickup_date;
+  }
+  if (updates.pickupTime !== undefined || updates.pickup_time !== undefined) {
+    mappedUpdates.pickup_time = updates.pickupTime || updates.pickup_time;
+  }
+
+  const idx = memPickups.findIndex(p => p.id === id);
+  if (idx > -1) {
+    memPickups[idx] = { ...memPickups[idx], ...mappedUpdates, ...updates };
+  }
+
+  if (!supabase) {
+    const combined = { id, ...updates };
+    return res.json(combined);
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('pickups')
+      .update(mappedUpdates)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err: any) {
+    console.error("[SUPABASE PATCH PICKUP ERROR]:", err.message);
+    res.json({ id, ...updates });
+  }
+});
+
+// API: Delete a pickup
+app.delete("/api/pickups/:id", async (req, res) => {
+  const { id } = req.params;
+  
+  const idx = memPickups.findIndex(p => p.id === id);
+  if (idx > -1) {
+    memPickups.splice(idx, 1);
+  }
+
+  if (!supabase) {
+    return res.json({ success: true });
+  }
+
+  try {
+    const { error } = await supabase
+      .from('pickups')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("[SUPABASE DELETE PICKUP ERROR]:", err.message);
+    res.json({ success: true });
+  }
+});
 
 // API: Get all orders (Admin only)
 app.get("/api/orders", async (req, res) => {

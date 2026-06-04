@@ -212,5 +212,39 @@ export const api = {
       throw new Error(errData.error || errData.message || "Failed to verify SMTP link");
     }
     return await response.json();
+  },
+
+  async getPickups() {
+    const response = await fetch(`${API_URL}/api/pickups`);
+    if (!response.ok) throw new Error('Failed to fetch pickups');
+    return await response.json();
+  },
+
+  async createPickup(pickup: any) {
+    const response = await fetch(`${API_URL}/api/pickups`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(pickup)
+    });
+    if (!response.ok) throw new Error('Failed to create pickup');
+    return await response.json();
+  },
+
+  async updatePickup(id: string, updates: any) {
+    const response = await fetch(`${API_URL}/api/pickups/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates)
+    });
+    if (!response.ok) throw new Error('Failed to update pickup');
+    return await response.json();
+  },
+
+  async deletePickup(id: string) {
+    const response = await fetch(`${API_URL}/api/pickups/${id}`, {
+      method: "DELETE"
+    });
+    if (!response.ok) throw new Error('Failed to delete pickup');
+    return await response.json();
   }
 };

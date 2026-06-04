@@ -161,8 +161,39 @@ CREATE POLICY "Allow public insert shipping_settings" ON shipping_settings FOR I
 CREATE POLICY "Allow public update shipping_settings" ON shipping_settings FOR UPDATE USING (true);
 CREATE POLICY "Allow public delete shipping_settings" ON shipping_settings FOR DELETE USING (true);
 
+-- Create 'pickups' table
+CREATE TABLE IF NOT EXISTS pickups (
+  id TEXT PRIMARY KEY,
+  customer_id TEXT NOT NULL,
+  customer_name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  status TEXT NOT NULL DEFAULT 'Scheduled',
+  pickup_date TEXT,
+  pickup_time TEXT,
+  address TEXT NOT NULL,
+  items JSONB NOT NULL DEFAULT '[]'::jsonb,
+  payment_status TEXT NOT NULL DEFAULT 'Pending',
+  pickup_type TEXT DEFAULT 'AllAgent',
+  assigned_agent_id TEXT,
+  language_preference TEXT,
+  item_type TEXT,
+  vehicle_type TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS for pickups
+ALTER TABLE pickups ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for public access (for development)
+CREATE POLICY "Allow public read pickups" ON pickups FOR SELECT USING (true);
+CREATE POLICY "Allow public insert pickups" ON pickups FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update pickups" ON pickups FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete pickups" ON pickups FOR DELETE USING (true);
+
 -- Enable Realtime
 ALTER PUBLICATION supabase_realtime ADD TABLE shipping_settings;
+ALTER PUBLICATION supabase_realtime ADD TABLE pickups;
 
 
 -- OPTIONAL: If you want to enable it for ALL current and future tables

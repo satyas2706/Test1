@@ -1291,6 +1291,19 @@ const AdminDashboard = ({
       await api.updateOrderStatus(orderId, newStatus, order.customerId, order.destination);
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
       
+      // Also update status in 'pickups' table in Supabase
+      if (isSupabaseConfigured) {
+        try {
+          await api.updatePickup(orderId, {
+            status: (newStatus === 'Scheduled' || newStatus === 'Pending Pickup') ? 'Scheduled' : 
+                    newStatus === 'Cancelled' ? 'Cancelled' : 
+                    newStatus === 'Picked Up' ? 'Picked Up' : 'Completed'
+          });
+        } catch (e) {
+          console.warn('Failed to update pickup status in Supabase:', e);
+        }
+      }
+
       // Send dynamic WhatsApp message on status change
       const message = getStatusWhatsAppMessage(
         orderId, 
@@ -4690,6 +4703,28 @@ export default function App() {
           setLastBookingRef(savedOrder.id);
           setOrders(prev => prev.map(o => o.id === newOrder.id ? { ...o, id: savedOrder.id } : o));
         }
+
+        // Also save to 'pickups' table in Supabase
+        const targetId = (savedOrder && savedOrder.id) ? savedOrder.id : newOrder.id;
+        const pickupData = {
+          id: targetId,
+          customer_id: resolvedCustomerId,
+          customer_name: resolvedName,
+          email: resolvedEmail,
+          phone: pickupPhone,
+          status: 'Scheduled',
+          pickup_date: selectedPickupDate,
+          pickup_time: 'Flexible',
+          address: fullAddress,
+          items: [],
+          payment_status: 'Pending',
+          pickup_type: type,
+          assigned_agent_id: assignedAgent?.id,
+          language_preference: pickupLanguage,
+          item_type: pickupItemType,
+          vehicle_type: pickupVehicleType
+        };
+        await api.createPickup(pickupData);
       } catch (err) {
         console.error('Failed to sync pickup to DB:', err);
       }
@@ -12404,6 +12439,17 @@ export default function App() {
         assignedAgent: agent || undefined, 
         assignedAgentId: agent ? agent.id : undefined 
       } : o));
+
+      // Also update 'pickups' table in Supabase
+      if (dbStatus.connected) {
+        try {
+          await api.updatePickup(orderId, {
+            assignedAgentId: agent ? agent.id : null,
+          });
+        } catch (e) {
+          console.warn('Failed to update pickup agent assignment in Supabase:', e);
+        }
+      }
 
       if (agent) {
         logAgentActionToSupabase(
