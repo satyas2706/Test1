@@ -3895,10 +3895,21 @@ export default function App() {
         setPickupEmail('');
         setPickupPhone('');
         setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
+        setPickupDetailsTab('pickup');
+        setPickupDestination({
+          fullName: '',
+          email: '',
+          phone: '',
+          addressLine1: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          country: COUNTRIES[0],
+        });
         setPickupLanguage('English');
         setPickupSpecialInstructions('');
         setPickupCategory('Personal Effects');
-        setPickupEstimatedWeight('1-5 kg');
+        setPickupEstimatedWeight('Less than 5 kg');
         setActivePickupStep(1);
         setLastBookingRef(null);
         setIsSchedulingNewPickup(true);
@@ -3984,11 +3995,11 @@ export default function App() {
         return {
           id: o.id,
           customerId: o.customerId || (o as any).customer_id,
-          customerName: o.customerName || o.destination?.fullName || '',
+          customerName: (o as any).pickupAddress?.fullName || o.customerName || o.destination?.fullName || '',
           date: o.shippingDate || (o as any).date || o.createdAt?.split('T')[0],
           time: (o as any).time || 'Flexible',
-          address: o.destination?.addressLine1 || '',
-          phone: o.destination?.phone || '',
+          address: (o as any).pickupAddress?.addressLine1 || o.destination?.addressLine1 || '',
+          phone: (o as any).pickupAddress?.phone || o.destination?.phone || '',
           status: (o.status === 'Scheduled' || o.status === 'Pending Pickup') ? 'Scheduled' : 
                   o.status === 'Cancelled' ? 'Cancelled' : 
                   o.status === 'Picked Up' ? 'Picked Up' : 'Completed',
@@ -4063,12 +4074,23 @@ export default function App() {
     state: '',
     zip: ''
   });
+  const [pickupDetailsTab, setPickupDetailsTab] = useState<'pickup' | 'destination'>('pickup');
+  const [pickupDestination, setPickupDestination] = useState<DestinationAddress>({
+    fullName: '',
+    email: '',
+    phone: '',
+    addressLine1: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: COUNTRIES[0],
+  });
   const [pickupLanguage, setPickupLanguage] = useState('English');
   const [pickupItemType, setPickupItemType] = useState('Everyday Items');
-  const [pickupVehicleType, setPickupVehicleType] = useState('Fits in a car');
+  const [pickupVehicleType, setPickupVehicleType] = useState('Less than 5 kg');
   const [pickupSpecialInstructions, setPickupSpecialInstructions] = useState('');
   const [pickupCategory, setPickupCategory] = useState('Personal Effects');
-  const [pickupEstimatedWeight, setPickupEstimatedWeight] = useState('1-5 kg');
+  const [pickupEstimatedWeight, setPickupEstimatedWeight] = useState('Less than 5 kg');
   const [savePickupToProfile, setSavePickupToProfile] = useState(true);
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; checked: boolean }>({ connected: false, checked: false });
   const [isGuestMode, setIsGuestMode] = useState(false);
@@ -4601,6 +4623,16 @@ export default function App() {
       createdAt: new Date().toISOString(),
       shippingDate: selectedPickupDate,
       destination: {
+        fullName: pickupDestination.fullName || resolvedName,
+        email: pickupDestination.email || resolvedEmail,
+        phone: pickupDestination.phone || pickupPhone,
+        addressLine1: pickupDestination.addressLine1 || '',
+        city: pickupDestination.city || '',
+        state: pickupDestination.state || '',
+        zipCode: pickupDestination.zipCode || '',
+        country: pickupDestination.country || COUNTRIES[0]
+      },
+      pickupAddress: {
         fullName: resolvedName,
         email: resolvedEmail,
         phone: pickupPhone,
@@ -4647,6 +4679,7 @@ export default function App() {
           total_weight: newOrder.totalWeight || 3,
           total_cost: 0,
           destination: newOrder.destination,
+          pickup_address: newOrder.pickupAddress,
           payment_status: 'Pending',
           shipping_date: selectedPickupDate
         } as any;
@@ -4670,10 +4703,21 @@ export default function App() {
     setPickupEmail('');
     setPickupPhone('');
     setPickupAddress({ street: '', apartment: '', city: '', state: '', zip: '' });
+    setPickupDetailsTab('pickup');
+    setPickupDestination({
+      fullName: '',
+      email: '',
+      phone: '',
+      addressLine1: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: COUNTRIES[0],
+    });
     setPickupLanguage('English');
     setPickupSpecialInstructions('');
     setPickupCategory('Personal Effects');
-    setPickupEstimatedWeight('1-5 kg');
+    setPickupEstimatedWeight('Less than 5 kg');
   };
 
   const cancelPickup = (id: string) => {
@@ -5197,9 +5241,69 @@ export default function App() {
               toast.success(`New order received: #${newOrder.id.slice(0, 8)}`);
             }
           } else if (payload.eventType === 'UPDATE') {
-            const updatedOrder = normalizeOrder(payload.new);
-            setOrders(prev => prev.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o));
-            if (!isPrivileged || updatedOrder.customerId === currentUser.id) {
+            const rawNew = payload.new as any;
+            const updatedOrder = normalizeOrder(rawNew);
+            setOrders(prev => prev.map(o => {
+              if (o.id === updatedOrder.id) {
+                // Defensive merge to prevent any partial update (e.g. status-only) from wiping out unchanged fields like items, destination, etc.
+                const mergedOrder = { ...o };
+                
+                if (rawNew.status !== undefined && rawNew.status !== null) {
+                  mergedOrder.status = updatedOrder.status;
+                }
+                if (rawNew.payment_status !== undefined && rawNew.payment_status !== null || rawNew.paymentStatus !== undefined && rawNew.paymentStatus !== null) {
+                  mergedOrder.paymentStatus = updatedOrder.paymentStatus;
+                }
+                if (rawNew.items !== undefined && rawNew.items !== null) {
+                  mergedOrder.items = updatedOrder.items;
+                }
+                if (rawNew.destination !== undefined && rawNew.destination !== null) {
+                  mergedOrder.destination = { ...o.destination, ...updatedOrder.destination };
+                }
+                if (rawNew.customer_id !== undefined && rawNew.customer_id !== null || rawNew.customerId !== undefined && rawNew.customerId !== null) {
+                  mergedOrder.customerId = updatedOrder.customerId;
+                }
+                if (rawNew.total_weight !== undefined && rawNew.total_weight !== null || rawNew.totalWeight !== undefined && rawNew.totalWeight !== null) {
+                  mergedOrder.totalWeight = updatedOrder.totalWeight;
+                }
+                if (rawNew.total_cost !== undefined && rawNew.total_cost !== null || rawNew.totalCost !== undefined && rawNew.totalCost !== null) {
+                  mergedOrder.totalCost = updatedOrder.totalCost;
+                }
+                if (rawNew.shipping_date !== undefined && rawNew.shipping_date !== null || rawNew.shippingDate !== undefined && rawNew.shippingDate !== null) {
+                  mergedOrder.shippingDate = updatedOrder.shippingDate;
+                }
+                if (rawNew.assigned_agent_id !== undefined && rawNew.assigned_agent_id !== null || rawNew.assignedAgentId !== undefined && rawNew.assignedAgentId !== null) {
+                  mergedOrder.assignedAgentId = updatedOrder.assignedAgentId;
+                }
+                if (rawNew.assigned_agent !== undefined && rawNew.assigned_agent !== null || rawNew.assignedAgent !== undefined && rawNew.assignedAgent !== null) {
+                  mergedOrder.assignedAgent = updatedOrder.assignedAgent;
+                }
+                if (rawNew.pickup_type !== undefined && rawNew.pickup_type !== null || rawNew.pickupType !== undefined && rawNew.pickupType !== null) {
+                  mergedOrder.pickupType = updatedOrder.pickupType;
+                }
+                if (rawNew.created_at !== undefined && rawNew.created_at !== null || rawNew.createdAt !== undefined && rawNew.createdAt !== null) {
+                  mergedOrder.createdAt = updatedOrder.createdAt;
+                }
+
+                // Map any other string/scalar fields safely
+                const simpleProps = [
+                  'customerName', 'phone', 'date', 'time', 'address', 'languagePreference', 'itemType', 'vehicleType'
+                ];
+                simpleProps.forEach(prop => {
+                  const snakeKey = prop.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+                  if (rawNew[prop] !== undefined && rawNew[prop] !== null) {
+                    (mergedOrder as any)[prop] = (updatedOrder as any)[prop];
+                  } else if (rawNew[snakeKey] !== undefined && rawNew[snakeKey] !== null) {
+                    (mergedOrder as any)[prop] = (updatedOrder as any)[prop];
+                  }
+                });
+
+                return mergedOrder;
+              }
+              return o;
+            }));
+            const finalUserId = updatedOrder.customerId || currentUser.id;
+            if (!isPrivileged || finalUserId === currentUser.id) {
                toast.info(`Order #${updatedOrder.id.slice(0, 8)} status updated to: ${updatedOrder.status}`);
             }
           } else if (payload.eventType === 'DELETE') {
@@ -5260,13 +5364,61 @@ export default function App() {
       const isAgentRole = roleLower === 'agent';
       
       const processOrders = (data: any[]) => {
-        const normalized = data.map(normalizeOrder) as any[];
+        const rawNormalized = data.map(normalizeOrder) as any[];
+        
+        // Dedup logic to remove stale scheduled duplicates resulting from the old ID-increment bug
+        const completed = rawNormalized.filter(o => 
+          (o.items?.length || 0) > 0 || 
+          ['Picked Up', 'In Warehouse', 'Received at Warehouse', 'Ready to Ship', 'In Transit', 'Out for Delivery', 'Delivered', 'Completed'].includes(o.status)
+        );
+        const pending = rawNormalized.filter(o => !completed.some(co => co.id === o.id));
+        
+        const cleanOrders = [...completed];
+        const duplicatesToSkipId = new Set<string>();
+
+        for (const pend of pending) {
+          const isDup = completed.some(comp => {
+            const sameCustomer = String(pend.customerId) === String(comp.customerId);
+            const sameDate = pend.shippingDate === comp.shippingDate;
+            const sameName = pend.destination?.fullName === comp.destination?.fullName;
+            const sameAddress = (pend.destination?.addressLine1 || pend.address) === (comp.destination?.addressLine1 || comp.address);
+            
+            const pendingNum = parseInt(pend.id.split('-')[1], 10);
+            const completedNum = parseInt(comp.id.split('-')[1], 10);
+            const isSeqClose = !isNaN(pendingNum) && !isNaN(completedNum) && Math.abs(pendingNum - completedNum) <= 2;
+
+            return sameCustomer && sameDate && sameName && sameAddress && isSeqClose;
+          });
+
+          if (isDup && (pend.items?.length || 0) === 0 && (pend.status === 'Scheduled' || pend.status === 'Pending Pickup')) {
+            duplicatesToSkipId.add(pend.id);
+          } else {
+            cleanOrders.push(pend);
+          }
+        }
+
+        // Sort cleanOrders by date/createdAt descending
+        cleanOrders.sort((a, b) => {
+          const dateA = new Date(a.createdAt || a.created_at || 0).getTime();
+          const dateB = new Date(b.createdAt || b.created_at || 0).getTime();
+          return dateB - dateA;
+        });
+
+        // Fast-compare with prev list, including status, paymentStatus, item count, totalCost and weight
         setOrders(prev => {
-          if (prev.length === normalized.length && 
-              prev.every((o: any, idx: number) => o.id === normalized[idx].id && o.status === normalized[idx].status && o.paymentStatus === normalized[idx].paymentStatus)) {
+          if (prev.length === cleanOrders.length && 
+              prev.every((o: any, idx: number) => {
+                const norm = cleanOrders[idx];
+                return o.id === norm.id && 
+                       o.status === norm.status && 
+                       o.paymentStatus === norm.paymentStatus &&
+                       (o.items?.length || 0) === (norm.items?.length || 0) &&
+                       parseFloat(o.totalWeight || 0) === parseFloat(norm.totalWeight || 0) &&
+                       parseFloat(o.totalCost || 0) === parseFloat(norm.totalCost || 0);
+              })) {
             return prev;
           }
-          return normalized;
+          return cleanOrders;
         });
       };
 
@@ -5861,43 +6013,24 @@ export default function App() {
 
     // Sync to DB
     if (dbStatus.connected) {
-      api.createOrder({
-        ...newOrder,
-        id: newOrderId,
-        customer_id: activeWorkOrder.customerId, // Snake case for DB
-        total_weight: totalW,
-        total_cost: totalC,
-        payment_status: 'Paid',
-        shipping_date: woShippingDate,
-        documents: woDocuments,
-        status: woStatusInput
-      } as any).catch(err => {
-        console.warn('Failed to sync new order, falling back to update:', err);
-        api.updateOrder(newOrderId, {
-          status: woStatusInput,
-          paymentStatus: 'Paid',
-          items: completedItems,
-          totalWeight: totalW,
-          totalCost: totalC,
-          assignedAgent: currentAgent,
-          assignedAgentId: currentAgent.id,
-          assigned_agent: currentAgent,
-          assigned_agent_id: currentAgent.id,
-          documents: woDocuments
-        } as any).catch(e => console.error('Failed to update completed order on DB:', e));
-      });
-
-      api.updateOrderStatus(activeWorkOrder.id, woStatusInput).catch(err => console.error('Failed to update status on completion:', err));
-      api.updateOrder(activeWorkOrder.id, {
+      api.updateOrder(newOrderId, {
         status: woStatusInput,
         paymentStatus: 'Paid',
         items: completedItems,
+        totalWeight: totalW,
+        totalCost: totalC,
         assignedAgent: currentAgent,
         assignedAgentId: currentAgent.id,
         assigned_agent: currentAgent,
         assigned_agent_id: currentAgent.id,
         documents: woDocuments
-      } as any).catch(err => console.error('Failed to update order info on completion:', err));
+      } as any)
+      .then(() => {
+        console.log(`[Order] Order ${newOrderId} successfully updated on DB`);
+      })
+      .catch(err => {
+        console.error('Failed to update completed order on DB:', err);
+      });
 
       const recipientEmail = woAddress.email || currentUser?.email || '';
       api.shareInvoice(newOrder)
@@ -6862,7 +6995,7 @@ export default function App() {
                 </div>
 
                 {(() => {
-                  const isPendingInvoice = selectedOrderForInvoice.status === 'Scheduled' || selectedOrderForInvoice.status === 'Pending Pickup';
+                  const isPendingInvoice = (selectedOrderForInvoice.status === 'Scheduled' || selectedOrderForInvoice.status === 'Pending Pickup') && (!selectedOrderForInvoice.items || selectedOrderForInvoice.items.length === 0);
                   return (
                     <>
                       <div className="border-t border-slate-100 pt-6 mb-8">
@@ -6976,16 +7109,36 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-8 mb-8">
                     <div>
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
-                      <div className="text-sm font-bold text-slate-900">JiffEX Warehouse</div>
+                      <div className="text-sm font-bold text-slate-900">
+                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
+                          ? ((selectedOrderForDetails as any).pickupAddress?.fullName || selectedOrderForDetails.customerName || 'Customer Residence')
+                          : 'JiffEX Warehouse'
+                        }
+                      </div>
                       <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                        {WAREHOUSE_ADDRESS.street}<br />
-                        {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
-                        {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
+                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType ? (
+                          <>
+                            {((selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || '').split(',').slice(0, 2).join(',')}<br />
+                            {((selectedOrderForDetails as any).pickupAddress?.city || selectedOrderForDetails.destination?.city || '')} {((selectedOrderForDetails as any).pickupAddress?.state || selectedOrderForDetails.destination?.state || '')}<br />
+                            {((selectedOrderForDetails as any).pickupAddress?.zipCode || (selectedOrderForDetails as any).pickupAddress?.zip || selectedOrderForDetails.destination?.zipCode || '')} India
+                          </>
+                        ) : (
+                          <>
+                            {WAREHOUSE_ADDRESS.street}<br />
+                            {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
+                            {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
+                          </>
+                        )}
                       </div>
                     </div>
                     <div>
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
-                      <div className="text-sm font-bold text-slate-900">{selectedOrderForDetails.destination?.fullName || currentUser?.name}</div>
+                      <div className="text-sm font-bold text-slate-900">
+                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
+                          ? (selectedOrderForDetails.destination?.fullName || 'Receiver Location')
+                          : (selectedOrderForDetails.destination?.fullName || currentUser?.name || 'Receiver Location')
+                        }
+                      </div>
                       <div className="text-xs text-slate-600 leading-relaxed mt-1">
                         {selectedOrderForDetails.destination?.addressLine1 || 'N/A'}<br />
                         {selectedOrderForDetails.destination?.city || ''} {selectedOrderForDetails.destination?.state || ''}<br />
@@ -7027,8 +7180,14 @@ export default function App() {
                           <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).vehicleType || (selectedOrderForDetails as any).destination?.vehicleType || 'Two-Wheeler'}</div>
                         </div>
                         <div className="col-span-2">
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Full Pickup Address</div>
-                          <div className="font-bold text-slate-800">{selectedOrderForDetails.destination?.addressLine1 || (selectedOrderForDetails as any).destination?.addressLine1 || 'N/A'}</div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Full Pickup Address (From)</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || 'N/A'}</div>
+                        </div>
+                        <div className="col-span-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Destination Delivery Address (To)</div>
+                          <div className="font-bold text-slate-800">
+                            {selectedOrderForDetails.destination?.addressLine1}, {selectedOrderForDetails.destination?.city}, {selectedOrderForDetails.destination?.state} - {selectedOrderForDetails.destination?.zipCode}, {selectedOrderForDetails.destination?.country}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -9786,18 +9945,23 @@ export default function App() {
                                   </div>
 
                                   <div className="space-y-4">
-                                    <h5 className="text-sm font-black text-deep-blue uppercase tracking-wider">How much to pick up?</h5>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <h5 className="text-sm font-black text-deep-blue uppercase tracking-wider">Approximate Weight of Items</h5>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                       {[
-                                        { id: 'Fits in a car', desc: 'Luggage / boxes, small items', icon: <Car size={24} />, badge: 'Most customers choose this' },
-                                        { id: 'Need a Van', desc: 'Furniture, large boxes, bulk shipments', icon: <Truck size={24} /> }
+                                        { id: 'Less than 5 kg', label: 'Less than 5 kg', desc: 'Documents, small parcels, or light gift packs', icon: <Package size={22} /> },
+                                        { id: '5 to 20 kg', label: '5 to 20 kg', desc: 'Standard suitcases, medium boxes, or household items', icon: <Box size={22} /> },
+                                        { id: 'More than 20 kg', label: 'More than 20 kg', desc: 'Heavy cargo, large bulk luggage, or multiple packages', icon: <Truck size={22} /> }
                                       ].map(v => (
                                         <motion.button
                                           key={v.id}
-                                          whileHover={{ scale: 1.02, x: 4 }}
+                                          type="button"
+                                          whileHover={{ scale: 1.02, y: -2 }}
                                           whileTap={{ scale: 0.98 }}
-                                          onClick={() => setPickupVehicleType(v.id)}
-                                          className={`p-6 rounded-3xl border-2 transition-all flex items-center gap-5 text-left relative overflow-hidden ${
+                                          onClick={() => {
+                                            setPickupVehicleType(v.id);
+                                            setPickupEstimatedWeight(v.id);
+                                          }}
+                                          className={`p-5 rounded-3xl border-2 transition-all flex flex-col justify-between text-left relative overflow-hidden h-full min-h-[160px] ${
                                             pickupVehicleType === v.id 
                                               ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange shadow-[0_0_25px_rgba(249,115,22,0.1)]' 
                                               : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
@@ -9812,19 +9976,29 @@ export default function App() {
                                               transition={{ duration: 0.2 }}
                                             />
                                           )}
-                                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 relative z-10 transition-transform duration-200 ${pickupVehicleType === v.id ? 'bg-jiffex-orange text-white shadow-lg shadow-jiffex-orange/20 scale-110' : 'bg-white text-slate-400'}`}>
-                                            {v.icon}
-                                          </div>
-                                          <div className="relative z-10 flex-1">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                              <p className="text-base font-black text-slate-900">{v.id}</p>
-                                              {v.badge && (
-                                                <span className="text-[8px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                                  {v.badge}
-                                                </span>
+                                          
+                                          {/* Header with Icon and Radio Dot */}
+                                          <div className="flex items-center justify-between w-full relative z-10 mb-4">
+                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-200 ${pickupVehicleType === v.id ? 'bg-jiffex-orange text-white shadow-lg shadow-jiffex-orange/20 scale-105' : 'bg-white text-slate-400 border border-slate-100'}`}>
+                                              {v.icon}
+                                            </div>
+                                            
+                                            {/* Visual Radio Button Dot */}
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                                              pickupVehicleType === v.id 
+                                                ? 'border-jiffex-orange bg-jiffex-orange' 
+                                                : 'border-slate-300 bg-white'
+                                            }`}>
+                                              {pickupVehicleType === v.id && (
+                                                <div className="w-2 h-2 rounded-full bg-white" />
                                               )}
                                             </div>
-                                            <p className="text-xs font-medium text-slate-500 mt-1 leading-relaxed">{v.desc}</p>
+                                          </div>
+
+                                          {/* Title and Description */}
+                                          <div className="relative z-10">
+                                            <p className="text-base font-black text-slate-900 leading-tight mb-1">{v.label}</p>
+                                            <p className="text-xs font-medium text-slate-500 leading-normal">{v.desc}</p>
                                           </div>
                                         </motion.button>
                                       ))}
@@ -10004,153 +10178,343 @@ export default function App() {
                               <MapPin size={24} />
                             </div>
                             <div>
-                              <h4 className="text-xl font-black text-deep-blue">Pickup details</h4>
+                              <h4 className="text-xl font-black text-deep-blue">Pickup & Destination Details</h4>
                             </div>
                           </div>
                         </div>
 
-                        <div className="pt-8 space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                  <div className="space-y-2">
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
-                                    <div className="relative">
-                                      <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                      <input 
-                                        type="text" 
-                                        className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium"
-                                        placeholder="Enter your name"
-                                        value={pickupName}
-                                        onChange={(e) => setPickupName(e.target.value)}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="space-y-2">
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
-                                    <div className="relative">
-                                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">+91</span>
-                                      <input 
-                                        type="tel" 
-                                        className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium"
-                                        placeholder="10-digit mobile"
-                                        value={pickupPhone}
-                                        maxLength={10}
-                                        onChange={(e) => {
-                                          const val = e.target.value.replace(/\D/g, '');
-                                          if (val.length <= 10) setPickupPhone(val);
-                                        }}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
+                        {/* Tab Selector */}
+                        <div className="mt-6 flex bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => setPickupDetailsTab('pickup')}
+                            className={`flex-1 py-3 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+                              pickupDetailsTab === 'pickup' 
+                                ? 'bg-deep-blue text-white shadow-md shadow-deep-blue/20' 
+                                : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            <MapPin size={14} /> 1. Pickup Address (From)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPickupDetailsTab('destination')}
+                            className={`flex-1 py-3 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+                              pickupDetailsTab === 'destination' 
+                                ? 'bg-deep-blue text-white shadow-md shadow-deep-blue/20' 
+                                : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            <Globe size={14} /> 2. Destination Address (To)
+                          </button>
+                        </div>
 
+                        <div className="pt-6 space-y-6">
+                          {pickupDetailsTab === 'pickup' ? (
+                            <div className="space-y-6">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
                                   <div className="relative">
-                                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                    <input 
-                                      type="email" 
-                                      className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium"
-                                      placeholder="Enter your email for confirmation"
-                                      value={pickupEmail}
-                                      onChange={(e) => setPickupEmail(e.target.value)}
-                                    />
-                                  </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Pick up address</label>
-                                  <input 
-                                    type="text" 
-                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium"
-                                    placeholder="House No, Building, Street Name"
-                                    value={pickupAddress.street}
-                                    onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
-                                  />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div className="space-y-2">
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">City</label>
+                                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                                     <input 
                                       type="text" 
-                                      className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium"
-                                      placeholder="City"
-                                      value={pickupAddress.city}
-                                      onChange={(e) => setPickupAddress({...pickupAddress, city: e.target.value})}
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">PIN code</label>
-                                    <input 
-                                      type="text" 
-                                      className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium"
-                                      placeholder="PIN Code"
-                                      value={pickupAddress.zip}
-                                      onChange={(e) => setPickupAddress({...pickupAddress, zip: e.target.value})}
+                                      className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                      placeholder="Enter your name"
+                                      value={pickupName}
+                                      onChange={(e) => setPickupName(e.target.value)}
                                     />
                                   </div>
                                 </div>
-
                                 <div className="space-y-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Special Instructions</label>
-                                  <textarea 
-                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium min-h-[100px]"
-                                    placeholder="Any specific instructions for our agent?"
-                                    value={pickupSpecialInstructions}
-                                    onChange={(e) => setPickupSpecialInstructions(e.target.value)}
-                                  />
-                                </div>
-
-                                {currentUser && (
-                                  <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50 flex items-start gap-3 mt-4 hover:bg-slate-50 transition-colors">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                                  <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">+91</span>
                                     <input 
-                                      type="checkbox" 
-                                      id="save-pickup-to-profile"
-                                      className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 mt-0.5 cursor-pointer accent-indigo-600"
-                                      checked={savePickupToProfile}
-                                      onChange={(e) => setSavePickupToProfile(e.target.checked)}
+                                      type="tel" 
+                                      className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                      placeholder="10-digit mobile"
+                                      value={pickupPhone}
+                                      maxLength={10}
+                                      onChange={(e) => {
+                                        const val = e.target.value.replace(/\D/g, '');
+                                        if (val.length <= 10) setPickupPhone(val);
+                                      }}
                                     />
-                                    <label htmlFor="save-pickup-to-profile" className="text-xs font-bold text-slate-700 leading-relaxed cursor-pointer select-none">
-                                      Save these details in my customer profile
-                                      <span className="block text-[10px] text-slate-400 font-medium normal-case mt-0.5 animate-pulse">
-                                        These details will be securely stored and auto-filled next time when logged in with the same ID.
-                                      </span>
-                                    </label>
                                   </div>
-                                )}
-
-                                <div className="flex gap-4">
-                                  <button 
-                                    onClick={() => {
-                                      setActivePickupStep(2);
-                                    }}
-                                    className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-                                  >
-                                    <ArrowLeft size={18} /> Back
-                                  </button>
-                                  <button 
-                                    onClick={() => {
-                                      if (!pickupName || !pickupPhone || !pickupAddress.street || !pickupAddress.city || !pickupAddress.zip) {
-                                        toast.error('Please fill in all required fields');
-                                        return;
-                                      }
-                                      if (pickupPhone.length !== 10) {
-                                        toast.error('Phone number must be 10 digits');
-                                        return;
-                                      }
-                                      if (savePickupToProfile && currentUser) {
-                                        savePickupProfileToDb();
-                                      }
-                                      setActivePickupStep(4);
-                                    }}
-                                    className="flex-[2] py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
-                                  >
-                                    Continue to Review <ArrowRight size={18} />
-                                  </button>
                                 </div>
                               </div>
-                        </motion.div>
-                      )}
+
+                              <div className="space-y-2">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+                                <div className="relative">
+                                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                  <input 
+                                    type="email" 
+                                    className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                    placeholder="Enter your email for confirmation"
+                                    value={pickupEmail}
+                                    onChange={(e) => setPickupEmail(e.target.value)}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Pick up address</label>
+                                <input 
+                                  type="text" 
+                                  className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                  placeholder="House No, Building, Street Name"
+                                  value={pickupAddress.street}
+                                  onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">City</label>
+                                  <input 
+                                    type="text" 
+                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                    placeholder="City"
+                                    value={pickupAddress.city}
+                                    onChange={(e) => setPickupAddress({...pickupAddress, city: e.target.value})}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">State</label>
+                                  <input 
+                                    type="text" 
+                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                    placeholder="State"
+                                    value={pickupAddress.state}
+                                    onChange={(e) => setPickupAddress({...pickupAddress, state: e.target.value})}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">PIN code</label>
+                                  <input 
+                                    type="text" 
+                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                    placeholder="PIN Code"
+                                    value={pickupAddress.zip}
+                                    onChange={(e) => setPickupAddress({...pickupAddress, zip: e.target.value})}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Special Instructions</label>
+                                <textarea 
+                                  className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium min-h-[100px] text-sm"
+                                  placeholder="Any specific instructions for our agent?"
+                                  value={pickupSpecialInstructions}
+                                  onChange={(e) => setPickupSpecialInstructions(e.target.value)}
+                                />
+                              </div>
+
+                              {currentUser && (
+                                <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50 flex items-start gap-3 mt-4 hover:bg-slate-50 transition-colors">
+                                  <input 
+                                    type="checkbox" 
+                                    id="save-pickup-to-profile"
+                                    className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 mt-0.5 cursor-pointer accent-indigo-600"
+                                    checked={savePickupToProfile}
+                                    onChange={(e) => setSavePickupToProfile(e.target.checked)}
+                                  />
+                                  <label htmlFor="save-pickup-to-profile" className="text-xs font-bold text-slate-700 leading-relaxed cursor-pointer select-none">
+                                    Save these details in my customer profile
+                                    <span className="block text-[10px] text-slate-400 font-medium normal-case mt-0.5">
+                                      These details will be securely stored and auto-filled next time when logged in with the same ID.
+                                    </span>
+                                  </label>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="space-y-6">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Name</label>
+                                  <div className="relative">
+                                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                    <input 
+                                      type="text" 
+                                      className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                      placeholder="Receiver full name"
+                                      value={pickupDestination.fullName}
+                                      onChange={(e) => setPickupDestination({...pickupDestination, fullName: e.target.value})}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Phone</label>
+                                  <div className="relative">
+                                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                    <input 
+                                      type="tel" 
+                                      className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                      placeholder="Receiver contact phone"
+                                      value={pickupDestination.phone}
+                                      onChange={(e) => setPickupDestination({...pickupDestination, phone: e.target.value})}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Email</label>
+                                <div className="relative">
+                                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                  <input 
+                                    type="email" 
+                                    className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                    placeholder="Receiver email (optional)"
+                                    value={pickupDestination.email}
+                                    onChange={(e) => setPickupDestination({...pickupDestination, email: e.target.value})}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination Address</label>
+                                <input 
+                                  type="text" 
+                                  className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                  placeholder="Street Address, Block, Apartment Info"
+                                  value={pickupDestination.addressLine1}
+                                  onChange={(e) => setPickupDestination({...pickupDestination, addressLine1: e.target.value})}
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination City</label>
+                                  <input 
+                                    type="text" 
+                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                    placeholder="Destination City"
+                                    value={pickupDestination.city}
+                                    onChange={(e) => setPickupDestination({...pickupDestination, city: e.target.value})}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination State</label>
+                                  <input 
+                                    type="text" 
+                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                    placeholder="Destination State"
+                                    value={pickupDestination.state}
+                                    onChange={(e) => setPickupDestination({...pickupDestination, state: e.target.value})}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">ZIP / Post Code</label>
+                                  <input 
+                                    type="text" 
+                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                    placeholder="ZIP or Postal Code"
+                                    value={pickupDestination.zipCode}
+                                    onChange={(e) => setPickupDestination({...pickupDestination, zipCode: e.target.value})}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination Country</label>
+                                <div className="relative">
+                                  <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10" size={18} />
+                                  <select 
+                                    className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm appearance-none cursor-pointer pr-10"
+                                    value={pickupDestination.country}
+                                    onChange={(e) => setPickupDestination({...pickupDestination, country: e.target.value})}
+                                  >
+                                    {COUNTRIES.map(c => (
+                                      <option key={c} value={c}>{c}</option>
+                                    ))}
+                                  </select>
+                                  <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-slate-400">
+                                    <ChevronDown size={18} />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex gap-4 pt-4 border-t border-slate-100">
+                            {pickupDetailsTab === 'pickup' ? (
+                              <>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    setActivePickupStep(2);
+                                  }}
+                                  className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                                >
+                                  <ArrowLeft size={18} /> Back
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    // Local Validation before going to Destination Address Tab
+                                    if (!pickupName || !pickupPhone || !pickupAddress.street || !pickupAddress.city || !pickupAddress.state || !pickupAddress.zip) {
+                                      toast.error('Please fill in all required Pickup Address fields before proceeding.');
+                                      return;
+                                    }
+                                    if (pickupPhone.length !== 10) {
+                                      toast.error('Phone number must be exactly 10 digits');
+                                      return;
+                                    }
+                                    setPickupDetailsTab('destination');
+                                  }}
+                                  className="flex-[2] py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
+                                >
+                                  Continue to Destination <ArrowRight size={18} />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    setPickupDetailsTab('pickup');
+                                  }}
+                                  className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                                >
+                                  <ArrowLeft size={18} /> Back
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    if (!pickupName || !pickupPhone || !pickupAddress.street || !pickupAddress.city || !pickupAddress.state || !pickupAddress.zip) {
+                                      toast.error('Please fill in all required Pickup Address fields');
+                                      setPickupDetailsTab('pickup');
+                                      return;
+                                    }
+                                    if (pickupPhone.length !== 10) {
+                                      toast.error('Phone number must be 10 digits');
+                                      setPickupDetailsTab('pickup');
+                                      return;
+                                    }
+                                    if (!pickupDestination.fullName || !pickupDestination.phone || !pickupDestination.addressLine1 || !pickupDestination.city || !pickupDestination.state || !pickupDestination.zipCode) {
+                                      toast.error('Please fill in all required Destination fields');
+                                      return;
+                                    }
+                                    if (savePickupToProfile && currentUser) {
+                                      savePickupProfileToDb();
+                                    }
+                                    setActivePickupStep(4);
+                                  }}
+                                  className="flex-[2] py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
+                                >
+                                  Continue to Review <ArrowRight size={18} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
 
                     {/* Step 4: Review your booking */}
                     {activePickupStep === 4 && (
@@ -10188,9 +10552,24 @@ export default function App() {
                                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact</p>
                                       <p className="font-bold text-slate-900">{pickupName} (+91 {pickupPhone})</p>
                                     </div>
-                                    <div className="col-span-2">
-                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Address</p>
-                                      <p className="font-bold text-slate-900">{pickupAddress.street}, {pickupAddress.city}, {pickupAddress.zip}</p>
+                                    <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-250/20">
+                                      <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Address (From)</p>
+                                        <p className="font-bold text-slate-900 text-xs mt-1 leading-relaxed">
+                                          {pickupAddress.street}<br />
+                                          {pickupAddress.city}, {pickupAddress.state} - {pickupAddress.zip}<br />
+                                          India
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Destination Address (To)</p>
+                                        <p className="font-bold text-slate-900 text-xs mt-1 leading-relaxed">
+                                          {pickupDestination.fullName} (+{pickupDestination.phone})<br />
+                                          {pickupDestination.addressLine1}<br />
+                                          {pickupDestination.city}, {pickupDestination.state} - {pickupDestination.zipCode}<br />
+                                          {pickupDestination.country}
+                                        </p>
+                                      </div>
                                     </div>
                                     {pickupSpecialInstructions && (
                                       <div className="col-span-2">
@@ -10200,6 +10579,77 @@ export default function App() {
                                     )}
                                   </div>
                                 </div>
+
+                                {/* Approximate Price Estimate */}
+                                {(() => {
+                                  let minWeight = 1;
+                                  let maxWeight = 5;
+                                  let isMoreThan20 = false;
+
+                                  if (pickupEstimatedWeight) {
+                                    if (pickupEstimatedWeight.includes('Less than 5') || pickupEstimatedWeight.includes('1-5')) {
+                                      minWeight = 1;
+                                      maxWeight = 5;
+                                    } else if (pickupEstimatedWeight.includes('5 to 20') || pickupEstimatedWeight.includes('5-15') || pickupEstimatedWeight.includes('5-20') || pickupEstimatedWeight.includes('5 to 15')) {
+                                      minWeight = 5;
+                                      maxWeight = 20;
+                                    } else if (pickupEstimatedWeight.includes('More than 20') || pickupEstimatedWeight.includes('15-50') || pickupEstimatedWeight.includes('20+')) {
+                                      minWeight = 20;
+                                      maxWeight = 50;
+                                      isMoreThan20 = true;
+                                    } else {
+                                      const match = pickupEstimatedWeight.match(/(\d+)/);
+                                      if (match) {
+                                        const val = parseInt(match[0], 10);
+                                        minWeight = Math.max(1, val - 2);
+                                        maxWeight = val + 2;
+                                      }
+                                    }
+                                  }
+
+                                  const targetCountry = pickupDestination.country || COUNTRIES[0];
+                                  const rate = shippingRates[targetCountry] || 10;
+                                  const discountPercent = shippingDiscounts[targetCountry] || 0;
+
+                                  const rawMinQuote = minWeight * rate;
+                                  const rawMaxQuote = maxWeight * rate;
+
+                                  const minDiscount = rawMinQuote * (discountPercent / 100);
+                                  const maxDiscount = rawMaxQuote * (discountPercent / 100);
+
+                                  const finalMin = Math.max(0, rawMinQuote - minDiscount);
+                                  const finalMax = Math.max(0, rawMaxQuote - maxDiscount);
+
+                                  return (
+                                    <div className="p-6 bg-indigo-50/50 rounded-3xl border border-indigo-100 flex items-start gap-4">
+                                      <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-200">
+                                        <Globe size={20} />
+                                      </div>
+                                      <div className="flex-1">
+                                        <div className="flex items-center justify-between">
+                                          <h5 className="font-extrabold text-indigo-950 text-sm">Approximate Price Estimate</h5>
+                                          <span className="text-xs font-black bg-indigo-100/80 text-indigo-700 px-2.5 py-1 rounded-full uppercase tracking-widest">
+                                            {minWeight}-{maxWeight}{isMoreThan20 ? '+' : ''} kg
+                                          </span>
+                                        </div>
+                                        <div className="mt-2 flex items-baseline gap-2">
+                                          <span className="text-2xl font-black text-indigo-600">
+                                            ₹{finalMin.toFixed(2)} - ₹{finalMax.toFixed(2)}{isMoreThan20 ? '+' : ''}
+                                          </span>
+                                          <span className="text-xs font-medium text-slate-500">to {targetCountry}</span>
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 mt-1.5 leading-relaxed font-sans">
+                                          Based on standard rate of <strong className="text-slate-700">₹{rate}/kg</strong> for {targetCountry} over the weight range limit of {minWeight} to {maxWeight} kg.
+                                          {discountPercent > 0 && (
+                                            <span className="text-emerald-600 font-bold block mt-1">
+                                              ✨ Special {discountPercent}% discount applied! Saved ₹{minDiscount.toFixed(2)} - ₹{maxDiscount.toFixed(2)}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
 
                                 {/* Payment Info Section */}
                                 <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100 flex items-start gap-4">
@@ -10304,54 +10754,6 @@ export default function App() {
                                 </button>
                               </div>
                             </div>
-
-                            <div className="flex flex-col items-center gap-3">
-                              <button 
-                                onClick={() => {
-                                  const ref = lastBookingRef || activePickup?.id;
-                                  if (ref) {
-                                    setNavbarTrackingId(ref);
-                                    navigateTo('track');
-                                  }
-                                }}
-                                className="flex items-center gap-2 text-xs font-black text-indigo-600 hover:text-indigo-700 transition-colors"
-                              >
-                                <Share size={14} /> Track this booking
-                              </button>
-                              
-                              <button 
-                                onClick={() => {
-                                  const ref = lastBookingRef || activePickup?.id;
-                                  if (ref) {
-                                    const message = `*JiffEX Pickup Confirmation*\n\nBooking Reference: ${ref}\nDestination: India\nStatus: Confirmed\n\nTrack your shipment at: ${window.location.origin}?tab=track&id=${ref}\n\nThank you for choosing JiffEX!`;
-                                    sendWhatsApp(pickupPhone, message);
-                                  }
-                                }}
-                                className="flex items-center gap-2 text-xs font-black text-emerald-600 hover:text-emerald-700 transition-colors mt-1"
-                              >
-                                <MessageCircle size={14} /> Send Confirmation via WhatsApp
-                              </button>
-
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap justify-center gap-3 pt-2">
-                            {[
-                              { icon: Check, text: "No payment required yet", color: "text-emerald-600", bg: "bg-emerald-50" },
-                              { icon: ShieldCheck, text: "Secure handling & packaging", color: "text-indigo-600", bg: "bg-indigo-50" },
-                              { icon: Users, text: "Trusted by 1000+ customers", color: "text-amber-600", bg: "bg-amber-50" }
-                            ].map((badge, i) => (
-                              <motion.div 
-                                key={i}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.5 + (i * 0.1) }}
-                                className={`flex items-center gap-2 px-4 py-2 ${badge.bg} rounded-full border border-white shadow-sm`}
-                              >
-                                <badge.icon size={14} className={badge.color} />
-                                <span className="text-[11px] font-bold text-slate-700">{badge.text}</span>
-                              </motion.div>
-                            ))}
                           </div>
                         </div>
 
@@ -11957,14 +12359,25 @@ export default function App() {
       state: '',
       zip: ''
     });
+    setPickupDetailsTab('pickup');
+    setPickupDestination({
+      fullName: '',
+      email: '',
+      phone: '',
+      addressLine1: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: COUNTRIES[0],
+    });
     setPickupName('');
     setPickupPhone('');
     setPickupLanguage('English');
     setPickupItemType('Everyday Items');
-    setPickupVehicleType('Fits in a car');
+    setPickupVehicleType('Less than 5 kg');
     setPickupSpecialInstructions('');
     setPickupCategory('Personal Effects');
-    setPickupEstimatedWeight('1-5 kg');
+    setPickupEstimatedWeight('Less than 5 kg');
     setCartItemName('');
     setCartItemWeight('');
     setCartItemQuantity(1);

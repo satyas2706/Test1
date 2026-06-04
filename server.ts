@@ -1770,6 +1770,82 @@ const transformDbOrder = (o: any) => {
   };
 };
 
+// Helper to perform structural deduplication of orders
+// If there is an order that is still scheduled but has empty items, and we find a completed/processed clone
+// (created historical sequence increment bugs in the previous codebase), we automatically delete the scheduled empty clone.
+const deduplicateOrders = (ordersList: any[]) => {
+  if (!ordersList || ordersList.length === 0) return ordersList;
+
+  const completed = ordersList.filter(o => {
+    let its = o.items;
+    if (typeof its === 'string') {
+      try { its = JSON.parse(its); } catch (e) { its = []; }
+    }
+    const hasItems = Array.isArray(its) && its.length > 0;
+    const isCompletedStatus = ['Picked Up', 'In Warehouse', 'Received at Warehouse', 'Ready to Ship', 'In Transit', 'Out for Delivery', 'Delivered', 'Completed'].includes(o.status || o.destination?.status);
+    return hasItems || isCompletedStatus;
+  });
+
+  const pending = ordersList.filter(o => !completed.some(co => co.id === o.id));
+  const cleanList = [...completed];
+  const idsToDelete: string[] = [];
+
+  for (const pend of pending) {
+    const isDup = completed.some(comp => {
+      const pCust = pend.customer_id || pend.customerId || pend.destination?.customer_id || pend.destination?.customerId;
+      const cCust = comp.customer_id || comp.customerId || comp.destination?.customer_id || comp.destination?.customerId;
+      if (String(pCust) !== String(cCust)) return false;
+
+      const pDate = pend.shipping_date || pend.shippingDate || pend.destination?.shippingDate || pend.destination?.date || pend.date;
+      const cDate = comp.shipping_date || comp.shippingDate || comp.destination?.shippingDate || comp.destination?.date || comp.date;
+      if (pDate !== cDate) return false;
+
+      const pName = pend.customer_name || pend.customerName || pend.destination?.fullName || pend.destination?.customerName;
+      const cName = comp.customer_name || comp.customerName || comp.destination?.fullName || comp.destination?.customerName;
+      if (pName !== cName) return false;
+
+      const pAddr = pend.address || pend.destination?.address || pend.destination?.addressLine1;
+      const cAddr = comp.address || comp.destination?.address || comp.destination?.addressLine1;
+      if (pAddr !== cAddr) return false;
+
+      const pendingNum = parseInt(pend.id.split('-')[1], 10);
+      const completedNum = parseInt(comp.id.split('-')[1], 10);
+      const isSeqClose = !isNaN(pendingNum) && !isNaN(completedNum) && Math.abs(pendingNum - completedNum) <= 2;
+
+      return isSeqClose;
+    });
+
+    let its = pend.items;
+    if (typeof its === 'string') {
+      try { its = JSON.parse(its); } catch (e) { its = []; }
+    }
+    const itemLength = Array.isArray(its) ? its.length : 0;
+
+    if (isDup && itemLength === 0 && (pend.status === 'Scheduled' || pend.status === 'Pending Pickup' || pend.status === 'Pending')) {
+      console.log(`[SERVER SELF-HEAL] Deleting stale duplicate order: ${pend.id}`);
+      idsToDelete.push(pend.id);
+    } else {
+      cleanList.push(pend);
+    }
+  }
+
+  // Fire background PostgreSQL deletions if we have duplicate IDs and supabase is alive
+  if (idsToDelete.length > 0 && supabase) {
+    supabase.from('orders').delete().in('id', idsToDelete)
+      .then(({ error }) => {
+        if (error) console.error('[SERVER SELF-HEAL] PG Delete Error:', error.message);
+        else console.log('[SERVER SELF-HEAL] PG Deleted IDs:', idsToDelete);
+      });
+    // Filter from memory arrays
+    const filteredMem = memOrders.filter(o => !idsToDelete.includes(o.id));
+    memOrders.length = 0;
+    memOrders.push(...filteredMem);
+    cachedAllOrders = cachedAllOrders.filter(o => !idsToDelete.includes(o.id));
+  }
+
+  return cleanList;
+};
+
 // API: Get all orders (Admin only)
 app.get("/api/orders", async (req, res) => {
   if (!supabase) {
@@ -1803,10 +1879,12 @@ app.get("/api/orders", async (req, res) => {
       return dateB - dateA;
     });
 
-    // Cache the successful results
-    cachedAllOrders = finalOrders;
+    const deduplicatedFinalOrders = deduplicateOrders(finalOrders);
 
-    res.json(finalOrders);
+    // Cache the successful results
+    cachedAllOrders = deduplicatedFinalOrders;
+
+    res.json(deduplicatedFinalOrders);
   } catch (err: any) {
     console.log("Serving all orders cleanly (cache/memory optimized rendering).");
     
@@ -1820,7 +1898,7 @@ app.get("/api/orders", async (req, res) => {
       const dateB = new Date(b.created_at || b.createdAt || 0).getTime();
       return dateB - dateA;
     });
-    res.json(fallback);
+    res.json(deduplicateOrders(fallback));
   }
 });
 
@@ -1886,7 +1964,7 @@ app.get("/api/orders/:customerId", async (req, res) => {
     if (error) throw error;
     
     const transformed = (data || []).map(transformDbOrder);
-    res.json(transformed);
+    res.json(deduplicateOrders(transformed));
   } catch (err: any) {
     console.log(`Serving filtered orders layout for user: ${customerId}`);
     
@@ -1906,7 +1984,7 @@ app.get("/api/orders/:customerId", async (req, res) => {
         return dateB - dateA;
       });
 
-    res.json(fallback);
+    res.json(deduplicateOrders(fallback));
   }
 });
 

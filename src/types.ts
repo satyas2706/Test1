@@ -76,6 +76,7 @@ export interface Order {
   updatedAt?: string;
   assignedAgent?: AgentProfile;
   assignedAgentId?: string;
+  pickupAddress?: DestinationAddress;
   documents?: { id: string; name: string; image: string; type: string; uploadedAt: string }[];
 }
 
