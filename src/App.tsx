@@ -5972,6 +5972,23 @@ export default function App() {
           assigned_agent: currentAgent,
           assigned_agent_id: currentAgent.id
         } as any);
+
+        // Also update pickups table in Supabase
+        if (isSupabaseConfigured) {
+          try {
+            await api.updatePickup(activeWorkOrder.id, {
+              items: woItems,
+              status: 'Scheduled',
+              paymentStatus: 'Pending',
+              assignedAgentId: currentAgent.id,
+              pickupDate: woShippingDate,
+              address: `${woAddress.addressLine1}, ${woAddress.city}, ${woAddress.country}`
+            });
+          } catch (e) {
+            console.warn('Failed to update pickup details in Supabase:', e);
+          }
+        }
+
         toast.success(`Cargo list, documents and details saved successfully!`);
       } catch (err: any) {
         console.warn('Failed to sync details online:', err);
@@ -6066,6 +6083,26 @@ export default function App() {
       .catch(err => {
         console.error('Failed to update completed order on DB:', err);
       });
+
+      // Also update pickup status in 'pickups' table in Supabase
+      if (isSupabaseConfigured) {
+        api.updatePickup(newOrderId, {
+          status: (woStatusInput === 'Scheduled' || woStatusInput === 'Pending Pickup') ? 'Scheduled' : 
+                  woStatusInput === 'Cancelled' ? 'Cancelled' : 
+                  woStatusInput === 'Picked Up' ? 'Picked Up' : 'Completed',
+          items: completedItems,
+          paymentStatus: 'Paid',
+          assignedAgentId: currentAgent.id,
+          pickupDate: woShippingDate,
+          address: `${woAddress.addressLine1}, ${woAddress.city}, ${woAddress.country}`
+        })
+        .then(() => {
+          console.log(`[Pickup] Pickup ${newOrderId} successfully updated on DB`);
+        })
+        .catch(e => {
+          console.warn('Failed to update completed pickup in Supabase:', e);
+        });
+      }
 
       const recipientEmail = woAddress.email || currentUser?.email || '';
       api.shareInvoice(newOrder)
