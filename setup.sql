@@ -143,5 +143,27 @@ ALTER PUBLICATION supabase_realtime ADD TABLE agents;
 ALTER PUBLICATION supabase_realtime ADD TABLE agent_logs;
 ALTER PUBLICATION supabase_realtime ADD TABLE customer_profiles;
 
+-- Create 'shipping_settings' table
+CREATE TABLE IF NOT EXISTS shipping_settings (
+  id TEXT PRIMARY KEY DEFAULT 'global',
+  rates JSONB NOT NULL,
+  discounts JSONB NOT NULL,
+  coupons JSONB NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS for shipping_settings
+ALTER TABLE shipping_settings ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for public access (for development)
+CREATE POLICY "Allow public read shipping_settings" ON shipping_settings FOR SELECT USING (true);
+CREATE POLICY "Allow public insert shipping_settings" ON shipping_settings FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update shipping_settings" ON shipping_settings FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete shipping_settings" ON shipping_settings FOR DELETE USING (true);
+
+-- Enable Realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE shipping_settings;
+
+
 -- OPTIONAL: If you want to enable it for ALL current and future tables
 -- ALTER PUBLICATION supabase_realtime SET FOR ALL TABLES;

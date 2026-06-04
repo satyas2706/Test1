@@ -474,7 +474,32 @@ const DEFAULT_SHIPPING_SETTINGS = {
   }
 };
 
-const getShippingSettings = () => {
+const getShippingSettings = async () => {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('shipping_settings')
+        .select('*')
+        .eq('id', 'global')
+        .maybeSingle();
+
+      if (!error && data) {
+        return {
+          rates: data.rates || DEFAULT_SHIPPING_SETTINGS.rates,
+          discounts: data.discounts || DEFAULT_SHIPPING_SETTINGS.discounts,
+          coupons: data.coupons || [
+            { code: "SHIP5", discountPercent: 5, isEnabled: true },
+            { code: "BOOST", discountPercent: 12, isEnabled: false }
+          ]
+        };
+      } else if (error && error.code !== 'PGRST116') {
+        console.warn("[Supabase] Failed to fetch shipping settings, falling back to local file:", error.message);
+      }
+    } catch (err: any) {
+      console.warn("[Supabase] Exception fetching shipping settings:", err.message || err);
+    }
+  }
+
   try {
     if (fs.existsSync(SETTINGS_FILE_PATH)) {
       const data = fs.readFileSync(SETTINGS_FILE_PATH, 'utf-8');
@@ -506,23 +531,46 @@ const getShippingSettings = () => {
   };
 };
 
-const saveShippingSettings = (settings: any) => {
+const saveShippingSettings = async (settings: any) => {
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from('shipping_settings')
+        .upsert({
+          id: 'global',
+          rates: settings.rates,
+          discounts: settings.discounts,
+          coupons: settings.coupons,
+          updated_at: new Date().toISOString()
+        });
+
+      if (!error) {
+        console.log("[Supabase] Successfully saved shipping settings.");
+      } else {
+        console.warn("[Supabase] Failed to save shipping settings to Supabase:", error.message);
+      }
+    } catch (err: any) {
+      console.warn("[Supabase] Exception saving shipping settings to Supabase:", err.message || err);
+    }
+  }
+
   try {
     fs.writeFileSync(SETTINGS_FILE_PATH, JSON.stringify(settings, null, 2), 'utf-8');
     return true;
   } catch (err) {
-    console.error("Error saving shipping settings:", err);
+    console.error("Error saving shipping settings local file:", err);
     return false;
   }
 };
 
-app.get("/api/settings/shipping", (req, res) => {
-  res.json(getShippingSettings());
+app.get("/api/settings/shipping", async (req, res) => {
+  const current = await getShippingSettings();
+  res.json(current);
 });
 
-app.post("/api/settings/shipping", (req, res) => {
+app.post("/api/settings/shipping", async (req, res) => {
   const { rates, discounts, coupons } = req.body;
-  const current = getShippingSettings();
+  const current = await getShippingSettings();
   
   if (rates) {
     current.rates = { ...current.rates, ...rates };
@@ -546,7 +594,7 @@ app.post("/api/settings/shipping", (req, res) => {
       .filter((c: any) => c.code.length === 5);
   }
   
-  saveShippingSettings(current);
+  await saveShippingSettings(current);
   res.json(current);
 });
 
@@ -2189,6 +2237,30 @@ async function seedDatabaseIfEmpty() {
               console.log("[Supabase Seeder] Orders seeded successfully!");
             }
          }
+       }
+
+       // 6. Seed Shipping Settings if empty
+       try {
+         const { data: existingSettings, error: sErr } = await supabase.from('shipping_settings').select('id').limit(1);
+         if (!sErr && (!existingSettings || existingSettings.length === 0)) {
+            console.log("[Supabase Seeder] shipping_settings table is empty, seeding default settings...");
+            const { error: sInsError } = await supabase.from('shipping_settings').insert({
+              id: 'global',
+              rates: DEFAULT_SHIPPING_SETTINGS.rates,
+              discounts: DEFAULT_SHIPPING_SETTINGS.discounts,
+              coupons: [
+                { code: "SHIP5", discountPercent: 5, isEnabled: true },
+                { code: "BOOST", discountPercent: 12, isEnabled: false }
+              ]
+            });
+            if (sInsError) {
+              console.error("[Supabase Seeder] Failed to seed shipping_settings:", sInsError);
+            } else {
+              console.log("[Supabase Seeder] shipping_settings seeded successfully!");
+            }
+         }
+       } catch (e: any) {
+         console.warn("[Supabase Seeder] Optional shipping_settings table check skipped or failed:", e.message || e);
        }
     }
   } catch (err: any) {
