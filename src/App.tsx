@@ -3929,11 +3929,17 @@ export default function App() {
 
   const goBack = () => {
     if (tabHistory.length > 1) {
-      const newHistory = [...tabHistory];
+      let newHistory = [...tabHistory];
       newHistory.pop(); // remove current
-      const prevTab = newHistory[newHistory.length - 1];
-      setTabHistory(newHistory);
-      setActiveTab(prevTab);
+
+      if (newHistory.length > 0) {
+        const prevTab = newHistory[newHistory.length - 1];
+        setTabHistory(newHistory);
+        setActiveTab(prevTab);
+      } else {
+        setActiveTab('home');
+        setTabHistory(['home']);
+      }
       setTimeout(() => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }, 100);
@@ -4174,14 +4180,8 @@ export default function App() {
     localStorage.setItem('jiffex_auto_assign_agent', String(isAutoAssignAgentEnabled));
   }, [isAutoAssignAgentEnabled]);
 
-  // Reset pickup steps and booking references when navigating away from the pickup tab
-  useEffect(() => {
-    if (activeTab !== 'pickup') {
-      setActivePickupStep(1);
-      setLastBookingRef(null);
-      setIsSchedulingNewPickup(false);
-    }
-  }, [activeTab]);
+  // State persistence on tab transitions is preferred over aggressive resets.
+  // This allows the user to navigate back safely from the Cart to their active booking confirmation page.
 
   const [lastBookingRef, setLastBookingRef] = useState<string | null>(null);
   const userAppointments = useMemo(() => {
@@ -10688,7 +10688,7 @@ export default function App() {
                                     onClick={handleSchedulePickup}
                                     className="flex-[2] py-5 bg-jiffex-orange text-white rounded-[2rem] text-lg font-black hover:bg-amber-600 transition-all shadow-2xl shadow-jiffex-orange/20 flex items-center justify-center gap-3"
                                   >
-                                    {currentUser ? 'Confirm Booking' : 'Guest Checkout (OTP-based)'}
+                                    {currentUser ? 'Confirm Booking' : 'Sign in (OTP-based)'}
                                   </button>
                                 </div>
                               </div>
