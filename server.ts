@@ -449,8 +449,6 @@ app.get("/api/supabase-config", (req, res) => {
   });
 });
 
-const SETTINGS_FILE_PATH = path.join(process.cwd(), 'shipping_settings.json');
-
 const DEFAULT_SHIPPING_SETTINGS = {
   rates: {
     'USA': 12,
@@ -493,35 +491,14 @@ const getShippingSettings = async () => {
           ]
         };
       } else if (error && error.code !== 'PGRST116') {
-        console.warn("[Supabase] Failed to fetch shipping settings, falling back to local file:", error.message);
+        console.warn("[Supabase] Failed to fetch shipping settings:", error.message);
       }
     } catch (err: any) {
       console.warn("[Supabase] Exception fetching shipping settings:", err.message || err);
     }
   }
 
-  try {
-    if (fs.existsSync(SETTINGS_FILE_PATH)) {
-      const data = fs.readFileSync(SETTINGS_FILE_PATH, 'utf-8');
-      const parsed = JSON.parse(data);
-      if (!parsed.discounts) {
-        parsed.discounts = {};
-        const ratesObj = parsed.rates || DEFAULT_SHIPPING_SETTINGS.rates;
-        Object.keys(ratesObj).forEach(country => {
-          parsed.discounts[country] = parsed.discountPercent || 0;
-        });
-      }
-      if (!parsed.coupons) {
-        parsed.coupons = [
-          { code: "SHIP5", discountPercent: 5, isEnabled: true },
-          { code: "BOOST", discountPercent: 12, isEnabled: false }
-        ];
-      }
-      return parsed;
-    }
-  } catch (err) {
-    console.error("Error reading shipping settings:", err);
-  }
+  // Fallback to default in-memory settings since we strictly do not read or write anything to local filesystem.
   return {
     ...DEFAULT_SHIPPING_SETTINGS,
     coupons: [
@@ -545,7 +522,8 @@ const saveShippingSettings = async (settings: any) => {
         });
 
       if (!error) {
-        console.log("[Supabase] Successfully saved shipping settings.");
+        console.log("[Supabase] Successfully saved shipping settings to Supabase.");
+        return true;
       } else {
         console.warn("[Supabase] Failed to save shipping settings to Supabase:", error.message);
       }
@@ -553,14 +531,7 @@ const saveShippingSettings = async (settings: any) => {
       console.warn("[Supabase] Exception saving shipping settings to Supabase:", err.message || err);
     }
   }
-
-  try {
-    fs.writeFileSync(SETTINGS_FILE_PATH, JSON.stringify(settings, null, 2), 'utf-8');
-    return true;
-  } catch (err) {
-    console.error("Error saving shipping settings local file:", err);
-    return false;
-  }
+  return false;
 };
 
 app.get("/api/settings/shipping", async (req, res) => {
