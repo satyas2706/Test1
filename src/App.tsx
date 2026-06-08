@@ -3069,9 +3069,17 @@ const AdminDashboard = ({
                                 Edit Specs
                               </button>
                               <button 
-                                onClick={() => {
-                                  setStoreProducts(storeProducts.filter(p => p.id !== product.id));
-                                  toast.info(`Product "${product.name}" removed from catalog.`);
+                                onClick={async () => {
+                                  try {
+                                    await api.deleteProduct(product.id);
+                                    setStoreProducts(prev => prev.filter(p => p.id !== product.id));
+                                    toast.info(`Product "${product.name}" removed from database catalog.`);
+                                  } catch (err: any) {
+                                    console.error("DB Delete Product Failed:", err);
+                                    // Local fallback
+                                    setStoreProducts(prev => prev.filter(p => p.id !== product.id));
+                                    toast.info(`Product "${product.name}" removed from local catalog view.`);
+                                  }
                                 }}
                                 className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-150 rounded-xl transition-all"
                                 title="Remove Product"
@@ -3218,7 +3226,7 @@ const AdminDashboard = ({
                             </button>
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={async () => {
                                 const finalPrice = Number(editPriceValue);
                                 const finalWeight = Number(editTempWeight);
                                 if (!editTempName.trim()) {
@@ -3234,31 +3242,36 @@ const AdminDashboard = ({
                                   return;
                                 }
                                 
-                                const updatedProducts = storeProducts.map(p => {
-                                  if (p.id === product.id) {
-                                    return {
-                                      ...p,
-                                      name: editTempName,
-                                      price: finalPrice,
-                                      category: editTempCategory,
-                                      weight: finalWeight,
-                                      estimatedDelivery: editDeliveryValue,
-                                      description: editTempDescription,
-                                      material: editTempMaterial,
-                                      origin: editTempOrigin,
-                                      dimensions: {
-                                        length: Number(editTempLength) || 15,
-                                        width: Number(editTempWidth) || 12,
-                                        height: Number(editTempHeight) || 8,
-                                        unit: 'cm'
-                                      }
-                                    };
-                                  }
-                                  return p;
-                                });
-                                setStoreProducts(updatedProducts);
-                                setEditingProductId(null);
-                                toast.success(`"${editTempName}" specifications successfully updated!`);
+                                const updatedPayload: Partial<StoreProduct> = {
+                                  name: editTempName,
+                                  price: finalPrice,
+                                  category: editTempCategory as any,
+                                  weight: finalWeight,
+                                  estimatedDelivery: editDeliveryValue,
+                                  description: editTempDescription,
+                                  material: editTempMaterial,
+                                  origin: editTempOrigin,
+                                  dimensions: {
+                                    length: Number(editTempLength) || 15,
+                                    width: Number(editTempWidth) || 12,
+                                    height: Number(editTempHeight) || 8,
+                                    unit: 'cm'
+                                  },
+                                  image: product.image
+                                };
+
+                                try {
+                                  const savedProduct = await api.updateProduct(product.id, updatedPayload);
+                                  setStoreProducts(prev => prev.map(p => p.id === product.id ? savedProduct : p));
+                                  setEditingProductId(null);
+                                  toast.success(`"${editTempName}" specs successfully synchronized with Database!`);
+                                } catch (err: any) {
+                                  console.error("DB Product Spec Sync Failed:", err);
+                                  const localUpdated = { ...product, ...updatedPayload };
+                                  setStoreProducts(prev => prev.map(p => p.id === product.id ? localUpdated : p));
+                                  setEditingProductId(null);
+                                  toast.success(`"${editTempName}" updated offline successfully.`);
+                                }
                               }}
                               className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs transition-all shadow-sm"
                             >
@@ -3358,21 +3371,46 @@ const AdminDashboard = ({
                   </div>
                 </div>
                 <button 
-                  onClick={() => {
-                    if (!newProduct.name || !newProduct.price) return;
-                    const prod: StoreProduct = {
-                      id: 'p' + (storeProducts.length + 1),
+                  onClick={async () => {
+                    if (!newProduct.name || !newProduct.price) {
+                      toast.error("Name and price are required.");
+                      return;
+                    }
+                    const payload: Partial<StoreProduct> = {
                       name: newProduct.name,
                       price: newProduct.price,
                       category: newProduct.category as any,
                       image: newProduct.image || 'https://picsum.photos/seed/product/400/400',
                       weight: newProduct.weight || 0.5,
-                      estimatedDelivery: newProduct.estimatedDelivery
+                      estimatedDelivery: newProduct.estimatedDelivery || new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                      description: "Imported product from JiffEX shop catalog.",
+                      dimensions: { length: 15, width: 12, height: 8, unit: 'cm' },
+                      material: 'Premium quality',
+                      origin: 'India'
                     };
-                    setStoreProducts([...storeProducts, prod]);
-                    setNewProduct({ name: '', price: 0, category: categories[0], image: '', weight: 0, estimatedDelivery: '' });
-                    toast.success(`"${prod.name}" successfully published!`);
-                    setInventoryActiveSubTab('StoreCatalog');
+
+                    try {
+                      const createdProduct = await api.createProduct(payload);
+                      setStoreProducts(prev => [...prev, createdProduct]);
+                      setNewProduct({ name: '', price: 0, category: categories[0] || 'Pooja', image: '', weight: 0, estimatedDelivery: '' });
+                      toast.success(`"${payload.name}" successfully published to Database Catalog!`);
+                      setInventoryActiveSubTab('StoreCatalog');
+                    } catch (err: any) {
+                      console.error("DB Create Product Failed:", err);
+                      const fallbackProd: StoreProduct = {
+                        id: 'p' + (storeProducts.length + 1),
+                        name: newProduct.name,
+                        price: newProduct.price,
+                        category: newProduct.category as any,
+                        image: newProduct.image || 'https://picsum.photos/seed/product/400/400',
+                        weight: newProduct.weight || 0.5,
+                        estimatedDelivery: newProduct.estimatedDelivery
+                      };
+                      setStoreProducts(prev => [...prev, fallbackProd]);
+                      setNewProduct({ name: '', price: 0, category: categories[0] || 'Pooja', image: '', weight: 0, estimatedDelivery: '' });
+                      toast.success(`"${fallbackProd.name}" successfully published offline!`);
+                      setInventoryActiveSubTab('StoreCatalog');
+                    }
                   }}
                   className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100"
                 >
@@ -4176,7 +4214,7 @@ export default function App() {
         };
       }) as Appointment[];
   }, [orders, agents]);
-  const [storeProducts, setStoreProducts] = useState<StoreProduct[]>(STORE_PRODUCTS);
+  const [storeProducts, setStoreProducts] = useState<StoreProduct[]>([]);
   const [activeWorkOrder, setActiveWorkOrder] = useState<Appointment | null>(null);
   const [agentActiveTab, setAgentActiveTab] = useState<'Summary' | 'Scheduled' | 'Completed' | 'Canceled'>('Summary');
   const [agentMainTab, setAgentMainTab] = useState<'Summary' | 'Home Pickup'>('Summary');
@@ -4262,6 +4300,25 @@ export default function App() {
   const [showPickupConfirmModal, setShowPickupConfirmModal] = useState(false);
   const [showPickupInProgressModal, setShowPickupInProgressModal] = useState(false);
   const [activePickupStep, setActivePickupStep] = useState(1);
+
+  // Sync / Read store items from database only
+  useEffect(() => {
+    const loadProductsFromDb = async () => {
+      try {
+        console.log('[SUPABASE DATABASE PRODUCTS ONLY] Fetching store catalog...');
+        const fetched = await api.fetchProducts();
+        if (fetched && fetched.length > 0) {
+          setStoreProducts(fetched);
+        } else {
+          setStoreProducts(STORE_PRODUCTS);
+        }
+      } catch (err) {
+        console.error('[SUPABASE DATABASE PRODUCTS ONLY] Fetch failed, falling back to static list:', err);
+        setStoreProducts(STORE_PRODUCTS);
+      }
+    };
+    loadProductsFromDb();
+  }, [dbStatus.connected]);
 
   // Celebration effect for pickup confirmation
   useEffect(() => {
@@ -13549,23 +13606,6 @@ export default function App() {
           </div>
         </div>
       </footer>
-
-      {/* Disclaimer Banner */}
-      {activeTab !== 'agent' && currentUser?.role !== 'Agent' && currentUser?.role !== 'Admin' && (
-        <div className="fixed bottom-0 left-0 right-0 bg-slate-900 text-white py-3 px-4 z-50">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <AlertTriangle size={20} className="text-amber-400 shrink-0" />
-              <p className="text-xs text-slate-300">
-                <span className="font-bold text-white">Disclaimer:</span> Items like knives, chemicals, and explosives are prohibited. Unshipped items will be returned to the sender.
-              </p>
-            </div>
-            <button className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors underline underline-offset-4">
-              Full Policy Details
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Pickup Choice Modal - Removed for Unified Workflow */}
 

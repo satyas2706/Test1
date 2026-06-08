@@ -577,6 +577,30 @@ const MOCK_PRODUCTS = [
   { id: 'm3', name: 'Bubble Wrap (10m)', description: 'Extra protection for fragile items', price: 120, category: 'Protection', weight: 0.5, imageUrl: 'https://images.unsplash.com/photo-1549465220-1d8f9d0c441c?q=80&w=2070&auto=format&fit=crop' }
 ];
 
+// Helper formatting functions for products between Supabase (snake_case) and frontend (camelCase)
+function dbToProduct(dbProduct: any) {
+  if (!dbProduct) return null;
+  const { estimated_delivery, ...rest } = dbProduct;
+  return {
+    ...rest,
+    estimatedDelivery: estimated_delivery
+  };
+}
+
+function productToDb(product: any) {
+  if (!product) return null;
+  const { estimatedDelivery, id, ...rest } = product;
+  const dbProduct: any = {
+    ...rest,
+    estimated_delivery: estimatedDelivery
+  };
+  const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || '');
+  if (id && isValidUuid) {
+    dbProduct.id = id;
+  }
+  return dbProduct;
+}
+
 // API: Get all products
 app.get("/api/products", async (req, res) => {
   if (!supabase) return res.json(MOCK_PRODUCTS);
@@ -590,10 +614,10 @@ app.get("/api/products", async (req, res) => {
       return res.json(MOCK_PRODUCTS);
     }
     
-    res.json(data);
+    res.json(data.map(dbToProduct));
   } catch (err: any) {
     console.error("Fetch Products Error:", err.message);
-    res.json(MOCK_PRODUCTS);
+    res.json(MOCK_PRODUCTS.map(dbToProduct));
   }
 });
 
@@ -602,11 +626,45 @@ app.post("/api/products", async (req, res) => {
   if (!supabase) return res.json(req.body);
 
   try {
-    const { data, error } = await supabase.from('products').insert(req.body).select().single();
+    const dbPayload = productToDb(req.body);
+    const { data, error } = await supabase.from('products').insert(dbPayload).select().single();
     if (error) throw error;
-    res.json(data);
+    res.json(dbToProduct(data));
   } catch (err: any) {
     console.error("Create Product Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: Update a product
+app.patch("/api/products/:id", async (req, res) => {
+  if (!supabase) return res.json(req.body);
+
+  const { id } = req.params;
+  try {
+    const dbPayload = productToDb(req.body);
+    // Explicitly do not let id be changed on patch
+    delete dbPayload.id;
+    const { data, error } = await supabase.from('products').update(dbPayload).eq('id', id).select().single();
+    if (error) throw error;
+    res.json(dbToProduct(data));
+  } catch (err: any) {
+    console.error("Update Product Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: Delete a product
+app.delete("/api/products/:id", async (req, res) => {
+  if (!supabase) return res.json({ success: true });
+
+  const { id } = req.params;
+  try {
+    const { error } = await supabase.from('products').delete().eq('id', id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Delete Product Error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });

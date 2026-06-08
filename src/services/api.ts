@@ -29,6 +29,24 @@ export const api = {
     return await response.json();
   },
 
+  async updateProduct(id: string, product: Partial<StoreProduct>): Promise<StoreProduct> {
+    const response = await fetch(`${API_URL}/api/products/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(product),
+    });
+    if (!response.ok) throw new Error('Failed to update product');
+    return await response.json();
+  },
+
+  async deleteProduct(id: string): Promise<any> {
+    const response = await fetch(`${API_URL}/api/products/${id}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete product');
+    return await response.json();
+  },
+
   async fetchItems(userId: string): Promise<ShippingItem[]> {
     const response = await fetch(`${API_URL}/api/items/${userId}`);
     if (!response.ok) throw new Error('Failed to fetch items');
