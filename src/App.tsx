@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Logo } from './components/Logo';
 import { 
   Package, 
@@ -130,6 +130,148 @@ import { supabase, isSupabaseConfigured, updateSupabaseConfig } from './lib/supa
 import { Login } from './components/Login';
 import { Session } from '@supabase/supabase-js';
 import AccountSection from './components/sections/AccountSection';
+
+interface AutoScrollingShopProductsProps {
+  storeProducts: any[];
+  items: any[];
+  addItem: (item: any, source: string) => void;
+  removeStoreItem: (name: string) => void;
+}
+
+const AutoScrollingShopProducts: React.FC<AutoScrollingShopProductsProps> = ({
+  storeProducts,
+  items,
+  addItem,
+  removeStoreItem
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const isPausedRef = useRef(false);
+
+  // Synchronize dynamic hover pause state to the ref
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let frameId: number;
+    let lastTime = performance.now();
+    const speed = 28; // Smooth scrolling speed in pixels per second
+
+    const animate = (time: number) => {
+      const delta = (time - lastTime) / 1000;
+      lastTime = time;
+
+      if (!isPausedRef.current) {
+        // Safe-guard against frame-rate spikes (e.g. tab backgrounding)
+        const dt = Math.min(delta, 0.1);
+        container.scrollTop += speed * dt;
+
+        // Loop back smoothly once we reach the end of scrollable space
+        const maxScroll = container.scrollHeight - container.clientHeight;
+        if (maxScroll > 0 && container.scrollTop >= maxScroll - 4) {
+          container.scrollTop = 0;
+        }
+      }
+
+      frameId = requestAnimationFrame(animate);
+    };
+
+    frameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frameId);
+  }, []);
+
+  // Triplicate the list of products to ensure seamless infinite looping.
+  const tripledProducts = useMemo(() => {
+    if (!storeProducts || storeProducts.length === 0) return [];
+    return [...storeProducts, ...storeProducts, ...storeProducts];
+  }, [storeProducts]);
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      className="flex-1 overflow-y-auto pr-1 space-y-3 scrollbar-none"
+      style={{ scrollBehavior: 'auto', maxHeight: '420px' }}
+    >
+      <div className="grid grid-cols-1 gap-3">
+        {tripledProducts.map((product, index) => {
+          const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
+          return (
+            <div 
+              key={`${product.id}-${index}`} 
+              className="bg-white border border-slate-100 rounded-2xl p-3 flex flex-col justify-between hover:border-emerald-300 hover:shadow-md transition-all relative group shadow-sm"
+            >
+              <div className="flex gap-3">
+                <div className="w-16 h-16 bg-slate-50 rounded-xl overflow-hidden shrink-0 relative border border-slate-100">
+                  <img
+                    src={product.image}
+                    alt={product.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-350"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <div className="min-w-0 flex-1 flex flex-col justify-between py-0.5">
+                  <div>
+                    <span className="text-[8px] text-amber-600 font-black uppercase tracking-wider block leading-none mb-1">{product.category}</span>
+                    <h4 className="text-[11px] font-extrabold text-slate-800 truncate" title={product.name}>
+                      {product.name}
+                    </h4>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-xs font-black text-slate-900">
+                      ${product.price.toFixed(2)}
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-bold">
+                      {product.weight} kg
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-2.5 pt-2 border-t border-slate-100 flex justify-between items-center">
+                <span className="text-[9px] text-slate-400 font-semibold italic">Consolidated</span>
+                {cartItem ? (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => removeStoreItem(product.name)}
+                      className="w-5 h-5 bg-rose-50 text-rose-600 rounded-md flex items-center justify-center font-black text-[10px] hover:bg-rose-100 cursor-pointer"
+                    >
+                      -
+                    </button>
+                    <span className="text-[10px] font-black min-w-[14px] text-center">
+                      {cartItem.quantity}
+                    </span>
+                    <button
+                      onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
+                      className="w-5 h-5 bg-emerald-50 text-emerald-600 rounded-md flex items-center justify-center font-black text-[10px] hover:bg-emerald-100 cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store');
+                      toast.success(`"${product.name}" added to your pickup box!`);
+                    }}
+                    className="px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-md text-[9px] font-black cursor-pointer transition-all flex items-center gap-1"
+                  >
+                    <Plus size={8} /> Add to Box
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 type Tab = 'home' | 'pickup' | 'warehouse' | 'store' | 'cart' | 'finalize' | 'history' | 'admin' | 'warehouse-mgmt' | 'agent' | 'support' | 'notifications' | 'track' | 'account';
 
@@ -4407,7 +4549,12 @@ export default function App() {
   const [woOrderId, setWoOrderId] = useState<string | null>(null);
   const [woPaymentMethod, setWoPaymentMethod] = useState<'card' | 'phonepe' | 'cash'>('card');
   const [woShippingDate, setWoShippingDate] = useState<string>(SHIPPING_DATES[0]);
-  const [woIsEditingItems, setWoIsEditingItems] = useState<boolean>(true);
+  const [woIsEditingItems, setWoIsEditingItems] = useState<boolean>(false);
+  const [woOtpCode, setWoOtpCode] = useState<string>('');
+  const [woOtpSent, setWoOtpSent] = useState<boolean>(false);
+  const [woOtpVerified, setWoOtpVerified] = useState<boolean>(false);
+  const [woOtpInput, setWoOtpInput] = useState<string>('');
+  const [showSimulatedWhatsapp, setShowSimulatedWhatsapp] = useState<boolean>(false);
   const [woDocuments, setWoDocuments] = useState<{ id: string; name: string; image: string; type: string; uploadedAt: string }[]>([]);
   const [woDocName, setWoDocName] = useState('');
   const [woDocType, setWoDocType] = useState('Govt ID Proof');
@@ -4417,6 +4564,11 @@ export default function App() {
   useEffect(() => {
     if (activeWorkOrder) {
       setWoStep(1);
+      setWoOtpCode('');
+      setWoOtpSent(false);
+      setWoOtpVerified(false);
+      setWoOtpInput('');
+      setShowSimulatedWhatsapp(false);
       // Find corresponding order
       const correspondingOrder = orders.find(o => o.id === activeWorkOrder.id);
       if (correspondingOrder) {
@@ -4449,13 +4601,18 @@ export default function App() {
         setWoStatusInput('Picked Up');
       }
       setIsWOPaid(correspondingOrder?.paymentStatus === 'Paid');
-      setWoIsEditingItems(true);
+      setWoIsEditingItems(false);
     } else {
       setWoItems([]);
       setWoDocuments([]);
       setIsWOPaid(false);
       setWoStatusInput('Picked Up');
-      setWoIsEditingItems(true);
+      setWoIsEditingItems(false);
+      setWoOtpCode('');
+      setWoOtpSent(false);
+      setWoOtpVerified(false);
+      setWoOtpInput('');
+      setShowSimulatedWhatsapp(false);
       setWoItemName('');
       setWoItemWeight(1);
       setWoItemQuantity(1);
@@ -7476,12 +7633,18 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex justify-center pt-4">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4 max-w-lg mx-auto w-full">
               <button 
                 onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
-                className="max-w-md w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black transition-all text-sm shadow-md cursor-pointer"
+                className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black transition-all text-sm shadow-md cursor-pointer text-center"
               >
                 Process New Order
+              </button>
+              <button 
+                onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
+                className="flex-1 py-4 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl font-black transition-all text-sm shadow-xs cursor-pointer text-center"
+              >
+                Go Home
               </button>
             </div>
           </div>
@@ -7779,8 +7942,8 @@ export default function App() {
                   </div>
                 ) : (
                   woItems.map(item => (
-                    <div key={item.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-150 shadow-xs hover:border-slate-350 transition-all">
-                      <div className="flex items-center gap-3">
+                    <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white rounded-2xl border border-slate-150 shadow-xs hover:border-slate-350 transition-all gap-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div 
                           onClick={() => {
                             if (woIsEditingItems) {
@@ -7788,7 +7951,7 @@ export default function App() {
                               document.getElementById('universal-wo-camera')?.click();
                             }
                           }}
-                          className={`w-12 h-12 rounded-xl bg-slate-50 border overflow-hidden shrink-0 flex items-center justify-center transition-all ${
+                          className={`w-10 h-10 rounded-xl bg-slate-50 border overflow-hidden shrink-0 flex items-center justify-center transition-all ${
                             woIsEditingItems 
                               ? 'border-dashed border-slate-250 cursor-pointer hover:border-indigo-400 group relative' 
                               : 'border-slate-150'
@@ -7807,35 +7970,28 @@ export default function App() {
                             <div className="flex flex-col items-center justify-center text-slate-400">
                               {woIsEditingItems ? (
                                 <>
-                                  <Camera size={18} className="text-indigo-500 animate-pulse" />
-                                  <span className="text-[7px] text-slate-400 font-black tracking-tighter uppercase mt-0.5">TAP SNAP</span>
+                                  <Camera size={14} className="text-indigo-500 animate-pulse" />
+                                  <span className="text-[6px] text-slate-400 font-extrabold tracking-tighter uppercase mt-0.5">SNAP</span>
                                 </>
                               ) : (
-                                <Package size={20} className="text-slate-300" />
+                                <Package size={16} className="text-slate-300" />
                               )}
                             </div>
                           )}
                         </div>
-                        <div>
-                          <div className="text-sm font-bold text-slate-900">
+
+                        <div className="flex flex-row flex-wrap md:flex-nowrap items-center gap-y-2 gap-x-4 flex-1 min-w-0">
+                          {/* Item Name */}
+                          <div className="text-xs sm:text-sm font-bold text-slate-900 truncate flex-1 min-w-[100px] sm:min-w-[140px]" title={item.name}>
                             {item.name}
                           </div>
                           
-                          <div className="flex flex-wrap items-center gap-3 mt-1.5 md:gap-4">
+                          {/* Item Values/Controls in single line */}
+                          <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-xs font-semibold text-slate-600 shrink-0">
                             {/* Quantity Control */}
                             {woIsEditingItems ? (
-                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-1.5 py-0.5">
-                                <span className="text-[8px] font-black uppercase text-slate-400 px-0.5">Qty</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const newQty = Math.max(1, (item.quantity || 1) - 1);
-                                    setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: newQty } : i));
-                                  }}
-                                  className="w-5 h-5 bg-white border border-slate-200 rounded hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700"
-                                >
-                                  -
-                                </button>
+                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
+                                <span className="text-[9px] font-black uppercase text-slate-400">Qty</span>
                                 <input
                                   type="number"
                                   value={item.quantity || 1}
@@ -7843,18 +7999,8 @@ export default function App() {
                                     const val = Math.max(1, parseInt(e.target.value, 10) || 1);
                                     setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: val } : i));
                                   }}
-                                  className="w-8 text-center bg-transparent border-0 font-bold text-xs p-0 focus:ring-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                  className="w-10 text-center bg-white border border-slate-200 rounded font-bold text-xs p-0.5 focus:ring-1 focus:ring-indigo-500 outline-none"
                                 />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const newQty = (item.quantity || 1) + 1;
-                                    setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: newQty } : i));
-                                  }}
-                                  className="w-5 h-5 bg-white border border-slate-200 rounded hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700"
-                                >
-                                  +
-                                </button>
                               </div>
                             ) : (
                               <div className="flex items-center gap-1 bg-slate-50/70 border border-slate-150 rounded-lg px-2 py-0.5 text-xs">
@@ -7866,7 +8012,7 @@ export default function App() {
                             {/* Weight Control */}
                             {woIsEditingItems ? (
                               <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
-                                <span className="text-[8px] font-black uppercase text-slate-400">Wt</span>
+                                <span className="text-[9px] font-black uppercase text-slate-400">Wt</span>
                                 <input
                                   type="number"
                                   step="any"
@@ -7875,7 +8021,7 @@ export default function App() {
                                     const val = Math.max(0, parseFloat(e.target.value) || 0);
                                     setWoItems(woItems.map(i => i.id === item.id ? { ...i, weight: val } : i));
                                   }}
-                                  className="w-11 text-center bg-transparent border-b border-slate-250 font-bold text-xs p-0.5 focus:ring-0 focus:border-indigo-500 outline-none"
+                                  className="w-14 text-center bg-white border border-slate-200 rounded font-bold text-xs p-0.5 focus:ring-1 focus:ring-indigo-500 outline-none"
                                 />
                                 <span className="text-[9px] font-bold text-slate-400">kg</span>
                               </div>
@@ -7886,14 +8032,16 @@ export default function App() {
                               </div>
                             )}
 
-                            <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100/30 whitespace-nowrap">
+                            {/* Total calculated field */}
+                            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100/30 whitespace-nowrap">
                               Total: {(item.weight * (item.quantity || 1)).toFixed(1)} kg
                             </span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 justify-end shrink-0">
                         {woIsEditingItems ? (
                           <>
                             <button 
@@ -7905,7 +8053,7 @@ export default function App() {
                               className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-all cursor-pointer"
                               title="Snap Photo"
                             >
-                              <Camera size={15} />
+                              <Camera size={14} />
                             </button>
                             
                             <button 
@@ -7914,7 +8062,7 @@ export default function App() {
                               className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 flex items-center justify-center transition-all cursor-pointer"
                               title="Delete Item"
                             >
-                              <Trash2 size={15} />
+                              <Trash2 size={14} />
                             </button>
                           </>
                         ) : null}
@@ -8244,8 +8392,8 @@ export default function App() {
 
           {/* STEP 4: SCHEDULE & PAY */}
           {woStep === 4 && (
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start font-sans">
-              <div className="md:col-span-7 space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-sans relative">
+              <div className="lg:col-span-7 space-y-6">
                 <div>
                   <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
                     <Calendar className="text-indigo-600" size={20} /> 4. Shipping Schedule & Status
@@ -8270,84 +8418,284 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Note: Update Completion status is not required for Agent login */}
+                {/* 🔒 CUSTOMER AUTHORIZATION (OTP via WhatsApp) */}
+                <div className="p-5 rounded-2xl border border-emerald-150 bg-emerald-50/10 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <MessageCircle size={18} className="text-emerald-600 shrink-0" /> WhatsApp Cargo Authorization
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Send the collected items list and secure authorization OTP directly as a text message to the customer's WhatsApp in one click.
+                      </p>
+                    </div>
+                    {woOtpVerified ? (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 flex items-center gap-1 shrink-0">
+                        <Check size={12} strokeWidth={3} /> Authorized
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 animate-pulse shrink-0">
+                        Pending OTP
+                      </span>
+                    )}
+                  </div>
 
+                  {/* One-Click Send WhatsApp Action */}
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const code = Math.floor(100000 + Math.random() * 900000).toString();
+                        setWoOtpCode(code);
+                        setWoOtpSent(true);
+                        setWoOtpVerified(false);
+                        setWoOtpInput('');
+                        
+                        // Build plain text items list
+                        const itemsListText = woItems.map((item, index) => 
+                          `• ${item.name} (${item.quantity || 1}x) - ${(item.weight * (item.quantity || 1)).toFixed(1)} kg`
+                        ).join('\n');
+
+                        const customerPhoneNumber = (woAddress.phone || activeWorkOrder?.phone || '').replace(/\D/g, '');
+                        
+                        const whatsappMsg = `📌 *CARGO COLLECTION AUTHORIZATION*\n\n` +
+                          `*Work Order:* ${activeWorkOrder?.id || 'NEW'}\n` +
+                          `*Customer Name:* ${woAddress.fullName}\n\n` +
+                          `*Collected Items:*\n${itemsListText}\n\n` +
+                          `--------------------------------\n` +
+                          `*Total Weight:* ${woTotalWeight.toFixed(1)} kg\n` +
+                          `*Estimated Cost:* ₹${woTotalCost.toFixed(2)}\n` +
+                          `--------------------------------\n\n` +
+                          `🔑 *SECURE AUTHORIZATION OTP PIN:* *${code}*\n\n` +
+                          `Please tell this 6-digit PIN code to our field agent to authorize the cargo collection. Thank you!`;
+
+                        const whatsappUrl = `https://api.whatsapp.com/send?phone=${encodeURIComponent(customerPhoneNumber)}&text=${encodeURIComponent(whatsappMsg)}`;
+                        
+                        // Instantly open the WhatsApp API URL to send
+                        window.open(whatsappUrl, '_blank');
+                        
+                        toast.success(`OTP [${code}] generated! Opening WhatsApp chat for: ${woAddress.fullName || 'Customer'}`);
+                      }}
+                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer transition-all border border-emerald-500"
+                    >
+                      <MessageCircle size={14} /> Send Items List + OTP to Customer WhatsApp (1-Click)
+                    </button>
+                  </div>
+
+                  {woOtpSent && (
+                    <div className="space-y-3 pt-3 border-t border-slate-150">
+                      <div className="text-xs font-bold text-slate-700 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+                        <span className="flex items-center gap-1.5"><Lock size={12} className="text-indigo-600" /> Enter Customer Authorization OTP:</span>
+                        <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded w-max">Simulated Code: {woOtpCode}</span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          maxLength={6}
+                          placeholder="Enter 6-digit OTP code"
+                          value={woOtpInput}
+                          onChange={(e) => setWoOtpInput(e.target.value.replace(/\D/g, ''))}
+                          disabled={woOtpVerified}
+                          className="w-full sm:flex-1 px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-center font-bold tracking-widest outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-emerald-750 disabled:border-emerald-300 text-sm"
+                        />
+                        <button
+                          type="button"
+                          disabled={woOtpVerified || !woOtpInput}
+                          onClick={() => {
+                            if (woOtpInput === woOtpCode) {
+                              setWoOtpVerified(true);
+                              toast.success("Customer cargo authorization verified successfully!");
+                              confetti({ particleCount: 30, spread: 50 });
+                            } else {
+                              toast.error("Invalid secure OTP code. Please retry or get a new OTP.");
+                            }
+                          }}
+                          className={`w-full sm:w-auto px-6 py-2.5 font-black rounded-xl text-xs cursor-pointer transition-all shrink-0 ${
+                            woOtpVerified 
+                              ? 'bg-emerald-600 text-white' 
+                              : 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50'
+                          }`}
+                        >
+                          {woOtpVerified ? 'Verified ✓' : 'Verify'}
+                        </button>
+                      </div>
+                      
+                      {!woOtpVerified && (
+                        <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                          Ask your customer for the 6-digit PIN that was sent to their WhatsApp. Verify to confirm authorized collection.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Shipping cost payment setup */}
                 <div>
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><CreditCard size={11} className="text-emerald-600" /> Payment Method</h4>
-                  <div className="space-y-3">
-                    <div 
-                      onClick={() => setWoPaymentMethod('cash')}
-                      className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
-                      id="wo-payment-cash"
-                    >
-                      <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center text-white shrink-0">
-                        <Banknote size={18} />
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-sm font-bold">Cash On Delivery (Cash)</div>
-                        <div className="text-[10px] text-slate-500">Pay cash at doorstep</div>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                        {woPaymentMethod === 'cash' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                      </div>
+                  
+                  {!woOtpVerified ? (
+                    <div className="p-6 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50 flex flex-col items-center justify-center text-center py-8">
+                      <Lock size={20} className="text-slate-400 mb-1.5 animate-bounce" />
+                      <div className="text-xs font-bold text-slate-700">Payment Unlocked via Customer OTP</div>
+                      <p className="text-[10px] text-slate-400 max-w-xs mt-1">Please complete customer WhatsApp verification above to configure the localized payment gateway channel.</p>
                     </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div 
+                        onClick={() => setWoPaymentMethod('cash')}
+                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
+                        id="wo-payment-cash"
+                      >
+                        <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center text-white shrink-0">
+                          <Banknote size={18} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm font-bold">Cash On Delivery (Cash)</div>
+                          <div className="text-[10px] text-slate-500">Pay cash at doorstep</div>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                          {woPaymentMethod === 'cash' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                        </div>
+                      </div>
 
-                    <div 
-                      onClick={() => setWoPaymentMethod('phonepe')}
-                      className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
-                    >
-                      <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0">Pe</div>
-                      <div className="flex-1">
-                        <div className="text-sm font-bold">PhonePe</div>
-                        <div className="text-[10px] text-slate-500">UPI, Wallet</div>
+                      <div 
+                        onClick={() => setWoPaymentMethod('phonepe')}
+                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
+                      >
+                        <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0">Pe</div>
+                        <div className="flex-1">
+                          <div className="text-sm font-bold">PhonePe</div>
+                          <div className="text-[10px] text-slate-500">UPI, Wallet</div>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                          {woPaymentMethod === 'phonepe' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                        </div>
                       </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                        {woPaymentMethod === 'phonepe' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                      </div>
-                    </div>
 
-                    <div 
-                      onClick={() => setWoPaymentMethod('card')}
-                      className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
-                    >
-                      <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center text-white shrink-0"><CreditCard size={18} /></div>
-                      <div className="flex-1">
-                        <div className="text-sm font-bold">Credit / Debit Card</div>
-                        <div className="text-[10px] text-slate-500">Visa, Mastercard</div>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                        {woPaymentMethod === 'card' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                      <div 
+                        onClick={() => setWoPaymentMethod('card')}
+                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
+                      >
+                        <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center text-white shrink-0"><CreditCard size={18} /></div>
+                        <div className="flex-1">
+                          <div className="text-sm font-bold">Credit / Debit Card</div>
+                          <div className="text-[10px] text-slate-500">Visa, Mastercard</div>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                          {woPaymentMethod === 'card' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
               {/* Price list sidebar inside Step 4 */}
-              <div className="md:col-span-5 bg-slate-900 text-white rounded-3xl p-5 space-y-4 shadow-xl">
-                <span className="text-[8px] font-black uppercase text-indigo-400 bg-slate-850 border border-slate-700/60 rounded px-2 py-0.5 tracking-wider inline-block">Review Consolidated Pricing</span>
+              <div className="lg:col-span-5 bg-slate-900 text-white rounded-3xl p-5 space-y-4 shadow-xl">
+                <span className="text-[8px] font-black uppercase text-indigo-400 bg-slate-850 border border-slate-700/60 rounded px-2 py-0.5 tracking-wider inline-block font-mono">Consolidated Pricing</span>
                 
-                <div className="space-y-2 pt-2">
-                  <div className="flex justify-between items-center text-xs text-slate-400">
+                <div className="space-y-2 pt-2 text-xs">
+                  <div className="flex justify-between items-center text-[11px] text-slate-400">
                     <span>Total Weight</span>
                     <span className="text-white font-bold">{woTotalWeight.toFixed(1)} kg</span>
                   </div>
-                  <div className="flex justify-between items-center text-xs text-slate-400">
+                  <div className="flex justify-between items-center text-[11px] text-slate-400">
                     <span>Shipping Rate</span>
                     <span className="text-white font-bold">₹{woRate}/kg</span>
                   </div>
                   {woDiscountPercent > 0 && (
-                    <div className="flex justify-between items-center text-xs text-rose-450">
+                    <div className="flex justify-between items-center text-[11px] text-rose-400 font-bold">
                       <span>Discount ({woDiscountPercent}%)</span>
                       <span>-₹{woDiscountAmount.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="h-px bg-slate-800 my-2" />
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-bold">Total Amount Due</span>
+                    <span className="text-xs font-black">Total Cost</span>
                     <span className="text-base sm:text-lg font-black text-indigo-400">₹{woTotalCost.toFixed(2)}</span>
                   </div>
                 </div>
+
+                {/* Interactive Simulated Smartphone - WhatsApp Customer View */}
+                {showSimulatedWhatsapp && woOtpCode && (
+                  <div className="border border-slate-800 bg-slate-950 rounded-2xl overflow-hidden mt-6 text-slate-900 shadow-2xl transition-all duration-300 transform scale-100">
+                    <div className="bg-emerald-600 text-white p-3 flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-ping shrink-0" />
+                        <div className="leading-tight">
+                          <div className="text-[8px] font-bold uppercase tracking-wider text-emerald-100 opacity-90">Simulation View</div>
+                          <div className="text-xs font-black">Customer's WhatsApp Phone</div>
+                        </div>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => setShowSimulatedWhatsapp(false)} 
+                        className="text-[9px] uppercase font-bold tracking-wider text-emerald-100 hover:text-white bg-emerald-700/60 px-2 py-0.5 rounded cursor-pointer"
+                      >
+                        Hide Screen
+                      </button>
+                    </div>
+
+                    <div className="p-3.5 bg-[#efeae2] h-64 overflow-y-auto space-y-3 custom-scrollbar flex flex-col justify-end">
+                      {/* Document Attachment Message Card */}
+                      <div className="bg-white rounded-lg p-2 max-w-[85%] self-start shadow-xs text-[11px] space-y-1.5 border border-slate-200">
+                        <div className="flex items-center gap-2 bg-emerald-50 p-2 rounded-md border border-emerald-100">
+                          <FileText size={16} className="text-rose-500 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold text-slate-800 truncate">Cargo_Manifest_{activeWorkOrder?.id || 'NEW'}.pdf</p>
+                            <p className="text-[8px] text-slate-550 font-bold">PDF Document • {(woItems.length * 0.12).toFixed(2)} MB</p>
+                          </div>
+                          <div className="w-6 h-6 bg-emerald-600 rounded-full flex items-center justify-center text-white ml-auto shrink-0 shadow-xs cursor-pointer hover:bg-emerald-700">
+                            <Download size={10} />
+                          </div>
+                        </div>
+                        <div className="text-[9px] text-slate-400 flex items-center justify-between">
+                          <span>Manifest Attachment list</span>
+                          <span className="text-[8px]">05:36 PM ✓✓</span>
+                        </div>
+                      </div>
+
+                      {/* Text Dialog with OTP block */}
+                      <div className="bg-white rounded-lg p-2.5 max-w-[85%] self-start shadow-xs text-[11px] space-y-2 border border-slate-200">
+                        <div className="text-[10px] leading-relaxed text-slate-800 space-y-1">
+                          <p className="font-extrabold text-indigo-700">📌 Cargo Picked Up Manifest</p>
+                          <p className="text-[9px] text-slate-600 font-mono">ID: {activeWorkOrder?.id}</p>
+                          <div className="border-t border-dashed my-1 border-slate-200" />
+                          <p className="font-bold underline text-slate-700">Items Shipped:</p>
+                          <ul className="list-disc list-inside space-y-0.5 text-[8px] text-slate-600 font-mono">
+                            {woItems.map(item => (
+                              <li key={item.id} className="truncate">
+                                {item.name} ({item.quantity || 1}x, {item.weight} kg)
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="border-t border-dashed my-1 border-slate-200" />
+                          <p className="text-[9px] text-slate-700">Total weight: <b>{woTotalWeight.toFixed(1)} kg</b></p>
+                          <p className="text-[9px] text-slate-750">Estimated Bill: <b>₹{woTotalCost.toFixed(2)}</b></p>
+                          <div className="bg-amber-50 p-1.5 rounded-md border border-amber-250 mt-2 text-center text-slate-800">
+                            <p className="text-[7px] font-black text-slate-500 uppercase tracking-wider">YOUR SECURE OTP PIN</p>
+                            <p className="text-sm font-black tracking-widest text-indigo-950 my-0.5 select-all">{woOtpCode}</p>
+                            <p className="text-[7px] text-slate-400 font-medium">Share with agent to confirm cargo collection</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between mt-1 text-[8px] text-slate-400">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setWoOtpInput(woOtpCode);
+                              toast.info("OTP Pin filled in Agent input box!");
+                            }}
+                            className="text-[9px] text-indigo-650 font-black hover:underline cursor-pointer bg-slate-50 px-1.5 py-0.5 rounded border border-indigo-100"
+                          >
+                            ⚡ Autofill PIN
+                          </button>
+                          <span>05:36 PM ✓✓</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -8408,17 +8756,17 @@ export default function App() {
               <button 
                 type="button"
                 onClick={handleWOComplete}
-                disabled={woItems.length === 0 || !woAddress.email || !woAddress.fullName}
+                disabled={woItems.length === 0 || !woAddress.email || !woAddress.fullName || !woOtpVerified}
                 className="px-5 py-2.5 sm:px-6 sm:py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-250 cursor-pointer flex items-center justify-center gap-2"
               >
-                <CheckCircle2 size={15} className="shrink-0" /> Collect Payment & Complete
+                <CheckCircle2 size={15} className="shrink-0" /> {!woOtpVerified ? 'Awaiting Customer OTP Verification...' : 'Collect Payment & Complete'}
               </button>
             )}
           </div>
         </div>
       </div>
     );
-  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, woAddress, address, currentUser, handleWOSaveDetails, woStatusInput, setWoStatusInput, woStep, setWoStep, woIsEditingItems, setWoIsEditingItems]);
+  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, woAddress, address, currentUser, handleWOSaveDetails, woStatusInput, setWoStatusInput, woStep, setWoStep, woIsEditingItems, setWoIsEditingItems, woOtpCode, woOtpSent, woOtpVerified, woOtpInput, showSimulatedWhatsapp]);
 
   const AgentSection = useMemo(() => {
     if (!currentUser) return null;
@@ -9755,7 +10103,7 @@ export default function App() {
                 ) : mode === 'Pickup' ? (
                   <>
                     <div className="space-y-4">
-                  {mode === 'Pickup' && (
+                  {mode === 'Pickup' && activePickupStep !== 5 && (
                     <>
                       {/* Header Section with Progress for Pickup */}
                       <div 
@@ -10767,199 +11115,286 @@ export default function App() {
                         </motion.div>
                       )}
 
-                    {/* Step 5: Booking confirmed */}
-                    {activePickupStep === 5 && (
-                      <motion.div 
-                        key="step5"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ duration: 0.3 }}
-                        className="p-8 rounded-[2.5rem] bg-white border border-slate-100 shadow-2xl shadow-indigo-500/5 text-center space-y-10"
-                      >
-                        <div className="space-y-6">
-                          <motion.div 
-                            initial={{ scale: 0 }}
-                            animate={{ 
-                              scale: [1, 1.1, 1],
-                              transition: { 
-                                scale: {
-                                  repeat: Infinity,
-                                  duration: 2,
-                                  ease: "easeInOut"
-                                }
-                              }
-                            }}
-                            className="w-24 h-24 bg-emerald-500 text-white rounded-[2rem] flex items-center justify-center mx-auto shadow-xl shadow-emerald-500/20"
-                          >
-                            <CheckCircle2 size={48} />
-                          </motion.div>
-                          
-                          <div className="space-y-3">
-                            <h2 className="text-4xl font-black text-slate-900 tracking-tight">
-                              Thanks, {activePickup?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 'there'}! Your pickup is confirmed.
-                            </h2>
-                            <p className="text-lg text-slate-500 max-w-lg mx-auto leading-relaxed font-medium">
-                              Our agent will arrive at your selected time to collect your items. You can still <button onClick={() => navigateTo('store')} className="text-indigo-600 font-bold hover:underline">add products from our shop</button> before shipping.
-                            </p>
+                     {/* Step 5: Booking confirmed */}
+                     {activePickupStep === 5 && (
+                       <motion.div 
+                         key="step5"
+                         initial={{ opacity: 0, scale: 0.95 }}
+                         animate={{ opacity: 1, scale: 1 }}
+                         exit={{ opacity: 0, scale: 0.95 }}
+                         transition={{ duration: 0.3 }}
+                         className="p-6 md:p-8 rounded-[2.5rem] bg-white border border-slate-100 shadow-2xl shadow-indigo-500/5 text-left space-y-6 sm:space-y-8"
+                       >
+                        {/* Compact Header Alert */}
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b border-slate-100">
+                          <div className="flex items-center gap-4">
+                            <motion.div 
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="w-14 h-14 bg-emerald-500 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20"
+                            >
+                              <CheckCircle2 size={28} />
+                            </motion.div>
+                            <div>
+                              <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 rounded-full text-[9px] uppercase font-black tracking-wider leading-none">
+                                Confirmed & Active
+                              </span>
+                              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1.5 leading-none">
+                                Thanks, {activePickup?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 'there'}!
+                              </h2>
+                              <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+                                Your home pickup is scheduled. Our agent is on the way!
+                              </p>
+                            </div>
                           </div>
 
-                          <div className="space-y-4">
-                            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 inline-block relative group">
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Booking ref</p>
-                              <div className="flex items-center justify-center gap-3">
-                                <p className="text-3xl font-black text-deep-blue tracking-wider">
-                                  {lastBookingRef || activePickup?.id}
-                                </p>
-                                <button 
-                                  onClick={() => {
-                                    const ref = lastBookingRef || activePickup?.id;
-                                    if (ref) {
-                                      navigator.clipboard.writeText(ref);
-                                      toast.success('Booking reference copied!');
-                                    }
-                                  }}
-                                  className="p-2 bg-white rounded-xl border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-100 transition-all shadow-sm"
-                                  title="Copy Reference"
-                                >
-                                  <Copy size={16} />
-                                </button>
-                              </div>
+                          <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100 shrink-0 self-stretch sm:self-auto justify-between md:justify-start">
+                            <div>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Booking reference</p>
+                              <p className="text-base font-black text-slate-900 tracking-wider mt-1 font-mono">
+                                {lastBookingRef || activePickup?.id}
+                              </p>
                             </div>
+                            <button 
+                              onClick={() => {
+                                const ref = lastBookingRef || activePickup?.id;
+                                if (ref) {
+                                  navigator.clipboard.writeText(ref);
+                                  toast.success('Reference ID copied to clipboard!');
+                                }
+                              }}
+                              className="p-2 bg-white rounded-lg border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-100 transition-all shadow-sm cursor-pointer"
+                              title="Copy Reference"
+                            >
+                              <Copy size={12} />
+                            </button>
                           </div>
                         </div>
 
-                        {/* Next Steps & Documents Section */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left border-t border-slate-100 pt-10">
-                          {/* Next Steps */}
-                          <div className="space-y-6">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-deep-blue">
-                                <Clock size={20} className="text-indigo-600" />
-                              </div>
-                              <h4 className="text-xl font-black text-deep-blue">What to Expect</h4>
-                            </div>
+                        {/* Two Column Grid */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                          
+                          {/* 📋 GUIDES, EXPECTATIONS & DOCUMENTS (Left Column) */}
+                          <div className="lg:col-span-8 space-y-6">
                             
-                            <div className="relative pl-8 space-y-8">
-                              {/* Timeline Line */}
-                              <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-slate-100" />
+                            {/* What to Expect Timeline (Horizontal, from left to right) */}
+                            <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 space-y-5">
+                              <div className="flex items-center gap-2">
+                                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 shrink-0">
+                                  <Clock size={18} />
+                                </div>
+                                <h4 className="text-base font-black text-slate-800 uppercase tracking-wider">What to Expect</h4>
+                              </div>
                               
-                              {[
-                                { time: "Today", title: "Agent Call", desc: "Agent will call 30 mins before arrival", active: true },
-                                { time: "Today", title: "Pickup & Weighing", desc: "Agent collects items and gives final quote", active: true },
-                                { time: "Next 1-2 days", title: "Warehouse Processing", desc: "Items received and prepared for shipping", active: false },
-                                { time: "Then", title: "Payment & Dispatch", desc: "Pay securely to release for global delivery", active: false }
-                              ].map((step, i) => (
-                                <div key={i} className="relative group">
-                                  {/* Dot */}
-                                  <div className={`absolute -left-[26px] top-1.5 w-4 h-4 rounded-full border-2 transition-all duration-500 ${
-                                    step.active ? 'bg-indigo-600 border-indigo-200 scale-110' : 'bg-white border-slate-200'
-                                  }`} />
-                                  
-                                  <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className={`text-[10px] font-black uppercase tracking-widest ${step.active ? 'text-indigo-600' : 'text-slate-400'}`}>
-                                        {step.time}
-                                      </span>
-                                      {step.active && (
-                                        <span className="flex h-1.5 w-1.5 rounded-full bg-indigo-600 animate-pulse" />
-                                      )}
+                              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 relative">
+                                {[
+                                  { title: "1. Agent Call", desc: "Agent calls 30m before arrival.", active: true },
+                                  { title: "2. Pickup & Weighing", desc: "Instant quote given on-site.", active: true },
+                                  { title: "3. Secure Sorting", desc: "Packed safely at warehouse.", active: false },
+                                  { title: "4. Global Delivery", desc: "Pay online to dispatch package.", active: false }
+                                ].map((step, i) => (
+                                  <div key={i} className="relative p-4 bg-white border border-slate-100 rounded-2xl flex flex-col justify-between shadow-sm">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${
+                                        step.active ? 'bg-indigo-600 border-indigo-100' : 'bg-white border-slate-200'
+                                      }`} />
+                                      <p className="font-extrabold text-xs text-slate-800 leading-none">{step.title}</p>
                                     </div>
-                                    <p className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{step.title}</p>
                                     <p className="text-xs text-slate-500 font-medium leading-relaxed">{step.desc}</p>
                                   </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Documents Required */}
-                          <div className="space-y-6">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-jiffex-orange">
-                                <FileText size={20} />
+                                ))}
                               </div>
-                              <h4 className="text-xl font-black text-deep-blue">Documents Required</h4>
                             </div>
-                            <p className="text-xs text-slate-500 font-medium -mt-4 ml-[52px]">Keep these ready for a smooth pickup</p>
-                            <div className="space-y-4">
-                              {[
-                                { title: "ID Proof", desc: "Aadhar Card or Passport copy for verification." },
-                                { title: "Item List", desc: "Simple list of items for customs declaration." },
-                                { title: "Invoices", desc: "Purchase bills for any new items." }
-                              ].map((doc, i) => (
-                                <div key={i} className="flex gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-jiffex-orange/30 transition-all">
-                                  <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-jiffex-orange shadow-sm shrink-0">
-                                    <ShieldCheck size={16} />
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-black text-slate-900">{doc.title}</p>
-                                    <p className="text-xs text-slate-500 font-medium">{doc.desc}</p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
 
-                        <div className="pt-10 border-t border-slate-100 space-y-6">
-                          <div className="flex flex-col items-center gap-2">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Need help? Contact support</p>
-                            <div className="flex flex-wrap justify-center gap-4 md:gap-8">
-                              <button className="flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-all border border-slate-100 hover:border-indigo-100 group">
-                                <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                                  <MessageSquare size={16} className="text-indigo-600" />
-                                </div>
-                                <span className="text-sm font-black tracking-tight">Live Chat</span>
-                              </button>
+                            {/* Documents Required & Prohibited Items Side-by-Side (Below What to expect) */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                               
-                              <button className="flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-all border border-slate-100 hover:border-indigo-100 group">
-                                <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                                  <Phone size={16} className="text-indigo-600" />
+                              {/* Documents Required */}
+                              <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 space-y-5">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 shrink-0">
+                                    <FileText size={18} />
+                                  </div>
+                                  <h4 className="text-base font-black text-slate-800 uppercase tracking-wider">Documents Required</h4>
                                 </div>
-                                <span className="text-sm font-black tracking-tight">Call Us</span>
-                              </button>
+                                
+                                <div className="space-y-4">
+                                  {[
+                                    { title: "ID Proof Copy", desc: "Aadhar, Passport or Driving License Copy" },
+                                    { title: "Itemized Declaration", desc: "Simple list of contents & quantities" },
+                                    { title: "Value Statement", desc: "Bills/Invoices for any luxurious brand garments" }
+                                  ].map((doc, i) => (
+                                    <div key={i} className="flex gap-4 p-4 rounded-2xl bg-white border border-slate-100/60 shadow-sm">
+                                      <div className="w-6 h-6 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+                                        <ShieldCheck size={14} />
+                                      </div>
+                                      <div className="text-xs">
+                                        <p className="font-extrabold text-sm text-slate-800 leading-snug">{doc.title}</p>
+                                        <p className="text-xs text-slate-500 mt-1 font-medium leading-relaxed">{doc.desc}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
 
-                              <button className="flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all border border-emerald-100 group">
-                                <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                                  <MessageSquare size={16} className="text-emerald-600" />
+                              {/* Prohibited Items */}
+                              <div className="bg-rose-50/20 border border-rose-100/30 rounded-3xl p-6 space-y-5">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500 shrink-0">
+                                    <AlertTriangle size={18} />
+                                  </div>
+                                  <h4 className="text-base font-black text-rose-800 uppercase tracking-wider">Prohibited Items</h4>
                                 </div>
-                                <span className="text-sm font-black tracking-tight">WhatsApp</span>
+                                
+                                <div className="space-y-4">
+                                  {[
+                                    { title: "Aerosols & Perfumes", desc: "Body sprays, deodorants, or inflammable liquids" },
+                                    { title: "Cash & Jewellery", desc: "Currency notes, solid raw gold, silver bullion" },
+                                    { title: "Perishables", desc: "Open/homemade liquid curries, raw dairy products" },
+                                    { title: "Hazardous Materials", desc: "Ammunition, loose lithium batteries, explosive fuel" }
+                                  ].map((item, i) => (
+                                    <div key={i} className="flex gap-4 p-4 bg-white border border-rose-100/10 shadow-sm">
+                                      <div className="w-6 h-6 rounded-full bg-rose-50 text-rose-650 flex items-center justify-center shrink-0">
+                                        <XCircle size={14} />
+                                      </div>
+                                      <div className="text-xs">
+                                        <p className="font-black text-sm text-rose-950 leading-snug">{item.title}</p>
+                                        <p className="text-xs text-slate-500 mt-1 leading-relaxed font-semibold">{item.desc}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                            </div>
+
+                            {/* Actions bar at bottom of info */}
+                            <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                              <button 
+                                onClick={() => {
+                                  clearPickupInputs();
+                                  navigateTo('history');
+                                  setActivePickupStep(1);
+                                  setLastBookingRef(null);
+                                  setIsSchedulingNewPickup(false);
+                                  window.scrollTo(0, 0);
+                                }}
+                                className="flex-1 px-6 py-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                              >
+                                <Package size={16} /> View My Orders
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  clearPickupInputs();
+                                  navigateTo('home');
+                                  setActivePickupStep(1);
+                                  setLastBookingRef(null);
+                                  setIsSchedulingNewPickup(false);
+                                  window.scrollTo(0, 0);
+                                }}
+                                className="flex-1 px-6 py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                              >
+                                <ArrowLeft size={16} /> Back to Home
                               </button>
                             </div>
                           </div>
-                        </div>
+                          
+                          {/* 🛍️ CONSOLIDATED JIFFEX STORE SHOPPING INTEGRATION (Right Column - Scrollable) */}
+                          <div className="lg:col-span-4 space-y-4">
+                            <div className="bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent rounded-[2.5rem] border border-emerald-500/20 p-5 sm:p-6 space-y-4 flex flex-col justify-between max-h-[660px] h-[660px] shadow-lg">
+                              
+                              <div className="space-y-3 flex-1 flex flex-col min-h-0">
+                                <div className="flex items-center justify-between gap-4 shrink-0">
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="px-2.5 py-0.5 bg-emerald-500 text-white rounded-full text-[8px] uppercase font-black tracking-widest leading-none">
+                                        Co-Shipping Active
+                                      </span>
+                                      <span className="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-[8px] uppercase font-bold leading-none">
+                                        Zero Base Fees
+                                      </span>
+                                    </div>
+                                    <h3 className="text-[17px] font-black text-slate-900 mt-1">
+                                      Shop Indian Products
+                                    </h3>
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      navigateTo('store');
+                                      window.scrollTo(0, 0);
+                                    }}
+                                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-[10px] font-black rounded-lg flex items-center justify-center gap-1.5 shrink-0 cursor-pointer shadow transition-all whitespace-nowrap"
+                                  >
+                                    <ShoppingBag size={11} /> See All
+                                  </button>
+                                </div>
+                                <p className="text-xs text-slate-500 font-medium leading-relaxed shrink-0">
+                                  Delivered inside your same pickup box with <strong>no extra courier base fees</strong>.
+                                </p>
 
-                        <div className="flex flex-col items-center gap-4 pt-6">
-                          <button 
-                            onClick={() => {
-                              clearPickupInputs();
-                              navigateTo('history');
-                              setActivePickupStep(1);
-                              setLastBookingRef(null);
-                              setIsSchedulingNewPickup(false);
-                              window.scrollTo(0, 0);
-                            }}
-                            className="px-12 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 flex items-center justify-center gap-2"
-                          >
-                            <Package size={20} /> View My Orders
-                          </button>
-                          <button 
-                            onClick={() => {
-                              clearPickupInputs();
-                              navigateTo('home');
-                              setActivePickupStep(1);
-                              setLastBookingRef(null);
-                              setIsSchedulingNewPickup(false);
-                              window.scrollTo(0, 0);
-                            }}
-                            className="px-12 py-4 bg-deep-blue text-white rounded-2xl font-black hover:bg-slate-900 transition-all shadow-xl shadow-indigo-200 flex items-center justify-center gap-2"
-                          >
-                            <ArrowLeft size={20} /> Back to Home
-                          </button>
+                                {/* Scrollable Shop Items Grid with Infinite Auto-scrolling and Hover Pause */}
+                                <AutoScrollingShopProducts 
+                                  storeProducts={storeProducts}
+                                  items={items}
+                                  addItem={addItem}
+                                  removeStoreItem={removeStoreItem}
+                                />
+                              </div>
+
+                              {/* Live Consolidated Cart Items Summary */}
+                              {items.filter(i => i.source === 'Store').length > 0 && (
+                                <div className="p-3 bg-white border border-emerald-500/15 rounded-xl space-y-2 shrink-0 shadow-sm text-xs mt-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                                      <span className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[8px] font-black">✓</span>
+                                      Items in Consolidated Box:
+                                    </span>
+                                    <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded text-[10px] font-mono">
+                                      {items.filter(i => i.source === 'Store').reduce((acc, i) => acc + (i.quantity || 1), 0)} items
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="divide-y divide-slate-100 max-h-[110px] overflow-y-auto pr-1">
+                                    {items.filter(i => i.source === 'Store').map((storeIt) => (
+                                      <div key={storeIt.id} className="flex items-center justify-between py-1.5 text-[11px]">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <span className="font-medium text-slate-900 truncate">{storeIt.name}</span>
+                                          <span className="text-[9px] text-slate-400 font-semibold shrink-0">x{storeIt.quantity}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <span className="font-mono text-slate-400">{(storeIt.weight * (storeIt.quantity || 1)).toFixed(2)} kg</span>
+                                          <span className="font-bold text-emerald-600 font-mono">${(storeIt.price * (storeIt.quantity || 1)).toFixed(2)}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <div className="border-t border-slate-100 pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                                    <div>
+                                      <p className="text-[10px] text-slate-500 font-bold">
+                                        Consolidated Est. Weight: <span className="font-mono text-indigo-600 font-black">
+                                          {(items.filter(i => i.source === 'Store').reduce((acc, i) => acc + (i.weight * (i.quantity || 1)), 0) + 3.0).toFixed(1)} kg
+                                        </span>
+                                      </p>
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        navigateTo('cart');
+                                        window.scrollTo(0, 0);
+                                      }}
+                                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-lg text-[10px] flex items-center justify-center gap-1 shadow transition-all cursor-pointer border border-emerald-500"
+                                    >
+                                      Checkout & Pay
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            
+                          </div>
                         </div>
-                      </motion.div>
-                    )}
+                       </motion.div>
+                     )}
                     </AnimatePresence>
 
                     {/* Info Card */}
@@ -12561,9 +12996,11 @@ export default function App() {
             <div 
               className="flex items-center gap-3 cursor-pointer shrink-0 mr-4 sm:mr-6 md:mr-10" 
               onClick={() => {
-                if (currentUser?.role === 'Admin') navigateTo('admin');
-                else if (currentUser?.role === 'Agent') navigateTo('agent');
-                else navigateTo('home');
+                if (currentUser?.role === 'admin' || currentUser?.role === 'Admin') navigateTo('admin');
+                else if (currentUser?.role === 'agent' || currentUser?.role === 'Agent') {
+                  setActiveWorkOrder(null);
+                  navigateTo('agent');
+                } else navigateTo('home');
               }}
             >
               <Logo height="h-12 sm:h-14" />
@@ -12681,7 +13118,7 @@ export default function App() {
                 )}
                 {currentUser?.role === 'agent' && (
                   <button 
-                    onClick={() => navigateTo('agent')}
+                    onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
                     className={`text-sm lg:text-base font-bold transition-all px-3 py-1.5 rounded-xl border border-emerald-100 ${activeTab === 'agent' ? 'text-white bg-emerald-600' : 'text-emerald-600 hover:bg-emerald-50'}`}
                   >
                     Work Portal
@@ -12881,7 +13318,7 @@ export default function App() {
                   )}
                   {currentUser?.role === 'agent' && (
                     <button 
-                      onClick={() => { navigateTo('agent'); setIsMobileMenuOpen(false); }}
+                      onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); setIsMobileMenuOpen(false); }}
                       className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'agent' ? 'text-emerald-600 bg-emerald-50' : 'text-slate-600 hover:bg-slate-50'}`}
                     >
                       Work Portal
