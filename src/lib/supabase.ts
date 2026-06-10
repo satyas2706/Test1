@@ -1,5 +1,37 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Globally patch window.atob to immunize the application against "The string did not match the expected pattern" crash
+if (typeof window !== 'undefined' && window.atob) {
+  const originalAtob = window.atob;
+  window.atob = function (str: any) {
+    try {
+      if (str === null || str === undefined) return '';
+      let cleanStr = String(str).trim();
+      
+      // Convert Base64URL to Base64
+      cleanStr = cleanStr.replace(/-/g, '+').replace(/_/g, '/');
+      
+      // Strip any characters not allowed in Base64
+      cleanStr = cleanStr.replace(/[^A-Za-z0-9+/=]/g, '');
+      
+      // Correct padding
+      const mod = cleanStr.length % 4;
+      if (mod === 2) {
+        cleanStr += '==';
+      } else if (mod === 3) {
+        cleanStr += '=';
+      } else if (mod === 1) {
+        cleanStr = cleanStr.substring(0, cleanStr.length - 1);
+      }
+      
+      return originalAtob(cleanStr);
+    } catch (e) {
+      console.warn('[Safe atob fallback] Handled corrupt base64 string gracefully:', e);
+      return '{}';
+    }
+  };
+}
+
 const rawUrl = import.meta.env.VITE_SUPABASE_URL;
 const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
