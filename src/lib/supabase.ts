@@ -38,9 +38,12 @@ function sanitizeAuthStorage() {
               const parts = token.split('.');
               if (parts.length === 3) {
                 // Verify if parts are valid base64
-                const payloadPart = parts[1];
+                let payloadPart = parts[1];
+                while (payloadPart.length % 4 !== 0) {
+                  payloadPart += '=';
+                }
                 try {
-                  // Use native atob to check validity
+                  // Use native atob to check validity with safe padding length
                   window.atob(payloadPart.replace(/-/g, '+').replace(/_/g, '/'));
                 } catch (e) {
                   console.warn(`[Storage Sanitizer] Corrupted base64 payload found in token for key ${key}. Clearing.`);
@@ -82,12 +85,18 @@ const finalKey = isSupabaseConfigured ? rawKey : 'placeholder-anon-key';
 
 export let supabase: any;
 try {
-  supabase = createClient(finalUrl, finalKey);
+  supabase = createClient(finalUrl, finalKey, {
+    auth: {
+      persistSession: false,
+      detectSessionInUrl: false
+    }
+  });
 } catch (e) {
   console.warn('[Supabase] Initial client creation failed, creating fallback client with storage disabled:', e);
   supabase = createClient(finalUrl, finalKey, {
     auth: {
-      persistSession: false
+      persistSession: false,
+      detectSessionInUrl: false
     }
   });
 }
@@ -95,7 +104,12 @@ try {
 export function updateSupabaseConfig(url: string, key: string) {
   if (url && key && url !== 'undefined' && key !== 'undefined') {
     try {
-      supabase = createClient(url, key);
+      supabase = createClient(url, key, {
+        auth: {
+          persistSession: false,
+          detectSessionInUrl: false
+        }
+      });
       isSupabaseConfigured = true;
       console.log('[Supabase] Client reconfigured successfully with runtime settings.');
     } catch (e) {
