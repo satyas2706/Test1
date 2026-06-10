@@ -1,3 +1,4 @@
+import "./src/lib/patch-atob";
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import cors from "cors";
