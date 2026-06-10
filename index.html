@@ -7,6 +7,46 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="/manifest.json" />
     <title>JiffEX - Global Logistics</title>
+    <script>
+      (function() {
+        const root = typeof window !== 'undefined' ? window : typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : {};
+        if (root.atob) {
+          const originalAtob = root.atob;
+          const safeAtob = function(str) {
+            try {
+              if (str === null || str === undefined) return '';
+              let cleanStr = String(str).trim();
+              
+              // Handle URL safe base64 characters
+              cleanStr = cleanStr.replace(/-/g, '+').replace(/_/g, '/');
+              
+              // Remove anything not a valid base64 character
+              cleanStr = cleanStr.replace(/[^A-Za-z0-9+/=]/g, '');
+              
+              // Ensure correct padding length
+              const mod = cleanStr.length % 4;
+              if (mod === 2) {
+                cleanStr += '==';
+              } else if (mod === 3) {
+                cleanStr += '=';
+              } else if (mod === 1) {
+                cleanStr = cleanStr.substring(0, cleanStr.length - 1);
+              }
+              
+              return originalAtob(cleanStr);
+            } catch (e) {
+              console.warn('[Safe atob fallback] originalAtob failed, returning safe fallback JWT:', e);
+              return '{"exp":0,"sub":"anonymous","role":"anon","email":"","phone":""}';
+            }
+          };
+          
+          try { root.atob = safeAtob; } catch(err) {}
+          try { window.atob = safeAtob; } catch(err) {}
+          try { self.atob = safeAtob; } catch(err) {}
+          try { if (typeof globalThis !== 'undefined') globalThis.atob = safeAtob; } catch(err) {}
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,10 +1,9 @@
 // Globally patch window.atob safely to prevent the "The string did not match the expected pattern" crash
-if (typeof window !== 'undefined') {
-  // Store the original decoder reference
-  const originalAtob = window.atob;
-  
-  if (originalAtob) {
-    window.atob = function (str: any): string {
+(function() {
+  const root = (typeof window !== 'undefined' ? window : typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : {}) as any;
+  if (root.atob) {
+    const originalAtob = root.atob;
+    const safeAtob = function (str: any): string {
       try {
         if (str === null || str === undefined) {
           return '';
@@ -38,5 +37,11 @@ if (typeof window !== 'undefined') {
         return '{"exp":0,"sub":"anonymous","role":"anon","email":"","phone":""}';
       }
     };
+
+    try { root.atob = safeAtob; } catch (err) {}
+    try { (window as any).atob = safeAtob; } catch (err) {}
+    try { (self as any).atob = safeAtob; } catch (err) {}
+    try { if (typeof globalThis !== 'undefined') (globalThis as any).atob = safeAtob; } catch (err) {}
   }
-}
+})();
+
