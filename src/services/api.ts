@@ -411,6 +411,42 @@ export const api = {
     }
   },
 
+  async trackOrderLive(orderId: string): Promise<any> {
+    try {
+      const response = await fetch(`${API_URL}/api/track-order`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ orderId })
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || 'Failed to track order sequence.');
+    } catch (err) {
+      if (isSupabaseConfigured) {
+        console.log('[Supabase Client Fallback] Fetching order tracking info directly...');
+        // Using window's local supabase client:
+        const { data, error } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
+        if (error) throw error;
+        if (!data) throw new Error('Order not found');
+        return {
+          success: true,
+          isLive: false,
+          trackingData: data.tracking_response || {
+            id: data.tracking_number || 'TBD',
+            carrier: data.carrier || 'Pending Assignment',
+            status: data.shipment_status || 'In Warehouse',
+            events: []
+          }
+        };
+      }
+      throw err;
+    }
+  },
+
   async updateItemStatus(itemId: string, status: string, ...args: any[]) {
     try {
       const response = await fetch(`${API_URL}/api/items/${itemId}/status`, {
@@ -486,6 +522,17 @@ export const api = {
         if (updAny.assigned_agent_id) dbUpdates.assigned_agent_id = updAny.assigned_agent_id;
         if (updates.assignedAgent) dbUpdates.assigned_agent = updates.assignedAgent;
         if (updAny.assigned_agent) dbUpdates.assigned_agent = updAny.assigned_agent;
+        if (updAny.carrier !== undefined) dbUpdates.carrier = updAny.carrier;
+        if (updAny.trackingNumber !== undefined) dbUpdates.tracking_number = updAny.trackingNumber;
+        if (updAny.tracking_number !== undefined) dbUpdates.tracking_number = updAny.tracking_number;
+        if (updAny.shipmentStatus !== undefined) dbUpdates.shipment_status = updAny.shipmentStatus;
+        if (updAny.shipment_status !== undefined) dbUpdates.shipment_status = updAny.shipment_status;
+        if (updAny.shipmentDate !== undefined) dbUpdates.shipment_date = updAny.shipmentDate;
+        if (updAny.shipment_date !== undefined) dbUpdates.shipment_date = updAny.shipment_date;
+        if (updAny.lastTrackingUpdate !== undefined) dbUpdates.last_tracking_update = updAny.lastTrackingUpdate;
+        if (updAny.last_tracking_update !== undefined) dbUpdates.last_tracking_update = updAny.last_tracking_update;
+        if (updAny.trackingResponse !== undefined) dbUpdates.tracking_response = updAny.trackingResponse;
+        if (updAny.tracking_response !== undefined) dbUpdates.tracking_response = updAny.tracking_response;
         
         const { data, error } = await supabase.from('orders').update(dbUpdates).eq('id', orderId).select().single();
         if (error) throw error;

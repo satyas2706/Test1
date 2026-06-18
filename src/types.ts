@@ -78,6 +78,17 @@ export interface Order {
   assignedAgentId?: string;
   pickupAddress?: DestinationAddress;
   documents?: { id: string; name: string; image: string; type: string; uploadedAt: string }[];
+  carrier?: string;
+  tracking_number?: string;
+  trackingNumber?: string;
+  shipment_status?: string;
+  shipmentStatus?: string;
+  shipment_date?: string;
+  shipmentDate?: string;
+  last_tracking_update?: string;
+  lastTrackingUpdate?: string;
+  tracking_response?: any;
+  trackingResponse?: any;
 }
 
 export interface Appointment {

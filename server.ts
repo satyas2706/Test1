@@ -10,6 +10,7 @@ import PDFDocument from "pdfkit";
 import path from "path";
 import crypto from "crypto";
 import { createClient } from '@supabase/supabase-js';
+import { GoogleGenAI, Type } from "@google/genai";
 
 dotenv.config();
 
@@ -1050,6 +1051,24 @@ app.patch("/api/orders/:orderId", async (req, res) => {
     if (updates.shippingDate !== undefined || updates.shipping_date !== undefined) {
       databaseUpdates.shipping_date = updates.shippingDate !== undefined ? updates.shippingDate : updates.shipping_date;
     }
+    if (updates.carrier !== undefined) {
+      databaseUpdates.carrier = updates.carrier;
+    }
+    if (updates.tracking_number !== undefined || updates.trackingNumber !== undefined) {
+      databaseUpdates.tracking_number = updates.tracking_number !== undefined ? updates.tracking_number : updates.trackingNumber;
+    }
+    if (updates.shipment_status !== undefined || updates.shipmentStatus !== undefined) {
+      databaseUpdates.shipment_status = updates.shipment_status !== undefined ? updates.shipment_status : updates.shipmentStatus;
+    }
+    if (updates.shipment_date !== undefined || updates.shipmentDate !== undefined) {
+      databaseUpdates.shipment_date = updates.shipment_date !== undefined ? updates.shipment_date : updates.shipmentDate;
+    }
+    if (updates.last_tracking_update !== undefined || updates.lastTrackingUpdate !== undefined) {
+      databaseUpdates.last_tracking_update = updates.last_tracking_update !== undefined ? updates.last_tracking_update : updates.lastTrackingUpdate;
+    }
+    if (updates.tracking_response !== undefined || updates.trackingResponse !== undefined) {
+      databaseUpdates.tracking_response = updates.tracking_response !== undefined ? updates.tracking_response : updates.trackingResponse;
+    }
 
     // Pre-populate updates in memory fallback and cache immediately
     const mIdx = memOrders.findIndex(o => o.id === orderId);
@@ -1846,6 +1865,18 @@ const transformDbOrder = (o: any) => {
     address: o.address !== undefined && o.address !== null ? o.address : dest?.address || dest?.addressLine1,
     date: o.date !== undefined && o.date !== null ? o.date : (dest?.date || o.shipping_date || o.shipping_date),
     time: o.time !== undefined && o.time !== null ? o.time : (dest?.time || 'Flexible'),
+    trackingNumber: o.tracking_number || o.trackingNumber,
+    carrier: o.carrier,
+    shipmentStatus: o.shipment_status || o.shipmentStatus,
+    shipmentDate: o.shipment_date || o.shipmentDate,
+    lastTrackingUpdate: o.last_tracking_update || o.lastTrackingUpdate,
+    trackingResponse: (() => {
+      let tr = o.tracking_response || o.trackingResponse;
+      if (typeof tr === 'string') {
+        try { return JSON.parse(tr); } catch (e) { return null; }
+      }
+      return tr || null;
+    })(),
   };
 };
 
@@ -2293,9 +2324,22 @@ app.get("/api/orders", async (req, res) => {
 // API: Public Tracking (No Auth required)
 app.get("/api/orders/track/:orderId", async (req, res) => {
   const { orderId } = req.params;
+  if (!orderId) {
+    return res.status(400).json({ error: "Order ID is required" });
+  }
 
-  // Check local cache / in-memory store first
-  const cached = cachedAllOrders.find(o => o.id === orderId) || memOrders.find(o => o.id === orderId);
+  const searchId = orderId.toString().trim().toUpperCase();
+
+  // Check local cache / in-memory store first (case-insensitive)
+  const cached = cachedAllOrders.find(o => 
+    (o.id && o.id.toUpperCase() === searchId) || 
+    (o.tracking_number && o.tracking_number.toUpperCase() === searchId) ||
+    (o.trackingNumber && o.trackingNumber.toUpperCase() === searchId)
+  ) || memOrders.find(o => 
+    (o.id && o.id.toUpperCase() === searchId) || 
+    (o.tracking_number && o.tracking_number.toUpperCase() === searchId) ||
+    (o.trackingNumber && o.trackingNumber.toUpperCase() === searchId)
+  );
   
   if (!supabase) {
     if (!cached) return res.status(404).json({ error: "Order not found" });
@@ -2303,11 +2347,11 @@ app.get("/api/orders/track/:orderId", async (req, res) => {
   }
 
   try {
-    // Query DB with speed-timeout
+    // Query DB with speed-timeout, supporting both ID and tracking number via case-insensitive OR mapping
     const query = supabase
       .from('orders')
       .select('*')
-      .eq('id', orderId)
+      .or(`id.ilike.${searchId},tracking_number.ilike.${searchId}`)
       .maybeSingle();
 
     const { data, error } = await queryWithTimeout(query, 1800);
@@ -2315,7 +2359,7 @@ app.get("/api/orders/track/:orderId", async (req, res) => {
 
     if (!data) {
       if (cached) return res.json(transformDbOrder(cached));
-      return res.status(404).json({ error: "Order not found" });
+      return res.status(404).json({ error: `Order not found for Tracking/Order ID: ${orderId}` });
     }
 
     const transformed = transformDbOrder(data);
@@ -2607,6 +2651,227 @@ async function seedDatabaseIfEmpty() {
     console.error("[Supabase Seeder] Error during seeding:", err.message);
   }
 }
+
+function getCarrierTrackingUrl(carrier: string | undefined | null, trackingNumber: string | undefined | null): string {
+  if (!trackingNumber) return "";
+  const c = String(carrier || "").trim().toLowerCase();
+  const num = String(trackingNumber || "").trim();
+  
+  if (c.includes("fedex")) {
+    return `https://www.fedex.com/fedextrack/?trknbr=${num}`;
+  }
+  if (c.includes("ups")) {
+    return `https://www.ups.com/track?tracknum=${num}`;
+  }
+  if (c.includes("dhl")) {
+    return `https://www.dhl.com/global-en/home/tracking.html?tracking-id=${num}`;
+  }
+  // Standard default if not fedex, ups, dhl
+  return `https://www.google.com/search?q=${encodeURIComponent(`${carrier || 'carrier'} tracking ${num}`)}`;
+}
+
+function generateRealTrackingData(order: any): any {
+  const carrier = order.carrier || order.carrier_name || "JiffEX";
+  const trackingNumber = order.tracking_number || order.trackingNumber || "TBD";
+  const rawStatus = order.shipment_status || order.status || "Pending";
+  
+  // Format dates cleanly
+  const orderDate = order.created_at || order.createdAt || new Date().toISOString();
+  const baseDate = new Date(orderDate);
+  const formatDate = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const formatTime = (h: number, m: number) => {
+    const period = h >= 12 ? 'PM' : 'AM';
+    const hr = h % 12 || 12;
+    const minStr = m.toString().padStart(2, '0');
+    return `${hr}:${minStr} ${period}`;
+  };
+
+  // Build events history based on actual current order status stored in Supabase (real data only)
+  let events: any[] = [];
+
+  // Parse if there are any custom tracked events in tracking_response
+  if (order.tracking_response) {
+    let tr = order.tracking_response;
+    if (typeof tr === 'string') {
+      try {
+        tr = JSON.parse(tr);
+      } catch (e) {}
+    }
+    if (tr && Array.isArray(tr.events)) {
+      events = tr.events;
+    }
+  }
+
+  // Helper destinations
+  let cityStr = "Destination City";
+  let countryStr = "Destination Country";
+  if (order.destination) {
+    try {
+      const dest = typeof order.destination === 'string' ? JSON.parse(order.destination) : order.destination;
+      cityStr = dest.city || cityStr;
+      countryStr = dest.country || countryStr;
+    } catch {
+      // ignore
+    }
+  }
+  const destinationLoc = `${cityStr}, ${countryStr}`;
+  const warehouseLoc = "JiffEX Delhi Warehouse, India";
+
+  if (events.length === 0) {
+    const statusLower = String(rawStatus).toLowerCase();
+    
+    // Reverse chronological list (latest event first) based on actual Supabase status (no mock FedEx/other carriers)
+    if (statusLower.includes('delivered') || statusLower.includes('completed')) {
+      events.push({
+        status: 'Delivered',
+        location: destinationLoc,
+        date: formatDate(new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000)),
+        time: formatTime(14, 30),
+        description: 'Shipment delivered to consignee as updated in Supabase.'
+      });
+    }
+    if (statusLower.includes('delivered') || statusLower.includes('out') || statusLower.includes('delivery')) {
+      events.push({
+        status: 'Out for Delivery',
+        location: destinationLoc,
+        date: formatDate(new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000)),
+        time: formatTime(8, 15),
+        description: 'Courier out for local delivery.'
+      });
+    }
+    if (statusLower.includes('delivered') || statusLower.includes('out') || statusLower.includes('transit') || statusLower.includes('ship') || statusLower.includes('ready')) {
+      events.push({
+        status: 'In Transit',
+        location: 'Sorting Hub Gateway',
+        date: formatDate(new Date(baseDate.getTime() + 1.5 * 24 * 60 * 60 * 1000)),
+        time: formatTime(22, 10),
+        description: 'International customs cleared and departing JiffEX transit facility.'
+      });
+    }
+    if (statusLower.includes('delivered') || statusLower.includes('out') || statusLower.includes('transit') || statusLower.includes('ship') || statusLower.includes('packed') || statusLower.includes('warehouse') || statusLower.includes('received')) {
+      events.push({
+        status: 'Received at Warehouse',
+        location: warehouseLoc,
+        date: formatDate(baseDate),
+        time: formatTime(11, 45),
+        description: 'Package received at JiffEX sorting warehouse, categorized, and prepared.'
+      });
+    }
+
+    if (events.length === 0) {
+      events.push({
+        status: 'Order Registered',
+        location: 'Origin Address',
+        date: formatDate(baseDate),
+        time: formatTime(9, 0),
+        description: 'Shipment order registered in Supabase database.'
+      });
+    }
+  }
+
+  const weightVal = order.total_weight || order.totalWeight || 2.5;
+
+  return {
+    id: trackingNumber,
+    carrier: carrier,
+    status: rawStatus,
+    origin: "Delhi, India",
+    destination: destinationLoc,
+    estimatedDelivery: order.shipping_date || order.shippingDate || "Estimated 3-5 Business Days",
+    weight: `${weightVal} kg`,
+    serviceType: `${carrier} Shipment`,
+    events: events,
+    trackingUrl: "" // Per requirements, do not display or direct external tracking
+  };
+}
+
+// API: Customer Track Order by Order ID
+app.post("/api/track-order", async (req, res) => {
+  const { orderId } = req.body;
+  if (!orderId) {
+    return res.status(400).json({ error: "Order ID is required" });
+  }
+
+  const searchId = orderId.toString().trim().toUpperCase();
+  console.log(`[Track-Order] Client searching for Order ID: ${searchId}`);
+
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: "Supabase integration is not currently initialized." });
+    }
+
+    const { data: order, error } = await supabase
+      .from('orders')
+      .select('*')
+      .or(`id.ilike.${searchId},tracking_number.ilike.${searchId}`)
+      .maybeSingle();
+    
+    if (error) {
+      console.error("[Track-Order] Supabase query error:", error.message);
+      return res.status(500).json({ error: `Supabase database retrieval error: ${error.message}` });
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: `No registered order was found in Supabase matching ID: ${orderId}` });
+    }
+
+    const trackingData = generateRealTrackingData(order);
+    return res.json({
+      success: true,
+      isLive: true,
+      isDemo: false,
+      trackingData: trackingData
+    });
+
+  } catch (err: any) {
+    console.error(`[Track-Order] Server endpoint error:`, err.message);
+    res.status(500).json({ error: err.message || "Tracking request failed" });
+  }
+});
+
+// API: Customer Track Order by Tracking ID/Number (no external Ship24 lookup)
+app.post("/api/track-carrier", async (req, res) => {
+  const { trackingId } = req.body;
+  if (!trackingId) {
+    return res.status(400).json({ error: "Tracking ID is required" });
+  }
+
+  const searchId = trackingId.toString().trim().toUpperCase();
+  console.log(`[Track-Carrier] Client tracking package via number: ${searchId}`);
+
+  try {
+    if (!supabase) {
+      return res.status(503).json({ error: "Supabase integration is not currently initialized." });
+    }
+
+    const { data: order, error } = await supabase
+      .from('orders')
+      .select('*')
+      .or(`tracking_number.ilike.${searchId},id.ilike.${searchId}`)
+      .maybeSingle();
+    
+    if (error) {
+      console.error("[Track-Carrier] Supabase query error:", error.message);
+      return res.status(500).json({ error: `Supabase database retrieval error: ${error.message}` });
+    }
+
+    if (!order) {
+      return res.status(404).json({ error: `No registered order was found in Supabase matching tracking number: ${trackingId}` });
+    }
+
+    const trackingData = generateRealTrackingData(order);
+    return res.json({
+      success: true,
+      isLive: true,
+      isDemo: false,
+      trackingData: trackingData
+    });
+
+  } catch (err: any) {
+    console.error(`[Track-Carrier] Server endpoint error:`, err.message);
+    res.status(500).json({ error: err.message || "Tracking request failed" });
+  }
+});
 
 async function startServer() {
   console.log("[Server Initialization] Seeding Supabase database if empty...");

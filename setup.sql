@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS orders (
   destination JSONB NOT NULL,
   payment_status TEXT NOT NULL,
   shipping_date TEXT,
+  tracking_number TEXT,
+  carrier TEXT,
+  shipment_status TEXT,
+  shipment_date TIMESTAMP WITH TIME ZONE,
+  last_tracking_update TIMESTAMP WITH TIME ZONE,
+  tracking_response JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
