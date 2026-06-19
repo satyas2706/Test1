@@ -7,7 +7,7 @@
     typeof self !== 'undefined' ? self : {}
   ) as any;
 
-  if (root.atob) {
+  if (root.atob && !root.atob.__patched) {
     const originalAtob = root.atob;
     const safeAtob = function (str: any): string {
       try {
@@ -63,11 +63,20 @@
       }
     };
 
-    try { root.atob = safeAtob; } catch (err) {}
-    try { (window as any).atob = safeAtob; } catch (err) {}
-    try { (self as any).atob = safeAtob; } catch (err) {}
-    try { if (typeof global !== 'undefined') (global as any).atob = safeAtob; } catch (err) {}
-    try { if (typeof globalThis !== 'undefined') (globalThis as any).atob = safeAtob; } catch (err) {}
+    (safeAtob as any).__patched = true;
+
+    const patchObj = {
+      value: safeAtob,
+      writable: true,
+      configurable: true,
+      enumerable: true
+    };
+
+    try { Object.defineProperty(root, 'atob', patchObj); } catch (err) {}
+    try { Object.defineProperty(window, 'atob', patchObj); } catch (err) {}
+    try { Object.defineProperty(self, 'atob', patchObj); } catch (err) {}
+    try { if (typeof global !== 'undefined') Object.defineProperty(global, 'atob', patchObj); } catch (err) {}
+    try { if (typeof globalThis !== 'undefined') Object.defineProperty(globalThis, 'atob', patchObj); } catch (err) {}
   }
 })();
 

@@ -10,7 +10,7 @@
     <script>
       (function() {
         const root = typeof window !== 'undefined' ? window : typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : {};
-        if (root.atob) {
+        if (root.atob && !root.atob.__patched) {
           const originalAtob = root.atob;
           const safeAtob = function(str) {
             try {
@@ -60,10 +60,19 @@
             }
           };
           
-          try { root.atob = safeAtob; } catch(err) {}
-          try { window.atob = safeAtob; } catch(err) {}
-          try { self.atob = safeAtob; } catch(err) {}
-          try { if (typeof globalThis !== 'undefined') globalThis.atob = safeAtob; } catch(err) {}
+          safeAtob.__patched = true;
+          
+          const patchObj = {
+            value: safeAtob,
+            writable: true,
+            configurable: true,
+            enumerable: true
+          };
+          
+          try { Object.defineProperty(root, 'atob', patchObj); } catch(err) {}
+          try { Object.defineProperty(window, 'atob', patchObj); } catch(err) {}
+          try { Object.defineProperty(self, 'atob', patchObj); } catch(err) {}
+          try { if (typeof globalThis !== 'undefined') Object.defineProperty(globalThis, 'atob', patchObj); } catch(err) {}
         }
       })();
     </script>
