@@ -239,35 +239,15 @@ const AutoScrollingShopProducts: React.FC<AutoScrollingShopProductsProps> = ({
 
               <div className="mt-2.5 pt-2 border-t border-slate-100 flex justify-between items-center">
                 <span className="text-[9px] text-slate-400 font-semibold italic">Consolidated</span>
-                {cartItem ? (
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => removeStoreItem(product.name)}
-                      className="w-5 h-5 bg-rose-50 text-rose-600 rounded-md flex items-center justify-center font-black text-[10px] hover:bg-rose-100 cursor-pointer"
-                    >
-                      -
-                    </button>
-                    <span className="text-[10px] font-black min-w-[14px] text-center text-teal-950">
-                      {cartItem.quantity}
-                    </span>
-                    <button
-                      onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                      className="w-5 h-5 bg-teal-50 text-teal-600 rounded-md flex items-center justify-center font-black text-[10px] hover:bg-teal-100 cursor-pointer"
-                    >
-                      +
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => {
-                      addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store');
-                      toast.success(`"${product.name}" added to your pickup box!`);
-                    }}
-                    className="px-2.5 py-1 bg-teal-50 text-teal-750 hover:bg-teal-650 hover:text-white rounded-md text-[9px] font-black cursor-pointer transition-all flex items-center gap-1 border border-teal-100/40"
-                  >
-                    <Plus size={8} /> Add to Box
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store');
+                    toast.success(`"${product.name}" added to your cart!`);
+                  }}
+                  className="px-2.5 py-1 bg-teal-50 text-teal-750 hover:bg-teal-650 hover:text-white rounded-md text-[9px] font-black cursor-pointer transition-all flex items-center gap-1 border border-teal-100/40"
+                >
+                  <Plus size={8} /> Add to Cart
+                </button>
               </div>
             </div>
           );
@@ -5059,9 +5039,24 @@ export default function App() {
     setIsSchedulingNewPickup(false);
     setActivePickupStep(5);
     window.scrollTo(0, 0);
+
+    // Clear 'Store' items in local state so the Shop Indian Products cart starts completely empty by default
+    setItems(prev => prev.filter(i => i.source !== 'Store'));
     
     // Sync to DB
     if (dbStatus.checked) {
+      if (isSupabaseConfigured) {
+        supabase
+          .from('items')
+          .delete()
+          .eq('user_id', resolvedCustomerId)
+          .eq('source', 'Store')
+          .then(({ error }) => {
+            if (error) console.error('Failed to clear pre-existing Store items from DB on confirmation:', error);
+            else console.log('Successfully cleared pre-existing Store items from DB for', resolvedCustomerId);
+          })
+          .catch(err => console.error('Error during deleting Store items on confirmation:', err));
+      }
       try {
         const orderData = {
           ...newOrder,
@@ -5130,6 +5125,7 @@ export default function App() {
     setPickupSpecialInstructions('');
     setPickupCategory('Personal Effects');
     setPickupEstimatedWeight('Less than 5 kg');
+    setItems(prev => prev.filter(i => i.source !== 'Store'));
   };
 
   const cancelPickup = (id: string) => {

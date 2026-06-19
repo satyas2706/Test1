@@ -2646,6 +2646,22 @@ async function seedDatabaseIfEmpty() {
        } catch (e: any) {
          console.warn("[Supabase Seeder] Optional shipping_settings table check skipped or failed:", e.message || e);
        }
+
+       // 7. Clear pre-existing guest-user Store items to keep local startup empty by default
+       try {
+         const { error: clearStoreErr } = await supabase
+           .from('items')
+           .delete()
+           .eq('user_id', 'guest-user')
+           .eq('source', 'Store');
+         if (clearStoreErr) {
+           console.error("[Supabase Seeder] Failed to clear pre-existing guest-user Store items:", clearStoreErr);
+         } else {
+           console.log("[Supabase Seeder] Cleared pre-existing guest-user Store items successfully!");
+         }
+       } catch (e: any) {
+         console.warn("[Supabase Seeder] Optional guest-user Store items cleaning skipped or failed:", e.message || e);
+       }
     }
   } catch (err: any) {
     console.error("[Supabase Seeder] Error during seeding:", err.message);
