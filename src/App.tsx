@@ -13297,7 +13297,29 @@ export default function App() {
   }, [selectedCategory, searchQuery, sortBy, minPrice, maxPrice, showFilters, addItem, removeStoreItem, handleCheckout, items, storeProducts, currentUser, showJiffySuggestion, setActiveTab, appointments, lastBookingRef]);
 
   const FinalizeSection = useMemo(() => {
-    if (!currentUser) return null;
+    if (!currentUser) {
+      return (
+        <div className="max-w-md mx-auto text-center space-y-6 bg-white p-10 rounded-[2.5rem] shadow-xl border border-slate-100 my-8">
+          <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto">
+            <Lock size={40} />
+          </div>
+          <h2 className="text-3xl font-black text-slate-900">Secure Checkout</h2>
+          <p className="text-slate-500 leading-relaxed">Please sign in to your account to securely complete your payment and finalize your shipment.</p>
+          <button 
+            onClick={() => { setLoginTriggerSource('checkout'); setShowLoginModal(true); }}
+            className="w-full btn-cta flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <UserIcon size={20} /> Sign In to Pay
+          </button>
+          <button 
+            onClick={() => navigateTo('cart')}
+            className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all cursor-pointer"
+          >
+            Back to Cart
+          </button>
+        </div>
+      );
+    }
     const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
     const isWarehouseCheckout = orderId ? orderId.startsWith('SW-') : cartItems.some(i => i.source === 'Warehouse');
 
@@ -13767,38 +13789,12 @@ export default function App() {
         </div>
       </div>
     );
-  }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser?.id, handleFinalPayment, shippingPreference, appointments, pickupAddress, pickupName, pickupPhone, orderedItemIds]);
+  }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser, currentUser?.id, handleFinalPayment, shippingPreference, appointments, pickupAddress, pickupName, pickupPhone, orderedItemIds]);
 
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <Loader2 className="animate-spin text-indigo-600" size={48} />
-      </div>
-    );
-  }
-
-  if (!currentUser && activeTab === 'finalize') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="max-w-md w-full text-center space-y-6 bg-white p-10 rounded-[2.5rem] shadow-xl border border-slate-100">
-          <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto">
-            <Lock size={40} />
-          </div>
-          <h2 className="text-3xl font-black text-slate-900">Secure Checkout</h2>
-          <p className="text-slate-500 leading-relaxed">Please sign in to your account to securely complete your payment and finalize your shipment.</p>
-          <button 
-            onClick={() => { setLoginTriggerSource('checkout'); setShowLoginModal(true); }}
-            className="w-full btn-cta flex items-center justify-center gap-2"
-          >
-            <UserIcon size={20} /> Sign In to Pay
-          </button>
-          <button 
-            onClick={() => navigateTo('cart')}
-            className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
-          >
-            Back to Cart
-          </button>
-        </div>
       </div>
     );
   }
@@ -13915,7 +13911,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 safe-top safe-bottom overflow-x-hidden">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 safe-top safe-bottom overflow-x-clip">
       {/* Supabase Status Banner */}
       {!dbStatus.connected && dbStatus.checked && (
         <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex flex-col items-center justify-center gap-1 text-[10px] font-bold text-amber-700 uppercase tracking-widest">
@@ -13951,7 +13947,7 @@ export default function App() {
               <button 
                 onClick={() => setDbError(null)}
                 className="ml-4 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg text-xs transition-colors"
-              >
+               >
                 Dismiss
               </button>
             </div>
@@ -13959,10 +13955,11 @@ export default function App() {
         )}
 
         {/* Navigation */}
-        <nav className="bg-white/95 backdrop-blur-md sticky top-0 z-[100] border-b border-slate-100 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.04)]">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between md:justify-start gap-4 lg:gap-6 xl:gap-8 flex-nowrap">
+        <nav className="bg-white/95 border-b border-slate-100 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.04)] sticky top-0 z-[100] backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4 flex-nowrap">
+            {/* Mobile View Logo - Only visible below md screens */}
             <div 
-              className="flex items-center gap-3 cursor-pointer shrink-0" 
+              className="flex md:hidden items-center gap-3 cursor-pointer shrink-0" 
               onClick={() => {
                 if (currentUser?.role === 'admin' || currentUser?.role === 'Admin') navigateTo('admin');
                 else if (currentUser?.role === 'agent' || currentUser?.role === 'Agent') {
@@ -13975,238 +13972,252 @@ export default function App() {
             </div>
             
             {/* Desktop Navigation Group - Only visible on md screens & up */}
-            <div className="hidden md:flex flex-1 items-center justify-start gap-4 lg:gap-6 xl:gap-8 flex-nowrap">
+            <div className="hidden md:flex flex-1 items-center justify-between gap-4 flex-nowrap w-full">
+              {/* Desktop Logo */}
+              <div 
+                className="flex items-center gap-3 cursor-pointer shrink-0" 
+                onClick={() => {
+                  if (currentUser?.role === 'admin' || currentUser?.role === 'Admin') navigateTo('admin');
+                  else if (currentUser?.role === 'agent' || currentUser?.role === 'Agent') {
+                    setActiveWorkOrder(null);
+                    navigateTo('agent');
+                  } else navigateTo('home');
+                }}
+              >
+                <Logo height="h-12 sm:h-14" />
+              </div>
+
               {currentUser?.role !== 'agent' && currentUser?.role !== 'customer_service' && (
-                <>
-                  {/* Services Dropdown */}
+                  <>
+                    {/* Services Dropdown */}
+                    <div 
+                      className="relative"
+                      onMouseEnter={() => setShowServicesDropdown(true)}
+                      onMouseLeave={() => setShowServicesDropdown(false)}
+                    >
+                      <button 
+                        onClick={() => setShowServicesDropdown(!showServicesDropdown)}
+                        className={`text-xs lg:text-sm uppercase tracking-wider font-extrabold transition-all pb-1.5 border-b-2 mt-0.5 flex items-center gap-1 text-nowrap shrink-0 ${
+                          (activeTab === 'store' || activeTab === 'pickup' || activeTab === 'warehouse')
+                            ? 'text-orange-600 border-orange-500' 
+                            : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'
+                        }`}
+                      >
+                        Services
+                        <ChevronDown size={12} className={`transition-transform duration-300 ${showServicesDropdown ? 'rotate-180 text-orange-600' : 'text-slate-400'}`} />
+                      </button>
+
+                      <AnimatePresence>
+                        {showServicesDropdown && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                            transition={{ duration: 0.15, ease: 'easeOut' }}
+                            className="absolute left-0 mt-3 z-[110] bg-white rounded-2xl border border-slate-100 shadow-[0_12px_36px_rgba(15,23,42,0.08)] p-3.5 grid grid-cols-3 gap-3 w-[580px] pointer-events-auto"
+                          >
+                            <button
+                              onClick={() => {
+                                navigateTo('store');
+                                setShowServicesDropdown(false);
+                              }}
+                              className="flex flex-col items-center text-center p-4 rounded-xl border border-slate-100 hover:border-orange-200 hover:bg-gradient-to-b hover:from-orange-50/20 hover:to-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
+                            >
+                              <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center mb-3 transition-all duration-300 group-hover:bg-orange-500 group-hover:text-white group-hover:scale-110 group-hover:shadow-[0_8px_16px_rgba(249,115,22,0.25)]">
+                                <ShoppingBag size={22} className="stroke-[2.2] transition-transform group-hover:rotate-6" />
+                              </div>
+                              <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-orange-600 transition-colors">Shop & Ship</span>
+                              <span className="text-slate-450 text-[10px] leading-relaxed block px-1">Buy from India and get global delivery.</span>
+                              
+                              {/* Interactive Route Graphic */}
+                              <div className="w-full mt-3.5 pt-2.5 border-t border-slate-100/70 group-hover:border-orange-100 transition-colors flex items-center justify-between text-[9px] font-black tracking-wider text-slate-400 group-hover:text-orange-500">
+                                <span>IND</span>
+                                <div className="flex-1 mx-2 relative flex items-center justify-center h-4 overflow-hidden">
+                                  <div className="w-full h-[1.5px] bg-slate-100 group-hover:bg-orange-100 rounded-full" />
+                                  <div className="absolute top-1/2 left-0 right-0 h-[1.5px] border-t border-dashed border-slate-200 group-hover:border-orange-300 -translate-y-1/2" />
+                                  <motion.div 
+                                    className="absolute text-orange-500"
+                                    animate={{ x: [-35, 35], opacity: [0, 1, 1, 0] }}
+                                    transition={{ repeat: Infinity, duration: 2.2, ease: "linear" }}
+                                  >
+                                    <Plane size={11} className="transform rotate-45 stroke-[2.5]" />
+                                  </motion.div>
+                                </div>
+                                <span>GLO</span>
+                              </div>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                navigateTo('pickup');
+                                setShowServicesDropdown(false);
+                              }}
+                              className="flex flex-col items-center text-center p-4 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-gradient-to-b hover:from-indigo-50/20 hover:to-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
+                            >
+                              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3 transition-all duration-300 group-hover:bg-indigo-600 group-hover:text-white group-hover:scale-110 group-hover:shadow-[0_8px_16px_rgba(79,70,229,0.25)]">
+                                <Truck size={22} className="stroke-[2.2] transition-transform group-hover:-translate-x-1" />
+                              </div>
+                              <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-indigo-650 transition-colors">Schedule Pickup</span>
+                              <span className="text-slate-450 text-[10px] leading-relaxed block px-1">We gather, pack & ship package from home.</span>
+                              
+                              {/* Interactive Route Graphic */}
+                              <div className="w-full mt-3.5 pt-2.5 border-t border-slate-100/70 group-hover:border-indigo-100 transition-colors flex items-center justify-between text-[9px] font-black tracking-wider text-slate-400 group-hover:text-indigo-600">
+                                <span>HOME</span>
+                                <div className="flex-1 mx-2 relative flex items-center justify-center h-4 overflow-hidden">
+                                  <div className="w-full h-[1.5px] bg-slate-100 group-hover:bg-indigo-100 rounded-full" />
+                                  <div className="absolute top-1/2 left-0 right-0 h-[1.5px] border-t border-dashed border-slate-200 group-hover:border-indigo-350 -translate-y-1/2" />
+                                  <motion.div 
+                                    className="absolute text-indigo-550"
+                                    animate={{ x: [-35, 35], opacity: [0, 1, 1, 0] }}
+                                    transition={{ repeat: Infinity, duration: 2.5, ease: "linear" }}
+                                  >
+                                    <Truck size={11} className="stroke-[2.5]" />
+                                  </motion.div>
+                                </div>
+                                <span>HUB</span>
+                              </div>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                navigateTo('warehouse');
+                                setShowServicesDropdown(false);
+                              }}
+                              className="flex flex-col items-center text-center p-4 rounded-xl border border-slate-100 hover:border-emerald-200 hover:bg-gradient-to-b hover:from-emerald-50/20 hover:to-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
+                            >
+                              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 transition-all duration-300 group-hover:bg-emerald-600 group-hover:text-white group-hover:scale-110 group-hover:shadow-[0_8px_16px_rgba(16,185,129,0.25)]">
+                                <Package size={22} className="stroke-[2.2] transition-transform group-hover:scale-105" />
+                              </div>
+                              <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-indigo-650 transition-colors">Drop Off Package</span>
+                              <span className="text-slate-450 text-[10px] leading-relaxed block px-1">Deliver items directly to our warehouse.</span>
+                              
+                              {/* Interactive Route Graphic */}
+                              <div className="w-full mt-3.5 pt-2.5 border-t border-slate-100/70 group-hover:border-emerald-100 transition-colors flex items-center justify-between text-[9px] font-black tracking-wider text-slate-400 group-hover:text-emerald-600">
+                                <span>YOU</span>
+                                <div className="flex-1 mx-2 relative flex items-center justify-center h-4 overflow-hidden">
+                                  <div className="w-full h-[1.5px] bg-slate-100 group-hover:bg-emerald-100 rounded-full" />
+                                  <div className="absolute top-1/2 left-0 right-0 h-[1.5px] border-t border-dashed border-slate-200 group-hover:border-emerald-350 -translate-y-1/2" />
+                                  <motion.div 
+                                    className="absolute text-emerald-500"
+                                    animate={{ y: [-4, 3, -4], rotate: [0, 8, -8, 0] }}
+                                    transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+                                  >
+                                    <Package size={11} className="stroke-[2.5]" />
+                                  </motion.div>
+                                </div>
+                                <span>DEPOT</span>
+                              </div>
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <button 
+                      onClick={() => navigateTo('track')}
+                      className={`text-xs lg:text-sm uppercase tracking-wider font-extrabold transition-all pb-1.5 border-b-2 mt-0.5 text-nowrap shrink-0 ${activeTab === 'track' ? 'text-orange-600 border-orange-500' : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'}`}
+                    >
+                      Track your shipment
+                    </button>
+                    <button 
+                      onClick={() => navigateTo('about')}
+                      className={`text-xs lg:text-sm uppercase tracking-wider font-extrabold transition-all pb-1.5 border-b-2 mt-0.5 text-nowrap shrink-0 ${activeTab === 'about' ? 'text-orange-600 border-orange-500' : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'}`}
+                    >
+                      Why JiffEX
+                    </button>
+                    <button 
+                      onClick={() => navigateTo('support')}
+                      className={`text-xs lg:text-sm uppercase tracking-wider font-extrabold transition-all pb-1.5 border-b-2 mt-0.5 text-nowrap shrink-0 ${activeTab === 'support' ? 'text-orange-600 border-orange-500' : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'}`}
+                    >
+                      Support
+                    </button>
+                    {currentUser?.role !== 'agent' && (
+                      <button 
+                        onClick={handleQuickQuoteClick}
+                        className="text-xs lg:text-sm font-extrabold uppercase tracking-wider text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 px-3.5 py-1.5 rounded-xl shadow-sm hover:shadow-md transition-all duration-300 ease-out hover:-translate-y-0.5 active:translate-y-0 text-nowrap shrink-0"
+                      >
+                        Quick Quote
+                      </button>
+                    )}
+                  </>
+                )}
+
+                {currentUser?.role === 'admin' && (
+                  <button 
+                    onClick={() => navigateTo('admin')}
+                    className={`text-xs lg:text-sm font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'admin' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'} text-nowrap shrink-0`}
+                  >
+                    Admin
+                  </button>
+                )}
+                {currentUser?.role === 'webmaster' && (
+                  <button 
+                    onClick={() => navigateTo('admin')}
+                    className={`text-xs lg:text-sm font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'admin' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'} text-nowrap shrink-0`}
+                  >
+                    Catalog
+                  </button>
+                )}
+                {currentUser?.role === 'agent' && (
+                  <button 
+                    onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
+                    className={`text-xs lg:text-sm font-bold transition-all px-3 py-1.5 rounded-xl border border-emerald-100 ${activeTab === 'agent' ? 'text-white bg-emerald-600' : 'text-emerald-600 hover:bg-emerald-50'} text-nowrap shrink-0`}
+                  >
+                    Work Portal
+                  </button>
+                )}
+                {currentUser?.role === 'customer_service' && (
+                  <button 
+                    onClick={() => navigateTo('support')}
+                    className={`text-xs lg:text-sm font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'support' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'} text-nowrap shrink-0`}
+                  >
+                    Support Desk
+                  </button>
+                )}
+
+                {/* Cart Only */}
+                {currentUser?.role !== 'agent' && (
+                  <button 
+                    onClick={() => navigateTo('cart')}
+                    className={`relative p-2 rounded-xl transition-all shrink-0 ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <ShoppingCart size={18} className="lg:w-5 lg:h-5 shrink-0" />
+                    {cartItems.length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black border border-white">
+                        {cartItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                {/* Profile or Sign in */}
+                {currentUser ? (
                   <div 
-                    className="relative"
-                    onMouseEnter={() => setShowServicesDropdown(true)}
-                    onMouseLeave={() => setShowServicesDropdown(false)}
+                    className="relative shrink-0"
+                    onMouseEnter={() => setShowUserDropdown(true)}
+                    onMouseLeave={() => setShowUserDropdown(false)}
                   >
                     <button 
-                      onClick={() => setShowServicesDropdown(!showServicesDropdown)}
-                      className={`text-sm lg:text-base uppercase tracking-wider font-extrabold transition-all pb-2 border-b-2 mt-0.5 flex items-center gap-1.5 text-nowrap shrink-0 ${
-                        (activeTab === 'store' || activeTab === 'pickup' || activeTab === 'warehouse')
-                          ? 'text-orange-600 border-orange-500' 
-                          : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'
+                      className={`flex items-center gap-1.5 lg:gap-2 px-2.5 py-1.5 rounded-xl transition-all border-2 shrink-0 ${
+                        showUserDropdown ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-transparent text-slate-700 hover:bg-slate-100'
                       }`}
                     >
-                      Services
-                      <ChevronDown size={14} className={`transition-transform duration-300 ${showServicesDropdown ? 'rotate-180 text-orange-600' : 'text-slate-400'}`} />
+                      <div className="w-7 h-7 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-black text-xs shadow-sm shrink-0">
+                        {currentUser.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="hidden lg:flex flex-col items-start leading-none shrink-0 whitespace-nowrap">
+                        {currentUser.role.toLowerCase() !== 'customer' && (
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">{currentUser.role}</span>
+                        )}
+                        <span className="text-xs font-black text-slate-900 whitespace-nowrap">{currentUser.name}</span>
+                      </div>
+                      <ChevronDown size={14} className={`hidden lg:block transition-transform duration-300 shrink-0 ${showUserDropdown ? 'rotate-180' : ''}`} />
                     </button>
 
                     <AnimatePresence>
-                      {showServicesDropdown && (
+                      {showUserDropdown && (
                         <motion.div
-                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                          transition={{ duration: 0.15, ease: 'easeOut' }}
-                          className="absolute left-0 mt-3 z-[110] bg-white rounded-2xl border border-slate-100 shadow-[0_12px_36px_rgba(15,23,42,0.08)] p-3.5 grid grid-cols-3 gap-3 w-[580px] pointer-events-auto"
-                        >
-                          <button
-                            onClick={() => {
-                              navigateTo('store');
-                              setShowServicesDropdown(false);
-                            }}
-                            className="flex flex-col items-center text-center p-4 rounded-xl border border-slate-100 hover:border-orange-200 hover:bg-gradient-to-b hover:from-orange-50/20 hover:to-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
-                          >
-                            <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center mb-3 transition-all duration-300 group-hover:bg-orange-500 group-hover:text-white group-hover:scale-110 group-hover:shadow-[0_8px_16px_rgba(249,115,22,0.25)]">
-                              <ShoppingBag size={22} className="stroke-[2.2] transition-transform group-hover:rotate-6" />
-                            </div>
-                            <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-orange-600 transition-colors">Shop & Ship</span>
-                            <span className="text-slate-450 text-[10px] leading-relaxed block px-1">Buy from India and get global delivery.</span>
-                            
-                            {/* Interactive Route Graphic */}
-                            <div className="w-full mt-3.5 pt-2.5 border-t border-slate-100/70 group-hover:border-orange-100 transition-colors flex items-center justify-between text-[9px] font-black tracking-wider text-slate-400 group-hover:text-orange-500">
-                              <span>IND</span>
-                              <div className="flex-1 mx-2 relative flex items-center justify-center h-4 overflow-hidden">
-                                <div className="w-full h-[1.5px] bg-slate-100 group-hover:bg-orange-100 rounded-full" />
-                                <div className="absolute top-1/2 left-0 right-0 h-[1.5px] border-t border-dashed border-slate-200 group-hover:border-orange-300 -translate-y-1/2" />
-                                <motion.div 
-                                  className="absolute text-orange-500"
-                                  animate={{ x: [-35, 35], opacity: [0, 1, 1, 0] }}
-                                  transition={{ repeat: Infinity, duration: 2.2, ease: "linear" }}
-                                >
-                                  <Plane size={11} className="transform rotate-45 stroke-[2.5]" />
-                                </motion.div>
-                              </div>
-                              <span>GLO</span>
-                            </div>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              navigateTo('pickup');
-                              setShowServicesDropdown(false);
-                            }}
-                            className="flex flex-col items-center text-center p-4 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-gradient-to-b hover:from-indigo-50/20 hover:to-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
-                          >
-                            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3 transition-all duration-300 group-hover:bg-indigo-600 group-hover:text-white group-hover:scale-110 group-hover:shadow-[0_8px_16px_rgba(79,70,229,0.25)]">
-                              <Truck size={22} className="stroke-[2.2] transition-transform group-hover:-translate-x-1" />
-                            </div>
-                            <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-indigo-650 transition-colors">Schedule Pickup</span>
-                            <span className="text-slate-450 text-[10px] leading-relaxed block px-1">We gather, pack & ship package from home.</span>
-                            
-                            {/* Interactive Route Graphic */}
-                            <div className="w-full mt-3.5 pt-2.5 border-t border-slate-100/70 group-hover:border-indigo-100 transition-colors flex items-center justify-between text-[9px] font-black tracking-wider text-slate-400 group-hover:text-indigo-600">
-                              <span>HOME</span>
-                              <div className="flex-1 mx-2 relative flex items-center justify-center h-4 overflow-hidden">
-                                <div className="w-full h-[1.5px] bg-slate-100 group-hover:bg-indigo-100 rounded-full" />
-                                <div className="absolute top-1/2 left-0 right-0 h-[1.5px] border-t border-dashed border-slate-200 group-hover:border-indigo-350 -translate-y-1/2" />
-                                <motion.div 
-                                  className="absolute text-indigo-550"
-                                  animate={{ x: [-35, 35], opacity: [0, 1, 1, 0] }}
-                                  transition={{ repeat: Infinity, duration: 2.5, ease: "linear" }}
-                                >
-                                  <Truck size={11} className="stroke-[2.5]" />
-                                </motion.div>
-                              </div>
-                              <span>HUB</span>
-                            </div>
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              navigateTo('warehouse');
-                              setShowServicesDropdown(false);
-                            }}
-                            className="flex flex-col items-center text-center p-4 rounded-xl border border-slate-100 hover:border-emerald-200 hover:bg-gradient-to-b hover:from-emerald-50/20 hover:to-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
-                          >
-                            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 transition-all duration-300 group-hover:bg-emerald-600 group-hover:text-white group-hover:scale-110 group-hover:shadow-[0_8px_16px_rgba(16,185,129,0.25)]">
-                              <Package size={22} className="stroke-[2.2] transition-transform group-hover:scale-105" />
-                            </div>
-                            <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-indigo-650 transition-colors">Drop Off Package</span>
-                            <span className="text-slate-450 text-[10px] leading-relaxed block px-1">Deliver items directly to our warehouse.</span>
-                            
-                            {/* Interactive Route Graphic */}
-                            <div className="w-full mt-3.5 pt-2.5 border-t border-slate-100/70 group-hover:border-emerald-100 transition-colors flex items-center justify-between text-[9px] font-black tracking-wider text-slate-400 group-hover:text-emerald-600">
-                              <span>YOU</span>
-                              <div className="flex-1 mx-2 relative flex items-center justify-center h-4 overflow-hidden">
-                                <div className="w-full h-[1.5px] bg-slate-100 group-hover:bg-emerald-100 rounded-full" />
-                                <div className="absolute top-1/2 left-0 right-0 h-[1.5px] border-t border-dashed border-slate-200 group-hover:border-emerald-350 -translate-y-1/2" />
-                                <motion.div 
-                                  className="absolute text-emerald-500"
-                                  animate={{ y: [-4, 3, -4], rotate: [0, 8, -8, 0] }}
-                                  transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
-                                >
-                                  <Package size={11} className="stroke-[2.5]" />
-                                </motion.div>
-                              </div>
-                              <span>DEPOT</span>
-                            </div>
-                          </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-
-                  <button 
-                    onClick={() => navigateTo('track')}
-                    className={`text-sm lg:text-base uppercase tracking-wider font-extrabold transition-all pb-2 border-b-2 mt-0.5 text-nowrap shrink-0 ${activeTab === 'track' ? 'text-orange-600 border-orange-500' : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'}`}
-                  >
-                    Track your shipment
-                  </button>
-                  <button 
-                    onClick={() => navigateTo('about')}
-                    className={`text-sm lg:text-base uppercase tracking-wider font-extrabold transition-all pb-2 border-b-2 mt-0.5 text-nowrap shrink-0 ${activeTab === 'about' ? 'text-orange-600 border-orange-500' : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'}`}
-                  >
-                    Why JiffEX
-                  </button>
-                  <button 
-                    onClick={() => navigateTo('support')}
-                    className={`text-sm lg:text-base uppercase tracking-wider font-extrabold transition-all pb-2 border-b-2 mt-0.5 text-nowrap shrink-0 ${activeTab === 'support' ? 'text-orange-600 border-orange-500' : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'}`}
-                  >
-                    Support
-                  </button>
-                  {currentUser?.role !== 'agent' && (
-                    <button 
-                      onClick={handleQuickQuoteClick}
-                      className="text-sm lg:text-base font-extrabold uppercase tracking-wider text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 px-4 py-2 rounded-xl shadow-sm hover:shadow-md transition-all duration-300 ease-out hover:-translate-y-0.5 active:translate-y-0 text-nowrap shrink-0"
-                    >
-                      Quick Quote
-                    </button>
-                  )}
-                </>
-              )}
-
-              {currentUser?.role === 'admin' && (
-                <button 
-                  onClick={() => navigateTo('admin')}
-                  className={`text-sm lg:text-base font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'admin' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'} text-nowrap shrink-0`}
-                >
-                  Admin
-                </button>
-              )}
-              {currentUser?.role === 'webmaster' && (
-                <button 
-                  onClick={() => navigateTo('admin')}
-                  className={`text-sm lg:text-base font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'admin' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'} text-nowrap shrink-0`}
-                >
-                  Catalog
-                </button>
-              )}
-              {currentUser?.role === 'agent' && (
-                <button 
-                  onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
-                  className={`text-sm lg:text-base font-bold transition-all px-3 py-1.5 rounded-xl border border-emerald-100 ${activeTab === 'agent' ? 'text-white bg-emerald-600' : 'text-emerald-600 hover:bg-emerald-50'} text-nowrap shrink-0`}
-                >
-                  Work Portal
-                </button>
-              )}
-              {currentUser?.role === 'customer_service' && (
-                <button 
-                  onClick={() => navigateTo('support')}
-                  className={`text-sm lg:text-base font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'support' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'} text-nowrap shrink-0`}
-                >
-                  Support Desk
-                </button>
-              )}
-
-              {/* Cart Only */}
-              {currentUser?.role !== 'agent' && (
-                <button 
-                  onClick={() => navigateTo('cart')}
-                  className={`relative p-1.5 sm:p-3 rounded-2xl transition-all shrink-0 ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                  <ShoppingCart size={20} className="sm:w-6 sm:h-6 shrink-0" />
-                  {cartItems.length > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[10px] w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center font-black border-2 border-white">
-                      {cartItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}
-                    </span>
-                  )}
-                </button>
-              )}
-
-              {/* Profile or Sign in */}
-              {currentUser ? (
-                <div 
-                  className="relative shrink-0"
-                  onMouseEnter={() => setShowUserDropdown(true)}
-                  onMouseLeave={() => setShowUserDropdown(false)}
-                >
-                  <button 
-                    className={`flex items-center gap-1.5 sm:gap-3 px-2 py-1.5 sm:px-4 sm:py-2 rounded-2xl transition-all border-2 shrink-0 ${
-                      showUserDropdown ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-transparent text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    <div className="w-8 h-8 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-black text-sm shadow-sm shrink-0">
-                      {currentUser.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="hidden md:flex flex-col items-start leading-none shrink-0 whitespace-nowrap">
-                      {currentUser.role.toLowerCase() !== 'customer' && (
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">{currentUser.role}</span>
-                      )}
-                      <span className="text-sm font-black text-slate-900 whitespace-nowrap">{currentUser.name}</span>
-                    </div>
-                    <ChevronDown size={16} className={`hidden md:block transition-transform duration-300 shrink-0 ${showUserDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  <AnimatePresence>
-                    {showUserDropdown && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                          initial={{ opacity: 0, y: 8, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 8, scale: 0.98 }}
                         className="absolute top-full right-0 mt-2 w-56 bg-white rounded-3xl border border-slate-200 shadow-2xl shadow-slate-200/50 py-2 z-50"
@@ -14249,12 +14260,12 @@ export default function App() {
               ) : (
                 <button 
                   onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }}
-                  className="bg-deep-blue text-white flex items-center gap-2 py-2 px-3 sm:px-4 text-sm lg:text-base rounded-xl font-extrabold hover:bg-slate-800 transition-all active:scale-95 whitespace-nowrap text-nowrap shrink-0 uppercase tracking-wider"
+                  className="bg-deep-blue text-white flex items-center gap-1.5 py-1.5 px-3 lg:py-2 lg:px-4 text-xs lg:text-sm rounded-xl font-extrabold hover:bg-slate-800 transition-all active:scale-95 whitespace-nowrap text-nowrap shrink-0 uppercase tracking-wider"
                 >
-                  <UserIcon size={16} className="sm:w-[18px] sm:h-[18px] shrink-0" /> <span className="whitespace-nowrap">Sign In</span>
+                  <UserIcon size={14} className="lg:w-4 lg:h-4 shrink-0" /> <span className="whitespace-nowrap">Sign In</span>
                 </button>
               )}
-            </div>
+          </div>
 
             {/* Mobile View Group - Only visible below md screens */}
             <div className="flex md:hidden items-center gap-3 ml-auto shrink-0">
