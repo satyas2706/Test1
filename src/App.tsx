@@ -5624,8 +5624,7 @@ export default function App() {
   const refreshItems = useCallback(() => {
     if (dbStatus.checked) {
       if (!currentUser) {
-        // If there is no logged in user, keep cart local-only (starts empty)
-        setItems([]);
+        // If there is no logged in user, keep cart local-only (do not clear items)
         return;
       }
       const uId = currentUser.id;
