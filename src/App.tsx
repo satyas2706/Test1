@@ -4305,6 +4305,10 @@ export default function App() {
   const [dbError, setDbError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [items, setItems] = useState<ShippingItem[]>([]);
+  const itemsRef = useRef<ShippingItem[]>([]);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
   const [quote, setQuote] = useState<{ country: string; weight: number } | null>(null);
   const [address, setAddress] = useState<DestinationAddress>({
     fullName: '',
@@ -5639,6 +5643,71 @@ export default function App() {
       const roleLower = (currentUser.role || '').toLowerCase();
       const isAdminOrAgent = ['admin', 'webmaster', 'customer_service', 'agent'].includes(roleLower);
       const fetchId = isAdminOrAgent ? 'all' : uId;
+
+      // Detect and migrate any guest items to the current logged-in user
+      const guestItems = itemsRef.current.filter(i => !i.user_id && !i.userId);
+      if (guestItems.length > 0 && !isAdminOrAgent) {
+        console.log(`[Cart Migration] Found ${guestItems.length} guest items to migrate for user ${uId}`);
+        
+        const runMigration = async () => {
+          for (const item of guestItems) {
+            const qty = item.quantity || 1;
+            const singleWeight = (item.weight || 0) / qty;
+            const singlePrice = (item.price || 0) / qty;
+            const idsList = item.ids && item.ids.length > 0 ? item.ids : [item.id];
+            
+            for (const dId of idsList) {
+              try {
+                await api.createItem({
+                  id: dId,
+                  user_id: uId,
+                  name: item.name,
+                  weight: singleWeight,
+                  price: singlePrice,
+                  status: item.status,
+                  source: item.source,
+                  image: item.image,
+                  submitted: item.submitted
+                } as any);
+              } catch (err) {
+                console.error('[Cart Migration] Failed to migrate item unit:', err);
+              }
+            }
+          }
+          
+          // Clear current local guest items so they don't trigger migration repeatedly
+          guestItems.forEach(i => {
+            i.user_id = uId;
+            i.userId = uId;
+          });
+
+          // Fetch the fresh list from database
+          try {
+            const data = await api.fetchItems(fetchId);
+            setItems(prev => {
+              const merged = data.map(newItem => {
+                const localItem = prev.find(p => 
+                  p.id === newItem.id || 
+                  ((p.name || '').toLowerCase() === (newItem.name || '').toLowerCase() && p.source === newItem.source)
+                );
+                return {
+                  ...newItem,
+                  submitted: localItem ? (localItem.submitted !== undefined ? localItem.submitted : newItem.submitted) : newItem.submitted
+                };
+              });
+              if (prev.length === merged.length && prev.every((item, idx) => item.id === merged[idx].id && item.status === merged[idx].status && item.weight === merged[idx].weight && item.submitted === merged[idx].submitted)) {
+                return prev;
+              }
+              return merged;
+            });
+          } catch (err) {
+            console.error('Failed to fetch items after migration:', err);
+          }
+        };
+
+        runMigration();
+        return;
+      }
 
       api.fetchItems(fetchId)
         .then(data => {
