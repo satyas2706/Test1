@@ -101,6 +101,63 @@ const memItems: any[] = [];
 const memPickups: any[] = [];
 console.log("Memory Orders, Items, and Pickups stores initialized.");
 
+// Persistent file storage setup to prevent loss of cart/orders during process restarts
+const DATA_DIR = path.join(process.cwd(), 'data');
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+const ITEMS_FILE = path.join(DATA_DIR, 'mem_items.json');
+const ORDERS_FILE = path.join(DATA_DIR, 'mem_orders.json');
+const PICKUPS_FILE = path.join(DATA_DIR, 'mem_pickups.json');
+
+function saveDb() {
+  try {
+    fs.writeFileSync(ITEMS_FILE, JSON.stringify(memItems, null, 2), 'utf-8');
+    fs.writeFileSync(ORDERS_FILE, JSON.stringify(memOrders, null, 2), 'utf-8');
+    fs.writeFileSync(PICKUPS_FILE, JSON.stringify(memPickups, null, 2), 'utf-8');
+    console.log('[FILE-PERSISTENCE] Saved memItems, memOrders, memPickups to files.');
+  } catch (err: any) {
+    console.error('[FILE-PERSISTENCE] Failed to save database:', err.message || err);
+  }
+}
+
+function loadDb() {
+  try {
+    if (fs.existsSync(ITEMS_FILE)) {
+      const data = fs.readFileSync(ITEMS_FILE, 'utf-8');
+      const loaded = JSON.parse(data);
+      if (Array.isArray(loaded)) {
+        memItems.length = 0;
+        memItems.push(...loaded);
+        console.log(`[FILE-PERSISTENCE] Loaded ${memItems.length} items from JSON file.`);
+      }
+    }
+    if (fs.existsSync(ORDERS_FILE)) {
+      const data = fs.readFileSync(ORDERS_FILE, 'utf-8');
+      const loaded = JSON.parse(data);
+      if (Array.isArray(loaded)) {
+        memOrders.length = 0;
+        memOrders.push(...loaded);
+        console.log(`[FILE-PERSISTENCE] Loaded ${memOrders.length} orders from JSON file.`);
+      }
+    }
+    if (fs.existsSync(PICKUPS_FILE)) {
+      const data = fs.readFileSync(PICKUPS_FILE, 'utf-8');
+      const loaded = JSON.parse(data);
+      if (Array.isArray(loaded)) {
+        memPickups.length = 0;
+        memPickups.push(...loaded);
+        console.log(`[FILE-PERSISTENCE] Loaded ${memPickups.length} pickups from JSON file.`);
+      }
+    }
+  } catch (err: any) {
+    console.error('[FILE-PERSISTENCE] Failed to load database:', err.message || err);
+  }
+}
+
+// Initial load
+loadDb();
+
 // Notification Clients
 const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN 
   ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) 
@@ -678,6 +735,7 @@ app.delete("/api/items/:id", async (req, res) => {
     const idx = memItems.findIndex(i => i.id === id);
     if (idx > -1) {
       memItems.splice(idx, 1);
+      saveDb();
     }
     return res.json({ success: true });
   }
@@ -735,6 +793,7 @@ app.post("/api/items", async (req, res) => {
       image: req.body.image
     };
     memItems.push(itemData);
+    saveDb();
     return res.json(itemData);
   }
 
@@ -772,6 +831,7 @@ app.post("/api/orders", async (req, res) => {
     } else {
       memOrders.push(newOrder);
     }
+    saveDb();
     return res.json(newOrder);
   }
 
@@ -925,6 +985,7 @@ app.post("/api/orders", async (req, res) => {
     } else {
       memOrders.unshift(preOrder);
     }
+    saveDb();
     const trPreOrder = transformDbOrder(preOrder);
     const cIdx = cachedAllOrders.findIndex(o => o.id === finalInsertedId);
     if (cIdx > -1) {
@@ -948,6 +1009,7 @@ app.patch("/api/items/:itemId/status", async (req, res) => {
     const idx = memItems.findIndex(i => i.id === itemId);
     if (idx > -1) {
       memItems[idx].status = status;
+      saveDb();
       return res.json({ success: true });
     }
     return res.status(404).json({ error: "Item not found" });
@@ -974,6 +1036,7 @@ app.patch("/api/items/:itemId/weight", async (req, res) => {
     const idx = memItems.findIndex(i => i.id === itemId);
     if (idx > -1) {
       memItems[idx].weight = weight;
+      saveDb();
       return res.json({ success: true });
     }
     return res.status(404).json({ error: "Item not found" });
@@ -999,6 +1062,7 @@ app.patch("/api/orders/:orderId", async (req, res) => {
     const idx = memOrders.findIndex(o => o.id === orderId);
     if (idx > -1) {
       memOrders[idx] = { ...memOrders[idx], ...req.body };
+      saveDb();
       return res.json(transformDbOrder(memOrders[idx]));
     }
     return res.status(404).json({ error: "Order not found" });
@@ -1197,6 +1261,7 @@ app.patch("/api/orders/:orderId/status", async (req, res) => {
     const idx = memOrders.findIndex(o => o.id === orderId);
     if (idx > -1) {
       memOrders[idx].status = status;
+      saveDb();
       return res.json({ success: true, order: transformDbOrder(memOrders[idx]) });
     }
     return res.status(404).json({ error: "Order not found" });
@@ -1211,6 +1276,7 @@ app.patch("/api/orders/:orderId/status", async (req, res) => {
   const mIdxStatus = memOrders.findIndex(o => o.id === orderId);
   if (mIdxStatus > -1) {
     memOrders[mIdxStatus].status = status;
+    saveDb();
   }
   const cIdxStatus = cachedAllOrders.findIndex(o => o.id === orderId);
   if (cIdxStatus > -1) {
@@ -1971,6 +2037,7 @@ const deduplicateOrders = (ordersList: any[]) => {
     const filteredMem = memOrders.filter(o => !idsToDelete.includes(o.id));
     memOrders.length = 0;
     memOrders.push(...filteredMem);
+    saveDb();
     cachedAllOrders = cachedAllOrders.filter(o => !idsToDelete.includes(o.id));
   }
 
@@ -2191,6 +2258,7 @@ app.post("/api/pickups", async (req, res) => {
   } else {
     memPickups.push(dbPickup);
   }
+  saveDb();
 
   if (!supabase) {
     return res.json(dbPickup);
@@ -2234,6 +2302,7 @@ app.patch("/api/pickups/:id", async (req, res) => {
   const idx = memPickups.findIndex(p => p.id === id);
   if (idx > -1) {
     memPickups[idx] = { ...memPickups[idx], ...mappedUpdates, ...updates };
+    saveDb();
   }
 
   if (!supabase) {
@@ -2267,6 +2336,7 @@ app.delete("/api/pickups/:id", async (req, res) => {
   const idx = memPickups.findIndex(p => p.id === id);
   if (idx > -1) {
     memPickups.splice(idx, 1);
+    saveDb();
   }
 
   if (!supabase) {

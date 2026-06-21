@@ -398,13 +398,15 @@ const getStatusWhatsAppMessage = (orderId: string, status: string, name: string,
 
 const BackButton = ({ onClick }: { onClick: () => void }) => (
   <motion.button
+    id="global-back-button"
     initial={{ opacity: 0, x: -10 }}
     animate={{ opacity: 1, x: 0 }}
     exit={{ opacity: 0, x: -10 }}
     onClick={onClick}
-    className="absolute top-1 left-6 flex items-center justify-center w-10 h-10 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm group z-20"
+    className="absolute top-1 left-6 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm group z-20 font-bold text-xs cursor-pointer"
   >
-    <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+    <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform text-slate-400 group-hover:text-indigo-600" />
+    <span>Back</span>
   </motion.button>
 );
 
@@ -4259,7 +4261,7 @@ export default function App() {
         setActivePickupStep(1);
         setLastBookingRef(null);
         setIsSchedulingNewPickup(true);
-      } else if (appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)) && !isSchedulingNewPickup) {
+      } else if (userAppointments.some(a => a.status === 'Scheduled') && !isSchedulingNewPickup) {
         setShowPickupInProgressModal(true);
         return;
       }
@@ -4550,11 +4552,17 @@ export default function App() {
 
   const [lastBookingRef, setLastBookingRef] = useState<string | null>(null);
   const userAppointments = useMemo(() => {
-    return appointments.filter(a => currentUser 
-      ? (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)
-      : (lastBookingRef ? a.id === lastBookingRef : false)
-    );
-  }, [appointments, currentUser, lastBookingRef]);
+    return appointments.filter(a => {
+      if (!currentUser || !session?.user) {
+        return lastBookingRef ? a.id === lastBookingRef : false;
+      }
+      return (
+        (currentUser.id && a.customerId === currentUser.id) ||
+        (currentUser.email && currentUser.email !== 'guest@example.com' && a.email?.toLowerCase() === currentUser.email?.toLowerCase()) ||
+        (currentUser.phone && a.phone === currentUser.phone)
+      );
+    });
+  }, [appointments, currentUser, lastBookingRef, session]);
   const [categories, setCategories] = useState(['Pooja', 'Return Gifts', 'Decorative']);
   const [tickets, setTickets] = useState<Ticket[]>([
     {
@@ -5913,12 +5921,8 @@ export default function App() {
   }, [cartItems]);
 
   const hasAllAgentPickup = useMemo(() => {
-    return appointments.some(a => a.status === 'Scheduled' && a.pickupType === 'AllAgent' && (
-      currentUser 
-        ? (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)
-        : (lastBookingRef ? a.id === lastBookingRef : false)
-    ));
-  }, [appointments, currentUser, lastBookingRef]);
+    return userAppointments.some(a => a.status === 'Scheduled' && a.pickupType === 'AllAgent');
+  }, [userAppointments]);
 
   const totalCost = useMemo(() => {
     const rate = shippingRates[address.country] || 10;
@@ -6233,7 +6237,7 @@ export default function App() {
 
   const handleFinalPayment = async () => {
     if (!currentUser) return;
-    const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone));
+    const hasScheduledPickup = userAppointments.some(a => a.status === 'Scheduled');
     const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
     
     // Determine payment status based on pickup and shipping preference
@@ -6572,9 +6576,7 @@ export default function App() {
     setCouponCodeInput('');
 
     // Determine primary source and generate the correct order ID first so it is preserved even across login
-    const hasScheduledPickup = currentUser 
-      ? appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone))
-      : (lastBookingRef ? appointments.some(a => a.id === lastBookingRef && a.status === 'Scheduled') : false);
+    const hasScheduledPickup = userAppointments.some(a => a.status === 'Scheduled');
     const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
 
     let source: 'Store' | 'Warehouse' | 'Pickup' = 'Store';
@@ -10767,13 +10769,9 @@ export default function App() {
       toast.success('Warehouse address copied to clipboard!');
     };
 
-    const hasActivePickup = currentUser 
-      ? appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone))
-      : (lastBookingRef ? appointments.some(a => a.id === lastBookingRef && a.status === 'Scheduled') : false);
-    const activePickup = currentUser 
-      ? appointments.find(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone))
-      : (lastBookingRef ? appointments.find(a => a.id === lastBookingRef && a.status === 'Scheduled') : undefined);
-    const hasCompletedPickup = lastBookingRef ? appointments.some(a => a.id === lastBookingRef && a.status === 'Completed') : false;
+    const hasActivePickup = userAppointments.some(a => a.status === 'Scheduled');
+    const activePickup = userAppointments.find(a => a.status === 'Scheduled');
+    const hasCompletedPickup = userAppointments.some(a => a.status === 'Completed');
 
     const isCartEmpty = mode === 'Warehouse' 
       ? items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Warehouse' && !i.submitted).length === 0
@@ -12931,9 +12929,7 @@ export default function App() {
       }
     });
 
-    const hasActivePickup = currentUser 
-      ? appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone))
-      : (lastBookingRef ? appointments.some(a => a.id === lastBookingRef && a.status === 'Scheduled') : false);
+    const hasActivePickup = userAppointments.some(a => a.status === 'Scheduled');
 
     const ShopHeroSlider = () => {
       const [currentSlide, setCurrentSlide] = useState(0);
@@ -13401,7 +13397,7 @@ export default function App() {
     }
     const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
     const isWarehouseCheckout = orderId ? orderId.startsWith('SW-') : cartItems.some(i => i.source === 'Warehouse');
-    const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone));
+    const hasScheduledPickup = userAppointments.some(a => a.status === 'Scheduled');
     const isPayAtHome = hasScheduledPickup && shippingPreference === 'International' && !cartItems.some(i => i.source === 'Store');
 
     if (isPaid) {
@@ -13456,15 +13452,36 @@ export default function App() {
     }
 
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div id="finalize-checkout-grid" className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          {!isWarehouseCheckout && <CheckoutProgressTracker />}
+          {/* Back Action */}
+          <button 
+            id="btn-finalize-back"
+            onClick={goBack} 
+            className="flex items-center gap-2 text-slate-600 hover:text-indigo-600 font-bold transition-all group py-1 cursor-pointer"
+          >
+            <ArrowLeft className="group-hover:-translate-x-1 transition-transform text-slate-500 group-hover:text-indigo-600" size={20} />
+            <span>Back</span>
+          </button>
+
+          {/* Order ID Header */}
+          {orderId && !isWarehouseCheckout && (
+            <div id="finalize-order-header" className="bg-gradient-to-r from-indigo-600 to-violet-600 p-6 rounded-2xl text-white shadow-lg shadow-indigo-100 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-widest opacity-80">Order Reference</div>
+                <div className="text-2xl font-black">{orderId}</div>
+              </div>
+              <div className="px-4 py-2 bg-white/20 backdrop-blur rounded-xl text-xs font-bold">
+                Awaiting Payment
+              </div>
+            </div>
+          )}
           
           {/* Shipping Preference Selection */}
-          {!isWarehouseCheckout && appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)) && cartItems.length > 0 && (
+          {!isWarehouseCheckout && userAppointments.some(a => a.status === 'Scheduled') && cartItems.length > 0 && (
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <Truck className="text-indigo-600" /> How should we deliver your shop items?
+                <Truck className="text-indigo-600" /> Ship more from home or Pickup from home?
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div 
@@ -13510,19 +13527,6 @@ export default function App() {
                     Our agent will bring these items when they come for your pickup. <span className="font-bold text-emerald-600">Pay Now to confirm.</span>
                   </p>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Order ID Header */}
-          {orderId && !isWarehouseCheckout && (
-            <div className="bg-indigo-600 p-6 rounded-2xl text-white shadow-lg shadow-indigo-200 flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-widest opacity-80">Order Reference</div>
-                <div className="text-2xl font-black">{orderId}</div>
-              </div>
-              <div className="px-4 py-2 bg-white/20 backdrop-blur rounded-xl text-xs font-bold">
-                Awaiting Payment
               </div>
             </div>
           )}
@@ -13739,7 +13743,7 @@ export default function App() {
                     <span>Items Cost</span>
                     <span className="text-white font-medium">₹{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
                   </div>
-                  {appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)) && (
+                  {userAppointments.some(a => a.status === 'Scheduled') && (
                     <div className="flex justify-between text-slate-400 text-sm">
                       <span>Shop Item Delivery</span>
                       <span className="text-emerald-400 font-medium">{shippingPreference === 'LocalPickup' ? 'During Home Pickup' : 'To my Home'}</span>
@@ -14107,23 +14111,6 @@ export default function App() {
                               </div>
                               <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-orange-600 transition-colors">Shop & Ship</span>
                               <span className="text-slate-450 text-[10px] leading-relaxed block px-1">Buy from India and get global delivery.</span>
-                              
-                              {/* Interactive Route Graphic */}
-                              <div className="w-full mt-3.5 pt-2.5 border-t border-slate-100/70 group-hover:border-orange-100 transition-colors flex items-center justify-between text-[9px] font-black tracking-wider text-slate-400 group-hover:text-orange-500">
-                                <span>IND</span>
-                                <div className="flex-1 mx-2 relative flex items-center justify-center h-4 overflow-hidden">
-                                  <div className="w-full h-[1.5px] bg-slate-100 group-hover:bg-orange-100 rounded-full" />
-                                  <div className="absolute top-1/2 left-0 right-0 h-[1.5px] border-t border-dashed border-slate-200 group-hover:border-orange-300 -translate-y-1/2" />
-                                  <motion.div 
-                                    className="absolute text-orange-500"
-                                    animate={{ x: [-35, 35], opacity: [0, 1, 1, 0] }}
-                                    transition={{ repeat: Infinity, duration: 2.2, ease: "linear" }}
-                                  >
-                                    <Plane size={11} className="transform rotate-45 stroke-[2.5]" />
-                                  </motion.div>
-                                </div>
-                                <span>GLO</span>
-                              </div>
                             </button>
 
                             <button
@@ -14138,23 +14125,6 @@ export default function App() {
                               </div>
                               <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-indigo-650 transition-colors">Schedule Pickup</span>
                               <span className="text-slate-450 text-[10px] leading-relaxed block px-1">We gather, pack & ship package from home.</span>
-                              
-                              {/* Interactive Route Graphic */}
-                              <div className="w-full mt-3.5 pt-2.5 border-t border-slate-100/70 group-hover:border-indigo-100 transition-colors flex items-center justify-between text-[9px] font-black tracking-wider text-slate-400 group-hover:text-indigo-600">
-                                <span>HOME</span>
-                                <div className="flex-1 mx-2 relative flex items-center justify-center h-4 overflow-hidden">
-                                  <div className="w-full h-[1.5px] bg-slate-100 group-hover:bg-indigo-100 rounded-full" />
-                                  <div className="absolute top-1/2 left-0 right-0 h-[1.5px] border-t border-dashed border-slate-200 group-hover:border-indigo-350 -translate-y-1/2" />
-                                  <motion.div 
-                                    className="absolute text-indigo-550"
-                                    animate={{ x: [-35, 35], opacity: [0, 1, 1, 0] }}
-                                    transition={{ repeat: Infinity, duration: 2.5, ease: "linear" }}
-                                  >
-                                    <Truck size={11} className="stroke-[2.5]" />
-                                  </motion.div>
-                                </div>
-                                <span>HUB</span>
-                              </div>
                             </button>
 
                             <button
@@ -14169,23 +14139,6 @@ export default function App() {
                               </div>
                               <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-indigo-650 transition-colors">Drop Off Package</span>
                               <span className="text-slate-450 text-[10px] leading-relaxed block px-1">Deliver items directly to our warehouse.</span>
-                              
-                              {/* Interactive Route Graphic */}
-                              <div className="w-full mt-3.5 pt-2.5 border-t border-slate-100/70 group-hover:border-emerald-100 transition-colors flex items-center justify-between text-[9px] font-black tracking-wider text-slate-400 group-hover:text-emerald-600">
-                                <span>YOU</span>
-                                <div className="flex-1 mx-2 relative flex items-center justify-center h-4 overflow-hidden">
-                                  <div className="w-full h-[1.5px] bg-slate-100 group-hover:bg-emerald-100 rounded-full" />
-                                  <div className="absolute top-1/2 left-0 right-0 h-[1.5px] border-t border-dashed border-slate-200 group-hover:border-emerald-350 -translate-y-1/2" />
-                                  <motion.div 
-                                    className="absolute text-emerald-500"
-                                    animate={{ y: [-4, 3, -4], rotate: [0, 8, -8, 0] }}
-                                    transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
-                                  >
-                                    <Package size={11} className="stroke-[2.5]" />
-                                  </motion.div>
-                                </div>
-                                <span>DEPOT</span>
-                              </div>
                             </button>
                           </motion.div>
                         )}
