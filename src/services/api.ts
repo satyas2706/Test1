@@ -40,8 +40,35 @@ function dbToItem(dbItem: any): ShippingItem {
     source: dbItem.source || 'Warehouse',
     price: dbItem.price || 0,
     image: dbItem.image || '',
-    estimatedDelivery: dbItem.estimated_delivery || dbItem.estimatedDelivery || ''
+    estimatedDelivery: dbItem.estimated_delivery || dbItem.estimatedDelivery || '',
+    submitted: dbItem.submitted !== undefined ? dbItem.submitted : dbItem.source !== 'Warehouse'
   } as ShippingItem;
+}
+
+export function groupItems(flatItems: ShippingItem[]): ShippingItem[] {
+  const grouped: { [key: string]: ShippingItem & { ids: string[] } } = {};
+  
+  for (const item of flatItems) {
+    if (!item) continue;
+    // Group by name (lowercase) + source + submitted
+    const key = `${(item.name || '').toLowerCase()}_${item.source || 'Warehouse'}_${!!item.submitted}`;
+    
+    if (!grouped[key]) {
+      grouped[key] = {
+        ...item,
+        quantity: item.quantity || 1,
+        ids: [item.id]
+      };
+    } else {
+      const g = grouped[key];
+      g.quantity = (g.quantity || 1) + (item.quantity || 1);
+      g.weight = (g.weight || 0) + (item.weight || 0);
+      g.price = (g.price || 0) + (item.price || 0);
+      g.ids.push(item.id);
+    }
+  }
+  
+  return Object.values(grouped);
 }
 
 function itemToDb(item: any) {
@@ -135,6 +162,8 @@ function orderToDb(order: any) {
 }
 
 export const api = {
+  dbToItem,
+  groupItems,
   async checkHealth() {
     try {
       const response = await fetch(`${API_URL}/api/health`);
@@ -244,7 +273,9 @@ export const api = {
     try {
       const response = await fetch(`${API_URL}/api/items/${userId}`);
       if (response.ok) {
-        return await response.json();
+        const rawData = await response.json();
+        const flatItems = (rawData || []).map(dbToItem) as ShippingItem[];
+        return groupItems(flatItems);
       }
       throw new Error('Fetch items endpoint not reachable');
     } catch (err) {
@@ -256,7 +287,8 @@ export const api = {
         }
         const { data, error } = await query;
         if (error) throw error;
-        return (data || []).map(dbToItem) as ShippingItem[];
+        const flatItems = (data || []).map(dbToItem) as ShippingItem[];
+        return groupItems(flatItems);
       }
       throw err;
     }
@@ -270,7 +302,8 @@ export const api = {
         body: JSON.stringify(item),
       });
       if (response.ok) {
-        return await response.json();
+        const rawData = await response.json();
+        return dbToItem(rawData);
       }
       throw new Error('Create item endpoint not reachable');
     } catch (err) {
@@ -280,6 +313,26 @@ export const api = {
         const { data, error } = await supabase.from('items').insert(dbPayload).select().single();
         if (error) throw error;
         return dbToItem(data);
+      }
+      throw err;
+    }
+  },
+
+  async deleteItem(id: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${API_URL}/api/items/${id}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        return true;
+      }
+      throw new Error('Delete item endpoint not reachable');
+    } catch (err) {
+      if (isSupabaseConfigured) {
+        console.log('[Supabase Client Fallback] Deleting item directly...');
+        const { error } = await supabase.from('items').delete().eq('id', id);
+        if (error) throw error;
+        return true;
       }
       throw err;
     }
@@ -455,7 +508,8 @@ export const api = {
         body: JSON.stringify({ status }),
       });
       if (response.ok) {
-        return await response.json();
+        const rawData = await response.json();
+        return dbToItem(rawData);
       }
       throw new Error('Update item status endpoint not reachable');
     } catch (err) {
@@ -580,7 +634,8 @@ export const api = {
         body: JSON.stringify({ weight }),
       });
       if (response.ok) {
-        return await response.json();
+        const rawData = await response.json();
+        return dbToItem(rawData);
       }
       throw new Error('Failed to update weight');
     } catch (err) {

@@ -30,6 +30,7 @@ export type ShippingStatus =
 
 export interface ShippingItem {
   id: string;
+  ids?: string[];
   name: string;
   weight: number;
   quantity?: number;

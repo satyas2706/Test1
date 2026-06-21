@@ -4215,6 +4215,16 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [sessionGuestId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const existing = localStorage.getItem('jiffex_session_guest_id');
+      if (existing) return existing;
+      const newId = `guest_${Math.random().toString(36).substring(2, 9)}`;
+      localStorage.setItem('jiffex_session_guest_id', newId);
+      return newId;
+    }
+    return 'guest-user';
+  });
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [tabHistory, setTabHistory] = useState<Tab[]>(['home']);
   const [showSendDropdown, setShowSendDropdown] = useState(false);
@@ -4978,7 +4988,7 @@ export default function App() {
     }
     if (estWeight === 0) estWeight = 3;
 
-    const resolvedCustomerId = overrideCustomerId || currentUser?.id || 'guest-user';
+    const resolvedCustomerId = overrideCustomerId || currentUser?.id || sessionGuestId;
     const resolvedName = pickupName || overrideName || currentUser?.name || 'Guest User';
     const resolvedEmail = pickupEmail || overrideEmail || currentUser?.email || '';
 
@@ -5040,9 +5050,6 @@ export default function App() {
     setActivePickupStep(5);
     window.scrollTo(0, 0);
 
-    // Clear 'Store' items in local state so the Shop Indian Products cart starts completely empty by default
-    setItems(prev => prev.filter(i => i.source !== 'Store'));
-    
     // Sync to DB
     if (dbStatus.checked) {
       if (isSupabaseConfigured) {
@@ -5125,7 +5132,6 @@ export default function App() {
     setPickupSpecialInstructions('');
     setPickupCategory('Personal Effects');
     setPickupEstimatedWeight('Less than 5 kg');
-    setItems(prev => prev.filter(i => i.source !== 'Store'));
   };
 
   const cancelPickup = (id: string) => {
@@ -5343,7 +5349,7 @@ export default function App() {
       else if (isAgentEmail) role = 'agent';
       else if (email === 'webmaster@jiffex.com') role = 'webmaster';
 
-      const userId = email ? `guest_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : 'guest-user';
+      const userId = email ? `guest_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : sessionGuestId;
       const savedProfileStr = localStorage.getItem(`jiffex_user_profile_${userId}`);
       let localProfile: any = {};
       
@@ -5615,6 +5621,43 @@ export default function App() {
     };
   }, []);
 
+  const refreshItems = useCallback(() => {
+    if (dbStatus.checked) {
+      if (!currentUser) {
+        // If there is no logged in user, keep cart local-only (starts empty)
+        setItems([]);
+        return;
+      }
+      const uId = currentUser.id;
+      const roleLower = (currentUser.role || '').toLowerCase();
+      const isAdminOrAgent = ['admin', 'webmaster', 'customer_service', 'agent'].includes(roleLower);
+      const fetchId = isAdminOrAgent ? 'all' : uId;
+
+      api.fetchItems(fetchId)
+        .then(data => {
+          setItems(prev => {
+            // Map data and preserve the unpersisted custom properties from our local state (such as 'submitted')
+            const merged = data.map(newItem => {
+              const localItem = prev.find(p => 
+                p.id === newItem.id || 
+                ((p.name || '').toLowerCase() === (newItem.name || '').toLowerCase() && p.source === newItem.source)
+              );
+              return {
+                ...newItem,
+                submitted: localItem ? (localItem.submitted !== undefined ? localItem.submitted : newItem.submitted) : newItem.submitted
+              };
+            });
+
+            if (prev.length === merged.length && prev.every((item, idx) => item.id === merged[idx].id && item.status === merged[idx].status && item.weight === merged[idx].weight && item.submitted === merged[idx].submitted)) {
+              return prev;
+            }
+            return merged;
+          });
+        })
+        .catch(err => console.error('Failed to load items from server:', err));
+    }
+  }, [currentUser, dbStatus.checked]);
+
   // Real-time Order and Item Updates (Supabase Realtime)
   useEffect(() => {
     if (!currentUser || !dbStatus.connected) return;
@@ -5737,18 +5780,7 @@ export default function App() {
         },
         (payload) => {
           console.log('[Realtime] Item Change Detected:', payload);
-          if (payload.eventType === 'INSERT') {
-            const newItem = payload.new as ShippingItem;
-            setItems(prev => {
-              if (prev.some(i => i.id === newItem.id)) return prev;
-              return [...prev, newItem];
-            });
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedItem = payload.new as ShippingItem;
-            setItems(prev => prev.map(i => i.id === updatedItem.id ? { ...i, ...updatedItem } : i));
-          } else if (payload.eventType === 'DELETE') {
-            setItems(prev => prev.filter(i => i.id !== payload.old.id));
-          }
+          refreshItems();
         }
       )
       .subscribe((status) => {
@@ -5761,12 +5793,12 @@ export default function App() {
       supabase.removeChannel(channel);
       supabase.removeChannel(itemsChannel);
     };
-  }, [currentUser, dbStatus.connected, normalizeOrder]);
+  }, [currentUser, dbStatus.connected, normalizeOrder, refreshItems]);
 
   // Fetch orders when currentUser or activeTab changes, with fast-polling for agents/admins
   useEffect(() => {
     if (dbStatus.checked) {
-      const uId = currentUser?.id || 'guest-user';
+      const uId = currentUser?.id || sessionGuestId;
       const roleLower = (currentUser?.role || '').toLowerCase();
       const isAdminRole = currentUser ? ['admin', 'webmaster', 'customer_service'].includes(roleLower) : false;
       const isAgentRole = roleLower === 'agent';
@@ -5850,24 +5882,8 @@ export default function App() {
 
   // Fetch items from database when currentUser or activeTab changes, supporting admin views
   useEffect(() => {
-    if (dbStatus.checked) {
-      const uId = currentUser?.id || 'guest-user';
-      const roleLower = (currentUser?.role || '').toLowerCase();
-      const isAdminOrAgent = currentUser ? ['admin', 'webmaster', 'customer_service', 'agent'].includes(roleLower) : false;
-      const fetchId = isAdminOrAgent ? 'all' : uId;
-
-      api.fetchItems(fetchId)
-        .then(data => {
-          setItems(prev => {
-            if (prev.length === data.length && prev.every((item, idx) => item.id === data[idx].id && item.status === data[idx].status && item.weight === data[idx].weight)) {
-              return prev;
-            }
-            return data;
-          });
-        })
-        .catch(err => console.error('Failed to load items from server:', err));
-    }
-  }, [currentUser, activeTab, dbStatus.checked]);
+    refreshItems();
+  }, [currentUser, activeTab, sessionGuestId, refreshItems]);
 
   // Scroll to top when major state changes
   useEffect(() => {
@@ -5953,36 +5969,60 @@ export default function App() {
 
   const addItem = useCallback(async (item: Omit<ShippingItem, 'id' | 'status' | 'source'>, source: 'Warehouse' | 'Pickup' | 'Store', force = false) => {
     // Check if item already exists in cart (same name, source, and submission status)
-    const isSubmitted = source !== 'Warehouse';
     const existingItemIndex = items.findIndex(i => 
-      i.name === item.name && 
+      (i.name || '').toLowerCase() === (item.name || '').toLowerCase() && 
       i.source === source && 
       (source !== 'Warehouse' || i.submitted === false)
     );
 
+    const newId = crypto.randomUUID();
+
     if (existingItemIndex !== -1) {
       // Increment quantity
-      const quantityToAdd = item.quantity || 1;
+      const quantityToAdd = 1;
       const updatedItems = [...items];
       const existingItem = updatedItems[existingItemIndex];
+      const singleUnitWeight = item.weight || 0;
+      const singleUnitPrice = item.price || 0;
+      const currentIds = existingItem.ids || [existingItem.id];
+
       updatedItems[existingItemIndex] = {
         ...existingItem,
-        quantity: (existingItem.quantity || 0) + quantityToAdd,
-        weight: (existingItem.weight || 0) + (item.weight || 0),
-        price: (existingItem.price || 0) + (item.price || 0)
+        quantity: (existingItem.quantity || 1) + quantityToAdd,
+        weight: (existingItem.weight || 0) + singleUnitWeight,
+        price: (existingItem.price || 0) + singleUnitPrice,
+        ids: [...currentIds, newId]
       };
       setItems(updatedItems);
       setShowConflictModal({ show: false, item: null, source: null });
+
+      if (dbStatus.checked && currentUser) {
+        try {
+          await api.createItem({
+            id: newId,
+            user_id: currentUser.id,
+            name: item.name,
+            weight: singleUnitWeight,
+            price: singleUnitPrice,
+            status: existingItem.status,
+            source: source,
+            image: item.image,
+            submitted: source !== 'Warehouse'
+          } as any);
+        } catch (err: any) {
+          console.error('Failed to sync increment item:', err.message);
+        }
+      }
       return;
     }
 
-    const quantityToAdd = item.quantity || 1;
     const newItem: ShippingItem = {
       ...item,
-      id: crypto.randomUUID(),
+      id: newId,
+      ids: [newId],
       status: source === 'Store' ? 'Received at Warehouse' : source === 'Warehouse' ? 'Awaiting Warehouse Arrival' : 'Pending',
       source: source,
-      quantity: quantityToAdd,
+      quantity: 1,
       submitted: source !== 'Warehouse'
     };
     
@@ -5995,42 +6035,105 @@ export default function App() {
     }
 
     // Try to sync to backend database
-    if (dbStatus.checked) {
+    if (dbStatus.checked && currentUser) {
       try {
         await api.createItem({
           ...newItem,
-          user_id: currentUser?.id || 'guest-user' // Ensure user_id is passed
+          user_id: currentUser.id // Ensure user_id is passed
         } as any);
       } catch (err: any) {
         console.error('Failed to sync item to DB:', err.message);
       }
     }
+  }, [items, dbStatus.checked, currentUser, sessionGuestId]);
+
+  const removeItem = useCallback((id: string) => {
+    const itemToDelete = items.find(i => i.id === id);
+    setItems(prev => prev.filter(i => i.id !== id));
+    
+    if (itemToDelete && dbStatus.checked && currentUser) {
+      const idsToDelete = itemToDelete.ids && itemToDelete.ids.length > 0 ? itemToDelete.ids : [id];
+      for (const dId of idsToDelete) {
+        api.deleteItem(dId).catch(err => console.error('Failed to delete item from DB:', err));
+      }
+    }
   }, [items, dbStatus.checked, currentUser]);
 
-  const removeItem = (id: string) => {
-    setItems(items.filter(i => i.id !== id));
-  };
+  const updateItemQuantity = useCallback((id: string, delta: number) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    if (delta === -1 && (item.quantity || 1) <= 1) {
+      removeItem(id);
+      return;
+    }
+
+    if (delta === 1) {
+      const newId = crypto.randomUUID();
+      const singleUnitWeight = item.weight / (item.quantity || 1);
+      const singleUnitPrice = (item.price || 0) / (item.quantity || 1);
+      
+      setItems(prev => prev.map(i => {
+        if (i.id === id) {
+          return {
+            ...i,
+            quantity: (i.quantity || 1) + 1,
+            weight: i.weight + singleUnitWeight,
+            price: (i.price || 0) + singleUnitPrice,
+            ids: [...(i.ids || [i.id]), newId]
+          };
+        }
+        return i;
+      }));
+
+      if (dbStatus.checked && currentUser) {
+        api.createItem({
+          id: newId,
+          user_id: currentUser.id,
+          name: item.name,
+          weight: singleUnitWeight,
+          price: singleUnitPrice,
+          status: item.status,
+          source: item.source,
+          image: item.image,
+          submitted: item.submitted
+        } as any).catch(err => console.error('Failed to sync increment item:', err));
+      }
+    } else if (delta === -1) {
+      const currentIds = [...(item.ids || [item.id])];
+      const idToRemove = currentIds.pop() || id;
+      const singleUnitWeight = item.weight / (item.quantity || 1);
+      const singleUnitPrice = (item.price || 0) / (item.quantity || 1);
+
+      setItems(prev => prev.map(i => {
+        if (i.id === id) {
+          return {
+            ...i,
+            quantity: (i.quantity || 1) - 1,
+            weight: i.weight - singleUnitWeight,
+            price: (i.price || 0) - singleUnitPrice,
+            ids: currentIds
+          };
+        }
+        return i;
+      }));
+
+      if (dbStatus.checked && currentUser) {
+        api.deleteItem(idToRemove).catch(err => console.error('Failed to sync decrement item:', err));
+      }
+    }
+  }, [items, dbStatus.checked, currentUser, removeItem]);
 
   const removeStoreItem = useCallback((name: string) => {
-    const index = items.findIndex(i => i.name === name && i.source === 'Store');
-    if (index !== -1) {
-      const updatedItems = [...items];
-      const item = updatedItems[index];
-      if (item.quantity && item.quantity > 1) {
-        const unitWeight = item.weight / item.quantity;
-        const unitPrice = (item.price || 0) / item.quantity;
-        updatedItems[index] = {
-          ...item,
-          quantity: item.quantity - 1,
-          weight: item.weight - unitWeight,
-          price: (item.price || 0) - unitPrice
-        };
-      } else {
-        updatedItems.splice(index, 1);
-      }
-      setItems(updatedItems);
+    const item = items.find(i => (i.name || '').toLowerCase() === name.toLowerCase() && i.source === 'Store');
+    if (!item) return;
+    
+    if ((item.quantity || 1) <= 1) {
+      removeItem(item.id);
+    } else {
+      updateItemQuantity(item.id, -1);
     }
-  }, [items]);
+  }, [items, removeItem, updateItemQuantity]);
 
   const updateOrderItemStatus = async (orderId: string, itemId: string, status: ShippingStatus) => {
     setOrders(prevOrders => {
@@ -6125,32 +6228,6 @@ export default function App() {
     }
   };
 
-  const updateItemQuantity = (id: string, delta: number) => {
-    const item = items.find(i => i.id === id);
-    if (!item) return;
-
-    if (delta === -1 && (item.quantity || 1) === 1) {
-      removeItem(id);
-      return;
-    }
-
-    setItems(items.map(i => {
-      if (i.id === id) {
-        const currentQty = i.quantity || 1;
-        const newQuantity = Math.max(1, currentQty + delta);
-        const unitWeight = i.weight / currentQty;
-        const unitPrice = (i.price || 0) / currentQty;
-        return {
-          ...i,
-          quantity: newQuantity,
-          weight: unitWeight * newQuantity,
-          price: unitPrice * newQuantity
-        };
-      }
-      return i;
-    }));
-  };
-
   const cancelAppointment = (id: string) => {
     setOrders(prev => prev.filter(o => o.id !== id));
   };
@@ -6161,7 +6238,7 @@ export default function App() {
     const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
     
     // Determine payment status based on pickup and shipping preference
-    const isPayAtHome = hasScheduledPickup && shippingPreference === 'International';
+    const isPayAtHome = hasScheduledPickup && shippingPreference === 'International' && !cartItems.some(i => i.source === 'Store');
     const isWarehouseCheckout = cartItems.some(i => i.source === 'Warehouse');
     const paymentStatus = isWarehouseCheckout ? 'Pending' : isPayAtHome ? 'Pay at Home' : 'Paid';
 
@@ -13208,13 +13285,16 @@ export default function App() {
                       <motion.button 
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
-                        onClick={() => addItem({ 
-                          name: product.name, 
-                          weight: product.weight, 
-                          price: product.price, 
-                          image: product.image,
-                          estimatedDelivery: product.estimatedDelivery 
-                        }, 'Store')}
+                        onClick={() => {
+                          addItem({ 
+                            name: product.name, 
+                            weight: product.weight, 
+                            price: product.price, 
+                            image: product.image,
+                            estimatedDelivery: product.estimatedDelivery 
+                          }, 'Store');
+                          toast.success(`"${product.name}" added to your cart!`);
+                        }}
                         className="w-12 h-12 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/20"
                       >
                         <Plus size={24} />
@@ -13322,10 +13402,10 @@ export default function App() {
     }
     const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
     const isWarehouseCheckout = orderId ? orderId.startsWith('SW-') : cartItems.some(i => i.source === 'Warehouse');
+    const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone));
+    const isPayAtHome = hasScheduledPickup && shippingPreference === 'International' && !cartItems.some(i => i.source === 'Store');
 
     if (isPaid) {
-      const hasScheduledPickup = appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone));
-      const isPayAtHome = hasScheduledPickup && shippingPreference === 'International';
       
       return (
         <div className="max-w-2xl mx-auto text-center space-y-8 pb-12">
@@ -13411,7 +13491,7 @@ export default function App() {
                     <div className="font-bold">Ship to my home</div>
                   </div>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Consolidate with your pickup items and ship to your home address. <span className="font-bold text-indigo-600">Pay at Home enabled.</span>
+                    Consolidate with your pickup items and ship to your home address. <span className="font-bold text-indigo-600">{cartItems.some(i => i.source === 'Store') ? 'Pay Now to confirm.' : 'Pay at Home enabled.'}</span>
                   </p>
                 </div>
                 <div 
@@ -13562,7 +13642,7 @@ export default function App() {
 
           {/* Payment */}
           {!isWarehouseCheckout && (
-            (!appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)) || shippingPreference === 'LocalPickup') ? (
+            !isPayAtHome ? (
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
                   <CreditCard className="text-emerald-600" /> Payment Method
@@ -13768,7 +13848,7 @@ export default function App() {
             >
               {isWarehouseCheckout 
                 ? 'Confirm Shipment Request'
-                : (appointments.some(a => a.status === 'Scheduled' && (a.customerId === currentUser.id || a.email?.toLowerCase() === currentUser.email?.toLowerCase() || a.phone === currentUser.phone)) && shippingPreference === 'International') 
+                : isPayAtHome 
                   ? 'Confirm Order (Pay at Home)' 
                   : 'Confirm & Pay'
               }
@@ -14734,7 +14814,7 @@ export default function App() {
                     navigateTo('agent');
                   } else if (loginTriggerSource === 'pickup') {
                     // Start guest/member session and direct synchronous confirmation to next step (Step 5)
-                    const guestId = email ? `guest_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : 'guest-user';
+                    const guestId = email ? `guest_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : sessionGuestId;
                     confirmPickup('AllAgent', guestId, email, name || pickupName);
                   } else if (loginTriggerSource === 'checkout') {
                     navigateTo('finalize');

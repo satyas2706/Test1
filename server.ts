@@ -671,6 +671,27 @@ app.delete("/api/products/:id", async (req, res) => {
   }
 });
 
+// API: Delete an item
+app.delete("/api/items/:id", async (req, res) => {
+  const { id } = req.params;
+  if (!supabase) {
+    const idx = memItems.findIndex(i => i.id === id);
+    if (idx > -1) {
+      memItems.splice(idx, 1);
+    }
+    return res.json({ success: true });
+  }
+
+  try {
+    const { error } = await supabase.from('items').delete().eq('id', id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Delete Item Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Example API: Get all items for a user
 app.get("/api/items/:userId", async (req, res) => {
   const { userId } = req.params;
