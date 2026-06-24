@@ -4309,6 +4309,7 @@ export default function App() {
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
+  const deletedDbItemIdsRef = useRef<Set<string>>(new Set());
   const [quote, setQuote] = useState<{ country: string; weight: number } | null>(null);
   const [address, setAddress] = useState<DestinationAddress>({
     fullName: '',
@@ -4459,6 +4460,10 @@ export default function App() {
   const [showPickupConfirmModal, setShowPickupConfirmModal] = useState(false);
   const [showPickupInProgressModal, setShowPickupInProgressModal] = useState(false);
   const [activePickupStep, setActivePickupStep] = useState(1);
+  const [shopConsolidationOption, setShopConsolidationOption] = useState<'pickup' | 'warehouse' | 'store_only' | null>(null);
+  const [showConsolidationError, setShowConsolidationError] = useState(false);
+  const [pickupConsolidationOption, setPickupConsolidationOption] = useState<'shop_and_ship' | 'pickup_only' | null>(null);
+  const [showPickupConsolidationError, setShowPickupConsolidationError] = useState(false);
 
   // Sync / Read store items from database only
   useEffect(() => {
@@ -4664,6 +4669,19 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [activePickupStep, activeTab]);
+
+  const pickupDetailsRef = React.useRef<HTMLDivElement>(null);
+
+  // Scroll to pickup details when tab changes in step 3
+  useEffect(() => {
+    if (activeTab === 'pickup' && activePickupStep === 3) {
+      const timer = setTimeout(() => {
+        pickupDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [pickupDetailsTab, activePickupStep, activeTab]);
+
   const quoteRef = React.useRef<HTMLDivElement>(null);
   const warehouseItemsRef = React.useRef<HTMLDivElement>(null);
   const pickupHeaderRef = React.useRef<HTMLDivElement>(null);
@@ -4927,6 +4945,16 @@ export default function App() {
       return;
     }
 
+    if (!pickupConsolidationOption) {
+      setShowPickupConsolidationError(true);
+      toast.warning("Please choose a consolidation preference first: Do you want to shop Indian items from our store?");
+      const element = document.getElementById("pickup-consolidation-prompt-section");
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+
     if (!currentUser) {
       setLoginTriggerSource('pickup');
       setShowLoginModal(true);
@@ -5144,6 +5172,8 @@ export default function App() {
     setPickupSpecialInstructions('');
     setPickupCategory('Personal Effects');
     setPickupEstimatedWeight('Less than 5 kg');
+    setPickupConsolidationOption(null);
+    setShowPickupConsolidationError(false);
   };
 
   const cancelPickup = (id: string) => {
@@ -5636,7 +5666,8 @@ export default function App() {
   const refreshItems = useCallback(() => {
     if (dbStatus.checked) {
       if (!currentUser) {
-        // If there is no logged in user, keep cart local-only (do not clear items)
+        // If there is no logged in user, keep cart local-only (filter out any old authenticated items)
+        setItems(prev => prev.filter(i => !i.user_id && !i.userId));
         return;
       }
       const uId = currentUser.id;
@@ -5684,8 +5715,30 @@ export default function App() {
           // Fetch the fresh list from database
           try {
             const data = await api.fetchItems(fetchId);
+            
+            // Filter out items that are marked as deleted locally to avoid race conditions
+            const filteredData = data.map(newItem => {
+              if (newItem.ids && newItem.ids.length > 0) {
+                const remainingIds = newItem.ids.filter(id => !deletedDbItemIdsRef.current.has(id));
+                if (remainingIds.length === 0) return null;
+                const originalQty = newItem.quantity || newItem.ids.length;
+                const singleUnitWeight = (newItem.weight || 0) / originalQty;
+                const singleUnitPrice = (newItem.price || 0) / originalQty;
+                return {
+                  ...newItem,
+                  ids: remainingIds,
+                  quantity: remainingIds.length,
+                  weight: singleUnitWeight * remainingIds.length,
+                  price: singleUnitPrice * remainingIds.length
+                };
+              } else {
+                if (deletedDbItemIdsRef.current.has(newItem.id)) return null;
+                return newItem;
+              }
+            }).filter((item): item is NonNullable<typeof item> => item !== null);
+
             setItems(prev => {
-              const merged = data.map(newItem => {
+              const merged = filteredData.map(newItem => {
                 const localItem = prev.find(p => 
                   p.id === newItem.id || 
                   ((p.name || '').toLowerCase() === (newItem.name || '').toLowerCase() && p.source === newItem.source)
@@ -5695,10 +5748,30 @@ export default function App() {
                   submitted: localItem ? (localItem.submitted !== undefined ? localItem.submitted : newItem.submitted) : newItem.submitted
                 };
               });
-              if (prev.length === merged.length && prev.every((item, idx) => item.id === merged[idx].id && item.status === merged[idx].status && item.weight === merged[idx].weight && item.submitted === merged[idx].submitted)) {
+
+              // Keep local items that are not in the fetched filteredData,
+              // but make sure they are not items we just deleted.
+              const localOnlyItems = prev.filter(p => {
+                const existsInFetched = filteredData.some(f => 
+                  f.id === p.id || 
+                  (f.ids && p.ids && f.ids.some(id => p.ids.includes(id))) ||
+                  ((f.name || '').toLowerCase() === (p.name || '').toLowerCase() && f.source === p.source)
+                );
+                if (existsInFetched) return false;
+
+                const wasDeleted = p.ids && p.ids.length > 0 
+                  ? p.ids.every(id => deletedDbItemIdsRef.current.has(id))
+                  : deletedDbItemIdsRef.current.has(p.id);
+
+                return !wasDeleted;
+              });
+
+              const finalMerged = [...merged, ...localOnlyItems];
+
+              if (prev.length === finalMerged.length && prev.every((item, idx) => item.id === finalMerged[idx].id && item.status === finalMerged[idx].status && item.weight === finalMerged[idx].weight && item.submitted === finalMerged[idx].submitted)) {
                 return prev;
               }
-              return merged;
+              return finalMerged;
             });
           } catch (err) {
             console.error('Failed to fetch items after migration:', err);
@@ -5711,9 +5784,30 @@ export default function App() {
 
       api.fetchItems(fetchId)
         .then(data => {
+          // Filter out items that are marked as deleted locally to avoid race conditions
+          const filteredData = data.map(newItem => {
+            if (newItem.ids && newItem.ids.length > 0) {
+              const remainingIds = newItem.ids.filter(id => !deletedDbItemIdsRef.current.has(id));
+              if (remainingIds.length === 0) return null;
+              const originalQty = newItem.quantity || newItem.ids.length;
+              const singleUnitWeight = (newItem.weight || 0) / originalQty;
+              const singleUnitPrice = (newItem.price || 0) / originalQty;
+              return {
+                ...newItem,
+                ids: remainingIds,
+                quantity: remainingIds.length,
+                weight: singleUnitWeight * remainingIds.length,
+                price: singleUnitPrice * remainingIds.length
+              };
+            } else {
+              if (deletedDbItemIdsRef.current.has(newItem.id)) return null;
+              return newItem;
+            }
+          }).filter((item): item is NonNullable<typeof item> => item !== null);
+
           setItems(prev => {
             // Map data and preserve the unpersisted custom properties from our local state (such as 'submitted')
-            const merged = data.map(newItem => {
+            const merged = filteredData.map(newItem => {
               const localItem = prev.find(p => 
                 p.id === newItem.id || 
                 ((p.name || '').toLowerCase() === (newItem.name || '').toLowerCase() && p.source === newItem.source)
@@ -5724,10 +5818,29 @@ export default function App() {
               };
             });
 
-            if (prev.length === merged.length && prev.every((item, idx) => item.id === merged[idx].id && item.status === merged[idx].status && item.weight === merged[idx].weight && item.submitted === merged[idx].submitted)) {
+            // Keep local items that are not in the fetched filteredData,
+            // but make sure they are not items we just deleted.
+            const localOnlyItems = prev.filter(p => {
+              const existsInFetched = filteredData.some(f => 
+                f.id === p.id || 
+                (f.ids && p.ids && f.ids.some(id => p.ids.includes(id))) ||
+                ((f.name || '').toLowerCase() === (p.name || '').toLowerCase() && f.source === p.source)
+              );
+              if (existsInFetched) return false;
+
+              const wasDeleted = p.ids && p.ids.length > 0 
+                ? p.ids.every(id => deletedDbItemIdsRef.current.has(id))
+                : deletedDbItemIdsRef.current.has(p.id);
+
+              return !wasDeleted;
+            });
+
+            const finalMerged = [...merged, ...localOnlyItems];
+
+            if (prev.length === finalMerged.length && prev.every((item, idx) => item.id === finalMerged[idx].id && item.status === finalMerged[idx].status && item.weight === finalMerged[idx].weight && item.submitted === finalMerged[idx].submitted)) {
               return prev;
             }
-            return merged;
+            return finalMerged;
           });
         })
         .catch(err => console.error('Failed to load items from server:', err));
@@ -6123,10 +6236,14 @@ export default function App() {
     const itemToDelete = items.find(i => i.id === id);
     setItems(prev => prev.filter(i => i.id !== id));
     
-    if (itemToDelete && dbStatus.checked && currentUser) {
+    if (itemToDelete) {
       const idsToDelete = itemToDelete.ids && itemToDelete.ids.length > 0 ? itemToDelete.ids : [id];
-      for (const dId of idsToDelete) {
-        api.deleteItem(dId).catch(err => console.error('Failed to delete item from DB:', err));
+      idsToDelete.forEach(dId => deletedDbItemIdsRef.current.add(dId));
+      
+      if (dbStatus.checked && currentUser) {
+        for (const dId of idsToDelete) {
+          api.deleteItem(dId).catch(err => console.error('Failed to delete item from DB:', err));
+        }
       }
     }
   }, [items, dbStatus.checked, currentUser]);
@@ -6174,6 +6291,8 @@ export default function App() {
     } else if (delta === -1) {
       const currentIds = [...(item.ids || [item.id])];
       const idToRemove = currentIds.pop() || id;
+      deletedDbItemIdsRef.current.add(idToRemove); // Track locally deleted item unit ID
+      
       const singleUnitWeight = item.weight / (item.quantity || 1);
       const singleUnitPrice = (item.price || 0) / (item.quantity || 1);
 
@@ -6640,6 +6759,18 @@ export default function App() {
   };
 
   const handleCheckout = async () => {
+    // Check if shop items exist and option is selected - mandatory before signing in or checkout
+    const storeItemsCheck = items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Store');
+    if (storeItemsCheck.length > 0 && !shopConsolidationOption) {
+      setShowConsolidationError(true);
+      toast.warning("Please choose a consolidation preference first: Do you want to ship other items with this order?");
+      const element = document.getElementById("consolidation-prompt-section");
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+
     // Reset coupon code inputs
     setAppliedCoupon(null);
     setCouponCodeInput('');
@@ -8354,7 +8485,7 @@ export default function App() {
                               <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                                 <div className="flex items-center gap-3">
                                   <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                                    {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <Package size={20} />}
+                                    {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
                                   </div>
                                   <div>
                                     <div className="text-sm font-bold text-slate-900">{item.name}</div>
@@ -8538,7 +8669,7 @@ export default function App() {
                         <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                              {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <Package size={20} />}
+                              {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
                             </div>
                             <div>
                               <div className="text-sm font-bold text-slate-900">{item.name}</div>
@@ -10529,7 +10660,7 @@ export default function App() {
                           <td className="px-8 py-5">
                             <div className="flex items-center gap-4">
                               <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-white transition-colors">
-                                {item.image ? <img src={item.image} className="w-full h-full object-cover rounded-xl" /> : <ImageIcon size={20} />}
+                                {item.image ? <img src={item.image} className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" /> : <ImageIcon size={20} />}
                               </div>
                               <div>
                                 <div className="text-sm font-bold text-slate-900">{item.name}</div>
@@ -11690,12 +11821,13 @@ export default function App() {
                     {/* Step 3: Pickup details */}
                     {activePickupStep === 3 && (
                       <motion.div 
+                        ref={pickupDetailsRef}
                         key="step3"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
                         transition={{ duration: 0.3 }}
-                        className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5"
+                        className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5 scroll-mt-24"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
@@ -12187,6 +12319,154 @@ export default function App() {
                                       No payment now. Your agent will share the quote when they arrive and collect after your approval.
                                     </p>
                                   </div>
+                                </div>
+
+                                {/* Consolidation Selection block for Home Pickup Booking */}
+                                <div 
+                                  id="pickup-consolidation-prompt-section"
+                                  className={`p-6 md:p-8 rounded-[2rem] border-2 transition-all duration-300 ${
+                                    showPickupConsolidationError 
+                                      ? 'bg-rose-50/60 border-rose-300 shadow-xl shadow-rose-100/40 animate-pulse' 
+                                      : 'bg-gradient-to-r from-slate-50 to-indigo-50/30 border-slate-100/80 shadow-sm'
+                                  }`}
+                                >
+                                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-dashed border-slate-200/60">
+                                    <div className="space-y-1.5 flex-1">
+                                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50/85 text-indigo-700 text-[10px] font-black uppercase tracking-wider rounded-full border border-indigo-100/65">
+                                        Consolidation Offer
+                                      </span>
+                                      <h4 className="text-lg font-black text-slate-900 flex items-center gap-2 mt-1">
+                                        <HelpCircle size={20} className="text-indigo-600 shrink-0" />
+                                        Do you want to shop Indian items from our store which will be shipped along with this?
+                                      </h4>
+                                      <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-2xl">
+                                        Multiply value with bundled shopping! Browse original Indian snacks, fashion, spices, or handicrafts and put them in this shipment box without incurring any added shipping base fee.
+                                      </p>
+                                    </div>
+                                    {showPickupConsolidationError && (
+                                      <span className="shrink-0 px-4 py-2 bg-rose-105 text-rose-700 text-xs font-black uppercase tracking-wider rounded-xl border border-rose-200 flex items-center gap-1.5 shadow-sm shadow-rose-200/20 animate-bounce">
+                                        Required
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-6">
+                                    {/* Option 1: Yes - Shop & Ship */}
+                                    <div 
+                                      onClick={() => {
+                                        setPickupConsolidationOption('shop_and_ship');
+                                        setShowPickupConsolidationError(false);
+                                        toast.success("Consolidation Option Selected: Yes - Shop & Ship");
+                                      }}
+                                      className={`cursor-pointer p-6 rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden ${
+                                        pickupConsolidationOption === 'shop_and_ship'
+                                          ? 'bg-gradient-to-br from-white to-indigo-50/10 border-indigo-600 shadow-xl shadow-indigo-100/50'
+                                          : 'bg-white border-slate-100 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-100'
+                                      }`}
+                                    >
+                                      {pickupConsolidationOption === 'shop_and_ship' && (
+                                        <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-600/5 rounded-bl-full flex items-center justify-center pointer-events-none">
+                                          <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full mr-2 mb-2" />
+                                        </div>
+                                      )}
+                                      <div className="space-y-4">
+                                        <div className={`p-3 rounded-2xl w-fit transition-colors duration-300 ${
+                                          pickupConsolidationOption === 'shop_and_ship' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-500 group-hover:bg-indigo-50 group-hover:text-indigo-600'
+                                        }`}>
+                                          <ShoppingBag size={22} />
+                                        </div>
+                                        <div>
+                                          <h5 className="font-extrabold text-slate-950 text-base leading-snug">
+                                            Yes - Shop & Ship
+                                          </h5>
+                                          <p className="text-slate-500 text-[11px] leading-relaxed mt-2 font-medium">
+                                            Enable consolidated shopping to buy food items, books, clothing from our store. Everything packs together with zero added delivery base charges.
+                                          </p>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                                        <span className={`text-[10px] font-black tracking-wider uppercase ${
+                                          pickupConsolidationOption === 'shop_and_ship' ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-505'
+                                        }`}>Add Store Goods</span>
+                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                                          pickupConsolidationOption === 'shop_and_ship' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200'
+                                        }`}>
+                                          {pickupConsolidationOption === 'shop_and_ship' && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Option 2: No - Only ship my personal items */}
+                                    <div 
+                                      onClick={() => {
+                                        setPickupConsolidationOption('pickup_only');
+                                        setShowPickupConsolidationError(false);
+                                        toast.success("Consolidation Option Selected: No - Only ship my personal items");
+                                      }}
+                                      className={`cursor-pointer p-6 rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden ${
+                                        pickupConsolidationOption === 'pickup_only'
+                                          ? 'bg-gradient-to-br from-white to-slate-50/40 border-slate-700 shadow-xl shadow-slate-200/50'
+                                          : 'bg-white border-slate-100 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-100'
+                                      }`}
+                                    >
+                                      {pickupConsolidationOption === 'pickup_only' && (
+                                        <div className="absolute top-0 right-0 w-16 h-16 bg-slate-700/5 rounded-bl-full flex items-center justify-center pointer-events-none">
+                                          <div className="w-2.5 h-2.5 bg-slate-700 rounded-full mr-2 mb-2" />
+                                        </div>
+                                      )}
+                                      <div className="space-y-4">
+                                        <div className={`p-3 rounded-2xl w-fit transition-colors duration-300 ${
+                                          pickupConsolidationOption === 'pickup_only' ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-850'
+                                        }`}>
+                                          <Truck size={22} />
+                                        </div>
+                                        <div>
+                                          <h5 className="font-extrabold text-slate-950 text-base leading-snug">
+                                            No - Only ship my personal items
+                                          </h5>
+                                          <p className="text-slate-500 text-[11px] leading-relaxed mt-2 font-medium">
+                                            Proceed with standard pickup. Only the specific items collected from my home will be forwarded. No digital store goods.
+                                          </p>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                                        <span className={`text-[10px] font-black tracking-wider uppercase ${
+                                          pickupConsolidationOption === 'pickup_only' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-505'
+                                        }`}>Doorstep Courier Only</span>
+                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                                          pickupConsolidationOption === 'pickup_only' ? 'border-slate-800 bg-slate-50' : 'border-slate-200'
+                                        }`}>
+                                          {pickupConsolidationOption === 'pickup_only' && <div className="w-2 h-2 rounded-full bg-slate-800" />}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Helper visual description card */}
+                                  {pickupConsolidationOption && (
+                                    <div 
+                                      className="mt-6 p-4 rounded-2xl bg-white border border-slate-150 shadow-sm text-xs text-slate-700 font-bold flex items-start gap-3"
+                                    >
+                                      <div className="p-1 rounded-full bg-emerald-50 text-emerald-600 mt-0.5 shrink-0">
+                                        <CheckCircle2 size={16} />
+                                      </div>
+                                      <div>
+                                        <p className="font-extrabold text-slate-900">
+                                          {pickupConsolidationOption === 'shop_and_ship' 
+                                            ? 'Shop & Ship Integration Connected!' 
+                                            : 'Direct Courier Shipment Confirmed'}
+                                        </p>
+                                        <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-0.5">
+                                          {pickupConsolidationOption === 'shop_and_ship' 
+                                            ? "Upon confirming your booking, we will prompt and support addition of genuine premium products from our Indian market in your confirmation screen."
+                                            : "We'll dispatch only your home-collected packages. Standard weights, volumes, and custom declarations will apply."
+                                          }
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
 
                                 {!currentUser && (
@@ -12894,6 +13174,206 @@ export default function App() {
                             </motion.div>
                           ))}
                         </div>
+
+                        {/* Consolidation Selection block for Shop Items */}
+                        {!mode && source === 'Store' && (
+                          <div 
+                            id="consolidation-prompt-section"
+                            className={`mt-10 p-8 rounded-[2rem] border-2 transition-all duration-300 ${
+                              showConsolidationError 
+                                ? 'bg-rose-50/60 border-rose-300 shadow-xl shadow-rose-100/40 animate-pulse' 
+                                : 'bg-gradient-to-r from-slate-50 to-indigo-50/30 border-slate-100/80 shadow-sm'
+                            }`}
+                          >
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-dashed border-slate-200/60">
+                              <div className="space-y-1.5">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50/80 text-indigo-700 text-[10px] font-black uppercase tracking-wider rounded-full border border-indigo-100/65">
+                                  Consolidation Preference
+                                </span>
+                                <h4 className="text-xl font-black text-slate-900 flex items-center gap-2 mt-1">
+                                  <HelpCircle size={22} className="text-indigo-600 shrink-0" />
+                                  Do you want to send some items along with these items?
+                                </h4>
+                                <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-2xl">
+                                  We support combining your direct purchases with items retrieved from your home or forwarded from any external seller, saving you over 60% on international shipping.
+                                </p>
+                              </div>
+                              {showConsolidationError && (
+                                <span className="shrink-0 px-4 py-2 bg-rose-100 text-rose-700 text-xs font-black uppercase tracking-wider rounded-xl border border-rose-200 flex items-center gap-1.5 shadow-sm shadow-rose-200/20">
+                                  <AlertCircle size={14} className="animate-bounce" /> Selection Required
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-8">
+                              {/* Option 1: Yes - schedule pickup */}
+                              <div 
+                                onClick={() => {
+                                  setShopConsolidationOption('pickup');
+                                  setShowConsolidationError(false);
+                                  toast.success("Home Pickup selected! You'll schedule a pickup during checkout.");
+                                }}
+                                className={`cursor-pointer p-6 rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden ${
+                                  shopConsolidationOption === 'pickup'
+                                    ? 'bg-gradient-to-br from-white to-indigo-50/10 border-indigo-600 shadow-xl shadow-indigo-100/50'
+                                    : 'bg-white border-slate-100 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-100'
+                                }`}
+                              >
+                                {shopConsolidationOption === 'pickup' && (
+                                  <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-600/5 rounded-bl-full flex items-center justify-center pointer-events-none">
+                                    <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full mr-2 mb-2" />
+                                  </div>
+                                )}
+                                <div className="space-y-4">
+                                  <div className={`p-3 rounded-2xl w-fit transition-colors duration-300 ${
+                                    shopConsolidationOption === 'pickup' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-505 group-hover:bg-indigo-50 group-hover:text-indigo-600'
+                                  }`}>
+                                    <Truck size={22} />
+                                  </div>
+                                  <div>
+                                    <h5 className="font-extrabold text-slate-950 text-base leading-snug">
+                                      Yes - i will schedule Home Pickup
+                                    </h5>
+                                    <p className="text-slate-500 text-[11px] leading-relaxed mt-2 font-medium">
+                                      Ship extra items from your house. Our dedicated agent will arrive at your door to inspect, weigh, and collect them.
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                <div className="mt-6 pt-4 border-t border-slate-105 flex items-center justify-between">
+                                  <span className={`text-[10px] font-black tracking-wider uppercase ${
+                                    shopConsolidationOption === 'pickup' ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-500'
+                                  }`}>Home Pickup</span>
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                                    shopConsolidationOption === 'pickup' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200'
+                                  }`}>
+                                    {shopConsolidationOption === 'pickup' && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Option 2: Yes - warehouse */}
+                              <div 
+                                onClick={() => {
+                                  setShopConsolidationOption('warehouse');
+                                  setShowConsolidationError(false);
+                                  toast.success("Warehouse forward selected! We'll provide forwarding instructions.");
+                                }}
+                                className={`cursor-pointer p-6 rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden ${
+                                  shopConsolidationOption === 'warehouse'
+                                    ? 'bg-gradient-to-br from-white to-emerald-50/10 border-emerald-600 shadow-xl shadow-emerald-100/40'
+                                    : 'bg-white border-slate-100 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-100'
+                                }`}
+                              >
+                                {shopConsolidationOption === 'warehouse' && (
+                                  <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-600/5 rounded-bl-full flex items-center justify-center pointer-events-none">
+                                    <div className="w-2.5 h-2.5 bg-emerald-600 rounded-full mr-2 mb-2" />
+                                  </div>
+                                )}
+                                <div className="space-y-4">
+                                  <div className={`p-3 rounded-2xl w-fit transition-colors duration-300 ${
+                                    shopConsolidationOption === 'warehouse' ? 'bg-emerald-600 text-white' : 'bg-slate-50 text-slate-505 group-hover:bg-emerald-50 group-hover:text-emerald-600'
+                                  }`}>
+                                    <Warehouse size={22} />
+                                  </div>
+                                  <div>
+                                    <h5 className="font-extrabold text-slate-950 text-base leading-snug">
+                                      Yes - i will send items to your warehouse
+                                    </h5>
+                                    <p className="text-slate-500 text-[11px] leading-relaxed mt-2 font-medium">
+                                      Mail other packages directly to our hub. We will bundle them cleanly alongside these shop items before international departure.
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                <div className="mt-6 pt-4 border-t border-slate-105 flex items-center justify-between">
+                                  <span className={`text-[10px] font-black tracking-wider uppercase ${
+                                    shopConsolidationOption === 'warehouse' ? 'text-emerald-700' : 'text-slate-400 group-hover:text-slate-500'
+                                  }`}>Warehouse Freight</span>
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                                    shopConsolidationOption === 'warehouse' ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200'
+                                  }`}>
+                                    {shopConsolidationOption === 'warehouse' && <div className="w-2 h-2 rounded-full bg-emerald-600" />}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Option 3: No - store only */}
+                              <div 
+                                onClick={() => {
+                                  setShopConsolidationOption('store_only');
+                                  setShowConsolidationError(false);
+                                  toast.success("Only Shop items selected. Standard delivery only.");
+                                }}
+                                className={`cursor-pointer p-6 rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden ${
+                                  shopConsolidationOption === 'store_only'
+                                    ? 'bg-gradient-to-br from-white to-slate-50/40 border-slate-700 shadow-xl shadow-slate-200/50'
+                                    : 'bg-white border-slate-100 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-100'
+                                }`}
+                              >
+                                {shopConsolidationOption === 'store_only' && (
+                                  <div className="absolute top-0 right-0 w-16 h-16 bg-slate-700/5 rounded-bl-full flex items-center justify-center pointer-events-none">
+                                    <div className="w-2.5 h-2.5 bg-slate-700 rounded-full mr-2 mb-2" />
+                                  </div>
+                                )}
+                                <div className="space-y-4">
+                                  <div className={`p-3 rounded-2xl w-fit transition-colors duration-300 ${
+                                    shopConsolidationOption === 'store_only' ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-505 group-hover:bg-slate-100 group-hover:text-slate-800'
+                                  }`}>
+                                    <ShoppingBag size={22} />
+                                  </div>
+                                  <div>
+                                    <h5 className="font-extrabold text-slate-950 text-base leading-snug">
+                                      No - I only need shop items
+                                    </h5>
+                                    <p className="text-slate-500 text-[11px] leading-relaxed mt-2 font-medium">
+                                      Proceed without consolidation. Send only the purchased items currently shown in your shop cart directly with standard delivery.
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                <div className="mt-6 pt-4 border-t border-slate-105 flex items-center justify-between">
+                                  <span className={`text-[10px] font-black tracking-wider uppercase ${
+                                    shopConsolidationOption === 'store_only' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-505'
+                                  }`}>Direct Shipping</span>
+                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                                    shopConsolidationOption === 'store_only' ? 'border-slate-800 bg-slate-50' : 'border-slate-200'
+                                  }`}>
+                                    {shopConsolidationOption === 'store_only' && <div className="w-2 h-2 rounded-full bg-slate-800" />}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Beautiful visual check animation / info helper inside the box */}
+                            {shopConsolidationOption && (
+                              <div 
+                                className="mt-6 p-4 rounded-2xl bg-white border border-slate-200/50 shadow-sm text-xs text-slate-750 font-bold flex items-start gap-3"
+                              >
+                                <div className="p-1 rounded-full bg-emerald-50 text-emerald-600 mt-0.5 shrink-0">
+                                  <CheckCircle2 size={16} />
+                                </div>
+                                <div>
+                                  <p className="font-extrabold text-slate-900">
+                                    {shopConsolidationOption === 'pickup' 
+                                      ? 'Home Pickup Confirmed!' 
+                                      : shopConsolidationOption === 'warehouse' 
+                                        ? 'Warehouse forwarding option recorded!' 
+                                        : 'Direct express shipment selected!'}
+                                  </p>
+                                  <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-0.5">
+                                    {shopConsolidationOption === 'pickup' 
+                                      ? "After checking out, we will smoothly guide you to schedule our courier booking agent slot for your other items."
+                                      : shopConsolidationOption === 'warehouse'
+                                        ? "Perfect! We'll generate a dedicated JiffEX warehouse shipping address so you can self-forward packages from Amazon, eBay, etc."
+                                        : "We will handle packaging and dispatch of your shop items immediately without any extra consolidation steps."
+                                    }
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -13326,7 +13806,7 @@ export default function App() {
                   )}
                 </AnimatePresence>
                 <div className="aspect-square overflow-hidden relative">
-                  <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                  <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
                   <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-600">
                     {product.category}
                   </div>
@@ -13508,9 +13988,62 @@ export default function App() {
               }
             </p>
           </div>
-          <div className="flex justify-center">
+
+          {/* Custom consolidation guidance on payment success */}
+          {shopConsolidationOption === 'pickup' && (
+            <div className="p-6 bg-indigo-50 border border-indigo-100 rounded-3xl text-left space-y-3 max-w-xl mx-auto shadow-sm">
+              <h4 className="font-black text-indigo-950 text-base flex items-center gap-2">
+                <Truck className="text-indigo-600 animate-bounce" size={20} />
+                Now, let's schedule your Home Pickup!
+              </h4>
+              <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                Since you chose to send additional items via Home Pickup, our courier agent can collect them from your address. Click below to book your pickup slot.
+              </p>
+              <button
+                onClick={() => {
+                  navigateTo('pickup');
+                  setIsPaid(false);
+                  setOrderId(null);
+                  setShopConsolidationOption(null);
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow shadow-indigo-200"
+              >
+                Schedule Home Pickup Now →
+              </button>
+            </div>
+          )}
+
+          {shopConsolidationOption === 'warehouse' && (
+            <div className="p-6 bg-emerald-50 border border-emerald-100/65 rounded-3xl text-left space-y-3 max-w-xl mx-auto shadow-sm">
+              <h4 className="font-black text-emerald-950 text-base flex items-center gap-2">
+                <Warehouse className="text-emerald-700 animate-pulse" size={20} />
+                Next Step: Send items to our Warehouse
+              </h4>
+              <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                You decided to mail more items directly to our forwarding hub. We've compiled your customized forwarding instructions. Click below to view them.
+              </p>
+              <button
+                onClick={() => {
+                  navigateTo('warehouse');
+                  setIsPaid(false);
+                  setOrderId(null);
+                  setShopConsolidationOption(null);
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow shadow-emerald-200"
+              >
+                Get Warehouse Mailing Address →
+              </button>
+            </div>
+          )}
+
+          <div className="flex justify-center pt-2">
             <button 
-              onClick={() => { navigateTo('history'); setIsPaid(false); setOrderId(null); }}
+              onClick={() => { 
+                navigateTo('history'); 
+                setIsPaid(false); 
+                setOrderId(null); 
+                setShopConsolidationOption(null);
+              }}
               className="w-full md:w-2/3 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition-all"
             >
               {isWarehouseCheckout ? 'Go to My Orders' : 'View Order History'}
@@ -13941,7 +14474,7 @@ export default function App() {
         </div>
       </div>
     );
-  }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser, currentUser?.id, handleFinalPayment, shippingPreference, appointments, pickupAddress, pickupName, pickupPhone, orderedItemIds]);
+  }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser, currentUser?.id, handleFinalPayment, shippingPreference, appointments, pickupAddress, pickupName, pickupPhone, orderedItemIds, shopConsolidationOption]);
 
   if (authLoading) {
     return (
@@ -13952,18 +14485,24 @@ export default function App() {
   }
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    const wasGuest = isGuestMode;
-    setIsGuestMode(false);
-    setGuestEmail('');
-    
-    // Clear all local state on logout
+    // 1. Immediately and synchronously clear all local state and items to avoid transition lag or state re-fetching
     setItems([]);
     setOrders([]);
+    setSession(null);
+    setCurrentUser(null);
+    setIsGuestMode(false);
+    setGuestEmail('');
     setActivePickupStep(1);
     setLastBookingRef(null);
     setIsSchedulingNewPickup(false);
     setShowPickupConfirmModal(false);
+    
+    // 2. Perform background async Supabase signOut
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('Supabase signOut background error:', err);
+    }
     
     setAddress({
       fullName: '',

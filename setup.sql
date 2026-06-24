@@ -43,10 +43,12 @@ ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read items" ON items FOR SELECT USING (true);
 CREATE POLICY "Allow public insert items" ON items FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update items" ON items FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete items" ON items FOR DELETE USING (true);
 
 CREATE POLICY "Allow public read orders" ON orders FOR SELECT USING (true);
 CREATE POLICY "Allow public insert orders" ON orders FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update orders" ON orders FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete orders" ON orders FOR DELETE USING (true);
 
 -- Create the 'products' table for the store
 CREATE TABLE IF NOT EXISTS products (

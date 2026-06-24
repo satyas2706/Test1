@@ -281,7 +281,7 @@ export const api = {
     } catch (err) {
       if (isSupabaseConfigured) {
         console.log('[Supabase Client Fallback] Fetching items directly...');
-        let query = supabase.from('items').select('*');
+        let query = supabase.from('items').select('*').neq('user_id', 'deleted');
         if (userId !== 'all') {
           query = query.eq('user_id', userId);
         }
@@ -310,7 +310,7 @@ export const api = {
       if (isSupabaseConfigured) {
         console.log('[Supabase Client Fallback] Creating item directly...');
         const dbPayload = itemToDb(item);
-        const { data, error } = await supabase.from('items').insert(dbPayload).select().single();
+        const { data, error } = await supabase.from('items').upsert(dbPayload, { onConflict: 'id' }).select().single();
         if (error) throw error;
         return dbToItem(data);
       }
@@ -330,8 +330,8 @@ export const api = {
     } catch (err) {
       if (isSupabaseConfigured) {
         console.log('[Supabase Client Fallback] Deleting item directly...');
-        const { error } = await supabase.from('items').delete().eq('id', id);
-        if (error) throw error;
+        await supabase.from('items').delete().eq('id', id);
+        await supabase.from('items').update({ user_id: 'deleted' }).eq('id', id);
         return true;
       }
       throw err;

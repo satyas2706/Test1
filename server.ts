@@ -741,8 +741,17 @@ app.delete("/api/items/:id", async (req, res) => {
   }
 
   try {
-    const { error } = await supabase.from('items').delete().eq('id', id);
-    if (error) throw error;
+    // Attempt delete
+    const { error: deleteError } = await supabase.from('items').delete().eq('id', id);
+    
+    // In case the DELETE is silently blocked by missing RLS delete policies, also update the user_id to 'deleted'
+    // so it is excluded from future fetch queries
+    const { error: updateError } = await supabase.from('items').update({ user_id: 'deleted' }).eq('id', id);
+    
+    if (deleteError && updateError) {
+      throw new Error(`Delete failed: ${deleteError.message}. Update fallback failed: ${updateError.message}`);
+    }
+    
     res.json({ success: true });
   } catch (err: any) {
     console.error("Delete Item Error:", err.message);
@@ -765,7 +774,7 @@ app.get("/api/items/:userId", async (req, res) => {
   }
 
   try {
-    let query = supabase.from('items').select('*');
+    let query = supabase.from('items').select('*').neq('user_id', 'deleted');
     if (userId !== 'all') {
       query = query.eq('user_id', userId);
     }
@@ -808,7 +817,7 @@ app.post("/api/items", async (req, res) => {
     if (req.body.price !== undefined) itemData.price = req.body.price;
     if (req.body.image) itemData.image = req.body.image;
 
-    const { data, error } = await supabase.from('items').insert(itemData).select().single();
+    const { data, error } = await supabase.from('items').upsert(itemData, { onConflict: 'id' }).select().single();
     if (error) throw error;
     res.json(data);
   } catch (err: any) {
