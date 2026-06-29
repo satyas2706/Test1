@@ -799,7 +799,8 @@ app.post("/api/items", async (req, res) => {
       status: req.body.status || 'Received at Warehouse',
       source: req.body.source || 'Pickup',
       price: req.body.price,
-      image: req.body.image
+      image: req.body.image,
+      submitted: req.body.submitted !== undefined ? req.body.submitted : (req.body.source ? req.body.source !== 'Warehouse' : true)
     };
     memItems.push(itemData);
     saveDb();
@@ -816,11 +817,41 @@ app.post("/api/items", async (req, res) => {
     if (req.body.source) itemData.source = req.body.source;
     if (req.body.price !== undefined) itemData.price = req.body.price;
     if (req.body.image) itemData.image = req.body.image;
+    itemData.submitted = req.body.submitted !== undefined ? req.body.submitted : (req.body.source ? req.body.source !== 'Warehouse' : true);
 
     const { data, error } = await supabase.from('items').upsert(itemData, { onConflict: 'id' }).select().single();
-    if (error) throw error;
+    if (error) {
+      if (error.code === '42703' || (error.message && error.message.includes('submitted'))) {
+        console.warn("[Self-Heal] Missing 'submitted' column in Supabase items table during upsert. Retrying without it.");
+        const { submitted, ...safeItemData } = itemData;
+        const { data: retryData, error: retryError } = await supabase.from('items').upsert(safeItemData, { onConflict: 'id' }).select().single();
+        if (retryError) throw retryError;
+        return res.json(retryData);
+      }
+      throw error;
+    }
     res.json(data);
   } catch (err: any) {
+    if (err.code === '42703' || (err.message && err.message.includes('submitted'))) {
+      console.warn("[Self-Heal Catch] Missing 'submitted' column in Supabase items table. Stripping and retrying.");
+      try {
+        const itemData: any = {};
+        if (req.body.id) itemData.id = req.body.id;
+        itemData.user_id = req.body.user_id || req.body.userId || req.body.customer_id || req.body.customerId;
+        if (req.body.name) itemData.name = req.body.name;
+        if (req.body.weight !== undefined) itemData.weight = req.body.weight;
+        if (req.body.status) itemData.status = req.body.status;
+        if (req.body.source) itemData.source = req.body.source;
+        if (req.body.price !== undefined) itemData.price = req.body.price;
+        if (req.body.image) itemData.image = req.body.image;
+        const { data: retryData, error: retryError } = await supabase.from('items').upsert(itemData, { onConflict: 'id' }).select().single();
+        if (retryError) throw retryError;
+        return res.json(retryData);
+      } catch (retryErr: any) {
+        console.error("Create Item Retry Error:", retryErr.message);
+        return res.status(500).json({ error: retryErr.message });
+      }
+    }
     console.error("Create Item Error:", err.message);
     res.status(500).json({ error: err.message });
   }
@@ -1060,6 +1091,44 @@ app.patch("/api/items/:itemId/weight", async (req, res) => {
     res.json({ success: true });
   } catch (err: any) {
     console.error("Update Item Weight Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: Update item submitted status
+app.patch("/api/items/:itemId/submitted", async (req, res) => {
+  const { itemId } = req.params;
+  const { submitted } = req.body;
+
+  if (!supabase) {
+    const idx = memItems.findIndex(i => i.id === itemId);
+    if (idx > -1) {
+      memItems[idx].submitted = !!submitted;
+      saveDb();
+      return res.json({ success: true });
+    }
+    return res.status(404).json({ error: "Item not found" });
+  }
+
+  try {
+    const { error } = await supabase
+      .from('items')
+      .update({ submitted: !!submitted })
+      .eq('id', itemId);
+    if (error) {
+      if (error.code === '42703' || (error.message && error.message.includes('submitted'))) {
+        console.warn("[Self-Heal] Missing 'submitted' column in Supabase items table during update. Swallowing error and continuing.");
+        return res.json({ success: true, warning: 'Missing submitted column' });
+      }
+      throw error;
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    if (err.code === '42703' || (err.message && err.message.includes('submitted'))) {
+      console.warn("[Self-Heal Catch] Missing 'submitted' column in Supabase items table. Swallowing error and continuing.");
+      return res.json({ success: true, warning: 'Missing submitted column' });
+    }
+    console.error("Update Item Submitted Error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });

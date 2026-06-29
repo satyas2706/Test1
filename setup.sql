@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS items (
   source TEXT NOT NULL,
   price DECIMAL DEFAULT 0,
   image TEXT,
+  submitted BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

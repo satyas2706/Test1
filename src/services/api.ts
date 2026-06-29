@@ -41,7 +41,9 @@ function dbToItem(dbItem: any): ShippingItem {
     price: dbItem.price || 0,
     image: dbItem.image || '',
     estimatedDelivery: dbItem.estimated_delivery || dbItem.estimatedDelivery || '',
-    submitted: dbItem.submitted !== undefined ? dbItem.submitted : dbItem.source !== 'Warehouse'
+    submitted: (dbItem.submitted !== undefined && dbItem.submitted !== null) 
+      ? (dbItem.submitted === true || dbItem.submitted === 'true') 
+      : dbItem.source !== 'Warehouse'
   } as ShippingItem;
 }
 
@@ -517,6 +519,35 @@ export const api = {
         console.log('[Supabase Client Fallback] Updating item status directly...');
         const { data, error } = await supabase.from('items').update({ status }).eq('id', itemId).select().single();
         if (error) throw error;
+        return dbToItem(data);
+      }
+      throw err;
+    }
+  },
+
+  async updateItemSubmitted(itemId: string, submitted: boolean, ...args: any[]) {
+    try {
+      const response = await fetch(`${API_URL}/api/items/${itemId}/submitted`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submitted }),
+      });
+      if (response.ok) {
+        const rawData = await response.json();
+        return dbToItem(rawData);
+      }
+      throw new Error('Update item submitted status endpoint not reachable');
+    } catch (err) {
+      if (isSupabaseConfigured) {
+        console.log('[Supabase Client Fallback] Updating item submitted status directly...');
+        const { data, error } = await supabase.from('items').update({ submitted }).eq('id', itemId).select().single();
+        if (error) {
+          if (error.code === '42703' || (error.message && error.message.includes('submitted'))) {
+            console.warn('[Self-Heal Client Fallback] Missing submitted column, continuing gracefully.');
+            return { id: itemId } as any;
+          }
+          throw error;
+        }
         return dbToItem(data);
       }
       throw err;

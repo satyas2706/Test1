@@ -4233,6 +4233,7 @@ export default function App() {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showServicesDropdown, setShowServicesDropdown] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showNewOrderMenu, setShowNewOrderMenu] = useState(false);
   const [navbarTrackingId, setNavbarTrackingId] = useState('');
 
   const navigateTo = (tab: Tab) => {
@@ -4304,12 +4305,26 @@ export default function App() {
   const [isPaid, setIsPaid] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
-  const [items, setItems] = useState<ShippingItem[]>([]);
+  const [items, setItems] = useState<ShippingItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('jiffex_cart_items');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const itemsRef = useRef<ShippingItem[]>([]);
   useEffect(() => {
+    try {
+      localStorage.setItem('jiffex_cart_items', JSON.stringify(items));
+    } catch (e) {
+      console.warn('Failed to persist cart items to localStorage:', e);
+    }
     itemsRef.current = items;
   }, [items]);
+  const isMigratingRef = useRef(false);
   const deletedDbItemIdsRef = useRef<Set<string>>(new Set());
+  const orderedItemIdsRef = useRef<Set<string>>(new Set());
   const [quote, setQuote] = useState<{ country: string; weight: number } | null>(null);
   const [address, setAddress] = useState<DestinationAddress>({
     fullName: '',
@@ -5677,62 +5692,71 @@ export default function App() {
 
       // Detect and migrate any guest items to the current logged-in user
       const guestItems = itemsRef.current.filter(i => !i.user_id && !i.userId);
-      if (guestItems.length > 0 && !isAdminOrAgent) {
+      if (guestItems.length > 0 && !isAdminOrAgent && !isMigratingRef.current) {
+        isMigratingRef.current = true;
         console.log(`[Cart Migration] Found ${guestItems.length} guest items to migrate for user ${uId}`);
         
         const runMigration = async () => {
-          for (const item of guestItems) {
-            const qty = item.quantity || 1;
-            const singleWeight = (item.weight || 0) / qty;
-            const singlePrice = (item.price || 0) / qty;
-            const idsList = item.ids && item.ids.length > 0 ? item.ids : [item.id];
-            
-            for (const dId of idsList) {
-              try {
-                await api.createItem({
-                  id: dId,
+          try {
+            // Immutably associate local items with the logged-in user immediately to prevent duplicate runs
+            setItems(prev => prev.map(item => {
+              if (!item.user_id && !item.userId) {
+                return {
+                  ...item,
                   user_id: uId,
-                  name: item.name,
-                  weight: singleWeight,
-                  price: singlePrice,
-                  status: item.status,
-                  source: item.source,
-                  image: item.image,
-                  submitted: item.submitted
-                } as any);
-              } catch (err) {
-                console.error('[Cart Migration] Failed to migrate item unit:', err);
+                  userId: uId
+                };
+              }
+              return item;
+            }));
+
+            for (const item of guestItems) {
+              const qty = item.quantity || 1;
+              const singleWeight = (item.weight || 0) / qty;
+              const singlePrice = (item.price || 0) / qty;
+              const idsList = item.ids && item.ids.length > 0 ? item.ids : [item.id];
+              
+              for (const dId of idsList) {
+                try {
+                  await api.createItem({
+                    id: dId,
+                    user_id: uId,
+                    name: item.name,
+                    weight: singleWeight,
+                    price: singlePrice,
+                    status: item.status,
+                    source: item.source,
+                    image: item.image,
+                    submitted: item.submitted
+                  } as any);
+                } catch (err) {
+                  console.error('[Cart Migration] Failed to migrate item unit:', err);
+                }
               }
             }
-          }
-          
-          // Clear current local guest items so they don't trigger migration repeatedly
-          guestItems.forEach(i => {
-            i.user_id = uId;
-            i.userId = uId;
-          });
 
-          // Fetch the fresh list from database
-          try {
+            // Fetch the fresh list from database
             const data = await api.fetchItems(fetchId);
             
-            // Filter out items that are marked as deleted locally to avoid race conditions
+            // Filter out items that are marked as deleted locally or already ordered to avoid race conditions
             const filteredData = data.map(newItem => {
               if (newItem.ids && newItem.ids.length > 0) {
-                const remainingIds = newItem.ids.filter(id => !deletedDbItemIdsRef.current.has(id));
+                const remainingIds = newItem.ids.filter(id => !deletedDbItemIdsRef.current.has(id) && !orderedItemIdsRef.current.has(id));
                 if (remainingIds.length === 0) return null;
                 const originalQty = newItem.quantity || newItem.ids.length;
                 const singleUnitWeight = (newItem.weight || 0) / originalQty;
                 const singleUnitPrice = (newItem.price || 0) / originalQty;
+                const repId = remainingIds.includes(newItem.id) ? newItem.id : remainingIds[0];
                 return {
                   ...newItem,
+                  id: repId,
                   ids: remainingIds,
                   quantity: remainingIds.length,
                   weight: singleUnitWeight * remainingIds.length,
                   price: singleUnitPrice * remainingIds.length
                 };
               } else {
-                if (deletedDbItemIdsRef.current.has(newItem.id)) return null;
+                if (deletedDbItemIdsRef.current.has(newItem.id) || orderedItemIdsRef.current.has(newItem.id)) return null;
                 return newItem;
               }
             }).filter((item): item is NonNullable<typeof item> => item !== null);
@@ -5775,6 +5799,8 @@ export default function App() {
             });
           } catch (err) {
             console.error('Failed to fetch items after migration:', err);
+          } finally {
+            isMigratingRef.current = false;
           }
         };
 
@@ -5784,23 +5810,25 @@ export default function App() {
 
       api.fetchItems(fetchId)
         .then(data => {
-          // Filter out items that are marked as deleted locally to avoid race conditions
+          // Filter out items that are marked as deleted locally or already ordered to avoid race conditions
           const filteredData = data.map(newItem => {
             if (newItem.ids && newItem.ids.length > 0) {
-              const remainingIds = newItem.ids.filter(id => !deletedDbItemIdsRef.current.has(id));
+              const remainingIds = newItem.ids.filter(id => !deletedDbItemIdsRef.current.has(id) && !orderedItemIdsRef.current.has(id));
               if (remainingIds.length === 0) return null;
               const originalQty = newItem.quantity || newItem.ids.length;
               const singleUnitWeight = (newItem.weight || 0) / originalQty;
               const singleUnitPrice = (newItem.price || 0) / originalQty;
+              const repId = remainingIds.includes(newItem.id) ? newItem.id : remainingIds[0];
               return {
                 ...newItem,
+                id: repId,
                 ids: remainingIds,
                 quantity: remainingIds.length,
                 weight: singleUnitWeight * remainingIds.length,
                 price: singleUnitPrice * remainingIds.length
               };
             } else {
-              if (deletedDbItemIdsRef.current.has(newItem.id)) return null;
+              if (deletedDbItemIdsRef.current.has(newItem.id) || orderedItemIdsRef.current.has(newItem.id)) return null;
               return newItem;
             }
           }).filter((item): item is NonNullable<typeof item> => item !== null);
@@ -6094,6 +6122,10 @@ export default function App() {
     return ids;
   }, [orders]);
 
+  useEffect(() => {
+    orderedItemIdsRef.current = orderedItemIds;
+  }, [orderedItemIds]);
+
   const cartItems = useMemo(() => {
     return items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
   }, [items, orderedItemIds]);
@@ -6157,6 +6189,7 @@ export default function App() {
     const existingItemIndex = items.findIndex(i => 
       (i.name || '').toLowerCase() === (item.name || '').toLowerCase() && 
       i.source === source && 
+      !orderedItemIds.has(i.id) &&
       (source !== 'Warehouse' || i.submitted === false)
     );
 
@@ -6230,7 +6263,7 @@ export default function App() {
         console.error('Failed to sync item to DB:', err.message);
       }
     }
-  }, [items, dbStatus.checked, currentUser, sessionGuestId]);
+  }, [items, dbStatus.checked, currentUser, sessionGuestId, orderedItemIds]);
 
   const removeItem = useCallback((id: string) => {
     const itemToDelete = items.find(i => i.id === id);
@@ -6316,7 +6349,7 @@ export default function App() {
   }, [items, dbStatus.checked, currentUser, removeItem]);
 
   const removeStoreItem = useCallback((name: string) => {
-    const item = items.find(i => (i.name || '').toLowerCase() === name.toLowerCase() && i.source === 'Store');
+    const item = items.find(i => (i.name || '').toLowerCase() === name.toLowerCase() && i.source === 'Store' && !orderedItemIds.has(i.id));
     if (!item) return;
     
     if ((item.quantity || 1) <= 1) {
@@ -6324,7 +6357,7 @@ export default function App() {
     } else {
       updateItemQuantity(item.id, -1);
     }
-  }, [items, removeItem, updateItemQuantity]);
+  }, [items, removeItem, updateItemQuantity, orderedItemIds]);
 
   const updateOrderItemStatus = async (orderId: string, itemId: string, status: ShippingStatus) => {
     setOrders(prevOrders => {
@@ -7687,7 +7720,7 @@ export default function App() {
       return (
         <div className="space-y-24 pb-24">
           {/* JIFFEX Truck Hero Section */}
-          <div className="relative overflow-hidden rounded-[4rem] bg-slate-900 text-white p-12 md:p-20 shadow-2xl">
+          <div className="relative overflow-hidden rounded-none md:rounded-[4rem] bg-slate-900 text-white px-0 pt-6 pb-0 sm:p-12 md:p-20 shadow-2xl">
             <div 
               className="absolute inset-0 pointer-events-none"
               style={{
@@ -7695,100 +7728,197 @@ export default function App() {
               }}
             />
 
-            <div className="relative z-10 flex flex-col items-center text-center space-y-12">
-              <div className="space-y-8 max-w-4xl">
-                <div className="space-y-6">
+            <div className="relative z-10 flex flex-col items-center text-center space-y-8 md:space-y-12 w-full">
+              <div className="space-y-6 md:space-y-8 max-w-4xl px-4 md:px-0">
+                <div className="space-y-4 md:space-y-6">
                   <motion.h1 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-5xl md:text-8xl font-black tracking-tighter leading-tight text-white"
+                    className="text-3xl sm:text-5xl md:text-8xl font-black tracking-tighter leading-tight text-white"
                   >
-                    Send Anything from India to Abroad—<span className="relative inline-block">Hassle-Free<div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-2/3 h-1.5 bg-amber-500 rounded-full" /></span>
+                    Send Anything from India to Abroad—<span className="relative inline-block">Hassle-Free<div className="absolute -bottom-1 md:-bottom-2 left-1/2 -translate-x-1/2 w-2/3 h-1 md:h-1.5 bg-amber-500 rounded-full" /></span>
                   </motion.h1>
                   <motion.p 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="text-xl md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto"
+                    className="text-sm sm:text-xl md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto"
                   >
                     Shop online, schedule pickup, or send your own items. We handle packing & delivery.
                   </motion.p>
                 </div>
               </div>
 
-              <div className="space-y-8 w-full">
+              {/* Mobile View: Dedicated Unified White Container */}
+              <div className="md:hidden w-full px-0">
+                <div className="bg-white rounded-none p-5 shadow-xl border-y border-slate-100 text-slate-800 space-y-6 text-left">
+                  {/* Header */}
+                  <div className="text-center">
+                    <h3 className="text-base font-black text-slate-900 tracking-tight">What would you like to do?</h3>
+                  </div>
+
+                  {/* Three Side-by-Side Cards */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {/* Card 1: Schedule Pickup */}
+                    <div 
+                      onClick={() => {
+                        navigateTo('pickup');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                    >
+                      <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+                        <Truck className="w-5 h-5 text-indigo-600" />
+                      </div>
+                      <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Schedule Pickup</h4>
+                      <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Schedule</span>
+                    </div>
+
+                    {/* Card 2: Drop off package */}
+                    <div 
+                      onClick={() => {
+                        navigateTo('warehouse');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="cursor-pointer bg-white border border-slate-100 hover:border-emerald-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                    >
+                      <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center">
+                        <Package className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <h4 className="font-extrabold text-[9px] text-emerald-950 leading-tight">Drop Off Package</h4>
+                      <span className="text-[8px] bg-emerald-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full font-black">Drop Off</span>
+                    </div>
+
+                    {/* Card 3: Shop & Ship */}
+                    <div 
+                      onClick={() => {
+                        navigateTo('store');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="cursor-pointer bg-white border border-slate-100 hover:border-amber-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                    >
+                      <div className="w-9 h-9 bg-amber-50 rounded-lg flex items-center justify-center">
+                        <ShoppingBag className="w-5 h-5 text-amber-600" />
+                      </div>
+                      <h4 className="font-extrabold text-[9px] text-amber-950 leading-tight">Shop & Ship</h4>
+                      <span className="text-[8px] bg-amber-500 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Shop</span>
+                    </div>
+                  </div>
+
+                  {/* Below service cards, put how jiffex works side by side under the same white background */}
+                  <div className="border-t border-slate-100 pt-4 space-y-3">
+                    <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100/80 divide-y divide-slate-100">
+                      {[
+                        { icon: Calendar, title: "Book in 30 Seconds", desc: "Quick & easy pickup", color: "bg-indigo-50 text-indigo-600" },
+                        { icon: ShoppingBag, title: "Add items from Anywhere", desc: "From home, shop or any store", color: "bg-amber-50 text-amber-600" },
+                        { icon: Truck, title: "We Combine Everything", desc: "Pack & store in our warehouse", color: "bg-emerald-50 text-emerald-600" },
+                        { icon: CheckCircle2, title: "Delivered to Your Doorstep", desc: "Global delivery made easy", color: "bg-blue-50 text-blue-600" }
+                      ].map((step, idx) => {
+                        const StepIcon = step.icon;
+                        return (
+                          <div key={idx} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+                            <div className={`w-7 h-7 rounded-lg ${step.color} flex items-center justify-center shrink-0 mt-0.5`}>
+                              <StepIcon size={14} className="font-black" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h5 className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                                {step.title}
+                              </h5>
+                              <p className="text-[10px] text-slate-500 font-medium leading-normal mt-0.5">
+                                {step.desc}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Laptop / Desktop only view for the service selectors */}
+              <div className="hidden md:block space-y-6 md:space-y-8 w-full">
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.3 }}
-                  className="text-sm font-bold text-indigo-400 uppercase tracking-widest"
+                  className="text-xs sm:text-sm font-bold text-indigo-400 uppercase tracking-widest"
                 >
-                  Choose how you want to send:
+                  <span className="hidden md:inline">Choose how you want to send:</span>
                 </motion.p>
 
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-5xl mx-auto"
+                  className="grid grid-cols-3 md:grid-cols-3 gap-2 md:gap-6 max-w-5xl mx-auto"
                 >
                   {/* Card 1: Pickup from Home */}
-                  <div className="relative bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
-                      <span className="px-4 py-1.5 bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-amber-200">
+                  <div 
+                    onClick={() => navigateTo('pickup')}
+                    className="relative cursor-pointer bg-indigo-50/90 border-indigo-100 md:bg-white md:border-slate-100 p-2.5 sm:p-8 rounded-[1.2rem] md:rounded-[2.5rem] shadow-md md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                  >
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap">
+                      <span className="px-1.5 py-0.5 bg-amber-500 text-white text-[6px] md:text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-amber-200">
                         Most Popular
                       </span>
                     </div>
-                    <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <Truck size={40} className="text-indigo-600" />
+                    <div className="w-10 h-10 md:w-20 md:h-20 bg-indigo-100/80 md:bg-indigo-50 rounded-xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <Truck className="w-5 h-5 md:w-10 md:h-10 text-indigo-600" />
                     </div>
-                    <div className="space-y-3 flex-grow">
-                      <h3 className="font-black text-2xl text-slate-900">Schedule Pickup</h3>
-                      <p className="text-slate-500 leading-relaxed">
+                    <div className="space-y-1 md:space-y-3 flex-grow">
+                      <h3 className="font-black text-[10px] xs:text-xs md:text-2xl text-indigo-950 md:text-slate-900 leading-tight">Schedule Pickup</h3>
+                      <p className="hidden md:block text-xs sm:text-sm text-slate-500 leading-relaxed">
                         We collect items from your doorstep, pack & ship internationally
                       </p>
                     </div>
                     <button 
-                      onClick={() => navigateTo('pickup')}
-                      className="w-full btn-cta"
+                      onClick={(e) => { e.stopPropagation(); navigateTo('pickup'); }}
+                      className="w-full py-1.5 md:py-4 bg-indigo-600 text-white rounded-lg md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-[9px] md:text-sm"
                     >
-                      Schedule Pickup
+                      Schedule
                     </button>
                   </div>
 
                   {/* Card 2: Send to Our Warehouse */}
-                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-                    <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <Package size={40} className="text-indigo-600" />
+                  <div 
+                    onClick={() => navigateTo('warehouse')}
+                    className="cursor-pointer bg-emerald-50/90 border-emerald-100 md:bg-white md:border-slate-100 p-2.5 sm:p-8 rounded-[1.2rem] md:rounded-[2.5rem] shadow-md md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                  >
+                    <div className="w-10 h-10 md:w-20 md:h-20 bg-emerald-100/80 md:bg-indigo-50 rounded-xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <Package className="w-5 h-5 md:w-10 md:h-10 text-emerald-600 md:text-indigo-600" />
                     </div>
-                    <div className="space-y-3 flex-grow">
-                      <h3 className="font-black text-2xl text-slate-900">Drop Off Package</h3>
-                      <p className="text-slate-500 leading-relaxed">
+                    <div className="space-y-1 md:space-y-3 flex-grow">
+                      <h3 className="font-black text-[10px] xs:text-xs md:text-2xl text-emerald-950 md:text-slate-900 leading-tight">Drop Off Package</h3>
+                      <p className="hidden md:block text-xs sm:text-sm text-slate-500 leading-relaxed">
                         Ship your items to our warehouse—we pack & deliver abroad
                       </p>
                     </div>
                     <button 
-                      onClick={() => navigateTo('warehouse')}
-                      className="w-full btn-cta"
+                      onClick={(e) => { e.stopPropagation(); navigateTo('warehouse'); }}
+                      className="w-full py-1.5 md:py-4 bg-emerald-600 md:bg-indigo-600 text-white rounded-lg md:rounded-2xl font-bold hover:bg-emerald-700 md:hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-[9px] md:text-sm"
                     >
-                      Drop Off Package
+                      Drop Off
                     </button>
                   </div>
 
                   {/* Card 3: Shop & Send */}
-                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
-                    <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <ShoppingBag size={40} className="text-indigo-600" />
+                  <div 
+                    onClick={() => navigateTo('store')}
+                    className="cursor-pointer bg-amber-50/90 border-amber-100 md:bg-white md:border-slate-100 p-2.5 sm:p-8 rounded-[1.2rem] md:rounded-[2.5rem] shadow-md md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                  >
+                    <div className="w-10 h-10 md:w-20 md:h-20 bg-amber-100/80 md:bg-indigo-50 rounded-xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <ShoppingBag className="w-5 h-5 md:w-10 md:h-10 text-amber-600 md:text-indigo-600" />
                     </div>
-                    <div className="space-y-3 flex-grow">
-                      <h3 className="font-black text-2xl text-slate-900">Shop & Ship</h3>
-                      <p className="text-slate-500 leading-relaxed">
+                    <div className="space-y-1 md:space-y-3 flex-grow">
+                      <h3 className="font-black text-[10px] xs:text-xs md:text-2xl text-amber-950 md:text-slate-900 leading-tight">Shop & Ship</h3>
+                      <p className="hidden md:block text-xs sm:text-sm text-slate-500 leading-relaxed">
                         Buy authentic Indian products—we deliver anywhere abroad
                       </p>
                     </div>
                     <button 
-                      onClick={() => navigateTo('store')}
-                      className="w-full btn-cta"
+                      onClick={(e) => { e.stopPropagation(); navigateTo('store'); }}
+                      className="w-full py-1.5 md:py-4 bg-amber-500 md:bg-indigo-600 text-white rounded-lg md:rounded-2xl font-bold hover:bg-amber-600 md:hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-[9px] md:text-sm"
                     >
                       Shop Now
                     </button>
@@ -7808,12 +7938,12 @@ export default function App() {
                         element.scrollIntoView({ behavior: 'smooth' });
                       }
                     }}
-                    className="px-6 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-full font-bold flex items-center gap-2 transition-all group text-lg"
+                    className="hidden md:flex px-6 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-full font-bold items-center gap-2 transition-all group text-lg"
                   >
                     Not sure? <span className="underline underline-offset-4 transition-colors">See how it works</span>
                   </button>
                   
-                  <div className="h-6 w-px bg-slate-800 hidden sm:block" />
+                  <div className="h-6 w-px bg-slate-800 hidden md:block" />
                   
                   <div className="flex items-center gap-3 text-slate-400 font-medium text-lg">
                     <span className="text-amber-400 text-2xl">⭐</span> Trusted by 1000+ customers • Delivered worldwide
@@ -7824,7 +7954,7 @@ export default function App() {
           </div>
 
           {/* How JiffEX Works - Value Prop */}
-          <div id="how-it-works" className="space-y-12 scroll-mt-24">
+          <div id="how-it-works" className="hidden md:block space-y-12 scroll-mt-24">
             <div className="text-center space-y-4">
               <h3 className="text-4xl font-black text-slate-900 tracking-tight">How JiffEX Works</h3>
               <p className="text-slate-500 max-w-2xl mx-auto">A seamless, unified shipping experience designed for your convenience.</p>
@@ -7865,7 +7995,7 @@ export default function App() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="relative overflow-hidden rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-700 p-12 text-white shadow-2xl"
+            className="hidden md:block relative overflow-hidden rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-700 p-12 text-white shadow-2xl"
           >
             <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl" />
@@ -8003,7 +8133,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="lg:col-span-3">
+            <div className="hidden md:block lg:col-span-3">
               <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-10 rounded-[3rem] text-white flex flex-col md:flex-row items-center gap-10 relative overflow-hidden h-full">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -mr-32 -mt-32" />
                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -ml-32 -mb-32" />
@@ -8022,7 +8152,7 @@ export default function App() {
           </div>
 
           {/* Featured Products from Shop - Moved to Last */}
-          <div className="space-y-8">
+          <div className="hidden md:block space-y-8">
             <div className="flex items-end justify-between">
               <div>
                 <h3 className="text-3xl font-black text-slate-900">
@@ -8040,7 +8170,7 @@ export default function App() {
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {storeProducts.slice(0, 4).map(product => {
-                const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
+                const cartItem = items.find(i => i.name === product.name && i.source === 'Store' && !orderedItemIds.has(i.id));
                 const itemCount = cartItem?.quantity || 0;
                 
                 return (
@@ -10861,7 +10991,7 @@ export default function App() {
         </div>
         <div className="grid grid-cols-1 gap-4">
           {storeProducts.slice(0, 3).map(product => {
-            const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
+            const cartItem = items.find(i => i.name === product.name && i.source === 'Store' && !orderedItemIds.has(i.id));
             const itemCount = cartItem?.quantity || 0;
             return (
               <div key={product.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex gap-4 relative">
@@ -11283,14 +11413,30 @@ export default function App() {
                            <p className="text-indigo-100 text-sm font-medium">Confirming this pre-alert helps us identify your package instantly on arrival.</p>
                          </div>
                          <button 
-                           onClick={() => {
+                           onClick={async () => {
+                             const unsubmittedWarehouseItems = items.filter(i => i.source === 'Warehouse' && !i.submitted);
+                             
                              setItems(prev => prev.map(i => 
                                i.source === 'Warehouse' && !i.submitted 
                                  ? { ...i, submitted: true } 
                                  : i
                              ));
+                             
                              setActiveTab('cart');
                              toast.success('Pre-alert submitted successfully!');
+
+                             if (dbStatus.checked && currentUser) {
+                               for (const item of unsubmittedWarehouseItems) {
+                                 const ids = item.ids && item.ids.length > 0 ? item.ids : [item.id];
+                                 for (const itemId of ids) {
+                                   try {
+                                     await api.updateItemSubmitted(itemId, true);
+                                   } catch (err: any) {
+                                     console.error(`Failed to update item ${itemId} to submitted:`, err.message);
+                                   }
+                                 }
+                               }
+                             }
                            }}
                            className="px-10 py-5 bg-white text-indigo-600 rounded-2xl font-black shadow-lg hover:bg-slate-50 transition-all flex items-center gap-3 active:scale-95"
                          >
@@ -12723,14 +12869,14 @@ export default function App() {
                                 {/* Scrollable Shop Items Grid with Infinite Auto-scrolling and Hover Pause */}
                                 <AutoScrollingShopProducts 
                                   storeProducts={storeProducts}
-                                  items={items}
+                                  items={items.filter(i => !orderedItemIds.has(i.id))}
                                   addItem={addItem}
                                   removeStoreItem={removeStoreItem}
                                 />
                               </div>
 
                               {/* Live Consolidated Cart Items Summary */}
-                              {items.filter(i => i.source === 'Store').length > 0 && (
+                              {items.filter(i => i.source === 'Store' && !orderedItemIds.has(i.id)).length > 0 && (
                                 <div className="p-3 bg-white border border-teal-500/12 rounded-2xl space-y-2 shrink-0 shadow-sm text-xs mt-2">
                                   <div className="flex items-center justify-between">
                                     <span className="font-bold text-slate-700 flex items-center gap-1.5">
@@ -12738,12 +12884,12 @@ export default function App() {
                                       Items in Consolidated Box:
                                     </span>
                                     <span className="font-bold text-teal-700 bg-teal-50 border border-teal-100/30 px-2 py-0.5 rounded text-[10px] font-mono">
-                                      {items.filter(i => i.source === 'Store').reduce((acc, i) => acc + (i.quantity || 1), 0)} items
+                                      {items.filter(i => i.source === 'Store' && !orderedItemIds.has(i.id)).reduce((acc, i) => acc + (i.quantity || 1), 0)} items
                                     </span>
                                   </div>
                                   
                                   <div className="divide-y divide-slate-100 max-h-[110px] overflow-y-auto pr-1">
-                                    {items.filter(i => i.source === 'Store').map((storeIt) => (
+                                    {items.filter(i => i.source === 'Store' && !orderedItemIds.has(i.id)).map((storeIt) => (
                                       <div key={storeIt.id} className="flex items-center justify-between py-1.5 text-[11px]">
                                         <div className="flex items-center gap-1.5 min-w-0">
                                           <span className="font-medium text-slate-900 truncate">{storeIt.name}</span>
@@ -12761,7 +12907,7 @@ export default function App() {
                                     <div>
                                       <p className="text-[10px] text-slate-500 font-bold">
                                         Consolidated Est. Weight: <span className="font-mono text-indigo-600 font-black">
-                                          {(items.filter(i => i.source === 'Store').reduce((acc, i) => acc + (i.weight * (i.quantity || 1)), 0) + 3.0).toFixed(1)} kg
+                                          {(items.filter(i => i.source === 'Store' && !orderedItemIds.has(i.id)).reduce((acc, i) => acc + (i.weight * (i.quantity || 1)), 0) + 3.0).toFixed(1)} kg
                                         </span>
                                       </p>
                                     </div>
@@ -13784,7 +13930,7 @@ export default function App() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.length > 0 ? filteredProducts.map(product => {
-            const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
+            const cartItem = items.find(i => i.name === product.name && i.source === 'Store' && !orderedItemIds.has(i.id));
             const itemCount = cartItem?.quantity || 0;
             
             return (
@@ -13952,8 +14098,7 @@ export default function App() {
     if (isPaid) {
       
       return (
-        <div className="max-w-2xl mx-auto text-center space-y-8 pb-12">
-          {!isWarehouseCheckout && <CheckoutProgressTracker />}
+        <div className="max-w-2xl mx-auto text-center space-y-6 pb-12 pt-4">
           <motion.div 
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
@@ -14647,7 +14792,7 @@ export default function App() {
 
         {/* Navigation */}
         <nav className="bg-white/95 border-b border-slate-100 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.04)] sticky top-0 z-[100] backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4 flex-nowrap">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 md:h-20 flex items-center justify-between gap-4 flex-nowrap">
             {/* Mobile View Logo - Only visible below md screens */}
             <div 
               className="flex md:hidden items-center gap-3 cursor-pointer shrink-0" 
@@ -15096,14 +15241,16 @@ export default function App() {
       </header>
 
       {/* Main Content */}
-      <main className={`relative max-w-7xl mx-auto px-4 pb-20 ${
-        activeTab === 'home' || activeTab === 'about' || activeTab === 'store' || activeTab === 'warehouse' || activeTab === 'pickup' || activeTab === 'cart' || activeTab === 'finalize' 
-          ? 'pt-8' 
-          : activeTab === 'history' 
-            ? 'pt-6' 
-            : activeTab === 'admin' || activeTab === 'support' || currentUser?.role === 'agent'
-              ? 'pt-4' 
-              : 'pt-20'
+      <main className={`relative max-w-7xl mx-auto pb-32 md:pb-20 ${
+        activeTab === 'home'
+          ? 'pt-0 md:pt-8 px-0 md:px-4'
+          : 'px-4 ' + (activeTab === 'about' || activeTab === 'store' || activeTab === 'warehouse' || activeTab === 'pickup' || activeTab === 'cart' || activeTab === 'finalize' 
+            ? 'pt-8' 
+            : activeTab === 'history' 
+              ? 'pt-6' 
+              : activeTab === 'admin' || activeTab === 'support' || currentUser?.role === 'agent'
+                ? 'pt-4' 
+                : 'pt-20')
       }`}>
         <AnimatePresence>
           {activeTab !== 'home' && activeTab !== 'about' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'finalize' && activeTab !== 'history' && activeTab !== 'agent' && activeTab !== 'support' && activeTab !== 'admin' && <BackButton onClick={goBack} />}
@@ -15181,9 +15328,7 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className={`bg-slate-50 border-t border-slate-200 pt-16 pb-24 px-4 relative z-40 ${
-        currentUser?.role?.toLowerCase() === 'agent' ? 'hidden md:block' : ''
-      }`}>
+      <footer className="hidden md:block bg-slate-50 border-t border-slate-200 pt-16 pb-24 px-4 relative z-40">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
           <div className="col-span-1">
             <div className="flex items-center gap-2 mb-6">
@@ -15543,6 +15688,170 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Mobile Bottom Navigation Bar */}
+      {(!currentUser || (['customer', 'guest'].includes((currentUser.role || '').toLowerCase()))) && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-100 shadow-[0_-8px_30px_rgba(15,23,42,0.06)] z-[90] pb-safe">
+          <div className="flex justify-around items-center h-12 px-2">
+            {[
+              { id: 'home', label: 'Home', icon: Home },
+              { id: 'track', label: 'Track', icon: Search },
+              { id: 'new_order', label: 'New Order', icon: Plus, isFab: true },
+              { id: 'support', label: 'Support', icon: HelpCircle },
+              { id: 'account', label: 'Account', icon: UserIcon }
+            ].map((item) => {
+              const Icon = item.icon;
+              if (item.isFab) {
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setShowNewOrderMenu(true);
+                    }}
+                    className="flex flex-col items-center justify-center flex-1 h-full relative"
+                  >
+                    <div className="absolute -top-4 flex flex-col items-center">
+                      <div className="p-1.5 bg-indigo-600 text-white rounded-full shadow-lg shadow-indigo-200 border-4 border-white active:scale-95 transition-transform">
+                        <Icon size={16} className="stroke-[3]" />
+                      </div>
+                      <span className="text-[8px] font-black uppercase tracking-wider mt-0.5 text-indigo-600">
+                        {item.label}
+                      </span>
+                    </div>
+                  </button>
+                );
+              }
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    navigateTo(item.id as any);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex flex-col items-center justify-center flex-1 h-full relative"
+                >
+                  <div className={`p-0.5 rounded-xl transition-all duration-300 relative ${
+                    isActive 
+                      ? 'text-indigo-600 scale-110' 
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}>
+                    <Icon size={16} className="stroke-[2.2]" />
+                  </div>
+                  <span className={`text-[8px] font-black uppercase tracking-wider mt-0 transition-colors duration-300 ${
+                    isActive ? 'text-indigo-600 font-extrabold' : 'text-slate-400'
+                  }`}>
+                    {item.label}
+                  </span>
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeMobileIndicator"
+                      className="absolute bottom-0.5 w-4 h-0.5 bg-indigo-600 rounded-full"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile New Order Quick Drawer */}
+      <AnimatePresence>
+        {showNewOrderMenu && (
+          <div className="md:hidden fixed inset-0 z-[150] overflow-hidden">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowNewOrderMenu(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+
+            {/* Bottom Sheet */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2.5rem] shadow-2xl p-6 pb-12 border-t border-slate-100"
+            >
+              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6" />
+
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-black text-slate-900">Start a New Shipment</h3>
+                <p className="text-xs text-slate-500 mt-1">Select one of our premium international services</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                {/* Pickup Option */}
+                <button
+                  onClick={() => {
+                    setShowNewOrderMenu(false);
+                    navigateTo('pickup');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100/50 transition-all text-left w-full"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-100">
+                    <Truck size={22} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-indigo-950">Schedule Doorstep Pickup</h4>
+                    <p className="text-xs text-indigo-700/80 mt-0.5">We collect, pack & ship internationally</p>
+                  </div>
+                </button>
+
+                {/* Drop-off Option */}
+                <button
+                  onClick={() => {
+                    setShowNewOrderMenu(false);
+                    navigateTo('warehouse');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-100 hover:bg-emerald-100/50 transition-all text-left w-full"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-100">
+                    <Package size={22} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-emerald-950">Drop Off at Warehouse</h4>
+                    <p className="text-xs text-emerald-700/80 mt-0.5">Ship your package to our hubs—we deliver abroad</p>
+                  </div>
+                </button>
+
+                {/* Shop Option */}
+                <button
+                  onClick={() => {
+                    setShowNewOrderMenu(false);
+                    navigateTo('store');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-amber-50 border border-amber-100 hover:bg-amber-100/50 transition-all text-left w-full"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-100">
+                    <ShoppingBag size={22} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-amber-950">Shop & Ship from India</h4>
+                    <p className="text-xs text-amber-700/80 mt-0.5">Shop Indian brands—we pack and ship abroad</p>
+                  </div>
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowNewOrderMenu(false)}
+                className="w-full mt-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all active:scale-95"
+              >
+                Cancel
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <Toaster position="top-center" richColors />
     </div>
   );

@@ -66,6 +66,7 @@ interface CartSectionProps {
   confirmPickup: () => void;
   updatePickup: () => void;
   storeProducts: any[];
+  orderedItemIds?: Set<string>;
 }
 
 const CartSection = ({
@@ -108,7 +109,8 @@ const CartSection = ({
   setSelectedSlot,
   confirmPickup,
   updatePickup,
-  storeProducts
+  storeProducts,
+  orderedItemIds
 }: CartSectionProps) => {
   const handleAdd = () => {
     if (!cartItemName) return;
@@ -594,7 +596,7 @@ const CartSection = ({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {storeProducts.map((product) => {
-                const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
+                const cartItem = items.find(i => i.name === product.name && i.source === 'Store' && (!orderedItemIds || !orderedItemIds.has(i.id)));
                 const itemCount = cartItem?.quantity || 0;
                 
                 return (
