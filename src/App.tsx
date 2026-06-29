@@ -7718,23 +7718,24 @@ export default function App() {
 
     const HomeSection = useMemo(() => {
       return (
-        <div className="space-y-24 pb-24">
+        <div className="space-y-12 md:space-y-24 pb-6 md:pb-24">
           {/* JIFFEX Truck Hero Section */}
-          <div className="relative overflow-hidden rounded-none md:rounded-[4rem] bg-slate-900 text-white px-0 pt-6 pb-0 sm:p-12 md:p-20 shadow-2xl">
+          <div className="relative overflow-hidden rounded-none md:rounded-[4rem] bg-transparent text-white px-0 pt-4 pb-0 sm:p-12 md:p-20 shadow-2xl">
             <div 
-              className="absolute inset-0 pointer-events-none"
+              className="absolute inset-x-0 top-0 bottom-[180px] md:bottom-0 pointer-events-none z-0"
               style={{
                 background: `radial-gradient(circle at 30% 20%, #1e2a78 0%, #0b1220 60%, #05070f 100%)`,
               }}
             />
 
-            <div className="relative z-10 flex flex-col items-center text-center space-y-8 md:space-y-12 w-full">
-              <div className="space-y-6 md:space-y-8 max-w-4xl px-4 md:px-0">
-                <div className="space-y-4 md:space-y-6">
+            <div className="relative z-10 flex flex-col items-center text-center space-y-5 md:space-y-12 w-full">
+              {/* Laptop / Desktop View Header Text */}
+              <div className="hidden md:block space-y-4 md:space-y-8 max-w-4xl px-4 md:px-0">
+                <div className="space-y-2 md:space-y-6">
                   <motion.h1 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-3xl sm:text-5xl md:text-8xl font-black tracking-tighter leading-tight text-white"
+                    className="text-2xl sm:text-5xl md:text-8xl font-black tracking-tighter leading-tight text-white"
                   >
                     Send Anything from India to Abroad—<span className="relative inline-block">Hassle-Free<div className="absolute -bottom-1 md:-bottom-2 left-1/2 -translate-x-1/2 w-2/3 h-1 md:h-1.5 bg-amber-500 rounded-full" /></span>
                   </motion.h1>
@@ -7749,9 +7750,65 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Mobile View Header Text & Image (Right Side) */}
+              <div className="md:hidden w-[90%] mx-auto px-1 text-left flex items-center justify-between gap-3">
+                <div className="flex-1 space-y-1.5 pr-1">
+                  <motion.h1 
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-xl font-black tracking-tight leading-tight text-white"
+                  >
+                    Send Anything from India to Abroad—<span className="relative inline-block text-amber-400">Hassle-Free</span>
+                  </motion.h1>
+                  <motion.p 
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="text-[10px] text-slate-300 font-medium leading-normal"
+                  >
+                    Shop online, schedule pickup, or send your own items. We handle packing & delivery.
+                  </motion.p>
+                </div>
+                {/* Image on the right above the card container */}
+                <div className="w-[110px] shrink-0">
+                  <motion.img 
+                    initial={{ opacity: 0, scale: 0.85 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.15 }}
+                    src="https://lh3.googleusercontent.com/d/1m7ORvWwf92WuUJRS_-ySzPQhoInEnAU4"
+                    alt="Jiffex Delivery"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-auto object-contain"
+                  />
+                </div>
+              </div>
+
+              {/* Mobile View Badges (Secure Packing, Global Delivery, On-time Guaranteed) */}
+              <div className="md:hidden w-[90%] mx-auto grid grid-cols-3 gap-1.5 pt-1">
+                {[
+                  { icon: ShieldCheck, text: "Secure Packing", color: "text-emerald-400 border-emerald-500/25 bg-emerald-500/5" },
+                  { icon: Globe, text: "Global Delivery", color: "text-sky-400 border-sky-500/25 bg-sky-500/5" },
+                  { icon: Clock, text: "On-time Guaranteed", color: "text-amber-400 border-amber-500/25 bg-amber-500/5" }
+                ].map((badge, idx) => {
+                  const Icon = badge.icon;
+                  return (
+                    <motion.div 
+                      key={idx}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 + idx * 0.05 }}
+                      className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg border ${badge.color}`}
+                    >
+                      <Icon size={9} className="shrink-0" />
+                      <span className="font-extrabold text-[8px] tracking-tight whitespace-nowrap leading-none">{badge.text}</span>
+                    </motion.div>
+                  );
+                })}
+              </div>
+
               {/* Mobile View: Dedicated Unified White Container */}
-              <div className="md:hidden w-full px-0">
-                <div className="bg-white rounded-none p-5 shadow-xl border-y border-slate-100 text-slate-800 space-y-6 text-left">
+              <div className="md:hidden w-[95%] mx-auto px-0">
+                <div className="bg-white rounded-2xl p-4 shadow-xl border border-slate-100 text-slate-800 space-y-4 text-left">
                   {/* Header */}
                   <div className="text-center">
                     <h3 className="text-base font-black text-slate-900 tracking-tight">What would you like to do?</h3>
@@ -7805,9 +7862,9 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Below service cards, put how jiffex works side by side under the same white background */}
-                  <div className="border-t border-slate-100 pt-4 space-y-3">
-                    <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100/80 divide-y divide-slate-100">
+                  {/* Below service cards, put how jiffex works side by side horizontally under the same white background */}
+                  <div className="border-t border-slate-100 pt-3">
+                    <div className="bg-slate-50/50 rounded-xl p-2 border border-slate-100/80 grid grid-cols-4 divide-x divide-slate-200/50">
                       {[
                         { icon: Calendar, title: "Book in 30 Seconds", desc: "Quick & easy pickup", color: "bg-indigo-50 text-indigo-600" },
                         { icon: ShoppingBag, title: "Add items from Anywhere", desc: "From home, shop or any store", color: "bg-amber-50 text-amber-600" },
@@ -7816,18 +7873,16 @@ export default function App() {
                       ].map((step, idx) => {
                         const StepIcon = step.icon;
                         return (
-                          <div key={idx} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-                            <div className={`w-7 h-7 rounded-lg ${step.color} flex items-center justify-center shrink-0 mt-0.5`}>
-                              <StepIcon size={14} className="font-black" />
+                          <div key={idx} className="flex flex-col items-center text-center px-1 py-1 first:pl-0 last:pr-0">
+                            <div className={`w-6 h-6 rounded-md ${step.color} flex items-center justify-center shrink-0 mb-1`}>
+                              <StepIcon size={12} className="font-black" />
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <h5 className="font-extrabold text-[11px] text-slate-900 leading-tight">
-                                {step.title}
-                              </h5>
-                              <p className="text-[10px] text-slate-500 font-medium leading-normal mt-0.5">
-                                {step.desc}
-                              </p>
-                            </div>
+                            <h5 className="font-black text-[8px] sm:text-[9px] text-slate-900 leading-tight min-h-[22px] flex items-center justify-center">
+                              {step.title}
+                            </h5>
+                            <p className="text-[7px] text-slate-400 font-medium leading-tight mt-0.5">
+                              {step.desc}
+                            </p>
                           </div>
                         );
                       })}
@@ -7929,7 +7984,7 @@ export default function App() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.5 }}
-                  className="flex flex-col sm:flex-row items-center justify-center gap-8 pt-4"
+                  className="hidden md:flex flex-col sm:flex-row items-center justify-center gap-8 pt-4"
                 >
                   <button 
                     onClick={() => {
@@ -15241,7 +15296,7 @@ export default function App() {
       </header>
 
       {/* Main Content */}
-      <main className={`relative max-w-7xl mx-auto pb-32 md:pb-20 ${
+      <main className={`relative max-w-7xl mx-auto pb-16 md:pb-20 ${
         activeTab === 'home'
           ? 'pt-0 md:pt-8 px-0 md:px-4'
           : 'px-4 ' + (activeTab === 'about' || activeTab === 'store' || activeTab === 'warehouse' || activeTab === 'pickup' || activeTab === 'cart' || activeTab === 'finalize' 
