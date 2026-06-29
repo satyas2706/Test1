@@ -7837,13 +7837,13 @@ export default function App() {
                         navigateTo('warehouse');
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
-                      className="cursor-pointer bg-white border border-slate-100 hover:border-emerald-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
                     >
-                      <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center">
-                        <Package className="w-5 h-5 text-emerald-600" />
+                      <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+                        <Package className="w-5 h-5 text-indigo-600" />
                       </div>
-                      <h4 className="font-extrabold text-[9px] text-emerald-950 leading-tight">Drop Off Package</h4>
-                      <span className="text-[8px] bg-emerald-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full font-black">Drop Off</span>
+                      <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Drop Off Package</h4>
+                      <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Drop Off</span>
                     </div>
 
                     {/* Card 3: Shop & Ship */}
@@ -7852,13 +7852,13 @@ export default function App() {
                         navigateTo('store');
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
-                      className="cursor-pointer bg-white border border-slate-100 hover:border-amber-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
                     >
-                      <div className="w-9 h-9 bg-amber-50 rounded-lg flex items-center justify-center">
-                        <ShoppingBag className="w-5 h-5 text-amber-600" />
+                      <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+                        <ShoppingBag className="w-5 h-5 text-indigo-600" />
                       </div>
-                      <h4 className="font-extrabold text-[9px] text-amber-950 leading-tight">Shop & Ship</h4>
-                      <span className="text-[8px] bg-amber-500 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Shop</span>
+                      <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Shop & Ship</h4>
+                      <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Shop</span>
                     </div>
                   </div>
 
@@ -7889,6 +7889,43 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Mobile View: Shop Authentic Indian Items Promo Card */}
+              <div className="md:hidden w-[95%] mx-auto !mt-[-4px] px-0">
+                <motion.div 
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.25 }}
+                  onClick={() => {
+                    navigateTo('store');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="relative overflow-hidden bg-gradient-to-r from-indigo-500/10 via-indigo-600/5 to-indigo-500/10 border border-indigo-500/20 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-md active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  {/* Decorative background circle */}
+                  <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
+                  
+                  <div className="flex gap-2.5 items-start">
+                    <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/20 text-white">
+                      <ShoppingBag size={20} className="animate-pulse" />
+                    </div>
+                    <div className="space-y-1 text-left">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-extrabold text-[12px] text-indigo-950 tracking-tight leading-none">Shop Authentic Indian Goods</span>
+                        <span className="bg-indigo-600 text-white text-[7px] font-black uppercase px-1 py-0.5 rounded tracking-wide leading-none">Catalog</span>
+                      </div>
+                      <p className="text-[10px] text-slate-600 font-medium leading-normal max-w-[210px]">
+                        Craving home flavors, festive sweets, or premium ethnic wear? Buy from top Indian stores and we'll deliver them abroad!
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="shrink-0 flex flex-col items-center justify-center bg-indigo-600 text-white p-2 px-3 rounded-xl shadow-sm hover:bg-indigo-700 active:scale-95 transition-all">
+                    <span className="text-[9px] font-black tracking-tight leading-none">Shop</span>
+                    <ArrowRight size={12} className="mt-1" />
+                  </div>
+                </motion.div>
               </div>
 
               {/* Laptop / Desktop only view for the service selectors */}
@@ -8093,7 +8130,7 @@ export default function App() {
           {/* Quote Calculator & Protocol */}
           <div ref={quoteRef} className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start max-md:!mt-0">
             <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white p-8 rounded-3xl shadow-xl shadow-indigo-500/5 border border-slate-100">
+              <div className="bg-white p-4 md:p-8 rounded-2xl md:rounded-3xl shadow-xl md:shadow-indigo-500/5 border border-slate-100">
                 <h2 className="text-lg md:text-2xl font-bold mb-4 md:mb-6 flex items-center gap-2">
                   <Calculator className="text-indigo-600 shrink-0" size={20} /> Quick Quote
                 </h2>
