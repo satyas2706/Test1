@@ -86,6 +86,12 @@ import {
   Menu,
   Save,
   Pencil,
+  Headphones,
+  Flame,
+  Wine,
+  ShieldAlert,
+  BatteryCharging,
+  FlaskConical,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -959,119 +965,310 @@ const SupportSection = ({ currentUser, orders, tickets, setTickets, refundReques
     );
   }
 
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
+
+  const mobileFaqs = [
+    { q: "How long does shipping to the US take?", a: "Express shipments typically take 5-7 business days. Standard shipping takes 10-14 business days. These times depend on customs clearance and the final destination city." },
+    { q: "What is the 'Send to Our Warehouse' service?", a: "This service allows you to send items from online stores (Amazon, Flipkart, etc.) or your home to our warehouse. We consolidate all your packages into one shipment to save you money on international shipping." },
+    { q: "How do I calculate shipping costs?", a: "Shipping is calculated based on the higher of actual weight or volumetric weight. You can use our calculator on the home page for an instant estimate." }
+  ];
+
+  const prohibitedItemsList = [
+    { name: "Aerosols & Perfumes", icon: Flame, color: "text-[#FF7A00]", bg: "bg-[#FFF8F2] border-[#FFE2CC]" },
+    { name: "Alcohol & Tobacco", icon: Wine, color: "text-[#FF7A00]", bg: "bg-[#FFF8F2] border-[#FFE2CC]" },
+    { name: "Ammunition & Firearms", icon: ShieldAlert, color: "text-[#FF7A00]", bg: "bg-[#FFF8F2] border-[#FFE2CC]" },
+    { name: "Batteries (Lithium)", icon: BatteryCharging, color: "text-[#10B981]", bg: "bg-[#F0FDF4] border-[#DCFCE7]" },
+    { name: "Chemicals & Hazardous", icon: FlaskConical, color: "text-[#FF7A00]", bg: "bg-[#FFF8F2] border-[#FFE2CC]" }
+  ];
+
   return (
-    <div className="space-y-12 pb-24">
-      <div className="text-center space-y-4">
-        <h3 className="text-4xl font-black text-slate-900 tracking-tight">Need Help?</h3>
-        <p className="text-slate-500 max-w-2xl mx-auto">Our support team is here to ensure your shipping experience is flawless.</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {[
-          { 
-            icon: MessageSquare, 
-            title: "Live Chat", 
-            desc: "Chat with our logistics experts for immediate assistance with your shipment.",
-            action: "Start Chat",
-            color: "text-indigo-600",
-            bg: "bg-indigo-50"
-          },
-          { 
-            icon: Mail, 
-            title: "Email Support", 
-            desc: "Send us your queries and we'll get back to you within 24 hours.",
-            action: "support@jiffex.com",
-            color: "text-emerald-600",
-            bg: "bg-emerald-50"
-          },
-          { 
-            icon: HelpCircle, 
-            title: "Help Center", 
-            desc: "Browse our extensive library of FAQs and shipping guides.",
-            action: "Visit FAQ",
-            color: "text-amber-600",
-            bg: "bg-amber-50"
-          }
-        ].map((item, i) => (
-          <motion.div
-            key={item.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group"
-          >
-            <div className={`w-14 h-14 ${item.bg} ${item.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
-              <item.icon size={28} />
-            </div>
-            <h4 className="text-xl font-black text-slate-900 mb-2">{item.title}</h4>
-            <p className="text-sm text-slate-500 mb-6 leading-relaxed">{item.desc}</p>
-            <button className={`text-sm font-bold ${item.color} flex items-center gap-2 hover:underline`}>
-              {item.action} <ArrowRight size={16} />
-            </button>
-          </motion.div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-        {/* Comprehensive FAQ Section */}
-        <div className="bg-slate-50 rounded-[3rem] p-8 md:p-12">
-          <h4 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
-            <HelpCircle className="text-indigo-600" />
-            Frequently Asked Questions
-          </h4>
-          <div className="space-y-4 max-h-[600px] overflow-y-auto pr-4 custom-scrollbar">
-            {[
-              { q: "How long does shipping to the US take?", a: "Express shipments typically take 5-7 business days. Standard shipping takes 10-14 business days. These times depend on customs clearance and the final destination city." },
-              { q: "What is the 'Send to Our Warehouse' service?", a: "This service allows you to send items from online stores (Amazon, Flipkart, etc.) or your home to our warehouse. We consolidate all your packages into one shipment to save you money on international shipping." },
-              { q: "How do I calculate shipping costs?", a: "Shipping is calculated based on the higher of actual weight or volumetric weight. You can use our calculator on the home page for an instant estimate." },
-              { q: "Can I track my shipment in real-time?", a: "Yes! Once your shipment is dispatched, you'll receive a tracking ID. You can enter this ID in the 'Track Shipment' box on our home page." },
-              { q: "What happens if my items are fragile?", a: "We offer professional repacking services. If you mark an item as fragile, our warehouse team will add extra protective layers (bubble wrap, corrugated sheets) to ensure safe transit." },
-              { q: "Are there any hidden charges?", a: "Our quotes include door-to-door delivery. However, customs duties or taxes (if applicable in the destination country) are determined by local authorities and are the recipient's responsibility." },
-              { q: "What is the 'Pickup from home' service?", a: "If you're in a supported city in India, our agent will come to your doorstep to collect your items. They can even help with basic packing!" },
-              { q: "How do I pay for my shipment?", a: "We accept all major credit cards, debit cards, and digital payment methods like PhonePe. Payment is required once all your items are received and weighed at our warehouse." },
-              { q: "Can I ship homemade food items?", a: "Yes, you can ship dry, non-perishable homemade food (like sweets or snacks). However, they must be properly packed and have a reasonable shelf life. Perishables are strictly prohibited." },
-              { q: "What if my package is lost or damaged?", a: "We take extreme care, but in rare cases of loss or damage, we offer limited liability coverage. For high-value items, we strongly recommend purchasing additional shipping insurance." }
-            ].map((faq, i) => (
-              <div key={i} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:border-indigo-200 transition-colors">
-                <div className="font-bold text-slate-900 mb-2 flex items-start gap-3">
-                  <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5">?</div>
-                  {faq.q}
-                </div>
-                <p className="text-sm text-slate-500 ml-9 leading-relaxed">{faq.a}</p>
+    <>
+      {/* 1. MOBILE VIEW (Visible under md screens, matches screenshot design exactly) */}
+      <div className="block md:hidden space-y-6 pb-24 px-1 pt-1">
+        {/* Hero Section */}
+        <section className="relative p-5 rounded-[2rem] bg-gradient-to-r from-[#091535] to-[#142352] text-white overflow-hidden shadow-lg shadow-indigo-950/10">
+          <div className="max-w-[65%] space-y-1.5">
+            <h1 className="text-2xl font-black tracking-tight">Need Help?</h1>
+            <p className="text-[10px] text-blue-200/80 leading-relaxed font-medium">
+              We're here to make your shipping experience smooth and hassle-free.
+            </p>
+          </div>
+          {/* 3D Headset Illustration placeholder */}
+          <div className="absolute -right-2 -bottom-2 w-24 h-24 flex items-center justify-center">
+            <div className="relative w-16 h-16 bg-gradient-to-tr from-indigo-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/30">
+              <Headphones className="w-9 h-9 text-white animate-pulse" />
+              <div className="absolute -top-1 -right-1 bg-sky-400 p-1 rounded-xl shadow-md">
+                <MessageSquare className="w-3.5 h-3.5 text-white" />
               </div>
-            ))}
+            </div>
+          </div>
+        </section>
+
+        {/* How can we help you today? */}
+        <div className="space-y-3.5">
+          <h2 className="text-sm font-black text-[#0A142F] tracking-tight">How can we help you today?</h2>
+          
+          {/* Live Chat Card */}
+          <div className="flex items-center justify-between p-3.5 bg-[#F5F3FF] border border-[#E0DBFF] rounded-2xl shadow-sm">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-[#E0DBFF]/40 shrink-0">
+                <MessageSquare className="w-5 h-5 text-[#4F2EF7]" />
+              </div>
+              <div className="space-y-0.5">
+                <h3 className="text-xs font-black text-[#0A142F]">Live Chat</h3>
+                <p className="text-[9px] text-slate-500 font-medium leading-tight max-w-[170px]">Chat with our support team for instant assistance.</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => toast.success('Connecting to Live Chat...')}
+              className="px-3 py-1.5 bg-[#4F2EF7] text-white text-[9px] font-extrabold rounded-full flex items-center space-x-1 hover:bg-[#3F22D6] active:scale-95 transition shadow-md shadow-indigo-200 shrink-0"
+            >
+              <span>Chat Now</span>
+              <ChevronRight className="w-2.5 h-2.5" />
+            </button>
+          </div>
+
+          {/* Email Support Card */}
+          <a 
+            href="mailto:support@jiffex.com"
+            className="flex items-center justify-between p-3.5 bg-[#F4FBF7] border border-[#D1F2E1] rounded-2xl shadow-sm active:scale-[0.99] transition"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-[#D1F2E1]/40 shrink-0">
+                <Mail className="w-5 h-5 text-[#10B981]" />
+              </div>
+              <div className="space-y-0.5">
+                <h3 className="text-xs font-black text-[#0A142F]">Email Support</h3>
+                <p className="text-[9px] text-slate-500 font-medium leading-tight max-w-[170px]">Send us your queries and we'll reply within 24 hours.</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-[#10B981] shrink-0" />
+          </a>
+
+          {/* Help Center Card */}
+          <div 
+            onClick={() => toast.info('Opening Help Center / FAQ Section below...')}
+            className="flex items-center justify-between p-3.5 bg-[#FFF9F3] border border-[#FFE7D1] rounded-2xl shadow-sm cursor-pointer active:scale-[0.99] transition"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-[#FFE7D1]/40 shrink-0">
+                <HelpCircle className="w-5 h-5 text-[#FF7A00]" />
+              </div>
+              <div className="space-y-0.5">
+                <h3 className="text-xs font-black text-[#0A142F]">Help Center</h3>
+                <p className="text-[9px] text-slate-500 font-medium leading-tight max-w-[170px]">Browse FAQs, guides and shipping information.</p>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-[#FF7A00] shrink-0" />
+          </div>
+        </div>
+
+        {/* FAQs Section */}
+        <div className="space-y-3.5">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-1.5">
+              <HelpCircle className="w-4 h-4 text-[#4F2EF7]" />
+              <h2 className="text-sm font-black text-[#0A142F] tracking-tight">Frequently Asked Questions</h2>
+            </div>
+            <button 
+              onClick={() => {
+                setOpenFaq(openFaq === null ? 0 : null);
+              }}
+              className="text-[10px] font-extrabold text-[#4F2EF7] hover:underline"
+            >
+              {openFaq === null ? 'View all' : 'Collapse'}
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {mobileFaqs.map((faq, index) => {
+              const isOpen = openFaq === index;
+              return (
+                <div 
+                  key={index} 
+                  className={`border transition-all duration-200 rounded-xl overflow-hidden ${
+                    isOpen ? 'bg-[#F8FAFC] border-[#E2E8F0] shadow-sm' : 'bg-white border-slate-100'
+                  }`}
+                >
+                  <button 
+                    onClick={() => setOpenFaq(isOpen ? null : index)}
+                    className="w-full flex justify-between items-center p-3.5 text-left"
+                  >
+                    <span className="text-[11px] font-bold text-[#0A142F] pr-3 leading-snug">{faq.q}</span>
+                    <div className="flex-shrink-0">
+                      {isOpen ? (
+                        <div className="w-4 h-4 rounded-full border border-indigo-100 flex items-center justify-center bg-indigo-50">
+                          <Minus className="w-2.5 h-2.5 text-[#4F2EF7]" />
+                        </div>
+                      ) : (
+                        <div className="w-4 h-4 rounded-full border border-slate-200 flex items-center justify-center">
+                          <Plus className="w-2.5 h-2.5 text-slate-400" />
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div className="px-3.5 pb-3.5 text-[10px] text-slate-500 font-medium leading-relaxed border-t border-slate-100/60 pt-2.5">
+                      {faq.a}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* Prohibited Items Section */}
-        <div className="bg-white rounded-[3rem] p-8 md:p-12 border border-slate-100 shadow-sm">
-          <h4 className="text-2xl font-black text-slate-900 mb-2 flex items-center gap-3">
-            <AlertTriangle className="text-amber-500" />
-            Prohibited Items (US Shipping)
-          </h4>
-          <p className="text-sm text-slate-500 mb-8">
-            To comply with international regulations and US Customs, the following items cannot be shipped. Attempting to ship these may result in delays, fines, or seizure.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-            {PROHIBITED_ITEMS.map((item, i) => (
-              <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 group hover:bg-red-50 hover:border-red-100 transition-all">
-                <div className="w-2 h-2 rounded-full bg-red-400 group-hover:scale-125 transition-transform" />
-                <span className="text-xs font-medium text-slate-700 group-hover:text-red-700">{item}</span>
-              </div>
-            ))}
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-1.5">
+              <AlertTriangle className="w-4 h-4 text-[#FF7A00]" />
+              <h2 className="text-sm font-black text-[#0A142F] tracking-tight">Prohibited Items (US Shipping)</h2>
+            </div>
+            <button 
+              onClick={() => toast.info('Displaying full list of prohibited items below.')}
+              className="text-[10px] font-extrabold text-[#FF7A00] hover:underline"
+            >
+              View full list
+            </button>
           </div>
-          <div className="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-4">
-            <Info className="text-amber-600 shrink-0 mt-1" size={20} />
-            <div className="space-y-2">
-              <h5 className="text-sm font-black text-amber-900 uppercase tracking-widest">Important Note</h5>
-              <p className="text-xs text-amber-800 leading-relaxed">
-                This list is not exhaustive. If you are unsure about an item, please contact our support team before sending it to the warehouse. Certain items like medicines or seeds require specific documentation and prior approval.
-              </p>
+          <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+            To comply with international regulations and US Customs, the following items cannot be shipped.
+          </p>
+
+          <div className="grid grid-cols-5 gap-1.5 pt-1">
+            {prohibitedItemsList.map((item, idx) => {
+              const Icon = item.icon;
+              return (
+                <div 
+                  key={idx} 
+                  className={`flex flex-col items-center justify-center p-1.5 rounded-xl border text-center ${item.bg} min-h-[85px] shadow-sm`}
+                >
+                  <div className="p-1 rounded-full bg-white shadow-sm mb-1.5 shrink-0">
+                    <Icon className={`w-4 h-4 ${item.color}`} />
+                  </div>
+                  <span className="text-[7.5px] leading-tight font-black text-[#0A142F]">{item.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* 2. LAPTOP/DESKTOP VIEW (Completely untouched, matches original layout exactly) */}
+      <div className="hidden md:block space-y-12 pb-24">
+        <div className="text-center space-y-4">
+          <h3 className="text-4xl font-black text-slate-900 tracking-tight">Need Help?</h3>
+          <p className="text-slate-500 max-w-2xl mx-auto">Our support team is here to ensure your shipping experience is flawless.</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {[
+            { 
+              icon: MessageSquare, 
+              title: "Live Chat", 
+              desc: "Chat with our logistics experts for immediate assistance with your shipment.",
+              action: "Start Chat",
+              color: "text-indigo-600",
+              bg: "bg-indigo-50"
+            },
+            { 
+              icon: Mail, 
+              title: "Email Support", 
+              desc: "Send us your queries and we'll get back to you within 24 hours.",
+              action: "support@jiffex.com",
+              color: "text-emerald-600",
+              bg: "bg-emerald-50"
+            },
+            { 
+              icon: HelpCircle, 
+              title: "Help Center", 
+              desc: "Browse our extensive library of FAQs and shipping guides.",
+              action: "Visit FAQ",
+              color: "text-amber-600",
+              bg: "bg-amber-50"
+            }
+          ].map((item, i) => (
+            <motion.div
+              key={item.title}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group"
+            >
+              <div className={`w-14 h-14 ${item.bg} ${item.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
+                <item.icon size={28} />
+              </div>
+              <h4 className="text-xl font-black text-slate-900 mb-2">{item.title}</h4>
+              <p className="text-sm text-slate-500 mb-6 leading-relaxed">{item.desc}</p>
+              <button className={`text-sm font-bold ${item.color} flex items-center gap-2 hover:underline`}>
+                {item.action} <ArrowRight size={16} />
+              </button>
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          {/* Comprehensive FAQ Section */}
+          <div className="bg-slate-50 rounded-[3rem] p-8 md:p-12">
+            <h4 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
+              <HelpCircle className="text-indigo-600" />
+              Frequently Asked Questions
+            </h4>
+            <div className="space-y-4 max-h-[600px] overflow-y-auto pr-4 custom-scrollbar">
+              {[
+                { q: "How long does shipping to the US take?", a: "Express shipments typically take 5-7 business days. Standard shipping takes 10-14 business days. These times depend on customs clearance and the final destination city." },
+                { q: "What is the 'Send to Our Warehouse' service?", a: "This service allows you to send items from online stores (Amazon, Flipkart, etc.) or your home to our warehouse. We consolidate all your packages into one shipment to save you money on international shipping." },
+                { q: "How do I calculate shipping costs?", a: "Shipping is calculated based on the higher of actual weight or volumetric weight. You can use our calculator on the home page for an instant estimate." },
+                { q: "Can I track my shipment in real-time?", a: "Yes! Once your shipment is dispatched, you'll receive a tracking ID. You can enter this ID in the 'Track Shipment' box on our home page." },
+                { q: "What happens if my items are fragile?", a: "We offer professional repacking services. If you mark an item as fragile, our warehouse team will add extra protective layers (bubble wrap, corrugated sheets) to ensure safe transit." },
+                { q: "Are there any hidden charges?", a: "Our quotes include door-to-door delivery. However, customs duties or taxes (if applicable in the destination country) are determined by local authorities and are the recipient's responsibility." },
+                { q: "What is the 'Pickup from home' service?", a: "If you're in a supported city in India, our agent will come to your doorstep to collect your items. They can even help with basic packing!" },
+                { q: "How do I pay for my shipment?", a: "We accept all major credit cards, debit cards, and digital payment methods like PhonePe. Payment is required once all your items are received and weighed at our warehouse." },
+                { q: "Can I ship homemade food items?", a: "Yes, you can ship dry, non-perishable homemade food (like sweets or snacks). However, they must be properly packed and have a reasonable shelf life. Perishables are strictly prohibited." },
+                { q: "What if my package is lost or damaged?", a: "We take extreme care, but in rare cases of loss or damage, we offer limited liability coverage. For high-value items, we strongly recommend purchasing additional shipping insurance." }
+              ].map((faq, i) => (
+                <div key={i} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:border-indigo-200 transition-colors">
+                  <div className="font-bold text-slate-900 mb-2 flex items-start gap-3">
+                    <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5">?</div>
+                    {faq.q}
+                  </div>
+                  <p className="text-sm text-slate-500 ml-9 leading-relaxed">{faq.a}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Prohibited Items Section */}
+          <div className="bg-white rounded-[3rem] p-8 md:p-12 border border-slate-100 shadow-sm">
+            <h4 className="text-2xl font-black text-slate-900 mb-2 flex items-center gap-3">
+              <AlertTriangle className="text-amber-500" />
+              Prohibited Items (US Shipping)
+            </h4>
+            <p className="text-sm text-slate-500 mb-8">
+              To comply with international regulations and US Customs, the following items cannot be shipped. Attempting to ship these may result in delays, fines, or seizure.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+              {PROHIBITED_ITEMS.map((item, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 group hover:bg-red-50 hover:border-red-100 transition-all">
+                  <div className="w-2 h-2 rounded-full bg-red-400 group-hover:scale-125 transition-transform" />
+                  <span className="text-xs font-medium text-slate-700 group-hover:text-red-700">{item}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-4">
+              <Info className="text-amber-600 shrink-0 mt-1" size={20} />
+              <div className="space-y-2">
+                <h5 className="text-sm font-black text-amber-900 uppercase tracking-widest">Important Note</h5>
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  This list is not exhaustive. If you are unsure about an item, please contact our support team before sending it to the warehouse. Certain items like medicines or seeds require specific documentation and prior approval.
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
@@ -4234,6 +4431,7 @@ export default function App() {
   const [showServicesDropdown, setShowServicesDropdown] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showNewOrderMenu, setShowNewOrderMenu] = useState(false);
+  const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [navbarTrackingId, setNavbarTrackingId] = useState('');
 
   const navigateTo = (tab: Tab) => {
@@ -8131,15 +8329,15 @@ export default function App() {
           <div ref={quoteRef} className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start max-md:!mt-0">
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-white p-4 md:p-8 rounded-2xl md:rounded-3xl shadow-xl md:shadow-indigo-500/5 border border-slate-100">
-                <h2 className="text-lg md:text-2xl font-bold mb-4 md:mb-6 flex items-center gap-2">
-                  <Calculator className="text-indigo-600 shrink-0" size={20} /> Quick Quote
+                <h2 className="text-sm md:text-2xl font-bold mb-3 md:mb-6 flex items-center gap-1.5">
+                  <Calculator className="text-indigo-600 shrink-0" size={16} md:size={20} /> Quick Quote
                 </h2>
                 <div className="space-y-4 md:space-y-5">
                   <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-5">
                     <div>
-                      <label className="block text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 md:mb-2">Destination</label>
+                      <label className="block text-[8px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Destination</label>
                       <select 
-                        className="w-full p-3 md:p-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none text-xs md:text-base"
+                        className="w-full p-2 md:p-4 rounded-xl md:rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none text-[16px] md:text-base"
                         value={qCountry}
                         onChange={(e) => setQCountry(e.target.value)}
                       >
@@ -8147,12 +8345,12 @@ export default function App() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 md:mb-2">Weight (kg)</label>
+                      <label className="block text-[8px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Weight (kg)</label>
                       <input 
                         type="number" 
                         min="0.1" 
                         step="0.1"
-                        className="w-full p-3 md:p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs md:text-base"
+                        className="w-full p-2 md:p-4 rounded-xl md:rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-[16px] md:text-base"
                         value={qWeight}
                         onChange={(e) => setQWeight(Number(e.target.value))}
                       />
@@ -8160,7 +8358,7 @@ export default function App() {
                   </div>
                   
                   <div>
-                    <label className="block text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 md:mb-3">Shipping Method</label>
+                    <label className="block text-[8px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-3">Shipping Method</label>
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         { id: 'Standard', label: 'Standard', days: '10-14 Days', multiplier: 0.7 },
@@ -8169,16 +8367,16 @@ export default function App() {
                         <button
                           key={method.id}
                           onClick={() => setQMethod(method.id as any)}
-                          className={`p-3 md:p-4 rounded-2xl border-2 transition-all text-left ${
+                          className={`p-2 md:p-4 rounded-xl md:rounded-2xl border-2 transition-all text-left ${
                             qMethod === method.id 
                               ? 'border-indigo-600 bg-indigo-50 ring-4 ring-indigo-600/5' 
                               : 'border-slate-100 bg-white hover:border-slate-200'
                           }`}
                         >
-                          <div className={`text-xs md:text-sm font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
+                          <div className={`text-[10px] md:text-sm font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
                             {method.label}
                           </div>
-                          <div className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                          <div className="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
                             {method.days}
                           </div>
                         </button>
@@ -8186,13 +8384,13 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="p-4 md:p-6 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-200">
+                  <div className="p-2.5 md:p-6 bg-indigo-600 rounded-xl md:rounded-2xl text-white shadow-lg shadow-indigo-200">
                     <div className="flex justify-between items-end">
                       <div>
-                        <span className="text-indigo-100 text-[10px] md:text-xs font-bold uppercase tracking-widest">
+                        <span className="text-indigo-100 text-[8px] md:text-xs font-bold uppercase tracking-widest">
                           Estimated Cost ({qMethod})
                         </span>
-                        <div className="text-3xl md:text-4xl font-black">
+                        <div className="text-xl md:text-4xl font-black">
                           ₹{(() => {
                             const rate = shippingRates[qCountry] || 10;
                             const methodMultiplier = qMethod === 'Standard' ? 0.7 : 1.0;
@@ -8209,18 +8407,18 @@ export default function App() {
                             const methodMultiplier = qMethod === 'Standard' ? 0.7 : 1.0;
                             const saved = qWeight * rate * methodMultiplier * (discountPercent / 100);
                             return (
-                              <div className="text-[10px] md:text-xs font-bold text-rose-300 mt-1">
+                              <div className="text-[8px] md:text-xs font-bold text-rose-300 mt-0.5">
                                 Discount of {discountPercent}% Applied for {qCountry}! (Save ₹{saved.toFixed(2)})
                               </div>
                             );
                           }
                           return null;
                         })()}
-                        <div className="text-[9px] md:text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-2 flex items-center gap-1">
+                        <div className="text-[8px] md:text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-1 flex items-center gap-1">
                           <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
                         </div>
                       </div>
-                      <Truck className="opacity-20 shrink-0" size={36} md:size={48} />
+                      <Truck className="opacity-20 shrink-0" size={24} md:size={48} />
                     </div>
                   </div>
                 </div>
@@ -15818,13 +16016,19 @@ export default function App() {
                   </button>
                 );
               }
-              const isActive = activeTab === item.id;
+              const isActive = item.id === 'account' 
+                ? (activeTab === 'account' || activeTab === 'history') 
+                : activeTab === item.id;
               return (
                 <button
                   key={item.id}
                   onClick={() => {
-                    navigateTo(item.id as any);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    if (item.id === 'account') {
+                      setShowAccountMenu(true);
+                    } else {
+                      navigateTo(item.id as any);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
                   }}
                   className="flex flex-col items-center justify-center flex-1 h-full relative"
                 >
@@ -15940,6 +16144,83 @@ export default function App() {
 
               <button
                 onClick={() => setShowNewOrderMenu(false)}
+                className="w-full mt-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all active:scale-95"
+              >
+                Cancel
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Account Quick Drawer */}
+      <AnimatePresence>
+        {showAccountMenu && (
+          <div className="md:hidden fixed inset-0 z-[150] overflow-hidden">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAccountMenu(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+
+            {/* Bottom Sheet */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2.5rem] shadow-2xl p-6 pb-12 border-t border-slate-100"
+            >
+              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6" />
+
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-black text-slate-900">Your Account</h3>
+                <p className="text-xs text-slate-500 mt-1">Manage details or track order history</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                {/* My Account Option */}
+                <button
+                  onClick={() => {
+                    setShowAccountMenu(false);
+                    navigateTo('account');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100/50 transition-all text-left w-full"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-100">
+                    <UserIcon size={22} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-indigo-950">My Account</h4>
+                    <p className="text-xs text-indigo-700/80 mt-0.5">View your profile details and preferences</p>
+                  </div>
+                </button>
+
+                {/* My Orders Option */}
+                <button
+                  onClick={() => {
+                    setShowAccountMenu(false);
+                    navigateTo('history');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100/50 transition-all text-left w-full"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-100">
+                    <History size={22} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-indigo-950">My Orders</h4>
+                    <p className="text-xs text-indigo-700/80 mt-0.5">Track shipment statuses and order history</p>
+                  </div>
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowAccountMenu(false)}
                 className="w-full mt-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all active:scale-95"
               >
                 Cancel
