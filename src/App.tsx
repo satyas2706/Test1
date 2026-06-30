@@ -6,6 +6,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Logo } from './components/Logo';
 import { MobilePickupFlow } from './components/MobilePickupFlow';
+import { MobileDropOffFlow } from './components/MobileDropOffFlow';
 import { 
   Package, 
   PackageCheck, 
@@ -4902,7 +4903,10 @@ export default function App() {
   const pickupHeaderRef = React.useRef<HTMLDivElement>(null);
 
   const scrollToQuote = () => {
-    quoteRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = document.getElementById('mobile-quick-quote') || document.getElementById('desktop-quick-quote') || quoteRef.current;
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   const handleQuickQuoteClick = () => {
@@ -8006,126 +8010,247 @@ export default function App() {
                 })}
               </div>
 
-              {/* Mobile View: Dedicated Unified White Container */}
+              {/* Mobile View: Dedicated Unified Single Page Layout Container */}
               <div className="md:hidden w-[95%] mx-auto px-0 mt-3">
-                <div className="bg-white rounded-2xl p-4 shadow-xl border border-slate-100 text-slate-800 space-y-4 text-left">
-                  {/* Header */}
-                  <div className="text-center">
-                    <h3 className="text-base font-black text-slate-900 tracking-tight">What would you like to do?</h3>
+                <div className="bg-white rounded-3xl p-5 shadow-xl border border-slate-100 text-slate-800 space-y-6 text-left">
+                  
+                  {/* SECTION 1: WHAT WOULD YOU LIKE TO DO */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                        <PlusCircle size={14} className="stroke-[2.5]" />
+                      </div>
+                      <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase">Quick Actions</h3>
+                    </div>
+
+                    {/* Three Side-by-Side Cards */}
+                    <div className="grid grid-cols-3 gap-2">
+                      {/* Card 1: Schedule Pickup */}
+                      <div 
+                        onClick={() => {
+                          navigateTo('pickup');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      >
+                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+                          <Truck className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Schedule Pickup</h4>
+                        <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Schedule</span>
+                      </div>
+
+                      {/* Card 2: Drop off package */}
+                      <div 
+                        onClick={() => {
+                          navigateTo('warehouse');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      >
+                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+                          <Package className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Drop Off Package</h4>
+                        <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Drop Off</span>
+                      </div>
+
+                      {/* Card 3: Shop & Ship */}
+                      <div 
+                        onClick={() => {
+                          navigateTo('store');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      >
+                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+                          <ShoppingBag className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Shop & Ship</h4>
+                        <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Shop</span>
+                      </div>
+                    </div>
+
+                    {/* Below service cards, put how jiffex works side by side horizontally under the same white background */}
+                    <div className="pt-2">
+                      <div className="bg-slate-50/50 rounded-xl p-2 border border-slate-100/80 grid grid-cols-4 divide-x divide-slate-200/50">
+                        {[
+                          { icon: Calendar, title: "Book in 30 Seconds", desc: "Quick & easy pickup", color: "bg-indigo-50 text-indigo-600" },
+                          { icon: ShoppingBag, title: "Add items from Anywhere", desc: "From home, shop or any store", color: "bg-amber-50 text-amber-600" },
+                          { icon: Truck, title: "We Combine Everything", desc: "Pack & store in our warehouse", color: "bg-emerald-50 text-emerald-600" },
+                          { icon: CheckCircle2, title: "Delivered to Your Doorstep", desc: "Global delivery made easy", color: "bg-blue-50 text-blue-600" }
+                        ].map((step, idx) => {
+                          const StepIcon = step.icon;
+                          return (
+                            <div key={idx} className="flex flex-col items-center text-center px-1 py-1 first:pl-0 last:pr-0">
+                              <div className={`w-6 h-6 rounded-md ${step.color} flex items-center justify-center shrink-0 mb-1`}>
+                                <StepIcon size={12} className="font-black" />
+                              </div>
+                              <h5 className="font-black text-[8px] sm:text-[9px] text-slate-900 leading-tight min-h-[22px] flex items-center justify-center">
+                                {step.title}
+                              </h5>
+                              <p className="text-[7px] text-slate-400 font-medium leading-tight mt-0.5">
+                                {step.desc}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Three Side-by-Side Cards */}
-                  <div className="grid grid-cols-3 gap-2">
-                    {/* Card 1: Schedule Pickup */}
-                    <div 
-                      onClick={() => {
-                        navigateTo('pickup');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                    >
-                      <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
-                        <Truck className="w-5 h-5 text-indigo-600" />
+                  {/* Section Divider 1 */}
+                  <div className="border-t border-slate-100" />
+
+                  {/* SECTION 2: SHOP DEALS */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                        <ShoppingBag size={14} className="stroke-[2.5]" />
                       </div>
-                      <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Schedule Pickup</h4>
-                      <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Schedule</span>
+                      <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase">Shop Authentic Indian Goods</h3>
                     </div>
 
-                    {/* Card 2: Drop off package */}
-                    <div 
-                      onClick={() => {
-                        navigateTo('warehouse');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                    >
-                      <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
-                        <Package className="w-5 h-5 text-indigo-600" />
-                      </div>
-                      <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Drop Off Package</h4>
-                      <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Drop Off</span>
-                    </div>
-
-                    {/* Card 3: Shop & Ship */}
-                    <div 
+                    <motion.div 
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.25 }}
                       onClick={() => {
                         navigateTo('store');
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
-                      className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      className="relative overflow-hidden bg-gradient-to-r from-amber-500/10 via-amber-600/5 to-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-md active:scale-[0.98] transition-all cursor-pointer"
                     >
-                      <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
-                        <ShoppingBag className="w-5 h-5 text-indigo-600" />
-                      </div>
-                      <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Shop & Ship</h4>
-                      <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Shop</span>
-                    </div>
-                  </div>
-
-                  {/* Below service cards, put how jiffex works side by side horizontally under the same white background */}
-                  <div className="border-t border-slate-100 pt-3">
-                    <div className="bg-slate-50/50 rounded-xl p-2 border border-slate-100/80 grid grid-cols-4 divide-x divide-slate-200/50">
-                      {[
-                        { icon: Calendar, title: "Book in 30 Seconds", desc: "Quick & easy pickup", color: "bg-indigo-50 text-indigo-600" },
-                        { icon: ShoppingBag, title: "Add items from Anywhere", desc: "From home, shop or any store", color: "bg-amber-50 text-amber-600" },
-                        { icon: Truck, title: "We Combine Everything", desc: "Pack & store in our warehouse", color: "bg-emerald-50 text-emerald-600" },
-                        { icon: CheckCircle2, title: "Delivered to Your Doorstep", desc: "Global delivery made easy", color: "bg-blue-50 text-blue-600" }
-                      ].map((step, idx) => {
-                        const StepIcon = step.icon;
-                        return (
-                          <div key={idx} className="flex flex-col items-center text-center px-1 py-1 first:pl-0 last:pr-0">
-                            <div className={`w-6 h-6 rounded-md ${step.color} flex items-center justify-center shrink-0 mb-1`}>
-                              <StepIcon size={12} className="font-black" />
-                            </div>
-                            <h5 className="font-black text-[8px] sm:text-[9px] text-slate-900 leading-tight min-h-[22px] flex items-center justify-center">
-                              {step.title}
-                            </h5>
-                            <p className="text-[7px] text-slate-400 font-medium leading-tight mt-0.5">
-                              {step.desc}
-                            </p>
+                      {/* Decorative background circle */}
+                      <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
+                      
+                      <div className="flex gap-2.5 items-start">
+                        <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center shrink-0 text-amber-600 border border-amber-100/30">
+                          <ShoppingBag size={20} className="animate-pulse" />
+                        </div>
+                        <div className="space-y-1 text-left">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-extrabold text-[12px] text-amber-950 tracking-tight leading-none">Shop Indian Goods</span>
+                            <span className="bg-amber-600 text-white text-[7px] font-black uppercase px-1 py-0.5 rounded tracking-wide leading-none">Catalog</span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Mobile View: Shop Authentic Indian Items Promo Card */}
-              <div className="md:hidden w-[95%] mx-auto mt-3 px-0">
-                <motion.div 
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.25 }}
-                  onClick={() => {
-                    navigateTo('store');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="relative overflow-hidden bg-gradient-to-r from-indigo-500/10 via-indigo-600/5 to-indigo-500/10 border border-indigo-500/20 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-md active:scale-[0.98] transition-all cursor-pointer"
-                >
-                  {/* Decorative background circle */}
-                  <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
-                  
-                  <div className="flex gap-2.5 items-start">
-                    <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center shrink-0 text-indigo-600 border border-indigo-100/30">
-                      <ShoppingBag size={20} className="animate-pulse" />
-                    </div>
-                    <div className="space-y-1 text-left">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-extrabold text-[12px] text-indigo-950 tracking-tight leading-none">Shop Authentic Indian Goods</span>
-                        <span className="bg-indigo-600 text-white text-[7px] font-black uppercase px-1 py-0.5 rounded tracking-wide leading-none">Catalog</span>
+                          <p className="text-[10px] text-slate-600 font-medium leading-normal max-w-[210px]">
+                            Craving home flavors, festive sweets, or premium ethnic wear? Buy from top Indian stores and we'll deliver them abroad!
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-[10px] text-slate-600 font-medium leading-normal max-w-[210px]">
-                        Craving home flavors, festive sweets, or premium ethnic wear? Buy from top Indian stores and we'll deliver them abroad!
-                      </p>
+                      
+                      <div className="shrink-0 flex flex-col items-center justify-center bg-amber-600 text-white p-2 px-3 rounded-xl shadow-sm hover:bg-amber-700 active:scale-95 transition-all">
+                        <span className="text-[9px] font-black tracking-tight leading-none">Shop</span>
+                        <ArrowRight size={12} className="mt-1" />
+                      </div>
+                    </motion.div>
+                  </div>
+
+                  {/* Section Divider 2 */}
+                  <div className="border-t border-slate-100" />
+
+                  {/* SECTION 3: QUICK SHIPPING QUOTE */}
+                  <div id="mobile-quick-quote" className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+                        <Calculator size={14} className="stroke-[2.5]" />
+                      </div>
+                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Quick Shipping Quote</h3>
+                    </div>
+
+                    <div className="space-y-3.5">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Destination</label>
+                          <select 
+                            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold text-slate-800"
+                            value={qCountry}
+                            onChange={(e) => setQCountry(e.target.value)}
+                          >
+                            {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Weight (kg)</label>
+                          <input 
+                            type="number" 
+                            min="0.1" 
+                            step="0.1"
+                            className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold bg-slate-50 text-slate-800"
+                            value={qWeight}
+                            onChange={(e) => setQWeight(Number(e.target.value))}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Shipping Method</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { id: 'Standard', label: 'Standard', days: '10-14 Days', multiplier: 0.7 },
+                            { id: 'Express', label: 'Express', days: '5-7 Days', multiplier: 1.0 }
+                          ].map((method) => (
+                            <button
+                              key={method.id}
+                              onClick={() => setQMethod(method.id as any)}
+                              className={`p-2.5 rounded-xl border-2 transition-all text-left ${
+                                qMethod === method.id 
+                                  ? 'border-indigo-600 bg-indigo-50/50 ring-4 ring-indigo-600/5' 
+                                  : 'border-slate-100 bg-white hover:border-slate-200'
+                              }`}
+                            >
+                              <div className={`text-[10px] font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
+                                {method.label}
+                              </div>
+                              <div className="text-[7px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                {method.days}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
+                        <div className="flex justify-between items-end">
+                          <div>
+                            <span className="text-indigo-100 text-[8px] font-bold uppercase tracking-widest">
+                              Estimated Cost ({qMethod})
+                            </span>
+                            <div className="text-xl font-black">
+                              ₹{(() => {
+                                const rate = shippingRates[qCountry] || 10;
+                                const methodMultiplier = qMethod === 'Standard' ? 0.7 : 1.0;
+                                const rawQuote = qWeight * rate * methodMultiplier;
+                                const discountPercent = shippingDiscounts[qCountry] || 0;
+                                const discount = rawQuote * (discountPercent / 100);
+                                return Math.max(0, rawQuote - discount).toFixed(2);
+                              })()}
+                            </div>
+                            {(() => {
+                              const discountPercent = shippingDiscounts[qCountry] || 0;
+                              if (discountPercent > 0) {
+                                const rate = shippingRates[qCountry] || 10;
+                                const methodMultiplier = qMethod === 'Standard' ? 0.7 : 1.0;
+                                const saved = qWeight * rate * methodMultiplier * (discountPercent / 100);
+                                return (
+                                  <div className="text-[7px] font-bold text-rose-300 mt-0.5">
+                                    Discount of {discountPercent}% Applied for {qCountry}! (Save ₹{saved.toFixed(2)})
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                            <div className="text-[7px] font-bold text-indigo-200 uppercase tracking-widest mt-1.5 flex items-center gap-1">
+                              <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
+                            </div>
+                          </div>
+                          <Truck className="opacity-25 shrink-0" size={28} />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  
-                  <div className="shrink-0 flex flex-col items-center justify-center bg-indigo-600 text-white p-2 px-3 rounded-xl shadow-sm hover:bg-indigo-700 active:scale-95 transition-all">
-                    <span className="text-[9px] font-black tracking-tight leading-none">Shop</span>
-                    <ArrowRight size={12} className="mt-1" />
-                  </div>
-                </motion.div>
+
+                </div>
               </div>
 
               {/* Laptop / Desktop only view for the service selectors */}
@@ -8327,7 +8452,7 @@ export default function App() {
             </div>
           </motion.div>
 
-          <div ref={quoteRef} className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start max-md:!mt-3">
+          <div ref={quoteRef} id="desktop-quick-quote" className="hidden md:grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-white p-3 md:p-8 rounded-2xl md:rounded-3xl shadow-xl md:shadow-indigo-500/5 border border-slate-100">
                 <h2 className="text-xs md:text-2xl font-black mb-3 md:mb-6 flex items-center gap-1.5 uppercase tracking-wider text-slate-900">
@@ -11414,8 +11539,42 @@ export default function App() {
     return (
       <div className="space-y-6">
         {activeTab === 'warehouse' ? (
-          <div className="space-y-8">
-            {/* Value Prop Banner */}
+          <>
+            {/* MOBILE ONLY VIEW FOR DROP OFF PACKAGE (WAREHOUSE) */}
+            <div className="block md:hidden animate-fade-in">
+              <MobileDropOffFlow
+                customerWarehouseId={customerWarehouseId}
+                items={items}
+                addItem={addItem}
+                removeItem={removeItem}
+                setItems={setItems}
+                setActiveTab={setActiveTab}
+                currentUser={currentUser}
+                dbStatus={dbStatus}
+                api={api}
+                navigateTo={navigateTo}
+                cartItemName={cartItemName}
+                setCartItemName={setCartItemName}
+                cartItemWeight={cartItemWeight}
+                setCartItemWeight={setCartItemWeight}
+                cartItemQuantity={cartItemQuantity}
+                setCartItemQuantity={setCartItemQuantity}
+                cartItemFragile={cartItemFragile}
+                setCartItemFragile={setCartItemFragile}
+                cartItemInvoiceNumber={cartItemInvoiceNumber}
+                setCartItemInvoiceNumber={setCartItemInvoiceNumber}
+                cartItemRemarks={cartItemRemarks}
+                setCartItemRemarks={setCartItemRemarks}
+                cartItemPurchaseSource={cartItemPurchaseSource}
+                setCartItemPurchaseSource={setCartItemPurchaseSource}
+                cartItemImageUrl={cartItemImageUrl}
+                setCartItemImageUrl={setCartItemImageUrl}
+              />
+            </div>
+
+            {/* LAPTOP ONLY VIEW FOR DROP OFF PACKAGE (WAREHOUSE) */}
+            <div className="hidden md:block space-y-8">
+              {/* Value Prop Banner */}
             <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-8 md:p-12 rounded-[2.5rem] shadow-xl relative overflow-hidden">
                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
                <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
@@ -11742,6 +11901,7 @@ export default function App() {
               </div>
             </div>
           </div>
+          </>
         ) : (
           <>
             {!mode && hasActivePickup && !displayItems.some(i => i.source === 'Warehouse') && (
