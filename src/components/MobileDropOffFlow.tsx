@@ -240,22 +240,14 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
   return (
     <div className="space-y-4 px-3 py-1 text-left">
       {/* 1. Header & Drop Off Banner */}
-      <div className="bg-gradient-to-br from-[#064e3b] to-[#047857] text-white p-5 rounded-2xl shadow-md flex items-center justify-between relative overflow-hidden text-left">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
-        <div className="flex items-center gap-3.5 z-10">
-          <div className="w-11 h-11 rounded-xl bg-emerald-500/20 text-yellow-300 flex items-center justify-center shrink-0 border border-emerald-500/30">
-            <Package size={22} />
-          </div>
-          <div>
-            <h2 className="text-lg font-black tracking-tight leading-none text-white">Drop Off Package</h2>
-            <p className="text-[10px] text-emerald-100 font-bold mt-1.5 leading-tight">
-              Ship your packages to our hub — we deliver abroad
-            </p>
-          </div>
-        </div>
-        <div className="relative shrink-0 w-14 h-14 flex items-center justify-center">
-          <Package size={28} className="text-emerald-200/40 animate-bounce" />
-        </div>
+      <div className="relative overflow-hidden rounded-2xl h-36 shadow-md text-left -mx-3 -mt-1 mb-2.5 scale-[1.05]">
+        {/* Background Image from Google Drive */}
+        <img 
+          src="https://lh3.googleusercontent.com/d/14pgrQ4cnN4z6ymvfRCnRa-Q5kR8aW1Xr" 
+          alt="Drop Off Package Hero" 
+          className="absolute inset-0 w-full h-full object-cover"
+          referrerPolicy="no-referrer"
+        />
       </div>
 
       {/* 2. Progress Stepper */}
@@ -270,14 +262,14 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
           return (
             <div key={s.step} className="flex flex-col items-center">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black transition-all ${
-                isCompleted ? 'bg-emerald-600 text-white' :
-                isActive ? 'bg-[#064e3b] text-white ring-4 ring-emerald-100' :
+                isCompleted ? 'bg-indigo-600 text-white' :
+                isActive ? 'bg-indigo-900 text-white ring-4 ring-indigo-100' :
                 'bg-slate-100 text-slate-400'
               }`}>
                 {s.step}
               </div>
               <span className={`text-[9px] font-black tracking-tight mt-1 transition-colors ${
-                isActive || isCompleted ? 'text-[#064e3b] font-black' : 'text-slate-400 font-bold'
+                isActive || isCompleted ? 'text-indigo-900 font-black' : 'text-slate-400 font-bold'
               }`}>
                 {s.label}
               </span>
@@ -297,47 +289,47 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                 Order your products from any online store or courier, and ship them directly to this address.
               </p>
 
-              <div className="bg-emerald-50/50 rounded-2xl border border-emerald-100/60 p-4 space-y-3 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-3 text-emerald-200">
+              <div className="bg-indigo-50/50 rounded-2xl border border-indigo-100/60 p-4 space-y-3 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-3 text-indigo-200">
                   <MapPin size={48} className="opacity-15" />
                 </div>
 
                 <div className="space-y-2 text-xs text-slate-800">
                   <div>
-                    <span className="text-[9px] font-extrabold uppercase text-emerald-800 block">Recipient Name</span>
+                    <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">Recipient Name</span>
                     <span className="font-bold text-[#0A142F]">{WAREHOUSE_ADDRESS.name}</span>
                   </div>
 
                   <div>
-                    <span className="text-[9px] font-extrabold uppercase text-emerald-800 block">Unique ID (MUST Include as Attn)</span>
-                    <span className="font-mono bg-white border border-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded text-[11px] font-black">
+                    <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">Unique ID (MUST Include as Attn)</span>
+                    <span className="font-mono bg-white border border-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[11px] font-black">
                       Attn: {customerWarehouseId}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-[9px] font-extrabold uppercase text-emerald-800 block">Street Address</span>
+                    <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">Street Address</span>
                     <span className="font-bold text-[#0A142F]">{WAREHOUSE_ADDRESS.street}</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <span className="text-[9px] font-extrabold uppercase text-emerald-800 block">City & State</span>
+                      <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">City & State</span>
                       <span className="font-bold text-[#0A142F]">{WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}</span>
                     </div>
                     <div>
-                      <span className="text-[9px] font-extrabold uppercase text-emerald-800 block">Postal/ZIP Code</span>
+                      <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">Postal/ZIP Code</span>
                       <span className="font-bold text-[#0A142F]">{WAREHOUSE_ADDRESS.zip}</span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <span className="text-[9px] font-extrabold uppercase text-emerald-800 block">Country</span>
+                      <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">Country</span>
                       <span className="font-bold text-[#0A142F]">{WAREHOUSE_ADDRESS.country}</span>
                     </div>
                     <div>
-                      <span className="text-[9px] font-extrabold uppercase text-emerald-800 block">Hub Phone</span>
+                      <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">Hub Phone</span>
                       <span className="font-bold text-[#0A142F]">{WAREHOUSE_ADDRESS.phone}</span>
                     </div>
                   </div>
@@ -345,7 +337,7 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
 
                 <button 
                   onClick={handleCopyAddress}
-                  className="w-full mt-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-100"
+                  className="w-full mt-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-100"
                 >
                   {copied ? <Check size={14} /> : <Copy size={14} />}
                   <span>{copied ? 'Copied to Clipboard!' : 'Copy Address Details'}</span>
@@ -366,7 +358,7 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                 setActiveStep(2);
                 window.scrollTo(0, 0);
               }}
-              className="w-full py-3.5 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-1 cursor-pointer shadow-md shadow-emerald-100"
+              className="w-full py-3.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-1 cursor-pointer shadow-md shadow-indigo-100"
             >
               <span>Continue to Step 2</span>
               <ArrowRight size={13} className="stroke-[2.5]" />
@@ -379,7 +371,7 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
           <div className="space-y-4">
             <div className="space-y-3 text-left">
               <div className="flex items-center gap-1.5">
-                <div className="w-5 h-5 rounded bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <div className="w-5 h-5 rounded bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
                   <PackagePlus size={12} className="stroke-[2.5]" />
                 </div>
                 <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Register Incoming Package</h4>
@@ -391,91 +383,87 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
               <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm space-y-3 text-xs">
                 {/* Item Name */}
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-[#0A142F] uppercase tracking-wide">Item Description</label>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Item Description</label>
                   <input 
                     type="text" 
                     value={cartItemName}
                     onChange={(e) => setCartItemName(e.target.value)}
                     placeholder="e.g. Cotton Kurtis, Brass diya, Wedding garments"
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all text-xs font-bold bg-slate-50/50"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm font-semibold"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Online Store Source */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-[#0A142F] uppercase tracking-wide">Online Store Source</label>
-                    <select
-                      value={cartItemPurchaseSource}
-                      onChange={(e) => setCartItemPurchaseSource(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all text-xs font-bold bg-slate-50/50"
-                    >
-                      <option value="Myntra">Myntra</option>
-                      <option value="Amazon India">Amazon India</option>
-                      <option value="Flipkart">Flipkart</option>
-                      <option value="Ajio">Ajio</option>
-                      <option value="Nykaa">Nykaa</option>
-                      <option value="FirstCry">FirstCry</option>
-                      <option value="Meesho">Meesho</option>
-                      <option value="Other / Boutique">Other / Boutique</option>
-                    </select>
-                  </div>
+                {/* Online Store Source */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Online Store Source</label>
+                  <select
+                    value={cartItemPurchaseSource}
+                    onChange={(e) => setCartItemPurchaseSource(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm font-semibold h-[38px]"
+                  >
+                    <option value="Myntra">Myntra</option>
+                    <option value="Amazon India">Amazon India</option>
+                    <option value="Flipkart">Flipkart</option>
+                    <option value="Ajio">Ajio</option>
+                    <option value="Nykaa">Nykaa</option>
+                    <option value="FirstCry">FirstCry</option>
+                    <option value="Meesho">Meesho</option>
+                    <option value="Other / Boutique">Other / Boutique</option>
+                  </select>
+                </div>
 
-                  {/* Quantity Counter */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-[#0A142F] uppercase tracking-wide">Quantity</label>
-                    <div className="flex items-center justify-between border border-slate-200 rounded-xl px-2 py-1.5 bg-slate-50/50 h-[38px]">
-                      <button 
-                        onClick={() => setCartItemQuantity(Math.max(1, cartItemQuantity - 1))}
-                        className="w-7 h-7 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-50 active:scale-90 transition-all cursor-pointer"
-                      >
-                        <Minus size={12} className="stroke-[2.5]" />
-                      </button>
-                      <span className="font-extrabold text-[#0a142f] text-xs px-2">{cartItemQuantity}</span>
-                      <button 
-                        onClick={() => setCartItemQuantity(cartItemQuantity + 1)}
-                        className="w-7 h-7 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-50 active:scale-90 transition-all cursor-pointer"
-                      >
-                        <Plus size={12} className="stroke-[2.5]" />
-                      </button>
-                    </div>
+                {/* Quantity Counter */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Quantity</label>
+                  <div className="flex items-center justify-between border border-slate-200 rounded-xl px-2 py-1 bg-white shadow-sm h-[38px]">
+                    <button 
+                      onClick={() => setCartItemQuantity(Math.max(1, cartItemQuantity - 1))}
+                      className="w-7 h-7 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-50 active:scale-90 transition-all cursor-pointer"
+                    >
+                      <Minus size={12} className="stroke-[2.5]" />
+                    </button>
+                    <span className="font-extrabold text-[#0a142f] text-xs px-2">{cartItemQuantity}</span>
+                    <button 
+                      onClick={() => setCartItemQuantity(cartItemQuantity + 1)}
+                      className="w-7 h-7 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-50 active:scale-90 transition-all cursor-pointer"
+                    >
+                      <Plus size={12} className="stroke-[2.5]" />
+                    </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Courier Tracking ID */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-[#0A142F] uppercase tracking-wide">Courier Tracking ID</label>
-                    <input 
-                      type="text" 
-                      value={cartItemInvoiceNumber}
-                      onChange={(e) => setCartItemInvoiceNumber(e.target.value)}
-                      placeholder="Optional (e.g. Delivery tracking)"
-                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all text-xs font-mono bg-slate-50/50"
-                    />
-                  </div>
+                {/* Courier Tracking ID */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Courier Tracking ID</label>
+                  <input 
+                    type="text" 
+                    value={cartItemInvoiceNumber}
+                    onChange={(e) => setCartItemInvoiceNumber(e.target.value)}
+                    placeholder="Optional (e.g. Delivery tracking)"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm font-mono"
+                  />
+                </div>
 
-                  {/* Estimated Unit Weight */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-[#0A142F] uppercase tracking-wide">Est. Unit Weight (kg)</label>
-                    <input 
-                      type="number" 
-                      value={cartItemWeight}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setCartItemWeight(val === '' ? '' : parseFloat(val));
-                      }}
-                      placeholder="Optional"
-                      step="0.1"
-                      className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all text-xs font-bold bg-slate-50/50"
-                    />
-                  </div>
+                {/* Estimated Unit Weight */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Est. Unit Weight (kg)</label>
+                  <input 
+                    type="number" 
+                    value={cartItemWeight}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCartItemWeight(val === '' ? '' : parseFloat(val));
+                    }}
+                    placeholder="Optional"
+                    step="0.1"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm font-semibold"
+                  />
                 </div>
 
                 {/* Optional Item Image URL */}
                 <div className="space-y-1">
                   <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-black text-[#0A142F] uppercase tracking-wide">Item Image URL</label>
+                    <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Item Image URL</label>
                     <span className="text-[8px] text-slate-400 font-bold uppercase">Optional reference</span>
                   </div>
                   <input 
@@ -483,13 +471,13 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                     value={cartItemImageUrl}
                     onChange={(e) => setCartItemImageUrl(e.target.value)}
                     placeholder="Paste image link from Myntra, Amazon, etc."
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all text-xs font-semibold bg-slate-50/50"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm font-semibold"
                   />
                 </div>
 
                 <button 
                   onClick={handleAddItem}
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-100"
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-100"
                 >
                   <Plus size={14} className="stroke-[2.5]" />
                   <span>Register This Item</span>
@@ -498,24 +486,33 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
 
               {/* Added items mini overview */}
               {displayItems.length > 0 && (
-                <div className="bg-emerald-50/60 p-4 rounded-xl border border-emerald-100 text-left space-y-2">
+                <div className="bg-indigo-50/60 p-4 rounded-xl border border-indigo-100 text-left space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-black uppercase text-emerald-900 tracking-wide">Current Shipment Summary</span>
-                    <span className="text-[9px] font-extrabold bg-emerald-600 text-white px-2 py-0.5 rounded-full">
+                    <span className="text-[9px] font-black uppercase text-indigo-900 tracking-wide">Current Shipment Summary</span>
+                    <span className="text-[9px] font-extrabold bg-indigo-600 text-white px-2 py-0.5 rounded-full">
                       {displayItems.length} Registered
                     </span>
                   </div>
-                  <div className="text-[10px] text-emerald-800 space-y-1 font-semibold">
-                    {displayItems.slice(0, 3).map((item, index) => (
-                      <div key={item.id} className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                        <span className="truncate flex-1">{item.name} (x{item.quantity})</span>
-                        <span className="font-bold text-[#0A142F] uppercase shrink-0 text-[8px]">{item.purchaseSource}</span>
+                  <div className="text-[10px] text-indigo-800 space-y-1 font-semibold max-h-[180px] overflow-y-auto pr-1">
+                    {displayItems.map((item, index) => (
+                      <div key={item.id} className="flex items-center justify-between gap-1.5 py-1 border-b border-indigo-100/30 last:border-0">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                          <span className="truncate text-slate-900">{item.name} (x{item.quantity})</span>
+                          <span className="font-bold text-indigo-700 uppercase shrink-0 text-[8px] bg-indigo-100/50 px-1 py-0.2 rounded">{item.purchaseSource}</span>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            removeItem(item.id);
+                            toast.success(`"${item.name}" removed from shipment`);
+                          }}
+                          className="p-1 text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
+                          title="Delete Item"
+                        >
+                          <Trash2 size={12} className="stroke-[2.5]" />
+                        </button>
                       </div>
                     ))}
-                    {displayItems.length > 3 && (
-                      <p className="text-[9px] text-slate-400 italic pt-0.5 font-bold">And {displayItems.length - 3} more registered packages...</p>
-                    )}
                   </div>
                 </div>
               )}
@@ -536,7 +533,7 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                   setActiveStep(3);
                   window.scrollTo(0, 0);
                 }}
-                className="flex-[2] py-3.5 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-emerald-100"
+                className="flex-[2] py-3.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-100"
               >
                 <span>Review & Finish</span>
                 <ArrowRight size={13} className="stroke-[2.5]" />
@@ -550,7 +547,7 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
           <div className="space-y-4">
             <div className="space-y-3.5 text-left">
               <div className="flex items-center gap-1.5">
-                <div className="w-5 h-5 rounded bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                <div className="w-5 h-5 rounded bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
                   <CheckCircle2 size={12} className="stroke-[2.5]" />
                 </div>
                 <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Review Registered Items</h4>
@@ -581,7 +578,7 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                       className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex items-center justify-between gap-3 relative group"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center text-emerald-600 border border-slate-100 shrink-0">
+                        <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center text-indigo-600 border border-slate-100 shrink-0">
                           {item.image ? (
                             <img src={item.image} alt={item.name} className="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer" />
                           ) : (
@@ -589,13 +586,13 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-black text-xs text-slate-900 truncate leading-snug">{item.name}</p>
+                          <p className="font-mono font-bold text-xs text-slate-900 truncate leading-snug">{item.name}</p>
                           <div className="flex flex-wrap gap-1.5 mt-0.5">
-                            <span className="px-1.5 py-0.5 bg-white rounded text-[8px] font-bold text-slate-500 border border-slate-100">
+                            <span className="font-mono px-1.5 py-0.5 bg-white rounded text-[8px] font-bold text-slate-500 border border-slate-100">
                               Qty: {item.quantity}
                             </span>
                             {item.purchaseSource && (
-                              <span className="px-1.5 py-0.5 bg-emerald-50 rounded text-[8px] font-bold text-emerald-700 border border-emerald-100 uppercase">
+                              <span className="font-mono px-1.5 py-0.5 bg-indigo-50 rounded text-[8px] font-bold text-indigo-700 border border-indigo-100 uppercase">
                                 {item.purchaseSource}
                               </span>
                             )}
@@ -628,10 +625,10 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                 {/* REQUIRED DOCUMENTS */}
                 <div className="space-y-3 text-left">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                    <div className="w-6 h-6 rounded bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
                       <ShieldCheck size={13} className="stroke-[2.5]" />
                     </div>
-                    <h3 className="text-[11px] font-black uppercase text-emerald-950 tracking-wider">DOCUMENTS REQUIRED</h3>
+                    <h3 className="text-[11px] font-black uppercase text-indigo-950 tracking-wider">DOCUMENTS REQUIRED</h3>
                   </div>
 
                   <div className="space-y-2">
@@ -642,14 +639,14 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                     ].map((doc, idx) => (
                       <div 
                         key={idx} 
-                        className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm flex items-center justify-between gap-3 hover:border-emerald-100 transition-all cursor-pointer"
+                        className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm flex items-center justify-between gap-3 hover:border-indigo-100 transition-all cursor-pointer"
                         onClick={() => {
                           setSelectedDocIndex(idx);
                           setShowRequirementsModal(true);
                         }}
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
                             <ShieldCheck size={16} className="stroke-[2.5]" />
                           </div>
                           <div>
@@ -666,7 +663,7 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                       setSelectedDocIndex(null);
                       setShowRequirementsModal(true);
                     }}
-                    className="inline-flex items-center gap-1 text-[9px] font-black text-emerald-600 hover:underline tracking-wider uppercase pt-1 cursor-pointer bg-transparent border-none outline-none"
+                    className="inline-flex items-center gap-1 text-[9px] font-black text-indigo-600 hover:underline tracking-wider uppercase pt-1 cursor-pointer bg-transparent border-none outline-none"
                   >
                     View all requirements &gt;
                   </button>
@@ -727,7 +724,7 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
               <div className="bg-[#f0f9ff] border border-sky-100 p-4 rounded-2xl text-left space-y-3 shadow-sm relative overflow-hidden mt-4">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[8px] font-black text-white bg-emerald-600 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    <span className="text-[8px] font-black text-white bg-indigo-600 px-2 py-0.5 rounded-full uppercase tracking-wider">
                       CO-SHIPPING ACTIVE
                     </span>
                     <span className="text-[8px] font-black text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
@@ -739,7 +736,7 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                       navigateTo('store');
                       window.scrollTo(0, 0);
                     }}
-                    className="inline-flex items-center gap-1 text-[8px] font-black text-white bg-emerald-600 px-2 py-1 rounded-lg uppercase hover:bg-emerald-700 transition cursor-pointer"
+                    className="inline-flex items-center gap-1 text-[8px] font-black text-white bg-indigo-600 px-2 py-1 rounded-lg uppercase hover:bg-indigo-700 transition cursor-pointer"
                   >
                     <ShoppingBag size={10} />
                     <span>See All</span>
@@ -799,7 +796,7 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                       <div>
                         <div className={`w-full h-20 rounded-lg bg-gradient-to-br ${product.bgColor} flex items-center justify-center relative mb-1.5`}>
                           <span className="text-3xl select-none">{product.emoji}</span>
-                          <span className="absolute top-1 left-1 text-[7px] font-extrabold text-emerald-800 bg-emerald-50 px-1 py-0.2 rounded">
+                          <span className="absolute top-1 left-1 text-[7px] font-extrabold text-indigo-800 bg-indigo-50 px-1 py-0.2 rounded">
                             {product.tag}
                           </span>
                         </div>
@@ -815,20 +812,20 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                         <button 
                           onClick={() => {
                             addItem({
-                              name: product.title,
-                              weight: parseFloat(product.weight),
-                              price: parseFloat(product.price.replace('$', '')),
-                              quantity: 1,
-                              image: '',
-                              purchaseSource: 'Store',
-                              trackingId: '',
-                              invoiceNumber: '',
-                              fragile: false,
-                              remarks: 'Co-shipped with drop-off package'
+                                name: product.title,
+                                weight: parseFloat(product.weight),
+                                price: parseFloat(product.price.replace('$', '')),
+                                quantity: 1,
+                                image: '',
+                                purchaseSource: 'Store',
+                                trackingId: '',
+                                invoiceNumber: '',
+                                fragile: false,
+                                remarks: 'Co-shipped with drop-off package'
                             }, 'Store');
                             toast.success(`"${product.title}" consolidated in your shipment box!`);
                           }}
-                          className="px-1.5 py-0.5 text-[8px] font-black text-emerald-600 border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition shrink-0 cursor-pointer"
+                          className="px-1.5 py-0.5 text-[8px] font-black text-indigo-600 border border-indigo-500/30 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition shrink-0 cursor-pointer"
                         >
                           + Add
                         </button>
@@ -854,7 +851,7 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                 disabled={displayItems.length === 0}
                 className={`flex-[2] py-3.5 rounded-xl text-xs font-black transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer ${
                   displayItems.length > 0
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95'
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white active:scale-95'
                     : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                 }`}
               >
@@ -870,9 +867,9 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
           <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[90vh] overflow-hidden">
             {/* Header */}
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-50/50 to-teal-50/20">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-50/50 to-blue-50/20">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">
                   <FileText size={16} />
                 </div>
                 <div>
@@ -896,8 +893,8 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
               {selectedDocIndex !== null ? (
                 // Focused Doc view
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3 p-3 bg-emerald-50/50 rounded-2xl border border-emerald-100/30">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                  <div className="flex items-center gap-3 p-3 bg-indigo-50/50 rounded-2xl border border-indigo-100/30">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
                       {requirementsData[selectedDocIndex].icon}
                     </div>
                     <div>
@@ -907,11 +904,11 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                   </div>
 
                   <div className="space-y-3">
-                    <h5 className="text-[10px] font-black text-emerald-950 tracking-wider uppercase">Fulfillment Guidelines</h5>
+                    <h5 className="text-[10px] font-black text-indigo-950 tracking-wider uppercase">Fulfillment Guidelines</h5>
                     <ul className="space-y-2.5">
                       {requirementsData[selectedDocIndex].guidelines.map((guide, gIdx) => (
                         <li key={gIdx} className="flex gap-2 text-[10px] text-slate-500 font-medium leading-relaxed">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0 mt-1.5" />
                           <span>{guide}</span>
                         </li>
                       ))}
@@ -937,15 +934,15 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                       <div 
                         key={idx} 
                         onClick={() => setSelectedDocIndex(idx)}
-                        className="p-4 bg-slate-50/50 hover:bg-emerald-50/20 border border-slate-100 hover:border-emerald-100 rounded-2xl transition cursor-pointer flex gap-3"
+                        className="p-4 bg-slate-50/50 hover:bg-indigo-50/20 border border-slate-100 hover:border-indigo-100 rounded-2xl transition cursor-pointer flex gap-3"
                       >
-                        <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                        <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
                           {doc.icon}
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
                             <h4 className="text-xs font-black text-slate-950">{doc.title}</h4>
-                            <span className="text-emerald-500 text-[10px] font-black uppercase tracking-wider">Details {"→"}</span>
+                            <span className="text-indigo-500 text-[10px] font-black uppercase tracking-wider">Details {"→"}</span>
                           </div>
                           <p className="text-[9px] text-slate-400 font-bold mt-1 leading-normal">{doc.subtext}</p>
                         </div>
@@ -963,7 +960,7 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                   setShowRequirementsModal(false);
                   setSelectedDocIndex(null);
                 }}
-                className="flex-1 py-3 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 transition cursor-pointer text-center"
+                className="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 transition cursor-pointer text-center"
               >
                 Got It, Thanks!
               </button>
