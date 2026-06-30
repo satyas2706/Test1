@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import * as fs from 'fs';
 
 async function main() {
-  const fileId = '1MTwruPIrcKWjA5tZTXHObvxyugo5QAB6';
+  const fileId = '1VbHq1O-l0b0o8GFefCGoLXprMhJnzSXV';
   const downloadUrl = `https://docs.google.com/uc?export=download&id=${fileId}`;
   
   try {

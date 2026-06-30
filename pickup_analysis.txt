@@ -1,101 +1,84 @@
-Here is a detailed analysis of the "Home Pickup" page screenshot from the mobile application interface.
+Based on the provided screenshot, please note that while your prompt refers to this as a "Schedule Doorstep Pickup" page, **this interface is actually an e-commerce storefront/product catalog page** for a brand named **JIFFEX** ("Anything from India, to anywhere"), specialized in selling and shipping Indian sweets, Pooja items, and decorative goods. 
+
+Below is a detailed breakdown of the layout, elements, styles, and field patterns shown in this mobile interface.
 
 ---
 
-### **1. Page Header & Top Navigation**
-*   **Top Bar:**
-    *   **Back Button:** Located on the top-left, featuring a light-grey circular button with a dark left-pointing arrow (`←`).
-    *   **Logo:** Centered in the top bar, reading **"JIFFEX"** in a bold, dark-blue sans-serif font, with an orange upward-pointing arrow stylized into the letters "E" and "X".
-    *   **Right Controls:** A telephone handset icon inside a rounded rectangular border, placed next to a standard three-line hamburger menu icon (`☰`).
-*   **Home Pickup Banner:** 
-    *   A prominent dark-indigo rectangular banner with rounded corners and a soft gradient.
-    *   **Left Side:** A bright blue rounded square icon containing a yellow line-art delivery truck.
-    *   **Center Text:** Large white bold text reading **"Home Pickup"** with a subtitle below: *"Schedule an agent to collect from your home"*.
-    *   **Right Side:** A 3D illustration showing stacked yellow/cardboard delivery boxes labeled with shipping stickers, accompanied by a purple shield displaying a white checkmark.
+### 1. Header Bar (Top)
+*   **Menu Icon (Left):** A clean black hamburger menu icon (three horizontal lines).
+*   **Logo (Center):** The brand name **"JIFFEX"** in a bold, stylized black sans-serif font, featuring a small orange dynamic swoop accent on the letter "E".
+*   **Action Icons (Right):**
+    *   A black magnifying glass (Search) icon.
+    *   A black wireframe shopping cart icon featuring a round orange badge with the number **"2"** inside in white, indicating items are currently in the cart.
 
 ---
 
-### **2. Progress Stepper**
-A horizontal 5-step progress indicator runs across the page just below the top banner, connected by thin light-grey lines:
-1.  **Step 1 (Items - Active):** A dark blue/indigo circle containing the number **"1"**, with the label **"Items"** in dark blue text underneath.
-2.  **Step 2 (Schedule):** An inactive light-grey circle with the number **"2"** and label **"Schedule"** in grey.
-3.  **Step 3 (Address):** An inactive light-grey circle with the number **"3"** and label **"Address"** in grey.
-4.  **Step 4 (Review):** An inactive light-grey circle with the number **"4"** and label **"Review"** in grey.
-5.  **Step 5 (Done):** An inactive light-grey circle with the number **"5"** and label **"Done"** in grey.
+### 2. Hero Promo Banner (Carousel)
+A dark, rich banner showcasing a box of traditional Indian sweets alongside marigold flowers and burning brass diyas.
+*   **Text & Badges:**
+    *   "JIFFEX - Anything from India, to anywhere" in white text.
+    *   Two rounded pill-shaped sub-badges:
+        *   `FRESH & AUTHENTIC` (orange outline, leaf icon, orange text).
+        *   `HYGIENICALLY PACKED` (green outline, checkmark shield icon, green text).
+    *   **Main Headline:** "Miss the Taste of India? **We Deliver Sweet Happiness.**" in bold white and bright orange.
+    *   **Subheadline:** "Order delicious Indian sweets online. Freshly packed and shipped worldwide." in smaller white text.
+*   **Call to Action (CTA):** A solid orange rectangular pill button with the text **"EXPLORE SWEETS COLLECTION →"** in bold white.
+*   **Value Proposition Icons (Bottom of banner):** Three columns with white/orange labels and icons:
+    *   *Delivered in 3–7 Days* (Truck icon)
+    *   *Trusted by 1000+ Indians* (Group of people icon)
+    *   *Authentic Flavors from India* (Shield icon)
+*   **Page Indicator:** 5 horizontal dots at the bottom-center of the banner (the first dot is bright white, indicating page 1; the others are translucent gray).
 
 ---
 
-### **3. "What type of items are you sending?" Section**
-This section features a horizontal grid of 4 item category selection cards:
-*   **Card 1: Everyday Items (Selected State):**
-    *   **Styling:** Surrounded by a bright orange border and a light orange-tinted background. Includes an orange circular badge with a white checkmark in the top-right corner.
-    *   **Content:** An orange outline icon of a shopping bag, and the text **"Everyday Items"** in bold orange.
-*   **Card 2: Large/Furniture (Unselected State):**
-    *   **Styling:** Thin light-grey border with a white background.
-    *   **Content:** A light-grey outline icon of a single 3D box, and the text **"Large/ Furniture"** in dark grey.
-*   **Card 3: Mixed Items (Unselected State):**
-    *   **Styling:** Thin light-grey border with a white background.
-    *   **Content:** A light-grey outline icon of three stacked 3D boxes, and the text **"Mixed Items"** in dark grey.
-*   **Card 4: Documents (Unselected State):**
-    *   **Styling:** Thin light-grey border with a white background.
-    *   **Content:** A light-grey outline icon of a paper document, and the text **"Documents"** in dark grey.
+### 3. Search and Utility Controls
+*   **Search Bar:** A wide, white input field with rounded corners and a thin gray border. It contains a gray magnifying glass icon on the left with the placeholder text `"Search products..."` in light gray.
+*   **Filters & Sort Buttons:**
+    *   **Filters:** A button with a horizontal slider icon and the text "Filters" inside a rounded rectangle.
+    *   **Sort:** A dropdown button with a dual-direction arrow icon and the text "Sort" beside a downward chevron arrow.
 
 ---
 
-### **4. "Approximate weight of items" Section**
-A vertical list of three selectable weight options, formatted as wide card rows:
-*   **Option 1: Less than 5 kg (Selected State):**
-    *   **Styling:** Thin light orange-brown border with a pale orange background.
-    *   **Left Icon:** An orange circular badge containing a white 3D box graphic.
-    *   **Text:** Title **"Less than 5 kg"** in bold dark blue, with the description *"Documents, small parcels, or light gift packs"* in a smaller grey font.
-    *   **Right Indicator:** An orange selected radio button (an orange circle containing a white center dot).
-*   **Option 2: 5 to 20 kg (Unselected State):**
-    *   **Styling:** Thin light-grey border with a white background.
-    *   **Left Icon:** A light-grey circular badge containing a white 3D box graphic.
-    *   **Text:** Title **"5 to 20 kg"** in bold dark blue, with the description *"Standard suitcases, medium boxes, or household items"* in grey.
-    *   **Right Indicator:** An empty light-grey circular radio button outline.
-*   **Option 3: More than 20 kg (Unselected State):**
-    *   **Styling:** Thin light-grey border with a white background.
-    *   **Left Icon:** A light-grey circular badge containing a white delivery truck graphic.
-    *   **Text:** Title **"More than 20 kg"** in bold dark blue, with the description *"Heavy cargo, large bulk luggage, or multiple packages"* in grey.
-    *   **Right Indicator:** An empty light-grey circular radio button outline.
+### 4. Category Navigation Tabs (Horizontal Scroll)
+A row of pill-shaped filter buttons:
+*   **"All"** (Active state: Solid deep blue background with white text).
+*   **"Pooja"** (Inactive: White background, gray border, black text).
+*   **"Return Gifts"** (Inactive: White background, gray border, black text).
+*   **"Decorative"** (Inactive: White background, gray border, black text).
+*   **"More"** (Dropdown: Inactive style with a downward chevron).
 
 ---
 
-### **5. Informational Callout Boxes**
-Two informative note panels are placed vertically before the final call-to-action button:
-*   **Price Estimate Callout (Yellow/Orange):**
-    *   **Styling:** Light yellow/orange-tinted background with a thin matching border.
-    *   **Left Icon:** An orange circle with a white lowercase **"i"** information symbol inside.
-    *   **Text Content:** 
-        *   Header (Bold, black): *"You’ll receive a price estimate before confirmation — no payment required yet."*
-        *   Body (Orange): *"Once your pickup is confirmed, our agent will contact you with a final price based on size, weight, and distance before collecting payment."*
-*   **Safe & Verified Agents Callout (Blue/Purple):**
-    *   **Styling:** Soft lavender/light blue background with a matching thin border.
-    *   **Left Icon:** A blue shield outline containing a checkmark.
-    *   **Text Content:**
-        *   Header (Bold, dark blue): *"Safe & Verified Agents"*
-        *   Body (Grey-blue): *"All our pickup agents are background-verified and follow strict safety protocols. They will call you 30 minutes before arrival."*
+### 5. Popular Products Grid (Body Catalog)
+*   **Section Header:** **"Popular Products"** (bold black text, left-aligned) with a blue text link **"View all →"** on the right.
+*   **Layout:** A two-column responsive product card grid. Each card features:
+    *   **Card Styling:** White background, rounded corners, and a subtle drop shadow.
+    *   **Visual Badges:** 
+        *   An upper-left category tag in a white capsule with black text (e.g., `POOJA` or `DECORATIVE`).
+        *   An upper-right floating white circle with a black heart icon outline (Add to Wishlist).
+    *   **Image:** A high-quality photo of the product.
+    *   **Title:** Bold black product name.
+    *   **Price:** Prominent orange text with the Rupee symbol (e.g., `₹25`, `₹10`).
+    *   **Metadata (Weight):** Gray text indicating weight (e.g., `Weight: 0.5 kg`).
+    *   **Shipping Indicator:** A small green delivery truck icon with the text `"Ready to ship by 22 May"` in bright green.
+    *   **Controls (Action Row):**
+        *   **Quantity Counter:** A light-gray rounded container with a minus (`-`), the current count (`1` in bold black), and a plus (`+`) sign.
+        *   **Add Button:** A vibrant blue button featuring a white cart icon and the text `"Add"`.
+
+#### Specific Products Displayed:
+1.  **Brass Diya Set:** ₹25 | Weight: 0.5 kg (Category: Pooja)
+2.  **Sandalwood Incense Sticks:** ₹10 | Weight: 0.2 kg (Category: Pooja)
+3.  **Handcrafted Elephant Statue...:** ₹45 | Weight: 1.2 kg (Category: Decorative)
+4.  **Copper Kalash:** ₹30 | Weight: 0.8 kg (Category: Pooja)
+5.  *Decorative Thali/Plate* (Partially cut off at the bottom left)
+6.  *Lord Ganesha Statue* (Partially cut off at the bottom right)
 
 ---
 
-### **6. Primary Action Button**
-*   **Button:** A full-width, solid purple-blue (indigo) button with rounded corners.
-*   **Text:** **"Continue to Schedule"** in bold white, accompanied by a right-pointing white arrow (`→`) to indicate progress to the next step.
-
----
-
-### **7. Bottom Navigation Bar**
-A standard bottom bar with 5 icons, separated from the content by a thin horizontal grey line:
-1.  **Home:** A grey house outline icon with the label **"Home"** underneath in grey.
-2.  **Track:** A grey location pin icon with the label **"Track"** in grey.
-3.  **New Order (Active):** A prominent blue/purple circular button in the center containing a white plus (`+`) sign, with the label **"New Order"** in purple.
-4.  **Support:** A blue headset/microphone icon with the label **"Support"** in purple.
-5.  **Account:** A grey profile silhouette icon inside a circle, with the label **"Account"** in grey.
-
----
-
-### **Overall Visual Style**
-*   **Color Palette:** Dominated by corporate shades of **dark blue/indigo** (brand color), **bright orange** (selection highlights), and neutral greys/whites for background cards.
-*   **Typography:** Modern, clean, sans-serif font utilized throughout the UI with clear weights (bold, regular, light) to create a visual hierarchy.
-*   **UI Components:** Rounded-corner cards, clear micro-interactions (orange checkboxes and borders for selected items), and distinct visual separators.
+### 6. Bottom Navigation Bar (Footer)
+A fixed, white navigation bar with five options:
+1.  **Home:** Home icon (gray outline) with "Home" text.
+2.  **Categories:** Four-squares grid icon (highlighted in blue-purple) with "Categories" text.
+3.  **New Order (Center Highlight):** A large, elevated circular blue button with a white plus (`+`) icon in the center, overlapping the navigation bar. Underneath is the text "New Order" in blue.
+4.  **Support:** Headset icon (gray outline) with "Support" text.
+5.  **Account:** Profile avatar icon (gray outline) with "Account" text.

@@ -139,6 +139,7 @@ import { Login } from './components/Login';
 import { Session } from '@supabase/supabase-js';
 import AccountSection from './components/sections/AccountSection';
 import AboutSection from './components/sections/AboutSection';
+import { MobileStoreSection } from './components/sections/MobileStoreSection';
 
 interface AutoScrollingShopProductsProps {
   storeProducts: any[];
@@ -13953,6 +13954,36 @@ export default function App() {
 
     const hasActivePickup = userAppointments.some(a => a.status === 'Scheduled');
 
+    if (isMobile) {
+      return (
+        <MobileStoreSection
+          storeProducts={storeProducts}
+          categories={categories}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          addItem={addItem}
+          removeStoreItem={removeStoreItem}
+          items={items}
+          showFilters={showFilters}
+          setShowFilters={setShowFilters}
+          minPrice={minPrice}
+          setMinPrice={setMinPrice}
+          maxPrice={maxPrice}
+          setMaxPrice={setMaxPrice}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+          showJiffySuggestion={showJiffySuggestion}
+          setShowJiffySuggestion={setShowJiffySuggestion}
+          navigateTo={navigateTo}
+          appointments={userAppointments}
+          orderedItemIds={orderedItemIds}
+          setIsMobileMenuOpen={setIsMobileMenuOpen}
+        />
+      );
+    }
+
     const ShopHeroSlider = () => {
       const [currentSlide, setCurrentSlide] = useState(0);
       const slides = [
@@ -14391,7 +14422,7 @@ export default function App() {
         </div>
       </div>
     );
-  }, [selectedCategory, searchQuery, sortBy, minPrice, maxPrice, showFilters, addItem, removeStoreItem, handleCheckout, items, storeProducts, currentUser, showJiffySuggestion, setActiveTab, appointments, lastBookingRef]);
+  }, [selectedCategory, searchQuery, sortBy, minPrice, maxPrice, showFilters, addItem, removeStoreItem, handleCheckout, items, storeProducts, currentUser, showJiffySuggestion, setActiveTab, appointments, lastBookingRef, isMobile, setIsMobileMenuOpen]);
 
   const FinalizeSection = useMemo(() => {
     if (!currentUser) {
@@ -15571,13 +15602,15 @@ export default function App() {
       <main className={`relative max-w-7xl mx-auto pb-16 md:pb-20 ${
         activeTab === 'home'
           ? 'pt-0 md:pt-8 px-0 md:px-4'
-          : 'px-4 ' + (activeTab === 'about' || activeTab === 'store' || activeTab === 'warehouse' || activeTab === 'pickup' || activeTab === 'cart' || activeTab === 'finalize' 
-            ? 'pt-8' 
-            : activeTab === 'history' 
-              ? 'pt-6' 
-              : activeTab === 'admin' || activeTab === 'support' || currentUser?.role === 'agent'
-                ? 'pt-4' 
-                : 'pt-20')
+          : (activeTab === 'store' && isMobile)
+            ? 'pt-0 px-0'
+            : 'px-4 ' + (activeTab === 'about' || activeTab === 'store' || activeTab === 'warehouse' || activeTab === 'pickup' || activeTab === 'cart' || activeTab === 'finalize' 
+              ? 'pt-8' 
+              : activeTab === 'history' 
+                ? 'pt-6' 
+                : activeTab === 'admin' || activeTab === 'support' || currentUser?.role === 'agent'
+                  ? 'pt-4' 
+                  : 'pt-20')
       }`}>
         <AnimatePresence>
           {activeTab !== 'home' && activeTab !== 'about' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'finalize' && activeTab !== 'history' && activeTab !== 'agent' && activeTab !== 'support' && activeTab !== 'admin' && <BackButton onClick={goBack} />}

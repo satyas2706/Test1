@@ -14,7 +14,9 @@ import {
   Eye, 
   CheckCircle2, 
   Copy,
-  Check
+  Check,
+  X,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -79,6 +81,80 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
   lastBookingRef,
   navigateTo,
 }) => {
+
+  const [showRequirementsModal, setShowRequirementsModal] = React.useState(false);
+  const [showProhibitedModal, setShowProhibitedModal] = React.useState(false);
+  const [selectedDocIndex, setSelectedDocIndex] = React.useState<number | null>(null);
+  const [selectedProhibitedIndex, setSelectedProhibitedIndex] = React.useState<number | null>(null);
+
+  const requirementsData = [
+    {
+      title: 'ID Proof Copy',
+      subtext: 'Aadhar, Passport or Driving License Copy',
+      icon: <ShieldCheck size={20} className="text-blue-600" />,
+      guidelines: [
+        'Standard government-issued photo identification is mandatory.',
+        'Acceptable IDs: Aadhaar Card, Indian/Global Passport, Voter ID, or Driving License.',
+        'Please provide clear, legible front and back color copies of the document.',
+        'The name listed on your ID document must exactly match the sender name declared on the shipping bill.'
+      ]
+    },
+    {
+      title: 'Itemized Declaration',
+      subtext: 'Simple list of contents & quantities',
+      icon: <FileText size={20} className="text-blue-600" />,
+      guidelines: [
+        'A comprehensive declaration list detailing every item inside your package is required.',
+        'Please list exact descriptions and quantities of all products (e.g. "4 Cotton Shirts, 2 Packets of dry sweets").',
+        'This form helps customs officials easily verify the packages, avoiding unnecessary border delays.',
+        'No professional invoice is needed; a simple hand-written or digitally typed list is fully acceptable.'
+      ]
+    },
+    {
+      title: 'Value Statement',
+      subtext: 'Bills/Invoices for any luxurious brand garments',
+      icon: <FileText size={20} className="text-blue-600" />,
+      guidelines: [
+        'Mandatory for newly purchased retail items, branded luxurious goods, or heavy designer ethnic garments.',
+        'Please produce purchase invoices or digital store receipts detailing actual paid pricing.',
+        'Value statement ensures correct custom duty calculations and prevents arbitrary valuation adjustments by destination customs.',
+        'For older used personal belongings, a simple self-declared estimated fair value is sufficient.'
+      ]
+    }
+  ];
+
+  const prohibitedData = [
+    {
+      title: 'Aerosols & Perfumes',
+      subtext: 'Body sprays, deodorants, or inflammable liquids',
+      icon: <span className="text-lg">💨</span>,
+      reason: 'Under aviation safety law, pressurized aerosol sprays, body sprays, dry shampoos, sanitizers, and oil-based perfumes are treated as combustible hazardous cargo and cannot be boarded on cargo planes.'
+    },
+    {
+      title: 'Cash & Jewellery',
+      subtext: 'Currency notes, solid raw gold, silver bullion',
+      icon: <span className="text-lg">💵</span>,
+      reason: 'Standard express courier lines are strictly forbidden from carrying raw bullion metals, physical fiat banknotes, loose precious gems, gold/silver biscuits, or high-value ornaments due to global anti-money laundering controls and transit security guidelines.'
+    },
+    {
+      title: 'Perishables',
+      subtext: 'Open/homemade liquid curries, raw dairy products',
+      icon: <span className="text-lg">🍲</span>,
+      reason: 'Wet curries, unsealed pickles with high oil content, raw cheese, or items needing refrigeration are barred. They are highly prone to spoilage, odor emissions, and fluid leakages that can ruin entire multi-shipment containers.'
+    },
+    {
+      title: 'Hazardous Materials',
+      subtext: 'Ammunition, loose lithium batteries, explosive',
+      icon: <span className="text-lg">🔋</span>,
+      reason: 'Loose lithium-ion power cells, matches, fireworks, magnetic toys, combustible chemicals, and weapons of any category are completely banned. These products represent high-risk fire and explosion hazards under international air safety regulations.'
+    },
+    {
+      title: 'Restricted Drugs & Plants',
+      subtext: 'Prescription medicines without paperwork, live plants',
+      icon: <span className="text-lg">🌱</span>,
+      reason: 'Unprescribed medicine capsules or active pharmacy formulas are not permitted. Live flowers, plant saplings, soil bags, and raw unsterilized agricultural seeds are subject to biological quarantine laws in most destination countries.'
+    }
+  ];
 
   const COUNTRIES = ['United States', 'India', 'Canada', 'United Kingdom', 'United Arab Emirates', 'Australia', 'Singapore', 'Germany'];
   const PICKUP_SLOTS_TIMES = ['9–11 AM', '11–1 PM', '1–3 PM', '3–5 PM', '5–7 PM', '7–9 PM'];
@@ -696,69 +772,533 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
 
         {/* Step 5: Done (Confirmed) */}
         {activePickupStep === 5 && (
-          <div className="p-4 rounded-xl border border-slate-100 bg-white text-left space-y-4 shadow-sm">
-            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
-              <div className="w-10 h-10 bg-gradient-to-tr from-teal-500 to-emerald-400 text-white rounded-xl flex items-center justify-center shrink-0">
-                <CheckCircle2 size={24} />
+          <div className="space-y-6 text-left">
+            {/* Confirmation Card */}
+            <div className="bg-[#ecfdf5] border border-[#a7f3d0]/40 p-4 rounded-2xl flex flex-col gap-4 shadow-sm relative overflow-hidden">
+              <div className="flex items-start gap-3.5 z-10">
+                <div className="w-11 h-11 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-200">
+                  <CheckCircle2 size={24} />
+                </div>
+                <div>
+                  <span className="inline-block text-[9px] font-extrabold text-emerald-700 tracking-wider bg-emerald-100 px-2 py-0.5 rounded-full mb-1">
+                    CONFIRMED & ACTIVE
+                  </span>
+                  <h2 className="text-sm font-black text-slate-900 leading-tight">
+                    Thanks, {activePickup?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 's'}!
+                  </h2>
+                  <p className="text-[10px] text-slate-500 font-semibold leading-normal mt-1">
+                    Your home pickup is scheduled. Our agent is on the way!
+                  </p>
+                </div>
               </div>
-              <div>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-teal-50 text-teal-800 rounded-full text-[8px] uppercase font-black leading-none border border-teal-100/50">
-                  <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-                  Confirmed
-                </span>
-                <h2 className="text-sm font-black text-slate-900 mt-1">
-                  Thanks, {activePickup?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 'there'}!
-                </h2>
-                <p className="text-[9px] text-slate-400 font-bold leading-tight mt-0.5">Your home pickup is scheduled. Our agent is on the way!</p>
+              
+              <div className="bg-white border border-slate-100 p-3 rounded-xl flex items-center justify-between gap-3 shrink-0 shadow-sm">
+                <div className="text-left">
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">BOOKING REFERENCE</p>
+                  <p className="text-xs font-black text-[#091535] tracking-wide mt-1.5 font-mono">
+                    {lastBookingRef || activePickup?.id || 'PH-00072'}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => {
+                    const ref = lastBookingRef || activePickup?.id || 'PH-00072';
+                    if (ref) {
+                      navigator.clipboard.writeText(ref);
+                      toast.success('Reference ID copied to clipboard!');
+                    }
+                  }}
+                  className="p-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-all shrink-0 cursor-pointer"
+                >
+                  <Copy size={13} className="stroke-[2.5]" />
+                </button>
               </div>
             </div>
 
-            <div className="p-3 bg-indigo-50/45 rounded-xl border border-indigo-100/40 flex items-center justify-between">
+            {/* WHAT TO EXPECT Timeline */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-left">
+                <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                  <Clock size={13} className="stroke-[2.5]" />
+                </div>
+                <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider">WHAT TO EXPECT</h3>
+              </div>
+
+              <div className="flex gap-3 overflow-x-auto pb-3 pt-1 scrollbar-hide snap-x -mx-1 px-1">
+                {[
+                  {
+                    step: 1,
+                    title: 'Agent Call',
+                    subtext: 'Agent calls 30m before arrival.',
+                    completed: true
+                  },
+                  {
+                    step: 2,
+                    title: 'Pickup & Weighing',
+                    subtext: 'Instant quote given on-site.',
+                    completed: true
+                  },
+                  {
+                    step: 3,
+                    title: 'Secure Sorting',
+                    subtext: 'Packed safely at warehouse.',
+                    completed: false
+                  },
+                  {
+                    step: 4,
+                    title: 'Global Delivery',
+                    subtext: 'Pay online to dispatch package.',
+                    completed: false
+                  }
+                ].map((item) => (
+                  <div 
+                    key={item.step} 
+                    className="flex-shrink-0 w-[145px] bg-white border border-slate-100 p-3 rounded-xl shadow-sm snap-start flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        {item.completed ? (
+                          <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 text-[10px]">
+                            <Check size={11} className="stroke-[3]" />
+                          </div>
+                        ) : (
+                          <div className="w-5 h-5 rounded-full border border-slate-300 text-slate-400 flex items-center justify-center shrink-0 text-[9px] font-bold">
+                            {item.step}
+                          </div>
+                        )}
+                        <span className="text-[9px] font-black text-slate-300 font-mono">STEP {item.step}</span>
+                      </div>
+                      <h4 className="text-[11px] font-black text-slate-900 mt-2.5 leading-tight">{item.title}</h4>
+                      <p className="text-[9px] text-slate-400 font-medium leading-tight mt-1">{item.subtext}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Two-Column Information Section */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {/* Left Column: DOCUMENTS REQUIRED */}
+              <div className="space-y-3 text-left">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                    <FileText size={13} className="stroke-[2.5]" />
+                  </div>
+                  <h3 className="text-[11px] font-black uppercase text-[#091535] tracking-wider">DOCUMENTS REQUIRED</h3>
+                </div>
+
+                <div className="space-y-2">
+                  {[
+                    { title: 'ID Proof Copy', subtext: 'Aadhar, Passport or Driving License Copy' },
+                    { title: 'Itemized Declaration', subtext: 'Simple list of contents & quantities' },
+                    { title: 'Value Statement', subtext: 'Bills/Invoices for any luxurious brand garments' }
+                  ].map((doc, idx) => (
+                    <div 
+                      key={idx} 
+                      className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm flex items-center justify-between gap-3 hover:border-blue-100 transition-all cursor-pointer"
+                      onClick={() => {
+                        setSelectedDocIndex(idx);
+                        setShowRequirementsModal(true);
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                          <ShieldCheck size={16} className="stroke-[2.5]" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-[#0A142F]">{doc.title}</p>
+                          <p className="text-[8px] text-slate-400 font-bold leading-tight mt-0.5">{doc.subtext}</p>
+                        </div>
+                      </div>
+                      <span className="text-slate-300 font-bold text-xs select-none mr-1">&gt;</span>
+                    </div>
+                  ))}
+                </div>
+                <button 
+                  onClick={() => {
+                    setSelectedDocIndex(null);
+                    setShowRequirementsModal(true);
+                  }}
+                  className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:underline tracking-wider uppercase pt-1 cursor-pointer"
+                >
+                  View all requirements &gt;
+                </button>
+              </div>
+
+              {/* Right Column: PROHIBITED ITEMS */}
+              <div className="space-y-3 text-left">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                    <svg className="w-3.5 h-3.5 fill-current text-red-600" viewBox="0 0 24 24">
+                      <path d="M12 2L1 21h22L12 2zm1 14h-2v2h2v-2zm0-6h-2v4h2v-4z"/>
+                    </svg>
+                  </div>
+                  <h3 className="text-[11px] font-black uppercase text-red-800 tracking-wider">PROHIBITED ITEMS</h3>
+                </div>
+
+                <div className="space-y-2">
+                  {[
+                    { title: 'Aerosols & Perfumes', subtext: 'Body sprays, deodorants, or inflammable liquids' },
+                    { title: 'Cash & Jewellery', subtext: 'Currency notes, solid raw gold, silver bullion' },
+                    { title: 'Perishables', subtext: 'Open/homemade liquid curries, raw dairy products' },
+                    { title: 'Hazardous Materials', subtext: 'Ammunition, loose lithium batteries, explosive' }
+                  ].map((item, idx) => (
+                    <div 
+                      key={idx} 
+                      className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm flex items-center justify-between gap-3 hover:border-red-100 transition-all cursor-pointer"
+                      onClick={() => {
+                        setSelectedProhibitedIndex(idx);
+                        setShowProhibitedModal(true);
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-lg bg-red-50 text-red-500 flex items-center justify-center shrink-0">
+                          <span className="text-[10px] font-extrabold font-mono">X</span>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-[#0A142F]">{item.title}</p>
+                          <p className="text-[8px] text-slate-400 font-bold leading-tight mt-0.5">{item.subtext}</p>
+                        </div>
+                      </div>
+                      <span className="text-slate-300 font-bold text-xs select-none mr-1">&gt;</span>
+                    </div>
+                  ))}
+                </div>
+                <button 
+                  onClick={() => {
+                    setSelectedProhibitedIndex(null);
+                    setShowProhibitedModal(true);
+                  }}
+                  className="inline-flex items-center gap-1 text-[9px] font-black text-red-600 hover:underline tracking-wider uppercase pt-1 cursor-pointer"
+                >
+                  View all prohibited items &gt;
+                </button>
+              </div>
+            </div>
+
+            {/* Shop Indian Products Co-Shipping Section */}
+            <div className="bg-[#f0f9ff] border border-sky-100 p-4 rounded-2xl text-left space-y-3 shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[8px] font-black text-white bg-emerald-600 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    CO-SHIPPING ACTIVE
+                  </span>
+                  <span className="text-[8px] font-black text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    ZERO BASE FEES
+                  </span>
+                </div>
+                <button 
+                  onClick={() => {
+                    navigateTo('store');
+                    window.scrollTo(0, 0);
+                  }}
+                  className="inline-flex items-center gap-1 text-[8px] font-black text-white bg-emerald-600 px-2 py-1 rounded-lg uppercase hover:bg-emerald-700 transition cursor-pointer"
+                >
+                  <ShoppingBag size={10} />
+                  <span>See All</span>
+                </button>
+              </div>
+
               <div>
-                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none">Booking reference</p>
-                <p className="text-sm font-black text-indigo-750 tracking-widest mt-1 font-mono">
-                  {lastBookingRef || activePickup?.id}
+                <h3 className="text-xs font-black text-[#091535]">Shop Indian Products</h3>
+                <p className="text-[10px] text-slate-500 font-semibold leading-normal mt-0.5">
+                  Delivered inside your same pickup box with no extra courier base fees.
                 </p>
               </div>
-              <button 
-                onClick={() => {
-                  const ref = lastBookingRef || activePickup?.id;
-                  if (ref) {
-                    navigator.clipboard.writeText(ref);
-                    toast.success('Reference ID copied to clipboard!');
+
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x -mx-1 px-1">
+                {[
+                  {
+                    id: 'p1',
+                    tag: 'POOJA',
+                    title: 'Ganesh Idol (Eco-friendly)',
+                    price: '$15.00',
+                    weight: '0.4 kg',
+                    bgColor: 'from-amber-100 to-orange-100',
+                    emoji: '🪔'
+                  },
+                  {
+                    id: 'p2',
+                    tag: 'POOJA',
+                    title: 'Brass Diya Set',
+                    price: '$25.00',
+                    weight: '0.5 kg',
+                    bgColor: 'from-yellow-100 to-amber-200',
+                    emoji: '🕯️'
+                  },
+                  {
+                    id: 'p3',
+                    tag: 'POOJA',
+                    title: 'Sandalwood Incense Sticks',
+                    price: '$10.00',
+                    weight: '0.2 kg',
+                    bgColor: 'from-orange-100 to-amber-100',
+                    emoji: '🪵'
+                  },
+                  {
+                    id: 'p4',
+                    tag: 'DECOR',
+                    title: 'Decor Elephant',
+                    price: '$35.00',
+                    weight: '0.8 kg',
+                    bgColor: 'from-blue-100 to-slate-100',
+                    emoji: '🐘'
                   }
-                }}
-                className="p-2 bg-white text-indigo-600 hover:text-white hover:bg-indigo-600 rounded-lg border border-indigo-100/50 transition shadow-sm cursor-pointer"
-              >
-                <Copy size={11} />
-              </button>
+                ].map((product) => (
+                  <div 
+                    key={product.id} 
+                    className="flex-shrink-0 w-[130px] bg-white border border-slate-100 p-2 rounded-xl shadow-sm snap-start flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className={`w-full h-20 rounded-lg bg-gradient-to-br ${product.bgColor} flex items-center justify-center relative mb-1.5`}>
+                        <span className="text-3xl select-none">{product.emoji}</span>
+                        <span className="absolute top-1 left-1 text-[7px] font-extrabold text-emerald-800 bg-emerald-50 px-1 py-0.2 rounded">
+                          {product.tag}
+                        </span>
+                      </div>
+                      <h4 className="text-[10px] font-black text-slate-800 truncate leading-tight">{product.title}</h4>
+                      <p className="text-[8px] text-slate-400 font-bold mt-0.5">{product.weight}</p>
+                    </div>
+
+                    <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between gap-1">
+                      <div>
+                        <p className="text-[10px] font-black text-slate-900 leading-none">{product.price}</p>
+                        <p className="text-[7px] text-slate-400 font-medium mt-0.5 italic">Consolidated</p>
+                      </div>
+                      <button 
+                        onClick={() => toast.success(`"${product.title}" consolidated in your pickup box!`)}
+                        className="px-1.5 py-0.5 text-[8px] font-black text-emerald-600 border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition shrink-0 cursor-pointer"
+                      >
+                        + Add
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="bg-indigo-50/20 border border-indigo-100/20 rounded-xl p-3.5 space-y-2.5">
-              <div className="flex items-center gap-1.5">
-                <Clock className="text-indigo-600" size={13} />
-                <h4 className="text-[10px] font-black text-indigo-950 uppercase tracking-wider">What to Expect</h4>
-              </div>
-              <div className="space-y-1.5 text-[9px] text-slate-500 font-medium">
-                <p>1. Our background-verified agent will call you 30 minutes before arrival.</p>
-                <p>2. They will inspect your items, perform clean and professional packaging, and determine the exact physical dimensions and weight.</p>
-                <p>3. A final invoice rate will be generated on your dashboard. No prepayment is collected before the visit.</p>
-              </div>
-            </div>
-
+            {/* Back to Bookings CTA */}
             <button
               onClick={() => {
                 navigateTo('history');
                 window.scrollTo(0, 0);
               }}
-              className="w-full py-3 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-1 cursor-pointer"
+              className="w-full py-3.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-1 cursor-pointer shadow-md mt-2"
             >
               <span>View My Bookings</span>
-              <ArrowRight size={12} />
+              <ArrowRight size={13} className="stroke-[2.5]" />
             </button>
           </div>
         )}
-      </div>
+
+      {/* Documentation Requirements Modal */}
+      {showRequirementsModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-blue-50/50 to-indigo-50/20">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                  <FileText size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-950">Documents Required</h3>
+                  <p className="text-[10px] text-slate-400 font-bold">Official Shipping Requirements</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowRequirementsModal(false);
+                  setSelectedDocIndex(null);
+                }}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="p-6 overflow-y-auto space-y-5 text-left">
+              {selectedDocIndex !== null ? (
+                // Focused Doc view
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-3 bg-blue-50/50 rounded-2xl border border-blue-100/30">
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                      {requirementsData[selectedDocIndex].icon}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-950">{requirementsData[selectedDocIndex].title}</h4>
+                      <p className="text-[10px] text-slate-400 font-bold">{requirementsData[selectedDocIndex].subtext}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h5 className="text-[10px] font-black text-[#091535] tracking-wider uppercase">Fulfillment Guidelines</h5>
+                    <ul className="space-y-2.5">
+                      {requirementsData[selectedDocIndex].guidelines.map((guide, gIdx) => (
+                        <li key={gIdx} className="flex gap-2 text-[10px] text-slate-500 font-medium leading-relaxed">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
+                          <span>{guide}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <button 
+                    onClick={() => setSelectedDocIndex(null)}
+                    className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black transition-all cursor-pointer border border-slate-100"
+                  >
+                    {"←"} View All Requirements
+                  </button>
+                </div>
+              ) : (
+                // Complete list view
+                <div className="space-y-4">
+                  <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                    Please prepare and hand over these three documents to our pickup agent during their visit. This guarantees smooth clearing at international customs.
+                  </p>
+                  
+                  <div className="space-y-3">
+                    {requirementsData.map((doc, idx) => (
+                      <div 
+                        key={idx} 
+                        onClick={() => setSelectedDocIndex(idx)}
+                        className="p-4 bg-slate-50/50 hover:bg-blue-50/20 border border-slate-100 hover:border-blue-100 rounded-2xl transition cursor-pointer flex gap-3"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                          {doc.icon}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-black text-slate-950">{doc.title}</h4>
+                            <span className="text-blue-500 text-[10px] font-black uppercase tracking-wider">Details {"→"}</span>
+                          </div>
+                          <p className="text-[9px] text-slate-400 font-bold mt-1 leading-normal">{doc.subtext}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex gap-2">
+              <button 
+                onClick={() => {
+                  setShowRequirementsModal(false);
+                  setSelectedDocIndex(null);
+                }}
+                className="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 transition cursor-pointer text-center"
+              >
+                Got It, Thanks!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Prohibited Items Modal */}
+      {showProhibitedModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-red-50/50 to-orange-50/10">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-red-100 text-red-600 flex items-center justify-center">
+                  <AlertTriangle size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-red-950">Prohibited Items</h3>
+                  <p className="text-[10px] text-red-500 font-bold">Strict Safety Regulations</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowProhibitedModal(false);
+                  setSelectedProhibitedIndex(null);
+                }}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="p-6 overflow-y-auto space-y-5 text-left">
+              {selectedProhibitedIndex !== null ? (
+                // Focused item view
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-3 bg-red-50/50 rounded-2xl border border-red-100/30">
+                    <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                      {prohibitedData[selectedProhibitedIndex].icon}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-red-950">{prohibitedData[selectedProhibitedIndex].title}</h4>
+                      <p className="text-[10px] text-slate-400 font-bold">{prohibitedData[selectedProhibitedIndex].subtext}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <h5 className="text-[10px] font-black text-red-800 tracking-wider uppercase">Reason For Restriction</h5>
+                    <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                      {prohibitedData[selectedProhibitedIndex].reason}
+                    </p>
+                  </div>
+
+                  <button 
+                    onClick={() => setSelectedProhibitedIndex(null)}
+                    className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black transition-all cursor-pointer border border-slate-100"
+                  >
+                    {"←"} View All Prohibited Items
+                  </button>
+                </div>
+              ) : (
+                // Complete list view
+                <div className="space-y-4">
+                  <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                    Under aviation laws and security guidelines, the following categories cannot be shipped. Please check your package carefully to ensure none of these are included.
+                  </p>
+                  
+                  <div className="space-y-3">
+                    {prohibitedData.map((item, idx) => (
+                      <div 
+                        key={idx} 
+                        onClick={() => setSelectedProhibitedIndex(idx)}
+                        className="p-4 bg-slate-50/50 hover:bg-red-50/20 border border-slate-100 hover:border-red-100 rounded-2xl transition cursor-pointer flex gap-3"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                          {item.icon}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-black text-slate-950">{item.title}</h4>
+                            <span className="text-red-600 text-[10px] font-black uppercase tracking-wider">Why? {"→"}</span>
+                          </div>
+                          <p className="text-[9px] text-slate-400 font-bold mt-1 leading-normal">{item.subtext}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex gap-2">
+              <button 
+                onClick={() => {
+                  setShowProhibitedModal(false);
+                  setSelectedProhibitedIndex(null);
+                }}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black transition cursor-pointer text-center"
+              >
+                I Understand
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
     </div>
   );
 };
