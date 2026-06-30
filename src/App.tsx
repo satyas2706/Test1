@@ -5,6 +5,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Logo } from './components/Logo';
+import { MobilePickupFlow } from './components/MobilePickupFlow';
 import { 
   Package, 
   PackageCheck, 
@@ -8005,7 +8006,7 @@ export default function App() {
               </div>
 
               {/* Mobile View: Dedicated Unified White Container */}
-              <div className="md:hidden w-[95%] mx-auto px-0">
+              <div className="md:hidden w-[95%] mx-auto px-0 mt-3">
                 <div className="bg-white rounded-2xl p-4 shadow-xl border border-slate-100 text-slate-800 space-y-4 text-left">
                   {/* Header */}
                   <div className="text-center">
@@ -8090,7 +8091,7 @@ export default function App() {
               </div>
 
               {/* Mobile View: Shop Authentic Indian Items Promo Card */}
-              <div className="md:hidden w-[95%] mx-auto !mt-[-4px] px-0">
+              <div className="md:hidden w-[95%] mx-auto mt-3 px-0">
                 <motion.div 
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -8105,7 +8106,7 @@ export default function App() {
                   <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
                   
                   <div className="flex gap-2.5 items-start">
-                    <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/20 text-white">
+                    <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center shrink-0 text-indigo-600 border border-indigo-100/30">
                       <ShoppingBag size={20} className="animate-pulse" />
                     </div>
                     <div className="space-y-1 text-left">
@@ -8325,19 +8326,18 @@ export default function App() {
             </div>
           </motion.div>
 
-          {/* Quote Calculator & Protocol */}
-          <div ref={quoteRef} className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start max-md:!mt-0">
+          <div ref={quoteRef} className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start max-md:!mt-3">
             <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white p-4 md:p-8 rounded-2xl md:rounded-3xl shadow-xl md:shadow-indigo-500/5 border border-slate-100">
-                <h2 className="text-sm md:text-2xl font-bold mb-3 md:mb-6 flex items-center gap-1.5">
-                  <Calculator className="text-indigo-600 shrink-0" size={16} md:size={20} /> Quick Quote
+              <div className="bg-white p-3 md:p-8 rounded-2xl md:rounded-3xl shadow-xl md:shadow-indigo-500/5 border border-slate-100">
+                <h2 className="text-xs md:text-2xl font-black mb-3 md:mb-6 flex items-center gap-1.5 uppercase tracking-wider text-slate-900">
+                  <Calculator className="text-indigo-600 shrink-0" size={14} md:size={20} /> Quick Quote
                 </h2>
-                <div className="space-y-4 md:space-y-5">
+                <div className="space-y-3.5 md:space-y-5">
                   <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-5">
                     <div>
-                      <label className="block text-[8px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Destination</label>
+                      <label className="block text-[7.5px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Destination</label>
                       <select 
-                        className="w-full p-2 md:p-4 rounded-xl md:rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none text-[16px] md:text-base"
+                        className="w-full p-1.5 md:p-4 rounded-xl md:rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none text-[16px] md:text-base"
                         value={qCountry}
                         onChange={(e) => setQCountry(e.target.value)}
                       >
@@ -8345,12 +8345,12 @@ export default function App() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[8px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Weight (kg)</label>
+                      <label className="block text-[7.5px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Weight (kg)</label>
                       <input 
                         type="number" 
                         min="0.1" 
                         step="0.1"
-                        className="w-full p-2 md:p-4 rounded-xl md:rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-[16px] md:text-base"
+                        className="w-full p-1.5 md:p-4 rounded-xl md:rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-[16px] md:text-base"
                         value={qWeight}
                         onChange={(e) => setQWeight(Number(e.target.value))}
                       />
@@ -8358,8 +8358,8 @@ export default function App() {
                   </div>
                   
                   <div>
-                    <label className="block text-[8px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-3">Shipping Method</label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <label className="block text-[7.5px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-3">Shipping Method</label>
+                    <div className="grid grid-cols-2 gap-2">
                       {[
                         { id: 'Standard', label: 'Standard', days: '10-14 Days', multiplier: 0.7 },
                         { id: 'Express', label: 'Express', days: '5-7 Days', multiplier: 1.0 }
@@ -8367,16 +8367,16 @@ export default function App() {
                         <button
                           key={method.id}
                           onClick={() => setQMethod(method.id as any)}
-                          className={`p-2 md:p-4 rounded-xl md:rounded-2xl border-2 transition-all text-left ${
+                          className={`p-1.5 md:p-4 rounded-xl md:rounded-2xl border-2 transition-all text-left ${
                             qMethod === method.id 
                               ? 'border-indigo-600 bg-indigo-50 ring-4 ring-indigo-600/5' 
                               : 'border-slate-100 bg-white hover:border-slate-200'
                           }`}
                         >
-                          <div className={`text-[10px] md:text-sm font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
+                          <div className={`text-[9px] md:text-sm font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
                             {method.label}
                           </div>
-                          <div className="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                          <div className="text-[7px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
                             {method.days}
                           </div>
                         </button>
@@ -8384,13 +8384,13 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="p-2.5 md:p-6 bg-indigo-600 rounded-xl md:rounded-2xl text-white shadow-lg shadow-indigo-200">
+                  <div className="p-2 md:p-6 bg-indigo-600 rounded-xl md:rounded-2xl text-white shadow-lg shadow-indigo-200">
                     <div className="flex justify-between items-end">
                       <div>
-                        <span className="text-indigo-100 text-[8px] md:text-xs font-bold uppercase tracking-widest">
+                        <span className="text-indigo-100 text-[7px] md:text-xs font-bold uppercase tracking-widest">
                           Estimated Cost ({qMethod})
                         </span>
-                        <div className="text-xl md:text-4xl font-black">
+                        <div className="text-lg md:text-4xl font-black">
                           ₹{(() => {
                             const rate = shippingRates[qCountry] || 10;
                             const methodMultiplier = qMethod === 'Standard' ? 0.7 : 1.0;
@@ -8407,18 +8407,18 @@ export default function App() {
                             const methodMultiplier = qMethod === 'Standard' ? 0.7 : 1.0;
                             const saved = qWeight * rate * methodMultiplier * (discountPercent / 100);
                             return (
-                              <div className="text-[8px] md:text-xs font-bold text-rose-300 mt-0.5">
+                              <div className="text-[7px] md:text-xs font-bold text-rose-300 mt-0.5">
                                 Discount of {discountPercent}% Applied for {qCountry}! (Save ₹{saved.toFixed(2)})
                               </div>
                             );
                           }
                           return null;
                         })()}
-                        <div className="text-[8px] md:text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-1 flex items-center gap-1">
+                        <div className="text-[7px] md:text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-1 flex items-center gap-1">
                           <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
                         </div>
                       </div>
-                      <Truck className="opacity-20 shrink-0" size={24} md:size={48} />
+                      <Truck className="opacity-20 shrink-0" size={20} md:size={48} />
                     </div>
                   </div>
                 </div>
@@ -11776,7 +11776,42 @@ export default function App() {
                   </div>
                 ) : mode === 'Pickup' ? (
                   <>
-                    <div className="space-y-4">
+                    {/* MOBILE ONLY VIEW FOR SCHEDULE PICKUP */}
+                    <div className="block md:hidden">
+                      <MobilePickupFlow
+                        activePickupStep={activePickupStep}
+                        setActivePickupStep={setActivePickupStep}
+                        pickupItemType={pickupItemType}
+                        setPickupItemType={setPickupItemType}
+                        pickupEstimatedWeight={pickupEstimatedWeight}
+                        setPickupEstimatedWeight={setPickupEstimatedWeight}
+                        selectedPickupDate={selectedPickupDate}
+                        setSelectedPickupDate={setSelectedPickupDate}
+                        selectedPickupTime={selectedPickupTime}
+                        setSelectedPickupTime={setSelectedPickupTime}
+                        filteredPickupSlots={filteredPickupSlots}
+                        pickupDetailsTab={pickupDetailsTab}
+                        setPickupDetailsTab={setPickupDetailsTab}
+                        pickupName={pickupName}
+                        setPickupName={setPickupName}
+                        pickupPhone={pickupPhone}
+                        setPickupPhone={setPickupPhone}
+                        pickupAddress={pickupAddress}
+                        setPickupAddress={setPickupAddress}
+                        pickupDestination={pickupDestination}
+                        setPickupDestination={setPickupDestination}
+                        pickupConsolidationOption={pickupConsolidationOption}
+                        setPickupConsolidationOption={setPickupConsolidationOption}
+                        handleSchedulePickup={handleSchedulePickup}
+                        currentUser={currentUser}
+                        activePickup={activePickup}
+                        lastBookingRef={lastBookingRef}
+                        navigateTo={navigateTo}
+                      />
+                    </div>
+
+                    {/* LAPTOP/DESKTOP ONLY VIEW (Completely untouched) */}
+                    <div className="hidden md:block space-y-4">
                   {mode === 'Pickup' && activePickupStep !== 5 && (
                     <>
                       {/* Header Section with Progress for Pickup */}
