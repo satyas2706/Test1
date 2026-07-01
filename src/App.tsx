@@ -141,6 +141,7 @@ import { Session } from '@supabase/supabase-js';
 import AccountSection from './components/sections/AccountSection';
 import AboutSection from './components/sections/AboutSection';
 import { MobileStoreSection } from './components/sections/MobileStoreSection';
+import { MobileCartSection } from './components/sections/MobileCartSection';
 
 interface AutoScrollingShopProductsProps {
   storeProducts: any[];
@@ -16320,7 +16321,31 @@ export default function App() {
             {activeTab === 'track' && <TrackSection />}
             {activeTab === 'pickup' && renderUnifiedCartSection('Pickup')}
             {activeTab === 'warehouse' && renderUnifiedCartSection('Warehouse')}
-            {activeTab === 'cart' && renderUnifiedCartSection()}
+            {activeTab === 'cart' && (isMobile ? (
+              <MobileCartSection
+                items={items}
+                appointments={userAppointments}
+                currentUser={currentUser}
+                customerWarehouseId={customerWarehouseId}
+                addItem={addItem}
+                removeItem={removeItem}
+                updateItemQuantity={updateItemQuantity}
+                removeStoreItem={removeStoreItem}
+                handleCheckout={handleCheckout}
+                navigateTo={navigateTo}
+                storeProducts={storeProducts}
+                orderedItemIds={orderedItemIds}
+                shopConsolidationOption={shopConsolidationOption}
+                setShopConsolidationOption={setShopConsolidationOption}
+                showConsolidationError={showConsolidationError}
+                setShowConsolidationError={setShowConsolidationError}
+                couponCodeInput={couponCodeInput}
+                setCouponCodeInput={setCouponCodeInput}
+                coupons={coupons}
+                appliedCoupon={appliedCoupon}
+                setAppliedCoupon={setAppliedCoupon}
+              />
+            ) : renderUnifiedCartSection())}
             {activeTab === 'notifications' && NotificationCenter}
             {activeTab === 'support' && (
               <SupportSection 
