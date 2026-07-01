@@ -413,7 +413,7 @@ const BackButton = ({ onClick }: { onClick: () => void }) => (
     animate={{ opacity: 1, x: 0 }}
     exit={{ opacity: 0, x: -10 }}
     onClick={onClick}
-    className="absolute top-1 left-6 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm group z-20 font-bold text-xs cursor-pointer"
+    className="absolute top-3.5 md:top-1 left-6 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm group z-20 font-bold text-xs cursor-pointer"
   >
     <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform text-slate-400 group-hover:text-indigo-600" />
     <span>Back</span>

@@ -96,7 +96,7 @@ export const MobileCartSection: React.FC<MobileCartSectionProps> = ({
 
   if (isCartEmpty) {
     return (
-      <div className="flex flex-col min-h-[90vh] bg-[#F9FAFB] pb-32 animate-fade-in px-4 pt-16">
+      <div className="flex flex-col min-h-[90vh] bg-[#F9FAFB] pb-12 animate-fade-in px-4 pt-10">
         <div className="max-w-md mx-auto w-full space-y-6">
           <div className="flex flex-col items-center justify-center bg-white rounded-3xl border border-slate-100 py-12 px-6 text-center shadow-sm">
             <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
@@ -119,7 +119,7 @@ export const MobileCartSection: React.FC<MobileCartSectionProps> = ({
   }
 
   return (
-    <div className="flex flex-col min-h-[90vh] bg-[#F9FAFB] pb-32 animate-fade-in px-4 pt-16">
+    <div className="flex flex-col min-h-[90vh] bg-[#F9FAFB] pb-12 animate-fade-in px-4 pt-10">
       <div className="max-w-md mx-auto w-full space-y-6">
         {/* 2. Page Title & Meta Badges */}
         <div className="flex flex-col gap-3">
@@ -529,17 +529,17 @@ export const MobileCartSection: React.FC<MobileCartSectionProps> = ({
             )}
           </div>
         </div>
-      </div>
 
-      {/* 6. Sticky Footer Button */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4 pb-6 z-40 max-w-md mx-auto w-full">
-        <button 
-          onClick={handleCheckout}
-          className="w-full bg-[#4E36F5] hover:bg-opacity-95 text-white font-extrabold py-4 px-6 rounded-xl flex items-center justify-center gap-1.5 transition-all text-sm active:scale-[0.98] shadow-lg shadow-indigo-150"
-        >
-          <span>{getButtonText()}</span>
-          <span className="text-base font-bold">→</span>
-        </button>
+        {/* 6. Checkout Button (No longer sticky, scrolls with page items) */}
+        <div className="pt-2">
+          <button 
+            onClick={handleCheckout}
+            className="w-full bg-[#4E36F5] hover:bg-opacity-95 text-white font-extrabold py-4 px-6 rounded-xl flex items-center justify-center gap-1.5 transition-all text-sm active:scale-[0.98] shadow-lg shadow-indigo-150"
+          >
+            <span>{getButtonText()}</span>
+            <span className="text-base font-bold">→</span>
+          </button>
+        </div>
       </div>
 
     </div>
