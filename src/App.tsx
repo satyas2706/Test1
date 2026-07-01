@@ -8778,6 +8778,538 @@ export default function App() {
       return dateB - dateA;
     });
 
+    if (isMobile) {
+      return (
+        <div className="space-y-4 px-1 pb-16 bg-slate-50/50">
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <h2 className="text-2xl font-extrabold text-slate-900">My Orders</h2>
+            <button 
+              onClick={async () => {
+                if (window.confirm("Are you sure you want to clear ALL orders and items? This cannot be undone.")) {
+                  try {
+                    await api.clearAllOrders();
+                    toast.success("All orders cleared successfully.");
+                    setOrders([]);
+                    setItems([]);
+                  } catch (err) {
+                    toast.error("Failed to clear orders.");
+                  }
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50/50 border border-rose-100 rounded-lg hover:bg-rose-100/50 transition"
+            >
+              <Trash2 className="text-rose-600 w-4 h-4" />
+              <span className="text-rose-600 text-xs font-bold">Clear All</span>
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {unifiedHistory.length === 0 ? (
+              <div className="text-center py-12 text-slate-400 bg-white border border-slate-100 rounded-2xl p-4 shadow-sm mx-4">
+                <Package size={48} className="mx-auto mb-4 opacity-20" />
+                <p className="text-sm font-medium">You have no active shipments.</p>
+                <button onClick={() => navigateTo('home')} className="mt-4 text-indigo-600 font-bold hover:underline text-sm">Start a shipment</button>
+              </div>
+            ) : (
+              unifiedHistory.map(order => {
+                const isPickup = order.id.startsWith('PH-') || (order as any).pickupType;
+                const formattedPlacedDate = () => {
+                  try {
+                    const date = new Date(order.createdAt || order.created_at || Date.now());
+                    return `Placed: ${date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} at ${date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+                  } catch {
+                    return `Placed: ${order.createdAt || order.created_at || 'N/A'}`;
+                  }
+                };
+                
+                return (
+                  <div key={order.id} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm mb-4 mx-4">
+                    {/* Card Header */}
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[10px] font-extrabold tracking-wider text-slate-400 uppercase block">ORDER ID</span>
+                        <button 
+                          onClick={() => setSelectedOrderForDetails(order)}
+                          className="text-left hover:text-indigo-600 transition-colors cursor-pointer font-black text-slate-900 text-lg mt-0.5 block"
+                        >
+                          {order.id}
+                        </button>
+                      </div>
+                      
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        {isPickup && (
+                          <div className="bg-indigo-50 text-indigo-600 font-extrabold text-[9px] px-2.5 py-1 rounded-full uppercase tracking-wider whitespace-nowrap">
+                            HOME PICKUP SCHEDULED
+                          </div>
+                        )}
+                        
+                        <div className="bg-indigo-50 text-indigo-600 border border-indigo-100 font-bold text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap shrink-0">
+                          {order.status === 'Picked Up' || order.status === 'Order Picked Up' ? 'SCHEDULED' : order.status === 'Order Placed' || order.status === 'Pending' ? 'REQUEST PLACED' : order.status}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Pickup Details Box */}
+                    {isPickup && (
+                      <div className="bg-indigo-50/20 border border-indigo-100/40 rounded-xl p-3.5 mb-4">
+                        <div className="flex items-center gap-2 mb-3 text-xs font-bold text-slate-900">
+                          <Calendar size={16} className="text-indigo-600" />
+                          <span>Scheduled Pickup Details</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-y-2.5 gap-x-4 text-xs">
+                          <div>
+                            <span className="text-slate-400 font-medium block">Date:</span>
+                            <span className="text-slate-800 font-semibold">{order.shippingDate || (order as any).shipping_date || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-medium block">Time:</span>
+                            <span className="text-slate-800 font-semibold">{(order as any).time || (order as any).destination?.time || 'Flexible'}</span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-slate-400 font-medium block">Address:</span>
+                            <span className="text-slate-800 font-semibold block break-words">{order.destination?.addressLine1 || (order as any).destination?.addressLine1 || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-medium block">Weight Est:</span>
+                            <span className="text-slate-800 font-semibold">{order.totalWeight || (order as any).total_weight || 0} kg</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-medium block">Assigned Agent:</span>
+                            <span className="text-slate-800 font-semibold">{order.assignedAgent?.name || (order as any).assignedAgent?.name || (order as any).destination?.assignedAgent?.name || 'Assigning soon...'}</span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-slate-400 font-medium block">Item Type:</span>
+                            <span className="text-slate-800 font-semibold">{(order as any).itemType || (order as any).destination?.itemType || 'Everyday Items'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Summary Row */}
+                    <div className="grid grid-cols-5 divide-x divide-slate-100 py-3 border-t border-b border-slate-100 my-4 text-center">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block">FROM</span>
+                        <span className="text-xs font-extrabold text-slate-900 flex items-center justify-center gap-1">
+                          <span>🇮🇳</span>
+                          <span className="hidden xs:inline">India</span>
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block">TO</span>
+                        <span className="text-xs font-extrabold text-slate-900 block truncate px-1">
+                          {order.destination?.country || 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block">ITEMS</span>
+                        <span className="text-xs font-extrabold text-slate-900 block">
+                          {order.items?.length || 0} items
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block">WEIGHT</span>
+                        <span className="text-xs font-extrabold text-slate-900 block">
+                          {getSafeOrderTotalWeight(order)} kg
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block">TOTAL PAID</span>
+                        <span className="text-xs font-extrabold text-indigo-600 block">
+                          ₹{Math.round(Number(order.totalCost || order.total_cost || 0))}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Timestamp Row */}
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-4">
+                      <Clock size={14} className="text-slate-400" />
+                      <span>{formattedPlacedDate()}</span>
+                    </div>
+
+                    {/* Action Buttons Stack */}
+                    <div className="space-y-2">
+                      <button 
+                        onClick={() => {
+                          setTrackingId(order.id);
+                          setActiveTab('track');
+                        }}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-indigo-600 bg-indigo-50/50 border border-indigo-100 text-xs font-bold transition hover:bg-indigo-100/50 cursor-pointer"
+                      >
+                        <Search size={14} />
+                        <span>Track Shipment</span>
+                      </button>
+
+                      <button 
+                        onClick={async () => {
+                          const promise = api.shareInvoice(order);
+                          toast.promise(promise, {
+                            loading: 'Sending invoice...',
+                            success: 'Invoice sent to your email!',
+                            error: 'Could not send invoice via Email.'
+                          });
+
+                          const summary = `JiffEX Invoice\nOrder ID: ${order.id}\nDestination: ${order.destination.fullName || ''}, ${order.destination.country}\nTotal Weight: ${order.totalWeight || order.total_weight || 0} kg\nTotal Cost: ₹${order.totalCost || order.total_cost || 0}`;
+                          if (navigator.share) {
+                            try {
+                              await navigator.share({
+                                title: `JiffEX Invoice - ${order.id}`,
+                                text: summary,
+                              });
+                            } catch (e) {
+                              console.warn('Native share dismissed or failed', e);
+                            }
+                          } else {
+                            try {
+                              await navigator.clipboard.writeText(summary);
+                              toast.success('Invoice summary copied to clipboard!');
+                            } catch (e) {
+                              toast.error('Could not copy to clipboard.');
+                            }
+                          }
+                        }}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-emerald-600 bg-emerald-50/50 border border-emerald-100 text-xs font-bold transition hover:bg-emerald-100/50 cursor-pointer"
+                      >
+                        <Share size={14} />
+                        <span>Share Invoice</span>
+                      </button>
+
+                      {order.status !== 'Delivered' && order.status !== 'Cancelled' && (
+                        <button 
+                          onClick={() => cancelPickup(order.id)}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-rose-600 bg-rose-50/50 border border-rose-100 text-xs font-bold transition hover:bg-rose-100/50 cursor-pointer"
+                        >
+                          <Trash2 size={14} />
+                          <span>Cancel Order</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* View Invoice Footer Link */}
+                    <div 
+                      onClick={() => setSelectedOrderForInvoice(order)}
+                      className="flex items-center justify-center gap-1 text-xs font-extrabold text-indigo-600 mt-4 cursor-pointer hover:underline"
+                    >
+                      <span>View Invoice</span>
+                      <ChevronRight size={12} className="text-indigo-600" />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Invoice Modal */}
+          <AnimatePresence>
+            {selectedOrderForInvoice && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                  className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
+                >
+                  <div className="flex justify-between items-start mb-8">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Logo iconSize={18} />
+                      </div>
+                      <h2 className="text-2xl font-black text-slate-900">Tax Invoice</h2>
+                      <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {selectedOrderForInvoice.id}</p>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedOrderForInvoice(null)}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                    >
+                      <XCircle size={24} className="text-slate-400" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-8 mb-8">
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
+                      <div className="text-sm font-bold text-slate-900">JiffEX Warehouse</div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {WAREHOUSE_ADDRESS.street}<br />
+                        {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
+                        {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
+                      <div className="text-sm font-bold text-slate-900">{selectedOrderForInvoice.destination.fullName}</div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {selectedOrderForInvoice.destination.addressLine1}<br />
+                        {selectedOrderForInvoice.destination.city}, {selectedOrderForInvoice.destination.state}<br />
+                        {selectedOrderForInvoice.destination.zipCode}, {selectedOrderForInvoice.destination.country}
+                      </div>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const isPendingInvoice = (selectedOrderForInvoice.status === 'Scheduled' || selectedOrderForInvoice.status === 'Pending Pickup') && (!selectedOrderForInvoice.items || selectedOrderForInvoice.items.length === 0);
+                    return (
+                      <>
+                        <div className="border-t border-slate-100 pt-6 mb-8">
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
+                          {isPendingInvoice ? (
+                            <div className="bg-indigo-50/50 border border-indigo-100/60 text-indigo-900 rounded-2xl p-6 text-center">
+                              <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <Clock size={20} />
+                              </div>
+                              <p className="text-sm font-bold text-slate-800">No items picked or billed yet</p>
+                              <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                                This is a scheduled pickup from home. The item list will be finalized and updated once our agent collects and measures your items at our hub.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {selectedOrderForInvoice.items.map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
+                                      {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
+                                        <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
+                                        <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
+                                        <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
+                                        <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-sm font-bold text-slate-900">
+                                    {item.price ? `₹${item.price}` : '-'}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="bg-slate-900 rounded-2xl p-6 text-white mb-4">
+                          {isPendingInvoice ? (
+                            <div className="text-center py-4 font-sans">
+                              <span className="text-indigo-400 text-[10px] font-black uppercase tracking-widest block mb-1">Invoice Notification</span>
+                              <div className="text-sm font-bold text-slate-200 max-w-md mx-auto leading-relaxed">
+                                Invoice will be displayed once the items are picked and billed.
+                              </div>
+                              <span className="inline-block mt-3.5 px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[9px] font-bold uppercase tracking-widest">
+                                Awaiting Pick & Bill
+                              </span>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Weight</span>
+                                <span className="font-bold">{getSafeOrderTotalWeight(selectedOrderForInvoice)} kg</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Grand Total</span>
+                                  <div className="text-3xl font-black">₹{Math.round(Number(selectedOrderForInvoice.totalCost || selectedOrderForInvoice.total_cost || 0))}</div>
+                                </div>
+                                <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
+                                  {selectedOrderForInvoice.paymentStatus}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+
+                  <div className="mt-8 flex gap-4">
+                    <button className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                      <Printer size={18} /> Print
+                    </button>
+                    <button className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                      <Share size={18} /> Share
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* Details Modal (when Clicking Order ID) */}
+          <AnimatePresence>
+            {selectedOrderForDetails && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                  className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
+                >
+                  <div className="flex justify-between items-start mb-8">
+                    <div>
+                      <h2 className="text-2xl font-black text-slate-900">Order Details</h2>
+                      <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {selectedOrderForDetails.id}</p>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedOrderForDetails(null)}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                    >
+                      <XCircle size={24} className="text-slate-400" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-8 mb-8">
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
+                      <div className="text-sm font-bold text-slate-900">
+                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
+                          ? ((selectedOrderForDetails as any).pickupAddress?.fullName || selectedOrderForDetails.customerName || 'Customer Residence')
+                          : 'JiffEX Warehouse'
+                        }
+                      </div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType ? (
+                          <>
+                            {((selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || '').split(',').slice(0, 2).join(',')}<br />
+                            {((selectedOrderForDetails as any).pickupAddress?.city || selectedOrderForDetails.destination?.city || '')} {((selectedOrderForDetails as any).pickupAddress?.state || selectedOrderForDetails.destination?.state || '')}<br />
+                            {((selectedOrderForDetails as any).pickupAddress?.zipCode || (selectedOrderForDetails as any).pickupAddress?.zip || selectedOrderForDetails.destination?.zipCode || '')} India
+                          </>
+                        ) : (
+                          <>
+                            {WAREHOUSE_ADDRESS.street}<br />
+                            {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
+                            {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
+                      <div className="text-sm font-bold text-slate-900">
+                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
+                          ? (selectedOrderForDetails.destination?.fullName || 'Receiver Location')
+                          : (selectedOrderForDetails.destination?.fullName || currentUser?.name || 'Receiver Location')
+                        }
+                      </div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {selectedOrderForDetails.destination?.addressLine1 || 'N/A'}<br />
+                        {selectedOrderForDetails.destination?.city || ''} {selectedOrderForDetails.destination?.state || ''}<br />
+                        {selectedOrderForDetails.destination?.zipCode || ''} {selectedOrderForDetails.destination?.country || ''}
+                      </div>
+                    </div>
+                  </div>
+
+                  {(selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType) && (
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 mb-6 text-slate-700">
+                      <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-3 flex items-center gap-1.5 pb-2 border-b border-indigo-100/60">
+                        <Calendar size={14} className="text-indigo-600" /> Home Pickup Scheduled Details
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4 text-xs font-sans">
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pickup Date</div>
+                          <div className="font-bold text-slate-800">{selectedOrderForDetails.shippingDate || (selectedOrderForDetails as any).shipping_date || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Preferred Time</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).time || (selectedOrderForDetails as any).destination?.time || 'General Slot'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Assigned Agent</div>
+                          <div className="font-bold text-slate-800">
+                            {selectedOrderForDetails.assignedAgent?.name || (selectedOrderForDetails as any).assignedAgent?.name || (selectedOrderForDetails as any).destination?.assignedAgent?.name || 'Assigning soon...'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Language Preference</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).languagePreference || (selectedOrderForDetails as any).destination?.languagePreference || 'English'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Item Category</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).itemType || (selectedOrderForDetails as any).destination?.itemType || 'General Cargo'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Vehicle Type</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).vehicleType || (selectedOrderForDetails as any).destination?.vehicleType || 'Two-Wheeler'}</div>
+                        </div>
+                        <div className="col-span-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Full Pickup Address (From)</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || 'N/A'}</div>
+                        </div>
+                        <div className="col-span-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Destination Delivery Address (To)</div>
+                          <div className="font-bold text-slate-800">
+                            {selectedOrderForDetails.destination?.addressLine1}, {selectedOrderForDetails.destination?.city}, {selectedOrderForDetails.destination?.state} - {selectedOrderForDetails.destination?.zipCode}, {selectedOrderForDetails.destination?.country}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border-t border-slate-100 pt-6 mb-6">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
+                    <div className="space-y-3">
+                      {(selectedOrderForDetails.items || []).map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
+                              {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium font-sans">
+                                <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
+                                <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
+                                <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
+                                <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-sm font-bold text-slate-900">
+                              {item.price ? `₹${item.price}` : '-'}
+                            </div>
+                            <div className="mt-1.5">
+                              <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[9px] font-extrabold rounded-md uppercase tracking-wider">
+                                {item.status || selectedOrderForDetails.status}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-200 pt-5 space-y-3">
+                    <div className="flex justify-between items-center text-sm font-semibold text-slate-600">
+                      <span>Total Weight:</span>
+                      <span className="text-slate-900 font-extrabold text-base">{getSafeOrderTotalWeight(selectedOrderForDetails)} kg</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm font-semibold text-slate-600 border-t border-slate-100 pt-3">
+                      <div>
+                        <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">Grand Total</span>
+                        <div className="text-2xl font-black text-slate-950 mt-1">₹{Math.round(Number(selectedOrderForDetails.totalCost || selectedOrderForDetails.total_cost || 0))}</div>
+                      </div>
+                      <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold rounded-xl text-xs uppercase tracking-widest">
+                        {selectedOrderForDetails.paymentStatus || selectedOrderForDetails.payment_status || 'Paid'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 flex justify-end pt-2">
+                    <button 
+                      onClick={() => setSelectedOrderForDetails(null)}
+                      className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-all text-sm shadow-sm cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-8">
         <div className="flex justify-between items-center">
@@ -9275,7 +9807,7 @@ export default function App() {
           </AnimatePresence>
         </div>
       );
-    }, [orders, appointments, currentUser, setActiveTab, selectedOrderForInvoice, selectedOrderForDetails]);
+    }, [orders, appointments, currentUser, setActiveTab, selectedOrderForInvoice, selectedOrderForDetails, isMobile]);
 
 
   const WorkOrderSection = useMemo(() => {

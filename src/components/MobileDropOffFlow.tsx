@@ -240,7 +240,7 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
   return (
     <div className="space-y-4 px-3 py-1 text-left">
       {/* 1. Header & Drop Off Banner */}
-      <div className="relative overflow-hidden rounded-2xl h-36 shadow-md text-left -mx-3 -mt-1 mb-2.5 scale-[1.05]">
+      <div className="relative overflow-hidden rounded-2xl h-36 shadow-md text-left -mx-3 -mt-3 mb-2.5 scale-[1.05] origin-bottom">
         {/* Background Image from Google Drive */}
         <img 
           src="https://lh3.googleusercontent.com/d/14pgrQ4cnN4z6ymvfRCnRa-Q5kR8aW1Xr" 
@@ -289,58 +289,164 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
                 Order your products from any online store or courier, and ship them directly to this address.
               </p>
 
-              <div className="bg-indigo-50/50 rounded-2xl border border-indigo-100/60 p-4 space-y-3 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-3 text-indigo-200">
-                  <MapPin size={48} className="opacity-15" />
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3.5 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-3 text-indigo-500/10">
+                  <MapPin size={40} className="stroke-[1.5]" />
                 </div>
 
-                <div className="space-y-2 text-xs text-slate-800">
-                  <div>
-                    <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">Recipient Name</span>
-                    <span className="font-bold text-[#0A142F]">{WAREHOUSE_ADDRESS.name}</span>
+                <div className="space-y-3.5">
+                  {/* Recipient Name */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Recipient Name</span>
+                      <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(WAREHOUSE_ADDRESS.name);
+                          toast.success('Copied Recipient Name!');
+                        }}
+                        className="p-1 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded transition-colors"
+                        title="Copy Recipient Name"
+                      >
+                        <Copy size={10} />
+                      </button>
+                    </div>
+                    <div className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/40 text-xs font-bold text-[#0A142F]">
+                      {WAREHOUSE_ADDRESS.name}
+                    </div>
                   </div>
 
-                  <div>
-                    <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">Unique ID (MUST Include as Attn)</span>
-                    <span className="font-mono bg-white border border-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[11px] font-black">
+                  {/* Unique ID */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Unique ID (MUST Include as Attn)</span>
+                      <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(`Attn: ${customerWarehouseId}`);
+                          toast.success('Copied Unique ID!');
+                        }}
+                        className="p-1 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded transition-colors"
+                        title="Copy Unique ID"
+                      >
+                        <Copy size={10} />
+                      </button>
+                    </div>
+                    <div className="p-2.5 rounded-xl border border-indigo-150 bg-indigo-50/20 text-xs font-mono font-black text-indigo-700">
                       Attn: {customerWarehouseId}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">Street Address</span>
-                    <span className="font-bold text-[#0A142F]">{WAREHOUSE_ADDRESS.street}</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">City & State</span>
-                      <span className="font-bold text-[#0A142F]">{WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}</span>
-                    </div>
-                    <div>
-                      <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">Postal/ZIP Code</span>
-                      <span className="font-bold text-[#0A142F]">{WAREHOUSE_ADDRESS.zip}</span>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">Country</span>
-                      <span className="font-bold text-[#0A142F]">{WAREHOUSE_ADDRESS.country}</span>
+                  {/* Street Address */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Street Address</span>
+                      <button 
+                        onClick={() => {
+                          navigator.clipboard.writeText(WAREHOUSE_ADDRESS.street);
+                          toast.success('Copied Street Address!');
+                        }}
+                        className="p-1 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded transition-colors"
+                        title="Copy Street Address"
+                      >
+                        <Copy size={10} />
+                      </button>
                     </div>
-                    <div>
-                      <span className="text-[9px] font-extrabold uppercase text-indigo-800 block">Hub Phone</span>
-                      <span className="font-bold text-[#0A142F]">{WAREHOUSE_ADDRESS.phone}</span>
+                    <div className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/40 text-xs font-bold text-[#0A142F]">
+                      {WAREHOUSE_ADDRESS.street}
+                    </div>
+                  </div>
+
+                  {/* City & State */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">City & State</span>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(`${WAREHOUSE_ADDRESS.city}, ${WAREHOUSE_ADDRESS.state}`);
+                            toast.success('Copied City & State!');
+                          }}
+                          className="p-1 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded transition-colors"
+                          title="Copy City & State"
+                        >
+                          <Copy size={10} />
+                        </button>
+                      </div>
+                      <div className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/40 text-xs font-bold text-[#0A142F]">
+                        {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}
+                      </div>
+                    </div>
+
+                    {/* Postal Code */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Postal/ZIP Code</span>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(WAREHOUSE_ADDRESS.zip);
+                            toast.success('Copied Postal Code!');
+                          }}
+                          className="p-1 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded transition-colors"
+                          title="Copy Postal Code"
+                        >
+                          <Copy size={10} />
+                        </button>
+                      </div>
+                      <div className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/40 text-xs font-bold text-[#0A142F]">
+                        {WAREHOUSE_ADDRESS.zip}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Country & Phone */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Country */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Country</span>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(WAREHOUSE_ADDRESS.country);
+                            toast.success('Copied Country!');
+                          }}
+                          className="p-1 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded transition-colors"
+                          title="Copy Country"
+                        >
+                          <Copy size={10} />
+                        </button>
+                      </div>
+                      <div className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/40 text-xs font-bold text-[#0A142F]">
+                        {WAREHOUSE_ADDRESS.country}
+                      </div>
+                    </div>
+
+                    {/* Hub Phone */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Hub Phone</span>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText(WAREHOUSE_ADDRESS.phone);
+                            toast.success('Copied Phone!');
+                          }}
+                          className="p-1 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded transition-colors"
+                          title="Copy Hub Phone"
+                        >
+                          <Copy size={10} />
+                        </button>
+                      </div>
+                      <div className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/40 text-xs font-bold text-[#0A142F]">
+                        {WAREHOUSE_ADDRESS.phone}
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 <button 
                   onClick={handleCopyAddress}
-                  className="w-full mt-2 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-100"
+                  className="w-full mt-2.5 py-3 bg-[#091535] hover:bg-[#122352] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-indigo-100"
                 >
                   {copied ? <Check size={14} /> : <Copy size={14} />}
-                  <span>{copied ? 'Copied to Clipboard!' : 'Copy Address Details'}</span>
+                  <span>{copied ? 'Copied Full Address!' : 'Copy Entire Address'}</span>
                 </button>
               </div>
 
