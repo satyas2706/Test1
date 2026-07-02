@@ -4439,6 +4439,9 @@ export default function App() {
   const [navbarTrackingId, setNavbarTrackingId] = useState('');
 
   const navigateTo = (tab: Tab) => {
+    if (tab === 'finalize') {
+      setActiveCheckoutStep(1);
+    }
     if (tab === 'pickup') {
       if (!currentUser) {
         // Automatically start fresh for another customer if not signed in
@@ -4677,6 +4680,7 @@ export default function App() {
   const [showPickupConfirmModal, setShowPickupConfirmModal] = useState(false);
   const [showPickupInProgressModal, setShowPickupInProgressModal] = useState(false);
   const [activePickupStep, setActivePickupStep] = useState(1);
+  const [activeCheckoutStep, setActiveCheckoutStep] = useState(1);
   const [shopConsolidationOption, setShopConsolidationOption] = useState<'pickup' | 'warehouse' | 'store_only' | null>(null);
   const [showConsolidationError, setShowConsolidationError] = useState(false);
   const [pickupConsolidationOption, setPickupConsolidationOption] = useState<'shop_and_ship' | 'pickup_only' | null>(null);
@@ -4904,9 +4908,17 @@ export default function App() {
   const pickupHeaderRef = React.useRef<HTMLDivElement>(null);
 
   const scrollToQuote = () => {
-    const el = document.getElementById('mobile-quick-quote') || document.getElementById('desktop-quick-quote') || quoteRef.current;
+    const el = isMobile 
+      ? (document.getElementById('mobile-quick-quote') || document.getElementById('desktop-quick-quote') || quoteRef.current)
+      : (document.getElementById('desktop-quick-quote') || document.getElementById('mobile-quick-quote') || quoteRef.current);
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
+      if (!isMobile) {
+        const yOffset = -100; // 80px sticky nav + 20px comfortable breathing space
+        const y = el.getBoundingClientRect().top + window.scrollY + yOffset;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+      } else {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
   };
 
@@ -4916,7 +4928,7 @@ export default function App() {
       setTabHistory(prev => [...prev, 'home' as Tab]);
       setTimeout(() => {
         scrollToQuote();
-      }, 100);
+      }, 200);
     } else {
       scrollToQuote();
     }
@@ -6721,6 +6733,18 @@ export default function App() {
     // Optimistic update
     setOrders([...orders, newOrder]);
     setIsPaid(true);
+    
+    // Delete the checked out items from the active cart in the database
+    for (const item of cartItems) {
+      const idsToDelete = item.ids && item.ids.length > 0 ? item.ids : [item.id];
+      for (const dId of idsToDelete) {
+        deletedDbItemIdsRef.current.add(dId);
+        if (dbStatus.connected && currentUser) {
+          api.deleteItem(dId).catch(err => console.error('Failed to delete item from DB on checkout:', err));
+        }
+      }
+    }
+
     // Only remove items that were in the cart (submitted)
     setItems(items.filter(i => i.source === 'Warehouse' && !i.submitted));
 
@@ -7192,6 +7216,193 @@ export default function App() {
       const currentStepIndex = getStepIndex(result.status);
       const isSimulated = !!(result.isDemoFallback || !result.isLive);
       const hasError = !!(result.hasError || result.status === 'Error' || result.status === 'Fetch Failed');
+
+      if (isMobile) {
+        if (hasError) {
+          return (
+            <div className="bg-white rounded-3xl border border-red-100 shadow-md overflow-hidden p-5 space-y-4">
+              <div className="flex items-center gap-3">
+                {brand.logo}
+                <span className="px-2 py-0.5 rounded-full text-[8px] uppercase font-black tracking-widest bg-red-50 text-red-800 border border-red-100 flex items-center gap-1">
+                  <span className="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
+                  Sync Failed
+                </span>
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-800">Connection Offline</h3>
+                <span className="inline-block px-2.5 py-1 bg-red-50 text-red-700 text-[10px] font-black rounded-lg border border-red-100">
+                  ID: {result.id}
+                </span>
+              </div>
+              <div className="p-3.5 bg-red-50/50 border border-red-100 rounded-xl flex items-start gap-3">
+                <AlertTriangle size={16} className="text-red-600 mt-0.5 shrink-0" />
+                <p className="text-[10px] text-red-700 leading-normal font-semibold">
+                  We were unable to synchronize the delivery status with the partner carrier system. Please verify that the tracking number or order ID is correct and registered.
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-lg p-5 space-y-5 animate-fade-in">
+            {/* Header: Carrier Branding, Status Badge, ID */}
+            <div className="flex flex-col gap-3 pb-4 border-b border-slate-100">
+              <div className="flex items-center justify-between gap-3">
+                {brand.logo}
+                <span className={`px-2.5 py-0.5 rounded-full text-[9px] uppercase font-black tracking-wider text-white ${brand.barColor}`}>
+                  {result.status}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">ID:</span>
+                  <span className="text-xs font-black text-slate-800 font-mono bg-slate-50 px-2 py-0.5 rounded border border-slate-150">{result.id}</span>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(result.id);
+                      toast.success("Tracking ID copied to clipboard!");
+                    }}
+                    className="p-1 text-slate-400 hover:text-indigo-600 active:scale-95 transition-all"
+                    title="Copy Tracking ID"
+                  >
+                    <Copy size={12} />
+                  </button>
+                </div>
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-150">
+                  {result.serviceType}
+                </span>
+              </div>
+              {result.estimatedDelivery && (
+                <div className="text-[11px] font-semibold text-emerald-600 bg-emerald-50/50 border border-emerald-100/40 p-2.5 rounded-xl flex items-center gap-1.5">
+                  <Clock size={13} />
+                  <span>{result.estimatedDelivery}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Route Map Flow */}
+            <div className="bg-slate-50/50 border border-slate-100/60 p-4 rounded-2xl flex items-center justify-between gap-2">
+              <div className="flex-1 text-left space-y-0.5">
+                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block">Origin</span>
+                <span className="text-xs font-black text-slate-800 block truncate">{result.origin.split(',')[0]}</span>
+                <span className="text-[9px] text-slate-400 font-semibold block truncate">
+                  {result.origin.split(',').slice(1).join(',').trim()}
+                </span>
+              </div>
+              
+              <div className="flex flex-col items-center justify-center px-1 relative min-w-[50px] shrink-0">
+                <div className="absolute top-[16px] left-0 right-0 h-0.5 bg-slate-200" />
+                <div 
+                  className={`absolute top-[16px] left-0 h-0.5 ${brand.barColor} transition-all duration-1000`} 
+                  style={{ width: `${(currentStepIndex / 4) * 100}%` }}
+                />
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center bg-white border shadow-sm relative z-10 text-indigo-600`}>
+                  <Plane size={11} className="animate-pulse" />
+                </div>
+              </div>
+
+              <div className="flex-1 text-right space-y-0.5">
+                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block">Destination</span>
+                <span className="text-xs font-black text-slate-800 block truncate">{result.destination.split(',')[0]}</span>
+                <span className="text-[9px] text-slate-400 font-semibold block truncate">
+                  {result.destination.split(',').slice(1).join(',').trim()}
+                </span>
+              </div>
+            </div>
+
+            {/* Vertical Timeline logs */}
+            <div className="space-y-3 pt-1">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2 px-1">
+                Active Scanner Milestones
+              </span>
+              <div className="relative pl-5 space-y-5 pt-1 border-l border-slate-100 ml-2">
+                {result.events && result.events.length > 0 ? (
+                  result.events.map((ev, i) => {
+                    const isLatest = i === 0;
+                    return (
+                      <div key={i} className="relative flex flex-col gap-0.5 text-left">
+                        {/* Dot indicator */}
+                        <div className="absolute -left-[25px] top-1.5 w-3.5 h-3.5 rounded-full border border-white bg-white flex items-center justify-center z-10 shadow-sm">
+                          <div className={`w-2 h-2 rounded-full ${isLatest ? 'bg-indigo-600 animate-pulse' : 'bg-slate-350'}`} />
+                        </div>
+
+                        <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                          <span className={`text-xs font-extrabold ${isLatest ? 'text-indigo-600' : 'text-slate-800'}`}>
+                            {ev.status}
+                          </span>
+                          <span className="text-[9px] font-semibold text-slate-400 whitespace-nowrap">
+                            {ev.date} {ev.time}
+                          </span>
+                        </div>
+                        
+                        {ev.location && (
+                          <div className="inline-flex items-center gap-1 text-[8px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 border border-slate-150 px-1.5 py-0.5 rounded max-w-fit mt-0.5">
+                            <MapPin size={8} /> {ev.location}
+                          </div>
+                        )}
+
+                        <p className="text-[10px] text-slate-500 font-medium leading-relaxed mt-1">
+                          {ev.description}
+                        </p>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-4 text-slate-400 text-xs">No scan events received yet.</div>
+                )}
+              </div>
+            </div>
+
+            {/* Shipment Facts: 2-column tiles */}
+            {result.shipmentFacts && (
+              <div className="space-y-2.5 pt-4 border-t border-slate-100">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block px-1">Shipment Overview</span>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {result.shipmentFacts.overview.slice(0, 4).map((item, idx) => (
+                    <div key={idx} className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
+                      <span className="text-[8px] uppercase font-extrabold text-slate-400 tracking-wider block mb-0.5">{item.label}</span>
+                      <span className="text-xs font-extrabold text-slate-800 block break-words leading-tight">{item.value}</span>
+                    </div>
+                  ))}
+                  <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
+                    <span className="text-[8px] uppercase font-extrabold text-slate-400 tracking-wider block mb-0.5">Total Weight</span>
+                    <span className="text-xs font-mono font-extrabold text-indigo-600 block leading-tight">{result.weight}</span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
+                    <span className="text-[8px] uppercase font-extrabold text-slate-400 tracking-wider block mb-0.5">Carrier Service</span>
+                    <span className="text-xs font-extrabold text-slate-800 block leading-tight truncate">{result.carrier}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Active direct carrier link */}
+            <div className="flex flex-col gap-2 pt-4 border-t border-slate-100">
+              {result.trackingUrl && (
+                <a 
+                  href={result.trackingUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100 flex items-center justify-center gap-1.5 transition-all text-center font-bold"
+                >
+                  <ExternalLink size={12} />
+                  Open {result.carrier} Portal
+                </a>
+              )}
+              <button 
+                type="button"
+                onClick={() => navigateTo('support')}
+                className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center justify-center gap-1.5 transition-all text-center font-bold"
+              >
+                <Headphones size={12} />
+                Contact Support Desk
+              </button>
+            </div>
+          </div>
+        );
+      }
 
       if (hasError) {
         return (
@@ -7849,6 +8060,151 @@ export default function App() {
           autoSearch();
         }
       }, [trackingId]);
+
+      if (isMobile) {
+        const activeOrders = orders.filter(o => 
+          (o.customerId === currentUser?.id || o.customer_id === currentUser?.id)
+        );
+
+        return (
+          <div className="flex flex-col gap-5 px-4 py-4 pb-12">
+            {/* Mobile Header */}
+            <div className="space-y-1">
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Track Shipment</h1>
+              <p className="text-xs text-slate-500 font-semibold leading-normal">
+                Enter your Order ID or Courier Tracking number to check its delivery journey.
+              </p>
+            </div>
+
+            {/* Mobile Search Card */}
+            <div className="bg-white p-4 rounded-3xl shadow-lg shadow-indigo-500/5 border border-slate-100">
+              <form onSubmit={handleTrackSearch} className="flex flex-col gap-3">
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-4 flex items-center text-slate-400 group-focus-within:text-indigo-600 transition-colors">
+                    <Package size={18} />
+                  </div>
+                  <input 
+                    type="text" 
+                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-4 focus:ring-indigo-500/5 focus:bg-white focus:border-indigo-200 transition-all font-bold text-sm text-slate-900 placeholder:text-slate-400"
+                    placeholder="Order ID (e.g. SH-00001) or Carrier ID..."
+                    value={trackIdInput}
+                    onChange={(e) => setTrackIdInput(e.target.value)}
+                  />
+                </div>
+                <button 
+                  type="submit"
+                  disabled={isSearching}
+                  className="w-full py-3.5 bg-indigo-600 active:bg-indigo-700 text-white rounded-xl font-bold uppercase tracking-wider text-xs transition-all shadow-md shadow-indigo-100 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {isSearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                  {isSearching ? 'Searching...' : 'Track Shipment'}
+                </button>
+              </form>
+            </div>
+
+            <AnimatePresence mode="wait">
+              {/* If we have searched a tracking ID and found results */}
+              {trackingOrder && (
+                <motion.div
+                  key="local-order"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="space-y-4"
+                >
+                  <ThirdPartyTrackerCard result={mapOrderToThirdPartyTrackResult(trackingOrder)} />
+                  
+                  <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-100/60 flex items-start gap-3">
+                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-amber-500 shadow-sm shrink-0">
+                      <Info size={16} />
+                    </div>
+                    <div className="space-y-0.5">
+                      <h4 className="text-[10px] font-black text-amber-950 uppercase tracking-wider">Notice</h4>
+                      <p className="text-[10px] text-amber-800 leading-normal font-medium">
+                        Status updates can take 12-24 hours to reflect after handover. If you have questions, please reach out to JiffEX support.
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {thirdPartyResult && (
+                <motion.div
+                  key="third-party-order"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="space-y-4"
+                >
+                  <ThirdPartyTrackerCard result={thirdPartyResult} />
+                </motion.div>
+              )}
+
+              {/* Empty State / Active Shipments Quick Link (when no active result is rendered) */}
+              {!trackingOrder && !thirdPartyResult && (
+                <motion.div
+                  key="empty-quick-links"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="space-y-5"
+                >
+                  {activeOrders.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 px-1">
+                        <Truck size={15} className="text-indigo-600" />
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Your Active Orders</h3>
+                      </div>
+                      <div className="space-y-2">
+                        {activeOrders.map((ord) => (
+                          <div 
+                            key={ord.id} 
+                            onClick={() => {
+                              setTrackIdInput(ord.id);
+                              setTrackingId(ord.id);
+                            }}
+                            className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm active:bg-slate-50 transition-all flex items-center justify-between gap-3 cursor-pointer"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-extrabold text-slate-800">{ord.id}</span>
+                                <span className={`px-1.5 py-0.5 rounded-full text-[8px] uppercase font-bold border ${
+                                  ord.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                                  ord.status === 'Cancelled' ? 'bg-rose-50 text-rose-700 border-rose-100' :
+                                  'bg-indigo-50 text-indigo-700 border-indigo-100'
+                                }`}>
+                                  {ord.status}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-bold">
+                                Destination: <span className="text-slate-600 font-black">{ord.destination?.city || ord.destination?.country || 'Global'}</span>
+                              </div>
+                            </div>
+                            <div className="text-indigo-600 text-xs font-black flex items-center gap-0.5">
+                              Track <ChevronRight size={14} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white p-6 rounded-3xl border border-slate-100 text-center py-10 space-y-3">
+                      <div className="w-12 h-12 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center mx-auto">
+                        <Package size={22} />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-bold text-slate-800">No active searches</h4>
+                        <p className="text-[10px] text-slate-500 max-w-xs mx-auto leading-normal">
+                          Enter your tracking identifier above or view your order dashboard for details.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      }
 
       return (
         <div className="max-w-3xl mx-auto py-12 px-4 space-y-8">
@@ -15146,7 +15502,7 @@ export default function App() {
     const hasScheduledPickup = userAppointments.some(a => a.status === 'Scheduled');
     const isPayAtHome = hasScheduledPickup && shippingPreference === 'International' && !cartItems.some(i => i.source === 'Store');
 
-    if (isPaid) {
+    if (isPaid && !isMobile) {
       
       return (
         <div className="max-w-2xl mx-auto text-center space-y-6 pb-12 pt-4">
@@ -15244,6 +15600,677 @@ export default function App() {
             >
               {isWarehouseCheckout ? 'Go to My Orders' : 'View Order History'}
             </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (isMobile) {
+      const currentStep = isPaid ? 5 : activeCheckoutStep;
+      return (
+        <div className="max-w-md mx-auto space-y-6 pb-12 pt-4">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-2 text-[#0A142F]">
+            {currentStep !== 5 && (
+              <button 
+                onClick={() => {
+                  if (currentStep > 1) {
+                    setActiveCheckoutStep(currentStep - 1);
+                  } else {
+                    goBack();
+                  }
+                }}
+                className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all shrink-0 cursor-pointer"
+              >
+                <ArrowLeft size={16} />
+              </button>
+            )}
+            <div>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight">Shop & Ship Checkout</h2>
+              {currentStep !== 5 && (
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Step {currentStep} of 5</p>
+              )}
+            </div>
+          </div>
+
+          {/* Stepper Progress Bar */}
+          {currentStep !== 5 && (
+            <div className="grid grid-cols-5 gap-1 items-center justify-between text-center py-3 border border-slate-100 bg-white rounded-xl shadow-sm">
+              {[
+                { step: 1, label: 'Items' },
+                { step: 2, label: 'Address' },
+                { step: 3, label: 'Schedule' },
+                { step: 4, label: 'Review' },
+                { step: 5, label: 'Done' }
+              ].map((s) => {
+                const isActive = currentStep === s.step;
+                const isCompleted = currentStep > s.step;
+                return (
+                  <div key={s.step} className="flex flex-col items-center">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black transition-all ${
+                      isCompleted ? 'bg-indigo-600 text-white' :
+                      isActive ? 'bg-[#091535] text-white ring-4 ring-indigo-100' :
+                      'bg-slate-100 text-slate-400'
+                    }`}>
+                      {s.step}
+                    </div>
+                    <span className={`text-[9px] font-black tracking-tight mt-1 transition-colors ${
+                      isActive || isCompleted ? 'text-[#091535] font-black' : 'text-slate-400 font-bold'
+                    }`}>
+                      {s.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Steps Contents */}
+          <div className="min-h-[300px]">
+            {/* Step 1: Items Selector */}
+            {currentStep === 1 && (
+              <div className="space-y-6 text-left">
+                <div className="flex items-center gap-2 text-[#0A142F]">
+                  <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
+                  <h3 className="text-sm font-black uppercase tracking-wider">Step 1: Review Items</h3>
+                </div>
+                
+                {/* Display list of checkout items */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+                  {cartItems.map((item) => (
+                    <div key={item.id} className="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0">
+                      <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center shrink-0 overflow-hidden border border-slate-100">
+                        {item.image ? (
+                          <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <ShoppingBag size={18} className="text-slate-400" />
+                        )}
+                      </div>
+                      <div className="flex-grow min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate">{item.name}</p>
+                        <p className="text-[10px] text-slate-400 font-medium">Qty: {item.quantity || 1} • {item.weight ? `${item.weight.toFixed(2)} kg` : 'TBD'}</p>
+                      </div>
+                      <div className="text-xs font-black text-slate-900 shrink-0">
+                        ₹{(item.price || 0).toFixed(2)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Shipping Preference Selection */}
+                {!isWarehouseCheckout && userAppointments.some(a => a.status === 'Scheduled') && cartItems.length > 0 && (
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+                    <h4 className="text-xs font-black text-[#0A142F] uppercase tracking-wider">How would you like to receive your items?</h4>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div 
+                        onClick={() => {
+                          setShippingPreference('International');
+                          setAddress({
+                            fullName: pickupName || currentUser?.name || '',
+                            email: currentUser?.email || '',
+                            phone: pickupPhone || '',
+                            addressLine1: `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}`,
+                            city: pickupAddress.city,
+                            state: pickupAddress.state,
+                            zipCode: pickupAddress.zip,
+                            country: 'India'
+                          });
+                        }}
+                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${shippingPreference === 'International' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                      >
+                        <div className="flex items-center gap-2.5 mb-1.5">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${shippingPreference === 'International' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                            <Globe size={16} />
+                          </div>
+                          <div className="text-xs font-black text-slate-900">Ship to my home</div>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
+                          Consolidate with pickup items and ship to your home.
+                        </p>
+                      </div>
+
+                      <div 
+                        onClick={() => {
+                          setShippingPreference('LocalPickup');
+                          setAddress(WAREHOUSE_ADDRESS);
+                        }}
+                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${shippingPreference === 'LocalPickup' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                      >
+                        <div className="flex items-center gap-2.5 mb-1.5">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${shippingPreference === 'LocalPickup' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                            <Package size={16} />
+                          </div>
+                          <div className="text-xs font-black text-slate-900">Bring items during Home Pickup</div>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
+                          Our agent will bring these items during scheduled pickup.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Navigation Buttons */}
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    onClick={goBack}
+                    className="flex-1 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    Back to Cart
+                  </button>
+                  <button 
+                    onClick={() => setActiveCheckoutStep(2)}
+                    className="flex-1 py-3.5 bg-[#091535] text-white font-black rounded-xl text-xs transition-all active:scale-[0.98] shadow-md shadow-indigo-100 cursor-pointer"
+                  >
+                    Next: Address →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Address Details */}
+            {currentStep === 2 && (
+              <div className="space-y-6 text-left">
+                <div className="flex items-center gap-2 text-[#0A142F]">
+                  <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
+                  <h3 className="text-sm font-black uppercase tracking-wider">Step 2: Destination Address</h3>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Full Name</label>
+                    <input 
+                      type="text" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.fullName}
+                      onChange={e => setAddress({...address, fullName: e.target.value})}
+                      placeholder="Receiver's Full Name"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Email</label>
+                      <input 
+                        type="email" 
+                        disabled={shippingPreference === 'LocalPickup'}
+                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                        value={address.email}
+                        onChange={e => setAddress({...address, email: e.target.value})}
+                        placeholder="email@example.com"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Phone</label>
+                      <input 
+                        type="tel" 
+                        disabled={shippingPreference === 'LocalPickup'}
+                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                        value={address.phone}
+                        onChange={e => setAddress({...address, phone: e.target.value})}
+                        placeholder="Receiver's Contact Number"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Address Line 1</label>
+                    <input 
+                      type="text" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.addressLine1}
+                      onChange={e => setAddress({...address, addressLine1: e.target.value})}
+                      placeholder="Street, Building, Flat No."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">City</label>
+                      <input 
+                        type="text" 
+                        disabled={shippingPreference === 'LocalPickup'}
+                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                        value={address.city}
+                        onChange={e => setAddress({...address, city: e.target.value})}
+                        placeholder="City"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">State</label>
+                      <input 
+                        type="text" 
+                        disabled={shippingPreference === 'LocalPickup'}
+                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                        value={address.state || ''}
+                        onChange={e => setAddress({...address, state: e.target.value})}
+                        placeholder="State"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Zip Code</label>
+                      <input 
+                        type="text" 
+                        disabled={shippingPreference === 'LocalPickup'}
+                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                        placeholder="e.g. 123456"
+                        value={address.zipCode}
+                        onChange={e => setAddress({...address, zipCode: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Country</label>
+                      <select 
+                        disabled={shippingPreference === 'LocalPickup'}
+                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500 bg-white"
+                        value={address.country}
+                        onChange={e => setAddress({...address, country: e.target.value})}
+                      >
+                        {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Navigation Buttons */}
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    onClick={() => setActiveCheckoutStep(1)}
+                    className="flex-1 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    ← Back
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const isValid = address.fullName && address.email && address.phone && address.addressLine1 && address.city && address.state && address.zipCode;
+                      if (!isValid) {
+                        toast.error("Please fill out all destination address fields to proceed.");
+                        return;
+                      }
+                      setActiveCheckoutStep(3);
+                    }}
+                    className="flex-1 py-3.5 bg-[#091535] text-white font-black rounded-xl text-xs transition-all active:scale-[0.98] shadow-md shadow-indigo-100 cursor-pointer"
+                  >
+                    Next: Date →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Shipping Date Selection */}
+            {currentStep === 3 && (
+              <div className="space-y-6 text-left">
+                <div className="flex items-center gap-2 text-[#0A142F]">
+                  <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
+                  <h3 className="text-sm font-black uppercase tracking-wider">Step 3: Select Shipping Date</h3>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Available Dispatch Dates</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {SHIPPING_DATES.map(date => {
+                      const dObj = new Date(date);
+                      return (
+                        <button 
+                          key={date}
+                          onClick={() => setSelectedDate(date)}
+                          className={`p-4 rounded-xl border-2 transition-all text-center flex flex-col items-center justify-center cursor-pointer ${
+                            selectedDate === date 
+                              ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                              : 'border-slate-100 hover:border-slate-200 text-slate-600'
+                          }`}
+                        >
+                          <div className="text-[9px] font-extrabold uppercase opacity-65 mb-1">
+                            {dObj.toLocaleString('default', { month: 'short' })}
+                          </div>
+                          <div className="text-lg font-black">{date.split('-')[2]}</div>
+                          <div className="text-[9px] font-semibold opacity-60 mt-0.5">
+                            {dObj.toLocaleString('default', { weekday: 'short' })}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Navigation Buttons */}
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    onClick={() => setActiveCheckoutStep(2)}
+                    className="flex-1 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    ← Back
+                  </button>
+                  <button 
+                    onClick={() => setActiveCheckoutStep(4)}
+                    className="flex-1 py-3.5 bg-[#091535] text-white font-black rounded-xl text-xs transition-all active:scale-[0.98] shadow-md shadow-indigo-100 cursor-pointer"
+                  >
+                    Next: Pay →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: Review & Payment Details */}
+            {currentStep === 4 && (
+              <div className="space-y-6 text-left">
+                <div className="flex items-center gap-2 text-[#0A142F]">
+                  <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
+                  <h3 className="text-sm font-black uppercase tracking-wider">Step 4: Review & Pay</h3>
+                </div>
+
+                {/* Order Summary Card */}
+                <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-sm space-y-4">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Order Summary</h4>
+                  
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between text-slate-300">
+                      <span>Total Weight</span>
+                      <span className="font-bold text-white">{totalWeight.toFixed(2)} kg</span>
+                    </div>
+                    <div className="flex justify-between text-slate-300">
+                      <span>Shipping ({address.country})</span>
+                      <span className="font-bold text-white">₹{(totalWeight * (shippingRates[address.country] || 10)).toFixed(2)}</span>
+                    </div>
+
+                    {(() => {
+                      const discountPercent = shippingDiscounts[address.country] || 0;
+                      if (discountPercent > 0) {
+                        const baseShip = totalWeight * (shippingRates[address.country] || 10);
+                        const saved = baseShip * (discountPercent / 100);
+                        return (
+                          <div className="flex justify-between text-rose-400 font-semibold">
+                            <span>Shipping Discount ({discountPercent}%)</span>
+                            <span>-₹{saved.toFixed(2)}</span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    <div className="flex justify-between text-slate-300">
+                      <span>Items Cost</span>
+                      <span className="font-bold text-white">₹{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
+                    </div>
+
+                    {userAppointments.some(a => a.status === 'Scheduled') && (
+                      <div className="flex justify-between text-slate-300">
+                        <span>Shop Item Delivery</span>
+                        <span className="text-emerald-400 font-bold">{shippingPreference === 'LocalPickup' ? 'During Home Pickup' : 'To my Home'}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Coupon Block */}
+                  <div className="py-2.5 border-t border-b border-slate-800/80 my-1">
+                    {!appliedCoupon ? (
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">Coupon Code</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            maxLength={5}
+                            value={couponCodeInput}
+                            onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                            className="bg-slate-800 text-white text-xs font-mono font-bold uppercase rounded-lg px-2.5 py-1.5 flex-grow outline-none border border-slate-700 placeholder-slate-500"
+                            placeholder="CODE5"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const codeClean = couponCodeInput.trim().toUpperCase();
+                              if (codeClean.length !== 5) {
+                                toast.error("Coupon code must be exactly 5 characters.");
+                                return;
+                              }
+                              const matched = coupons.find(c => c.code === codeClean);
+                              if (!matched) {
+                                toast.error(`Coupon code "${codeClean}" is invalid.`);
+                                return;
+                              }
+                              if (!matched.isEnabled) {
+                                toast.error(`Coupon code "${codeClean}" is inactive.`);
+                                return;
+                              }
+                              setAppliedCoupon({
+                                code: matched.code,
+                                discountPercent: matched.discountPercent
+                              });
+                              toast.success(`Coupon "${matched.code}" applied! Saved ${matched.discountPercent}% OFF.`);
+                            }}
+                            className="bg-indigo-600 text-white text-xs font-bold rounded-lg px-3 py-1.5 transition-all cursor-pointer"
+                          >
+                            Apply
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2">
+                        <span className="text-[10px] text-emerald-400 font-bold font-mono uppercase">{appliedCoupon.code} applied ({appliedCoupon.discountPercent}% OFF)</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAppliedCoupon(null);
+                            setCouponCodeInput('');
+                          }}
+                          className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-1 flex justify-between items-center">
+                    <span className="text-sm font-bold text-slate-300">Total Amount</span>
+                    <span className="text-xl font-black text-indigo-400">
+                      ₹{(appliedCoupon ? Math.max(0, totalCost - (totalCost * (appliedCoupon.discountPercent / 100))) : totalCost).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Payment Selection or Pay at Home */}
+                {!isWarehouseCheckout && (
+                  !isPayAtHome ? (
+                    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Payment Method</h4>
+                      <div className="space-y-2.5">
+                        <div 
+                          onClick={() => setPaymentMethod('phonepe')}
+                          className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                        >
+                          <div className="w-9 h-9 bg-purple-600 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0">Pe</div>
+                          <div className="text-left">
+                            <p className="text-xs font-bold text-slate-900 leading-none">PhonePe</p>
+                            <p className="text-[9px] text-slate-500 mt-1">UPI, Wallet & Cards</p>
+                          </div>
+                          <div className={`ml-auto w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                            {paymentMethod === 'phonepe' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                          </div>
+                        </div>
+
+                        <div 
+                          onClick={() => setPaymentMethod('card')}
+                          className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                        >
+                          <div className="w-9 h-9 bg-slate-800 rounded-lg flex items-center justify-center text-white shrink-0"><CreditCard size={16} /></div>
+                          <div className="text-left">
+                            <p className="text-xs font-bold text-slate-900 leading-none">Credit / Debit Card</p>
+                            <p className="text-[9px] text-slate-500 mt-1">Visa, Mastercard, Amex</p>
+                          </div>
+                          <div className={`ml-auto w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                            {paymentMethod === 'card' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 space-y-2">
+                      <h4 className="text-xs font-black text-slate-900 flex items-center gap-2">
+                        <CheckCircle2 size={16} className="text-emerald-600" /> Pay at Home enabled
+                      </h4>
+                      <p className="text-[10px] text-slate-600 leading-relaxed font-semibold">
+                        Pay for your shop items along with your shipping charges during our home pickup visit.
+                      </p>
+                    </div>
+                  )
+                )}
+
+                {/* Terms Consent and Checkout Button */}
+                <div className="bg-slate-50 p-3.5 rounded-xl text-[10px] text-slate-500 leading-relaxed font-medium">
+                  By placing this order, you agree to the international shipping terms and conditions of Jiffex.
+                </div>
+
+                {/* Navigation Buttons */}
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    onClick={() => setActiveCheckoutStep(3)}
+                    className="py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs px-5 transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    ← Back
+                  </button>
+                  <button 
+                    onClick={handleFinalPayment}
+                    className="flex-grow py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs transition-all active:scale-[0.98] shadow-lg shadow-emerald-100 cursor-pointer"
+                  >
+                    {isWarehouseCheckout 
+                      ? 'Confirm Shipment Request'
+                      : isPayAtHome 
+                        ? 'Place Order (Pay at Home) →' 
+                        : `Pay & Place Order →`
+                    }
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 5: Done (Confirmed) */}
+            {currentStep === 5 && (
+              <div className="space-y-6 text-left animate-fade-in font-sans">
+                {/* Confirmation Card */}
+                <div className="bg-emerald-50 border border-emerald-200/60 p-5 rounded-2xl flex flex-col gap-4 shadow-sm relative overflow-hidden">
+                  <div className="flex items-start gap-3 z-10">
+                    <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-200">
+                      <CheckCircle2 size={22} />
+                    </div>
+                    <div>
+                      <span className="inline-block text-[9px] font-extrabold text-emerald-700 tracking-wider bg-emerald-100 px-2 py-0.5 rounded-full mb-1">
+                        ORDER CONFIRMED
+                      </span>
+                      <h2 className="text-sm font-black text-slate-900 leading-tight">
+                        Thanks, {currentUser?.name?.split(' ')[0] || 'Customer'}!
+                      </h2>
+                      <p className="text-[10px] text-slate-500 font-semibold leading-normal mt-1">
+                        {isWarehouseCheckout 
+                          ? 'Your warehouse shipment request has been placed successfully.' 
+                          : 'Your shop order has been placed successfully.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-100 p-3 rounded-xl flex items-center justify-between gap-3 shrink-0 shadow-sm">
+                    <div>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">ORDER REFERENCE ID</p>
+                      <p className="text-xs font-black text-[#091535] tracking-wide mt-1.5 font-mono">
+                        {orderId || 'SH-00214'}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const ref = orderId || 'SH-00214';
+                        navigator.clipboard.writeText(ref);
+                        toast.success('Order Reference ID copied!');
+                      }}
+                      className="p-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-all shrink-0 cursor-pointer"
+                    >
+                      <Copy size={13} className="stroke-[2.5]" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3 text-xs">
+                    <span className="font-bold text-slate-400 uppercase tracking-wider">Estimated Delivery</span>
+                    <span className="font-black text-indigo-600">{isWarehouseCheckout ? 'Awaiting Warehouse Arrival' : '12-15 Business Days'}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
+                    {isWarehouseCheckout 
+                      ? "Your shipment request is registered. Once received at our hub, we will weigh and bill your order."
+                      : isPayAtHome 
+                        ? "Our agent will bring your order and finalize billing at your home during pickup."
+                        : shippingPreference === 'LocalPickup'
+                          ? "Payment received. Our agent will bring these items with them during scheduled home pickup."
+                          : `We have received your payment. Our team will consolidate your items and ship them on ${selectedDate}.`
+                    }
+                  </p>
+                </div>
+
+                {/* Consolidation Options Prompts */}
+                {shopConsolidationOption === 'pickup' && (
+                  <div className="p-5 bg-indigo-50 border border-indigo-100 rounded-2xl text-left space-y-2.5">
+                    <h4 className="font-black text-indigo-950 text-xs flex items-center gap-1.5">
+                      <Truck className="text-indigo-600 animate-bounce" size={15} />
+                      Schedule your Home Pickup!
+                    </h4>
+                    <p className="text-[10px] text-slate-600 leading-relaxed font-semibold">
+                      You opted to send additional items via Home Pickup. Schedule our courier agent to collect them.
+                    </p>
+                    <button
+                      onClick={() => {
+                        navigateTo('pickup');
+                        setIsPaid(false);
+                        setOrderId(null);
+                        setShopConsolidationOption(null);
+                      }}
+                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow shadow-indigo-200 cursor-pointer"
+                    >
+                      Schedule Home Pickup Now →
+                    </button>
+                  </div>
+                )}
+
+                {shopConsolidationOption === 'warehouse' && (
+                  <div className="p-5 bg-emerald-50 border border-emerald-100 rounded-2xl text-left space-y-2.5">
+                    <h4 className="font-black text-emerald-950 text-xs flex items-center gap-1.5">
+                      <Warehouse className="text-emerald-700 animate-pulse" size={15} />
+                      Send items to our Warehouse
+                    </h4>
+                    <p className="text-[10px] text-slate-600 leading-relaxed font-semibold">
+                      We've compiled your customized forwarding instructions. Get your mailing address now.
+                    </p>
+                    <button
+                      onClick={() => {
+                        navigateTo('warehouse');
+                        setIsPaid(false);
+                        setOrderId(null);
+                        setShopConsolidationOption(null);
+                      }}
+                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow shadow-emerald-200 cursor-pointer"
+                    >
+                      Get Warehouse Address →
+                    </button>
+                  </div>
+                )}
+
+                {/* Go to history */}
+                <button 
+                  onClick={() => { 
+                    navigateTo('history'); 
+                    setIsPaid(false); 
+                    setOrderId(null); 
+                    setShopConsolidationOption(null);
+                  }}
+                  className="w-full py-3.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-black transition-all cursor-pointer"
+                >
+                  {isWarehouseCheckout ? 'Go to My Orders' : 'View Order History'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -15670,7 +16697,7 @@ export default function App() {
         </div>
       </div>
     );
-  }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser, currentUser?.id, handleFinalPayment, shippingPreference, appointments, pickupAddress, pickupName, pickupPhone, orderedItemIds, shopConsolidationOption]);
+  }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser, currentUser?.id, handleFinalPayment, shippingPreference, appointments, pickupAddress, pickupName, pickupPhone, orderedItemIds, shopConsolidationOption, isMobile, activeCheckoutStep, couponCodeInput, appliedCoupon, coupons, setAppliedCoupon, setCouponCodeInput, goBack, navigateTo]);
 
   if (authLoading) {
     return (
