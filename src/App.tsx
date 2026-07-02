@@ -8279,7 +8279,7 @@ export default function App() {
 
     const HomeSection = useMemo(() => {
       return (
-        <div className="flex flex-col gap-0 md:gap-24 pb-6 md:pb-24">
+        <div className="flex flex-col gap-0 md:gap-24 pb-3 md:pb-24">
           {/* JIFFEX Truck Hero Section */}
           <div className="relative overflow-hidden rounded-none md:rounded-[4rem] bg-transparent text-white px-0 pt-4 pb-0 sm:p-12 md:p-20 shadow-2xl">
             <div 
@@ -9094,7 +9094,32 @@ export default function App() {
   }, [notifications, loadingNotifications]);
 
   const CustomerHistory = useMemo(() => {
-    if (!currentUser) return null;
+    if (!currentUser) {
+      if (isMobile) {
+        return (
+          <div className="space-y-4 px-1 pb-16 bg-slate-50/50">
+            <div className="flex items-center justify-between px-4 pt-4 pb-2">
+              <h2 className="text-2xl font-extrabold text-slate-900">My Orders</h2>
+            </div>
+            <div className="text-center py-12 text-slate-400 bg-white border border-slate-100 rounded-2xl p-6 shadow-sm mx-4">
+              <Package size={48} className="mx-auto mb-4 opacity-20 text-indigo-600" />
+              <p className="text-sm font-semibold text-slate-700">You are not logged in</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-[240px] mx-auto leading-relaxed">Sign in to your JiffEX account to view, track, and manage all your shipments.</p>
+              <button 
+                onClick={() => {
+                  setLoginTriggerSource('default');
+                  setShowLoginModal(true);
+                }} 
+                className="mt-5 w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors text-sm shadow-md shadow-indigo-100 active:scale-95"
+              >
+                Sign In
+              </button>
+            </div>
+          </div>
+        );
+      }
+      return null;
+    }
     
     // Merge orders and appointments for a complete view
     const customerOrders = orders.filter(o => (o.customerId || o.customer_id) === currentUser.id);
@@ -16882,7 +16907,7 @@ export default function App() {
                 } else navigateTo('home');
               }}
             >
-              <Logo size={32} className="h-10" />
+              <Logo size={22} className="h-7" />
             </div>
             
             {/* Desktop Navigation Group - Only visible on md screens & up */}
@@ -17162,13 +17187,6 @@ export default function App() {
                   <UserIcon size={18} />
                 </button>
               )}
-
-              <button 
-                className="p-1.5 text-slate-600 hover:bg-slate-50 rounded-xl transition-all"
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              >
-                {isMobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
-              </button>
             </div>
           </div>
 
@@ -17183,7 +17201,7 @@ export default function App() {
               >
                 <div className="flex flex-col p-4 gap-2">
                   <div className="px-3 py-4 mb-2 border-b border-slate-50">
-                    <Logo height="h-10" />
+                    <Logo size={24} className="h-8" />
                   </div>
                   {currentUser?.role !== 'agent' && (
                     <button 
@@ -17319,7 +17337,7 @@ export default function App() {
       </header>
 
       {/* Main Content */}
-      <main className={`relative max-w-7xl mx-auto pb-16 md:pb-20 ${
+      <main className={`relative max-w-7xl mx-auto pb-10 md:pb-20 ${
         activeTab === 'home'
           ? 'pt-0 md:pt-8 px-0 md:px-4'
           : (activeTab === 'store' && isMobile)
