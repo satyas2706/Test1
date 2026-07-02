@@ -240,14 +240,22 @@ export const MobileDropOffFlow: React.FC<MobileDropOffFlowProps> = ({
   return (
     <div className="space-y-4 px-3 py-1 text-left">
       {/* 1. Header & Drop Off Banner */}
-      <div className="relative overflow-hidden rounded-2xl h-36 shadow-md text-left -mx-3 -mt-3 mb-2.5 scale-[1.05] origin-bottom">
-        {/* Background Image from Google Drive */}
-        <img 
-          src="https://lh3.googleusercontent.com/d/14pgrQ4cnN4z6ymvfRCnRa-Q5kR8aW1Xr" 
-          alt="Drop Off Package Hero" 
-          className="absolute inset-0 w-full h-full object-cover"
-          referrerPolicy="no-referrer"
-        />
+      <div className="bg-gradient-to-br from-[#091535] to-[#122352] text-white p-5 rounded-2xl shadow-md flex items-center justify-between relative overflow-hidden text-left mb-2.5">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
+        <div className="flex items-center gap-3.5 z-10">
+          <div className="w-11 h-11 rounded-xl bg-blue-500/20 text-yellow-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+            <Inbox size={22} />
+          </div>
+          <div>
+            <h2 className="text-lg font-black tracking-tight leading-none text-white">Drop Off Package</h2>
+            <p className="text-[10px] text-slate-300 font-bold mt-1.5 leading-tight">
+              Ship from anywhere, deliver to USA. Register and send items directly to our local hub.
+            </p>
+          </div>
+        </div>
+        <div className="relative shrink-0 w-14 h-14 flex items-center justify-center">
+          <Package size={28} className="text-slate-200/40 animate-bounce" />
+        </div>
       </div>
 
       {/* 2. Progress Stepper */}

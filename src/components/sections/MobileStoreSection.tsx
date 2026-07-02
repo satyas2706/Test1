@@ -4,6 +4,7 @@ import {
   Menu, 
   Search, 
   ShoppingCart, 
+  ShoppingBag,
   Heart, 
   Sparkles, 
   Truck, 
@@ -195,75 +196,23 @@ export const MobileStoreSection: React.FC<MobileStoreSectionProps> = ({
   return (
     <div className="bg-slate-50 min-h-screen pb-24 text-slate-900 font-sans antialiased">
       
-      {/* 2. Hero Promo Banner (Carousel) */}
+      {/* 2. Hero Promo Banner (Schedule Pickup Style) */}
       <div id="carousel-hero-container" className="px-4 pt-4 pb-2">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#091535] to-[#122352] text-white shadow-xl h-[280px] flex flex-col justify-between p-4 text-left">
-          
-          {/* Top Decorative / Logos */}
-          <div className="flex items-center justify-between z-10">
-            <span className="text-[9px] font-black tracking-wider uppercase opacity-80 text-orange-400">
-              JIFFEX • ANYTHING FROM INDIA, TO ANYWHERE
-            </span>
-            <div className="flex gap-1.5">
-              <span className={`text-[8px] font-extrabold px-2 py-0.5 rounded-full border flex items-center gap-1 ${slides[currentSlide].badgeColor}`}>
-                {slides[currentSlide].badgeIcon}
-                {slides[currentSlide].badgeText}
-              </span>
-              <span className={`text-[8px] font-extrabold px-2 py-0.5 rounded-full border flex items-center gap-1 ${slides[currentSlide].secondBadgeColor}`}>
-                {slides[currentSlide].secondBadgeIcon}
-                {slides[currentSlide].secondBadgeText}
-              </span>
+        <div className="bg-gradient-to-br from-[#091535] to-[#122352] text-white p-5 rounded-2xl shadow-md flex items-center justify-between relative overflow-hidden text-left">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
+          <div className="flex items-center gap-3.5 z-10">
+            <div className="w-11 h-11 rounded-xl bg-blue-500/20 text-yellow-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+              <ShoppingBag size={22} />
+            </div>
+            <div>
+              <h2 className="text-lg font-black tracking-tight leading-none text-white">Shop & Ship</h2>
+              <p className="text-[10px] text-slate-300 font-bold mt-1.5 leading-tight">
+                Buy from Indian stores & we'll deliver worldwide
+              </p>
             </div>
           </div>
-
-          {/* Background Sweets / Pooja Image on Right */}
-          <div className="absolute right-0 bottom-0 top-0 w-1/2 opacity-30 z-0">
-            <div className="absolute inset-0 bg-gradient-to-r from-[#091535] via-[#091535]/80 to-transparent z-10"></div>
-            <img 
-              src={slides[currentSlide].image} 
-              alt="Promo background" 
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-
-          {/* Main Headline & Subheadline */}
-          <div className="z-10 mt-2 space-y-1.5 max-w-[80%]">
-            <h1 className="text-lg leading-tight font-black tracking-tight text-white">
-              {slides[currentSlide].headlinePrefix} <br />
-              <span className="text-orange-400">{slides[currentSlide].headlineHighlight}</span>
-            </h1>
-            <p className="text-[10px] text-slate-300 font-medium leading-relaxed">
-              {slides[currentSlide].subheadline}
-            </p>
-          </div>
-
-          {/* Call to Action Button & Dots Pagination */}
-          <div className="z-10 flex items-center justify-between mt-auto pt-2 border-t border-white/10">
-            <button 
-              id="btn-explore-collection"
-              onClick={() => {
-                const poojaCat = slides[currentSlide].cta.includes("POOJA") ? "Pooja" : (slides[currentSlide].cta.includes("HANDICRAFTS") ? "Decorative" : "All");
-                setSelectedCategory(poojaCat);
-                toast.success(`Showing ${poojaCat} collection!`);
-              }}
-              className="bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-[10px] uppercase tracking-wider px-3.5 py-2 rounded-lg transition-colors flex items-center gap-1 active:scale-95 shadow-lg shadow-orange-500/20"
-            >
-              {slides[currentSlide].cta} →
-            </button>
-
-            {/* Pagination Dots */}
-            <div className="flex gap-1.5">
-              {slides.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentSlide(i)}
-                  className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                    currentSlide === i ? 'w-4 bg-orange-400' : 'bg-white/40'
-                  }`}
-                />
-              ))}
-            </div>
+          <div className="relative shrink-0 w-14 h-14 flex items-center justify-center">
+            <ShoppingCart size={28} className="text-slate-200/40 animate-bounce" />
           </div>
         </div>
 
