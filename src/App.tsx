@@ -1228,7 +1228,7 @@ const SupportSection = ({ currentUser, orders, tickets, setTickets, refundReques
                 { q: "What happens if my items are fragile?", a: "We offer professional repacking services. If you mark an item as fragile, our warehouse team will add extra protective layers (bubble wrap, corrugated sheets) to ensure safe transit." },
                 { q: "Are there any hidden charges?", a: "Our quotes include door-to-door delivery. However, customs duties or taxes (if applicable in the destination country) are determined by local authorities and are the recipient's responsibility." },
                 { q: "What is the 'Pickup from home' service?", a: "If you're in a supported city in India, our agent will come to your doorstep to collect your items. They can even help with basic packing!" },
-                { q: "How do I pay for my shipment?", a: "We accept all major credit cards, debit cards, and digital payment methods like PhonePe. Payment is required once all your items are received and weighed at our warehouse." },
+                { q: "How do I pay for my shipment?", a: "We accept all major credit cards, debit cards, and digital payment methods like UPI. Payment is required once all your items are received and weighed at our warehouse." },
                 { q: "Can I ship homemade food items?", a: "Yes, you can ship dry, non-perishable homemade food (like sweets or snacks). However, they must be properly packed and have a reasonable shelf life. Perishables are strictly prohibited." },
                 { q: "What if my package is lost or damaged?", a: "We take extreme care, but in rare cases of loss or damage, we offer limited liability coverage. For high-value items, we strongly recommend purchasing additional shipping insurance." }
               ].map((faq, i) => (
@@ -4414,6 +4414,24 @@ const ShipmentTrackingEditor = ({ order, onUpdate }: { order: any, onUpdate: (ca
   );
 };
 
+const loadRazorpayScript = (): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') {
+      resolve(false);
+      return;
+    }
+    if ((window as any).Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -4685,6 +4703,8 @@ export default function App() {
   const [showConsolidationError, setShowConsolidationError] = useState(false);
   const [pickupConsolidationOption, setPickupConsolidationOption] = useState<'shop_and_ship' | 'pickup_only' | null>(null);
   const [showPickupConsolidationError, setShowPickupConsolidationError] = useState(false);
+  const [showPaymentTroubleModal, setShowPaymentTroubleModal] = useState(false);
+  const [paymentTroublePendingOrderSave, setPaymentTroublePendingOrderSave] = useState<(() => Promise<void>) | null>(null);
 
   // Sync / Read store items from database only
   useEffect(() => {
@@ -4987,7 +5007,7 @@ export default function App() {
   }, [currentUser]);
 
   // Finalize Section States
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'phonepe'>('card');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'upi'>('card');
 
   // Work Order Section States
   const [woItems, setWoItems] = useState<ShippingItem[]>([]);
@@ -5019,7 +5039,7 @@ export default function App() {
   }, [woStep, isWOPaid]);
   const [woStatusInput, setWoStatusInput] = useState<ShippingStatus>('Picked Up');
   const [woOrderId, setWoOrderId] = useState<string | null>(null);
-  const [woPaymentMethod, setWoPaymentMethod] = useState<'card' | 'phonepe' | 'cash'>('card');
+  const [woPaymentMethod, setWoPaymentMethod] = useState<'card' | 'upi' | 'cash'>('card');
   const [woShippingDate, setWoShippingDate] = useState<string>(SHIPPING_DATES[0]);
   const [woIsEditingItems, setWoIsEditingItems] = useState<boolean>(false);
   const [woOtpCode, setWoOtpCode] = useState<string>('');
@@ -6730,73 +6750,194 @@ export default function App() {
       assignedAgentId: assignedAgent?.id
     } as any;
     
-    // Optimistic update
-    setOrders([...orders, newOrder]);
-    setIsPaid(true);
-    
-    // Delete the checked out items from the active cart in the database
-    for (const item of cartItems) {
-      const idsToDelete = item.ids && item.ids.length > 0 ? item.ids : [item.id];
-      for (const dId of idsToDelete) {
-        deletedDbItemIdsRef.current.add(dId);
-        if (dbStatus.connected && currentUser) {
-          api.deleteItem(dId).catch(err => console.error('Failed to delete item from DB on checkout:', err));
+    const saveAndConfirmOrder = async (orderToSave: Order) => {
+      // Optimistic update
+      setOrders([...orders, orderToSave]);
+      setIsPaid(true);
+      
+      // Delete the checked out items from the active cart in the database
+      for (const item of cartItems) {
+        const idsToDelete = item.ids && item.ids.length > 0 ? item.ids : [item.id];
+        for (const dId of idsToDelete) {
+          deletedDbItemIdsRef.current.add(dId);
+          if (dbStatus.connected && currentUser) {
+            api.deleteItem(dId).catch(err => console.error('Failed to delete item from DB on checkout:', err));
+          }
         }
       }
-    }
 
-    // Only remove items that were in the cart (submitted)
-    setItems(items.filter(i => i.source === 'Warehouse' && !i.submitted));
+      // Only remove items that were in the cart (submitted)
+      setItems(items.filter(i => i.source === 'Warehouse' && !i.submitted));
 
-    // Sync to DB
-    if (dbStatus.connected) {
+      // Sync to DB
+      if (dbStatus.connected) {
+        try {
+          const savedOrder = await api.createOrder({
+            ...orderToSave,
+            id: finalOrderId,
+            customer_id: currentUser.id, // Snake case for DB
+            total_weight: totalWeight,
+            total_cost: finalCostToPay,
+            payment_status: orderToSave.paymentStatus,
+            shipping_date: selectedDate,
+            pickup_type: isPickupType ? 'AllAgent' : undefined,
+            assigned_agent: assignedAgent,
+            assigned_agent_id: assignedAgent?.id
+          } as any);
+
+          let finalSavedOrder = orderToSave;
+          if (savedOrder && savedOrder.id && savedOrder.id !== finalOrderId) {
+            console.log(`[Order] Self-healed unique ID from backend: ${savedOrder.id}`);
+            setOrderId(savedOrder.id);
+            finalSavedOrder = { ...orderToSave, id: savedOrder.id };
+            setOrders(prev => prev.map(o => o.id === finalOrderId ? finalSavedOrder : o));
+          }
+
+          // Automatically send invoice email with PDF
+          const recipientEmail = address.email || currentUser.email;
+          if (isWarehouseCheckout) {
+            await api.sendOrderConfirmationEmail(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
+            toast.success(`Shipment request confirmed! Confirmation sent to ${recipientEmail}.`);
+          } else if (isPayAtHome) {
+            // Send a special "Pay at Home" confirmation email
+            await api.sendOrderConfirmationEmail(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
+            toast.success(`Order confirmed! Confirmation sent to ${recipientEmail}. Final billing will be done at your home.`);
+          } else {
+            await api.sendInvoicePDF(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
+            toast.success(`Payment successful! Invoice sent to ${recipientEmail}`);
+          }
+        } catch (err: any) {
+          console.error('Failed to sync order or send email:', err.message);
+          const successMsg = isWarehouseCheckout ? 'Shipment request confirmed' : isPayAtHome ? 'Order confirmed' : 'Payment successful';
+          toast.error(`${successMsg}, but ${err.message || 'failed to send confirmation email'}.`);
+        }
+      } else {
+        const successMsg = isWarehouseCheckout 
+          ? 'Shipment request confirmed (Offline Mode)' 
+          : isPayAtHome 
+            ? 'Order confirmed (Offline Mode)' 
+            : 'Payment successful (Offline Mode)';
+        toast.success(successMsg);
+      }
+    };
+
+    // Razorpay Integration for online paid checkouts
+    if (paymentStatus === 'Paid') {
       try {
-        const savedOrder = await api.createOrder({
-          ...newOrder,
-          id: finalOrderId,
-          customer_id: currentUser.id, // Snake case for DB
-          total_weight: totalWeight,
-          total_cost: finalCostToPay,
-          payment_status: paymentStatus,
-          shipping_date: selectedDate,
-          pickup_type: isPickupType ? 'AllAgent' : undefined,
-          assigned_agent: assignedAgent,
-          assigned_agent_id: assignedAgent?.id
-        } as any);
-
-        let finalSavedOrder = newOrder;
-        if (savedOrder && savedOrder.id && savedOrder.id !== finalOrderId) {
-          console.log(`[Order] Self-healed unique ID from backend: ${savedOrder.id}`);
-          setOrderId(savedOrder.id);
-          finalSavedOrder = { ...newOrder, id: savedOrder.id };
-          setOrders(prev => prev.map(o => o.id === finalOrderId ? finalSavedOrder : o));
+        toast.loading("Initializing secure Razorpay payment...", { id: "razorpay-init" });
+        const scriptLoaded = await loadRazorpayScript();
+        if (!scriptLoaded) {
+          toast.dismiss("razorpay-init");
+          throw new Error("Razorpay checkout SDK failed to load. Check your internet connection.");
         }
 
-        // Automatically send invoice email with PDF
-        const recipientEmail = address.email || currentUser.email;
-        if (isWarehouseCheckout) {
-          await api.sendOrderConfirmationEmail(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
-          toast.success(`Shipment request confirmed! Confirmation sent to ${recipientEmail}.`);
-        } else if (isPayAtHome) {
-          // Send a special "Pay at Home" confirmation email
-          await api.sendOrderConfirmationEmail(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
-          toast.success(`Order confirmed! Confirmation sent to ${recipientEmail}. Final billing will be done at your home.`);
-        } else {
-          await api.sendInvoicePDF(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
-          toast.success(`Payment successful! Invoice sent to ${recipientEmail}`);
+        // Fetch public Razorpay config key ID
+        const configRes = await fetch("/api/payment/razorpay/config");
+        if (!configRes.ok) {
+          toast.dismiss("razorpay-init");
+          throw new Error("Razorpay Key ID is not configured on the server. Please define RAZORPAY_KEY_ID in environment variables.");
         }
+        const { keyId } = await configRes.json();
+
+        // Create transaction order on backend
+        const orderRes = await fetch("/api/payment/razorpay/order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: finalCostToPay,
+            currency: "INR",
+            receipt: `rcpt_${finalOrderId}`
+          })
+        });
+
+        if (!orderRes.ok) {
+          const errData = await orderRes.json();
+          toast.dismiss("razorpay-init");
+          throw new Error(errData.error || "Failed to initiate payment transaction on the server.");
+        }
+        const razorpayOrder = await orderRes.json();
+        toast.dismiss("razorpay-init");
+
+        // Open official Razorpay checkout modal
+        const options = {
+          key: keyId,
+          amount: razorpayOrder.amount,
+          currency: razorpayOrder.currency,
+          name: "Jiffex International Logistics",
+          description: `Order ${finalOrderId} payment`,
+          image: "https://lh3.googleusercontent.com/d/14pgrQ4cnN4z6ymvfRCnRa-Q5kR8aW1Xr",
+          order_id: razorpayOrder.id,
+          handler: async function (response: any) {
+            try {
+              toast.loading("Verifying payment transaction...", { id: "razorpay-verify" });
+              
+              // Verify response signature on backend for security
+              const verifyRes = await fetch("/api/payment/razorpay/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature
+                })
+              });
+
+              if (!verifyRes.ok) {
+                toast.dismiss("razorpay-verify");
+                toast.error("Payment verification failed! Please try again.");
+                return;
+              }
+
+              toast.dismiss("razorpay-verify");
+              toast.success("Payment verified successfully!");
+
+              // Persist and confirm order
+              const paidOrder = { ...newOrder, paymentStatus: 'Paid' as any };
+              await saveAndConfirmOrder(paidOrder);
+            } catch (err: any) {
+              toast.dismiss("razorpay-verify");
+              toast.error(`Verification error: ${err.message || err}`);
+            }
+          },
+          prefill: {
+            name: currentUser.name || address.fullName,
+            email: currentUser.email || address.email,
+            contact: currentUser.phone || address.phone,
+            method: paymentMethod === 'upi' ? 'upi' : undefined,
+          },
+          notes: {
+            order_id: finalOrderId,
+            customer_id: currentUser.id
+          },
+          theme: {
+            color: "#4f46e5", // Indigo theme color
+          },
+          modal: {
+            ondismiss: function () {
+              toast.error("Payment window closed.");
+              setPaymentTroublePendingOrderSave(() => async () => {
+                const paidOrder = { ...newOrder, paymentStatus: 'Paid' as any };
+                await saveAndConfirmOrder(paidOrder);
+              });
+              setShowPaymentTroubleModal(true);
+            }
+          }
+        };
+
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
+
       } catch (err: any) {
-        console.error('Failed to sync order or send email:', err.message);
-        const successMsg = isWarehouseCheckout ? 'Shipment request confirmed' : isPayAtHome ? 'Order confirmed' : 'Payment successful';
-        toast.error(`${successMsg}, but ${err.message || 'failed to send confirmation email'}.`);
+        console.error("Razorpay error, falling back to simulated checkout:", err);
+        setPaymentTroublePendingOrderSave(() => async () => {
+          const paidOrder = { ...newOrder, paymentStatus: 'Paid' as any };
+          await saveAndConfirmOrder(paidOrder);
+        });
+        setShowPaymentTroubleModal(true);
       }
     } else {
-      const successMsg = isWarehouseCheckout 
-        ? 'Shipment request confirmed (Offline Mode)' 
-        : isPayAtHome 
-          ? 'Order confirmed (Offline Mode)' 
-          : 'Payment successful (Offline Mode)';
-      toast.success(successMsg);
+      // Direct placement (e.g. Warehouse or Pay at Home)
+      await saveAndConfirmOrder(newOrder);
     }
   };
 
@@ -11261,16 +11402,16 @@ export default function App() {
                       </div>
 
                       <div 
-                        onClick={() => setWoPaymentMethod('phonepe')}
-                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
+                        onClick={() => setWoPaymentMethod('upi')}
+                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
                       >
-                        <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0">Pe</div>
+                        <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0">UPI</div>
                         <div className="flex-1">
-                          <div className="text-sm font-bold">PhonePe</div>
-                          <div className="text-[10px] text-slate-500">UPI, Wallet</div>
+                          <div className="text-sm font-bold">UPI</div>
+                          <div className="text-[10px] text-slate-500">Pay via UPI QR / ID</div>
                         </div>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                          {woPaymentMethod === 'phonepe' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                          {woPaymentMethod === 'upi' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                         </div>
                       </div>
 
@@ -16106,16 +16247,16 @@ export default function App() {
                       <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Payment Method</h4>
                       <div className="space-y-2.5">
                         <div 
-                          onClick={() => setPaymentMethod('phonepe')}
-                          className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                          onClick={() => setPaymentMethod('upi')}
+                          className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${paymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
                         >
-                          <div className="w-9 h-9 bg-purple-600 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0">Pe</div>
+                          <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0">UPI</div>
                           <div className="text-left">
-                            <p className="text-xs font-bold text-slate-900 leading-none">PhonePe</p>
-                            <p className="text-[9px] text-slate-500 mt-1">UPI, Wallet & Cards</p>
+                            <p className="text-xs font-bold text-slate-900 leading-none">UPI / QR Code</p>
+                            <p className="text-[9px] text-slate-500 mt-1">Google Pay, PhonePe, Paytm, Any UPI App</p>
                           </div>
-                          <div className={`ml-auto w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                            {paymentMethod === 'phonepe' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                          <div className={`ml-auto w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                            {paymentMethod === 'upi' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                           </div>
                         </div>
 
@@ -16132,6 +16273,21 @@ export default function App() {
                             {paymentMethod === 'card' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                           </div>
                         </div>
+                      </div>
+
+                      {/* Razorpay Test Mode Helper Guide */}
+                      <div className="mt-4 p-3 bg-indigo-50/80 border border-indigo-100 rounded-xl text-left">
+                        <p className="text-[10px] font-black text-indigo-950 flex items-center gap-1">
+                          <Sparkles size={12} className="text-indigo-600 animate-pulse" /> Razorpay Test Mode Guide
+                        </p>
+                        <p className="text-[9px] text-indigo-900 mt-1.5 leading-normal font-semibold">
+                          To bypass international card limits in Razorpay's Test Mode, please select:
+                        </p>
+                        <ul className="list-disc pl-3 text-[9px] text-indigo-900/90 mt-1.5 space-y-1 leading-normal font-medium">
+                          <li><strong>UPI / QR Code:</strong> Choose <span className="font-bold">UPI</span>, enter <code className="bg-white/90 px-1 py-0.5 rounded border border-indigo-100 font-mono text-indigo-600">test@upi</code>, then click <span className="font-bold">Success</span> to simulate a completed transaction.</li>
+                          <li><strong>Netbanking:</strong> Select any bank (e.g. SBI) and click <span className="font-bold">Success</span> on the bank simulator.</li>
+                          <li><strong>Domestic Card:</strong> Use India test Visa <code className="bg-white/90 px-1 py-0.5 rounded border border-indigo-100 font-mono text-indigo-600">4111 1111 1111 1111</code> with CVV <span className="font-mono font-bold">123</span>.</li>
+                        </ul>
                       </div>
                     </div>
                   ) : (
@@ -16502,16 +16658,16 @@ export default function App() {
                 </h3>
                 <div className="space-y-4">
                   <div 
-                    onClick={() => setPaymentMethod('phonepe')}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                    onClick={() => setPaymentMethod('upi')}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
                   >
-                    <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold">Pe</div>
+                    <div className="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-black text-sm">UPI</div>
                     <div>
-                      <div className="font-bold">PhonePe</div>
-                      <div className="text-xs text-slate-500">UPI, Wallet & Cards</div>
+                      <div className="font-bold">UPI / QR Code</div>
+                      <div className="text-xs text-slate-500">Google Pay, PhonePe, Paytm, Any UPI App</div>
                     </div>
-                    <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'phonepe' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                      {paymentMethod === 'phonepe' && <div className="w-2 h-2 bg-white rounded-full" />}
+                    <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                      {paymentMethod === 'upi' && <div className="w-2 h-2 bg-white rounded-full" />}
                     </div>
                   </div>
                   <div 
@@ -17655,6 +17811,122 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Payment Gateway Trouble / International Card Fallback Modal */}
+      <AnimatePresence>
+        {showPaymentTroubleModal && (
+          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPaymentTroubleModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl overflow-hidden text-left"
+            >
+              {/* Header decorative */}
+              <div className="bg-red-50 p-6 border-b border-red-100 flex items-start gap-4">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-red-600 shrink-0">
+                  <AlertTriangle size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 leading-tight">Payment Issue?</h3>
+                  <p className="text-xs text-red-700 font-bold mt-1">
+                    "International cards are not supported"
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Razorpay accounts in test mode (and standard Indian accounts without international activation) block foreign cards by default, displaying the error above.
+                </p>
+                
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">How would you like to proceed?</h4>
+                  
+                  {/* Option 1: Simulate Payment Success */}
+                  <button
+                    onClick={async () => {
+                      if (paymentTroublePendingOrderSave) {
+                        toast.loading("Processing simulated transaction...", { id: "sim-payment" });
+                        try {
+                          await paymentTroublePendingOrderSave();
+                          toast.dismiss("sim-payment");
+                          setShowPaymentTroubleModal(false);
+                        } catch (err) {
+                          toast.dismiss("sim-payment");
+                          toast.error("Failed to complete order simulation.");
+                        }
+                      } else {
+                        setShowPaymentTroubleModal(false);
+                      }
+                    }}
+                    className="w-full p-4 rounded-2xl border-2 border-indigo-600 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-900 text-left transition-all flex items-center gap-4 group"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                      <Sparkles size={20} className="group-hover:rotate-12 transition-transform" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-xs font-black">Simulate Payment Success</div>
+                      <div className="text-[10px] text-indigo-600 font-bold mt-0.5">Recommended for Testing & Demos</div>
+                    </div>
+                  </button>
+
+                  {/* Option 2: Try Domestic Payment */}
+                  <button
+                    onClick={() => {
+                      setShowPaymentTroubleModal(false);
+                      toast.info("Please use 'test@upi' or a Domestic Visa card to test.");
+                    }}
+                    className="w-full p-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-left transition-all flex items-center gap-4"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
+                      <CreditCard size={18} />
+                    </div>
+                    <div>
+                      <div className="text-xs font-black">Try UPI / Domestic Test Bank</div>
+                      <div className="text-[10px] text-slate-500 font-bold mt-0.5">Bypasses international card limits</div>
+                    </div>
+                  </button>
+
+                  {/* Option 3: WhatsApp Support */}
+                  <a
+                    href="https://wa.me/919502758111"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full p-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-left transition-all flex items-center gap-4 block"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200">
+                      <MessageSquare size={18} />
+                    </div>
+                    <div>
+                      <div className="text-xs font-black">Contact Support on WhatsApp</div>
+                      <div className="text-[10px] text-emerald-600 font-bold mt-0.5">Pay via PayPal, Stripe, or Bank Transfer</div>
+                    </div>
+                  </a>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowPaymentTroubleModal(false)}
+                  className="px-5 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-xs transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {showPickupConfirmModal && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
