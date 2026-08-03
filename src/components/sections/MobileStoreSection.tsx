@@ -521,50 +521,7 @@ export const MobileStoreSection: React.FC<MobileStoreSectionProps> = ({
         )}
       </div>
 
-      {/* Suggestion / Sticky Jiff Suggestion Widget if any */}
-      {showJiffySuggestion && totalCartCount > 0 && (
-        <div className="px-4 py-2">
-          <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl relative flex flex-col gap-2.5">
-            <button 
-              onClick={() => setShowJiffySuggestion(false)}
-              className="absolute top-3 right-3 text-slate-400 hover:text-slate-650"
-            >
-              <X size={16} />
-            </button>
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
-                <Truck size={16} />
-              </div>
-              <div className="text-left">
-                <h5 className="text-[11px] font-black text-slate-900 leading-tight">Combine with Home Pickup?</h5>
-                <p className="text-[10px] text-slate-500 font-bold mt-0.5 leading-normal">
-                  Want to add some family parcels or documents to ship together with your items? Schedule an agent pickup!
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  navigateTo('pickup');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase tracking-wider active:scale-95 transition-all text-center"
-              >
-                Schedule Pickup
-              </button>
-              <button
-                onClick={() => {
-                  navigateTo('warehouse');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="flex-1 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-[9px] font-black uppercase tracking-wider active:scale-95 transition-all text-center"
-              >
-                Send Warehouse
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Floating Checkout Sticky Bottom Bar */}
       {totalCartCount > 0 && (

@@ -9,10 +9,12 @@ export let isSupabaseConfigured = !!(
   rawUrl !== 'undefined' &&
   rawUrl !== 'null' &&
   rawUrl.trim() !== '' &&
+  !rawUrl.includes('placeholder') &&
   rawKey &&
   rawKey !== 'undefined' &&
   rawKey !== 'null' &&
-  rawKey.trim() !== ''
+  rawKey.trim() !== '' &&
+  !rawKey.includes('placeholder')
 );
 
 // Clean any corrupted local storage tokens from other preview containers on the same origin/port to prevent decode crashes
@@ -103,7 +105,16 @@ try {
 }
 
 export function updateSupabaseConfig(url: string, key: string) {
-  if (url && key && url !== 'undefined' && key !== 'undefined') {
+  if (
+    url && 
+    key && 
+    url !== 'undefined' && 
+    key !== 'undefined' &&
+    url.trim() !== '' &&
+    key.trim() !== '' &&
+    !url.includes('placeholder') &&
+    !key.includes('placeholder')
+  ) {
     try {
       supabase = createClient(url, key, {
         auth: {
@@ -114,7 +125,7 @@ export function updateSupabaseConfig(url: string, key: string) {
       isSupabaseConfigured = true;
       console.log('[Supabase] Client reconfigured successfully with runtime settings.');
     } catch (e) {
-      console.error('[Supabase] Failed to reconfigure client:', e);
+      console.warn('[Supabase] Failed to reconfigure client:', e);
     }
   }
 }

@@ -60,7 +60,17 @@ const PORT = 3000;
 // Initialize Supabase Client
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
-const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
+const isSupabaseValid = !!(
+  supabaseUrl && 
+  supabaseKey && 
+  supabaseUrl !== 'undefined' && 
+  supabaseKey !== 'undefined' && 
+  supabaseUrl.trim() !== '' && 
+  supabaseKey.trim() !== '' &&
+  !supabaseUrl.includes('placeholder') &&
+  !supabaseKey.includes('placeholder')
+);
+const supabase = isSupabaseValid ? createClient(supabaseUrl, supabaseKey) : null;
 
 if (supabase) {
   console.log("Supabase client initialized on server.");
@@ -1078,7 +1088,16 @@ app.post("/api/orders", async (req, res) => {
     }
 
     if (!insertSuccess) {
-      throw lastError || new Error("Failed to insert order after all attempts");
+      console.warn("[SUPABASE] Order insert into database failed or offline. Saving to persistent memory storage instead.", lastError?.message);
+      const preOrder = { ...databaseOrderData, id: finalId, created_at: new Date().toISOString() };
+      const mIdx = memOrders.findIndex(o => o.id === finalId);
+      if (mIdx > -1) {
+        memOrders[mIdx] = { ...memOrders[mIdx], ...preOrder };
+      } else {
+        memOrders.push(preOrder);
+      }
+      saveDb();
+      return res.json(transformDbOrder(preOrder));
     }
 
     const finalInsertedId = savedData?.id || currentId;
@@ -1711,7 +1730,90 @@ www.jiffex.com
   }
 });
 
-// API: Send Order Confirmation for Pay at Home
+app.post("/api/invoice/send-consolidated-pdf", async (req, res) => {
+  const { email, orders, companyDetails } = req.body;
+  if (!orders || !Array.isArray(orders) || orders.length === 0) {
+    return res.status(400).json({ error: "No orders provided for consolidated invoice" });
+  }
+  console.log(`[Consolidated Invoice PDF] Request received for ${orders.length} orders to email: ${email}`);
+  
+  if (!mailTransporter || !process.env.SMTP_FROM) {
+    console.error('[Consolidated Invoice PDF] Email service not configured');
+    return res.status(503).json({ error: "Email service not configured" });
+  }
+
+  if (!email || !email.includes('@') || email === 'user@example.com') {
+    return res.status(400).json({ error: "Invalid email address" });
+  }
+
+  try {
+    const pdfBuffer = await generateConsolidatedInvoicePDF(orders, companyDetails);
+
+    const userInitials = (orders[0]?.destination?.fullName || 'USR').slice(0, 3).toUpperCase();
+    const consolId = `CONSOL-${userInitials}-${new Date().getTime().toString().slice(-6)}`;
+    const subject = `Consolidated Invoice for your JiffEX Orders: ${consolId}`;
+    const bodyText = `
+Dear ${orders[0].destination?.fullName || 'Valued Customer'},
+
+Thank you for choosing JiffEX for your shipping needs. 
+
+All your orders have now been completed successfully. Please find attached your single consolidated tax invoice containing all your completed shipments.
+
+If you have any questions or require further assistance, please do not hesitate to contact our support team at ${companyDetails.email}.
+
+Best regards,
+
+The JiffEX Team
+JiffEX Shipping & Logistics
+www.jiffex.com
+    `.trim();
+
+    const bodyHtml = `
+<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0; border: 1px solid #eee; padding: 20px; border-radius: 10px; text-align: left;">
+  <p>Dear <strong>${orders[0].destination?.fullName || 'Valued Customer'}</strong>,</p>
+  <p>Thank you for choosing <strong>JiffEX</strong> for your shipping needs.</p>
+  <p>We are pleased to inform you that all your orders have now been completed successfully. Please find the attached single consolidated tax invoice for your completed shipments.</p>
+  
+  <p>If you have any questions or require further assistance, please do not hesitate to contact our support team at <a href="mailto:${companyDetails.email}" style="color: #4f46e5;">${companyDetails.email}</a>.</p>
+  
+  <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+  
+  <p style="font-size: 14px; color: #666;">
+    Best regards,<br>
+    <strong>The JiffEX Team</strong><br>
+    JiffEX Shipping & Logistics<br>
+    <a href="https://www.jiffex.com" style="color: #4f46e5; text-decoration: none;">www.jiffex.com</a>
+  </p>
+</div>
+    `.trim();
+
+    console.log(`[Consolidated Invoice PDF] Sending email to ${email}...`);
+    await mailTransporter.sendMail({
+      from: process.env.SMTP_FROM,
+      to: email,
+      subject: subject,
+      text: bodyText,
+      html: bodyHtml,
+      attachments: [
+        {
+          filename: `Consolidated_Invoice_${consolId}.pdf`,
+          content: pdfBuffer
+        }
+      ]
+    });
+
+    console.log(`[Consolidated Invoice PDF] Consolidated Invoice ${consolId} successfully sent to ${email}`);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error(`[Consolidated Invoice PDF] CRITICAL ERROR:`, err);
+    res.status(500).json({ 
+      error: formatSmtpError(err, "Consolidated Invoice Email"),
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  }
+});
+
+// API: Send Order Confirmation for Pay at Home & General checkouts
 app.post("/api/order-confirmation", async (req, res) => {
   const { email, order, companyDetails } = req.body;
   if (!order) {
@@ -1735,19 +1837,48 @@ app.post("/api/order-confirmation", async (req, res) => {
     const appUrl = process.env.APP_URL || "https://www.jiffex.com";
     const trackingUrl = `${appUrl}?tab=track&id=${trackingId}`;
     
-    const subject = `Order Confirmed: ${trackingId} (Pay at Home)`;
+    const isPaid = order.paymentStatus === 'Paid' || order.payment_status === 'Paid';
+    const isPayAtHome = order.paymentStatus === 'Pay at Home' || order.payment_status === 'Pay at Home';
+    const isPending = order.paymentStatus === 'Pending' || order.payment_status === 'Pending';
+
+    const subject = isPaid ? `Order Confirmed & Paid: ${trackingId}` : `Order Confirmed: ${trackingId}`;
+    
+    let paymentBlockText = `Payment Status: Pending\nAmount: ₹${(order.totalCost || order.total_cost || 0).toLocaleString()}`;
+    let paymentBlockHtml = `
+    <div style="background-color: #fffbeb; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #fef3c7;">
+      <p style="margin: 0; font-weight: bold; color: #b45309;">Payment Status: Pending</p>
+      <p style="margin: 5px 0 0 0; color: #78350f;">The total amount of <strong>₹${(order.totalCost || order.total_cost || 0).toLocaleString()}</strong> is pending and will be collected or billed once the shipment is processed.</p>
+    </div>`;
+
+    if (isPaid) {
+      paymentBlockText = `Payment Status: Paid\nWe have successfully received your payment of ₹${(order.totalCost || order.total_cost || 0).toLocaleString()}.`;
+      paymentBlockHtml = `
+      <div style="background-color: #f0fdf4; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #bbf7d0;">
+        <p style="margin: 0; font-weight: bold; color: #15803d;">Payment Confirmed</p>
+        <p style="margin: 5px 0 0 0; color: #166534;">We have successfully received your payment of <strong>₹${(order.totalCost || order.total_cost || 0).toLocaleString()}</strong>.</p>
+      </div>`;
+    } else if (isPayAtHome) {
+      paymentBlockText = `Payment Method: Pay at Home\nThe total amount of ₹${(order.totalCost || order.total_cost || 0).toLocaleString()} will be collected by our executive during the scheduled pickup.`;
+      paymentBlockHtml = `
+      <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
+        <p style="margin: 0; font-weight: bold; color: #1e293b;">Payment Method: Pay at Home</p>
+        <p style="margin: 5px 0 0 0; color: #334155;">The total amount of <strong>₹${(order.totalCost || order.total_cost || 0).toLocaleString()}</strong> will be collected by our executive during the scheduled pickup.</p>
+      </div>`;
+    }
+
     const bodyText = `
 Dear ${order.destination.fullName},
 
 Thank you for choosing JiffEX. Your order ${trackingId} has been confirmed.
 
-Payment Method: Pay at Home
-The total amount of ₹${(order.totalCost || 0).toLocaleString()} will be collected by our executive during the scheduled pickup.
+${paymentBlockText}
 
-Pickup Date: ${order.shippingDate}
+Pickup/Shipping Date: ${order.shippingDate || order.shipping_date || 'As scheduled'}
 Destination: ${order.destination.city}, ${order.destination.country}
 
 Track your shipment here: ${trackingUrl}
+
+Your final tax invoice will be generated and emailed as a consolidated invoice once all your active orders are completed.
 
 If you have any questions, please contact our support team at ${companyDetails.email}.
 
@@ -1760,13 +1891,10 @@ The JiffEX Team
   <p>Dear <strong>${order.destination.fullName}</strong>,</p>
   <p>Thank you for choosing <strong>JiffEX</strong>. Your order <strong>${trackingId}</strong> has been confirmed.</p>
   
-  <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
-    <p style="margin: 0; font-weight: bold; color: #1e293b;">Payment Method: Pay at Home</p>
-    <p style="margin: 5px 0 0 0;">The total amount of <strong>₹${(order.totalCost || 0).toLocaleString()}</strong> will be collected by our executive during the scheduled pickup.</p>
-  </div>
+  ${paymentBlockHtml}
 
   <p><strong>Order Summary:</strong><br>
-  Pickup Date: ${order.shippingDate}<br>
+  Shipping Date: ${order.shippingDate || order.shipping_date || 'As scheduled'}<br>
   Destination: ${order.destination.city}, ${order.destination.country}</p>
   
   <p>You can track your shipment anytime using this link: 
@@ -1775,6 +1903,10 @@ The JiffEX Team
     </a>
   </p>
   
+  <p style="background-color: #eff6ff; padding: 10px; border-radius: 8px; border: 1px solid #bfdbfe; font-size: 13px; color: #1e40af; margin: 15px 0;">
+    <strong>Invoice Notice:</strong> To avoid multiple separate emails, we will generate and email a single consolidated tax invoice once all of your active orders are successfully completed.
+  </p>
+
   <p>If you have any questions, please contact our support team at <a href="mailto:${companyDetails.email}" style="color: #4f46e5;">${companyDetails.email}</a>.</p>
   
   <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
@@ -1862,6 +1994,168 @@ async function fetchImageBuffer(url: string | undefined): Promise<Buffer | null>
     console.error('[PDF Logo] Error fetching image buffer:', error);
     return null;
   }
+}
+
+async function generateConsolidatedInvoicePDF(orders: any[], companyDetails: any): Promise<Buffer> {
+  return new Promise(async (resolve, reject) => {
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const chunks: Buffer[] = [];
+
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    // Header Section
+    const logoUrl = process.env.VITE_LOGO_URL || "https://raw.githubusercontent.com/satyas2706/Test1/main/public/logo.png";
+    const logoBuffer = await fetchImageBuffer(logoUrl);
+    
+    if (logoBuffer) {
+      try {
+        doc.image(logoBuffer, 50, 45, { width: 120 });
+        doc.moveDown(2);
+      } catch (err) {
+        console.error("[PDF Logo] Rendering Error:", err);
+        doc.fillColor("#4f46e5").fontSize(28).font("Helvetica-Bold").text("JIFFEX", 50, 50);
+        doc.moveDown(1.5);
+      }
+    } else {
+      doc.fillColor("#4f46e5").fontSize(28).font("Helvetica-Bold").text("JIFFEX", 50, 50);
+      doc.moveDown(1.5);
+    }
+    
+    doc.fillColor("#444444").fontSize(10).font("Helvetica");
+    doc.text(companyDetails.name, 350, 50, { align: "right" });
+    doc.text(companyDetails.address, 350, 65, { align: "right" });
+    doc.text(companyDetails.email, 350, 80, { align: "right" });
+    
+    doc.moveDown(2.5);
+    const pageWidth = doc.page.width;
+    doc.fillColor("#000000").fontSize(20).font("Helvetica-Bold").text("CONSOLIDATED TAX INVOICE", 0, doc.y, { 
+      align: "center",
+      width: pageWidth
+    });
+    doc.moveDown();
+
+    const infoTop = doc.y;
+    doc.fontSize(10).font("Helvetica-Bold").text(`Invoice Number:`, 50, infoTop);
+    const primaryOrder = orders[0];
+    const userInitials = (primaryOrder?.destination?.fullName || 'USR').slice(0, 3).toUpperCase();
+    const consolId = `CONSOL-${userInitials}-${new Date().getTime().toString().slice(-6)}`;
+    doc.font("Helvetica").text(consolId, 150, infoTop);
+    
+    doc.font("Helvetica-Bold").text(`Invoice Date:`, 50, infoTop + 15);
+    doc.font("Helvetica").text(`${new Date().toLocaleDateString()}`, 150, infoTop + 15);
+    
+    doc.moveDown(2);
+
+    // Customer Details
+    const customerTop = doc.y;
+    doc.fontSize(12).font("Helvetica-Bold").text("Customer Details", 50, customerTop);
+    doc.moveTo(50, customerTop + 15).lineTo(250, customerTop + 15).stroke();
+    
+    doc.fontSize(10).font("Helvetica").text(`Name: ${primaryOrder?.destination?.fullName || 'Valued Customer'}`, 50, customerTop + 25);
+    doc.text(`Email: ${primaryOrder?.destination?.email || ''}`, 50, customerTop + 40);
+    doc.text(`Phone: ${primaryOrder?.destination?.phone || ''}`, 50, customerTop + 55);
+    
+    const addr = primaryOrder?.destination;
+    const addressStr = addr ? `${addr.addressLine1 || ''}, ${addr.city || ''}, ${addr.state || ''}, ${addr.zipCode || ''}, ${addr.country || ''}` : '';
+    doc.text(`Address: ${addressStr}`, 50, customerTop + 70, { width: 200 });
+
+    doc.moveDown(4);
+
+    // Order Details Table
+    const tableTop = doc.y;
+    doc.fontSize(12).font("Helvetica-Bold").text("Consolidated Item Details", 50, tableTop);
+    
+    doc.fontSize(10).font("Helvetica-Bold");
+    doc.text("Item Description", 50, tableTop + 25);
+    doc.text("Order ID", 220, tableTop + 25);
+    doc.text("Qty", 320, tableTop + 25, { width: 40, align: 'center' });
+    doc.text("Weight", 380, tableTop + 25, { width: 70, align: 'center' });
+    doc.text("Price", 470, tableTop + 25, { width: 80, align: 'right' });
+    
+    doc.moveTo(50, tableTop + 40).lineTo(550, tableTop + 40).stroke();
+    
+    let y = tableTop + 50;
+    doc.font("Helvetica");
+
+    const allItems: any[] = [];
+    orders.forEach(order => {
+      (order.items || []).forEach((item: any) => {
+        allItems.push({
+          ...item,
+          orderId: order.id
+        });
+      });
+    });
+
+    allItems.forEach((item: any) => {
+      if (y > 700) {
+        doc.addPage();
+        y = 50;
+        doc.fontSize(10).font("Helvetica-Bold");
+        doc.text("Item Description", 50, y);
+        doc.text("Order ID", 220, y);
+        doc.text("Qty", 320, y, { width: 40, align: 'center' });
+        doc.text("Weight", 380, y, { width: 70, align: 'center' });
+        doc.text("Price", 470, y, { width: 80, align: 'right' });
+        doc.moveTo(50, y + 15).lineTo(550, y + 15).stroke();
+        y += 25;
+        doc.font("Helvetica");
+      }
+
+      doc.text(item.name || 'Unknown Item', 50, y, { width: 160 });
+      doc.text(item.orderId || 'N/A', 220, y);
+      doc.text((item.quantity || 1).toString(), 320, y, { width: 40, align: 'center' });
+      doc.text(`${item.weight || 0} kg`, 380, y, { width: 70, align: 'center' });
+      doc.text(`Rs.${(item.price || 0).toLocaleString()}`, 470, y, { width: 80, align: 'right' });
+      y += 20;
+    });
+
+    if (y > 650) {
+      doc.addPage();
+      y = 50;
+    }
+
+    doc.moveTo(50, y).lineTo(550, y).stroke();
+    doc.moveDown(2);
+
+    // Shipping Details
+    const shippingTop = y + 15;
+    doc.fontSize(12).font("Helvetica-Bold").text("Shipping & Summary", 50, shippingTop);
+    doc.fontSize(10).font("Helvetica");
+    doc.text(`Completed Orders: ${orders.map(o => o.id).join(', ')}`, 50, shippingTop + 20, { width: 280 });
+    doc.text(`Destination: ${primaryOrder?.destination?.country || 'N/A'}`, 50, shippingTop + 50);
+
+    // Cost Breakdown
+    const costTop = shippingTop;
+    doc.fontSize(12).font("Helvetica-Bold").text("Cost Breakdown", 350, costTop);
+    
+    const productCost = allItems.reduce((acc: number, i: any) => acc + (i.price || 0), 0);
+    const totalCost = orders.reduce((acc: number, o: any) => acc + (o.total_cost || o.totalCost || 0), 0);
+    const shippingCharges = Math.max(0, totalCost - productCost);
+    
+    doc.fontSize(10).font("Helvetica");
+    doc.text(`Consolidated Product Cost:`, 350, costTop + 20);
+    doc.text(`Rs.${productCost.toLocaleString()}`, 460, costTop + 20, { width: 80, align: 'right' });
+    
+    doc.text(`Shipping Charges:`, 350, costTop + 35);
+    doc.text(`Rs.${shippingCharges.toLocaleString()}`, 460, costTop + 35, { width: 80, align: 'right' });
+    
+    doc.text(`Taxes:`, 350, costTop + 50);
+    doc.text(`Rs.0`, 460, costTop + 50, { width: 80, align: 'right' });
+    
+    doc.moveTo(350, costTop + 65).lineTo(550, costTop + 65).stroke();
+    doc.font("Helvetica-Bold").text(`Total Paid:`, 350, costTop + 70);
+    doc.text(`Rs.${totalCost.toLocaleString()}`, 460, costTop + 70, { width: 80, align: 'right' });
+
+    // Footer Section
+    doc.font("Helvetica-Oblique").fontSize(8).fillColor("#666666")
+       .text("This is a system-generated consolidated invoice and does not require a physical signature.", 50, 750, { align: "center" });
+    doc.text(`Support: ${companyDetails.email} | Website: www.jiffex.com`, { align: "center" });
+
+    doc.end();
+  });
 }
 
 async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buffer> {
@@ -2621,26 +2915,75 @@ app.get("/api/orders/track/:orderId", async (req, res) => {
 // Example API: Get all orders for a user
 app.get("/api/orders/:customerId", async (req, res) => {
   const { customerId } = req.params;
+  const { email, phone } = req.query;
 
   if (!supabase) {
     const userOrders = memOrders.filter(o => {
       const cId = o.customer_id || o.customerId || o.destination?.customerId || o.destination?.customer_id;
-      return String(cId) === String(customerId);
+      const isIdMatch = String(cId) === String(customerId);
+      
+      const destEmail = o.destination?.email || o.email || "";
+      const isEmailMatch = email && destEmail && String(destEmail).toLowerCase() === String(email).toLowerCase();
+      
+      const destPhone = o.destination?.phone || o.phone || "";
+      const isPhoneMatch = phone && destPhone && String(destPhone) === String(phone);
+
+      return isIdMatch || isEmailMatch || isPhoneMatch;
     });
     return res.json(userOrders.map(transformDbOrder));
   }
 
   try {
+    const idsToFetch = [customerId];
+    if (email) {
+      const guestId = `guest_${String(email).toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+      if (guestId !== customerId) {
+        idsToFetch.push(guestId);
+      }
+    }
+
     const query = supabase
       .from('orders')
       .select('*')
-      .eq('customer_id', customerId)
+      .in('customer_id', idsToFetch)
       .order('created_at', { ascending: false });
 
     const { data, error } = await queryWithTimeout(query, 2000);
     if (error) throw error;
     
-    const transformed = (data || []).map(transformDbOrder);
+    let mergedOrders = data || [];
+
+    // Also fetch orders matching destination email/phone to capture standard guest orders
+    if (email) {
+      const emailQuery = supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      
+      const { data: emailData, error: emailError } = await queryWithTimeout(emailQuery, 2000);
+      if (!emailError && emailData) {
+        const emailLower = String(email).toLowerCase();
+        emailData.forEach((o: any) => {
+          let dest = o.destination;
+          if (typeof dest === 'string') {
+            try { dest = JSON.parse(dest); } catch(e) { dest = {}; }
+          }
+          const destEmail = dest?.email || "";
+          const destPhone = dest?.phone || "";
+          const matchesEmail = destEmail && destEmail.toLowerCase() === emailLower;
+          const matchesPhone = phone && destPhone && String(destPhone) === String(phone);
+          
+          if (matchesEmail || matchesPhone) {
+            if (!mergedOrders.some((existing: any) => existing.id === o.id)) {
+              mergedOrders.push(o);
+            }
+          }
+        });
+      }
+    }
+
+    const transformed = mergedOrders.map(transformDbOrder);
     res.json(deduplicateOrders(transformed));
   } catch (err: any) {
     console.log(`Serving filtered orders layout for user: ${customerId}`);
@@ -2653,7 +2996,15 @@ app.get("/api/orders/:customerId", async (req, res) => {
     const fallback = Array.from(mergedSet.values())
       .filter((o: any) => {
         const cId = o.customer_id || o.customerId || o.destination?.customerId || o.destination?.customer_id;
-        return String(cId) === String(customerId);
+        const isIdMatch = String(cId) === String(customerId);
+        
+        const destEmail = o.destination?.email || o.email || "";
+        const isEmailMatch = email && destEmail && String(destEmail).toLowerCase() === String(email).toLowerCase();
+        
+        const destPhone = o.destination?.phone || o.phone || "";
+        const isPhoneMatch = phone && destPhone && String(destPhone) === String(phone);
+
+        return isIdMatch || isEmailMatch || isPhoneMatch;
       })
       .sort((a: any, b: any) => {
         const dateA = new Date(a.created_at || a.createdAt || 0).getTime();
@@ -3136,7 +3487,9 @@ app.post("/api/track-carrier", async (req, res) => {
 
 async function startServer() {
   console.log("[Server Initialization] Seeding Supabase database if empty...");
-  await seedDatabaseIfEmpty();
+  seedDatabaseIfEmpty().catch(err => {
+    console.error("[Server Seeding Warning] Background seeding failed:", err);
+  });
 
   console.log("Configuring Vite middleware...");
   // Vite middleware for development

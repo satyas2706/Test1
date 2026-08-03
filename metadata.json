@@ -1,7 +1,9 @@
 {
   "name": "Jiffex Your Global Logistics Partner",
   "description": "A comprehensive shipping and logistics platform featuring quote generation, warehouse tracking, pickup scheduling, and an integrated gift store.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": [
+    "microphone"
+  ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

@@ -5,6 +5,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Logo } from './components/Logo';
+import { VapiVoiceAssistant } from './components/VapiVoiceAssistant';
 import { MobilePickupFlow } from './components/MobilePickupFlow';
 import { MobileDropOffFlow } from './components/MobileDropOffFlow';
 import { 
@@ -1636,15 +1637,38 @@ const AdminDashboard = ({
 
       // Send dynamic WhatsApp message on status change
       const message = getStatusWhatsAppMessage(
-        orderId, 
-        newStatus, 
-        order.destination?.fullName || 'Valued Customer', 
-        order.destination?.country || '', 
-        order.totalCost
+         orderId, 
+         newStatus, 
+         order.destination?.fullName || 'Valued Customer', 
+         order.destination?.country || '', 
+         order.totalCost
       );
       sendWhatsApp(order.destination?.phone || '', message);
 
       toast.success(`Order ${orderId} status updated to ${newStatus}. WhatsApp notification sent.`);
+
+      // Check if all active orders for this customer are now completed (Delivered), and send a single consolidated invoice
+      if (newStatus === 'Delivered') {
+        const customerId = order.customerId || order.customer_id;
+        if (customerId) {
+          const customerOrders = orders.filter(o => (o.customerId === customerId || o.customer_id === customerId));
+          const updatedCustomerOrders = customerOrders.map(o => o.id === orderId ? { ...o, status: 'Delivered' as ShippingStatus } : o);
+          const activeCustomerOrders = updatedCustomerOrders.filter(o => o.status !== 'Cancelled');
+          
+          const allCompleted = activeCustomerOrders.length > 0 && activeCustomerOrders.every(o => o.status === 'Delivered');
+          if (allCompleted) {
+            const recipientEmail = order.destination?.email;
+            if (recipientEmail && recipientEmail.includes('@') && recipientEmail !== 'user@example.com') {
+              const promise = api.sendConsolidatedInvoicePDF(recipientEmail, activeCustomerOrders, COMPANY_DETAILS);
+              toast.promise(promise, {
+                loading: 'All orders completed! Sending consolidated invoice to customer...',
+                success: 'All orders completed! Single consolidated invoice sent to customer email.',
+                error: 'All orders completed, but could not send consolidated invoice email.'
+              });
+            }
+          }
+        }
+      }
     } catch (err: any) {
       console.error('Failed to update order status:', err.message);
       toast.error('Failed to update order status.');
@@ -4702,8 +4726,11 @@ export default function App() {
   const [shopConsolidationOption, setShopConsolidationOption] = useState<'pickup' | 'warehouse' | 'store_only' | null>(null);
   const [showConsolidationError, setShowConsolidationError] = useState(false);
   const [pickupConsolidationOption, setPickupConsolidationOption] = useState<'shop_and_ship' | 'pickup_only' | null>(null);
+  const [shopItemsShippingDestination, setShopItemsShippingDestination] = useState<'home' | 'warehouse'>('home');
   const [showPickupConsolidationError, setShowPickupConsolidationError] = useState(false);
   const [showPaymentTroubleModal, setShowPaymentTroubleModal] = useState(false);
+  const [showPendingPickupAlertModal, setShowPendingPickupAlertModal] = useState(false);
+  const hasShownPendingAlertThisSessionRef = useRef(false);
   const [paymentTroublePendingOrderSave, setPaymentTroublePendingOrderSave] = useState<(() => Promise<void>) | null>(null);
 
   // Sync / Read store items from database only
@@ -4813,6 +4840,54 @@ export default function App() {
       );
     });
   }, [appointments, currentUser, lastBookingRef, session]);
+
+  // Reset session alert ref when currentUser changes (login / logout)
+  useEffect(() => {
+    hasShownPendingAlertThisSessionRef.current = false;
+  }, [currentUser?.id, currentUser?.email]);
+
+  // Check if logged-in user has pending Home Pickup for Shop & Ship and trigger alert
+  useEffect(() => {
+    if (!currentUser) {
+      setShowPendingPickupAlertModal(false);
+      return;
+    }
+
+    const isHomePickupPending = !userAppointments.some(a => a.status === 'Scheduled' || a.status === 'Picked Up');
+
+    if (!isHomePickupPending) {
+      localStorage.removeItem(`jiffex_pending_home_pickup_${currentUser.id}`);
+      if (currentUser.email) {
+        localStorage.removeItem(`jiffex_pending_home_pickup_${currentUser.email.toLowerCase()}`);
+      }
+      return;
+    }
+
+    const userOrders = orders.filter(o => 
+      (currentUser.id && o.customerId === currentUser.id) || 
+      (currentUser.email && (o.destination?.email || (o as any).email)?.toLowerCase() === currentUser.email.toLowerCase()) ||
+      (currentUser.phone && (o.destination?.phone || (o as any).phone) === currentUser.phone)
+    );
+
+    const hasShopAndShipOrder = userOrders.some(o => 
+      (o.id && o.id.startsWith('SH-')) || 
+      (o.items && o.items.some((i: any) => i.source === 'Store' || i.source === 'shop')) || 
+      (o as any).shopConsolidationOption === 'pickup' || 
+      (o as any).pickupConsolidationOption === 'shop_and_ship' ||
+      (o as any).pickupType === 'AllAgent'
+    );
+
+    const hasStoredFlag = 
+      localStorage.getItem(`jiffex_pending_home_pickup_${currentUser.id}`) === 'true' ||
+      (currentUser.email && localStorage.getItem(`jiffex_pending_home_pickup_${currentUser.email.toLowerCase()}`) === 'true');
+
+    if ((hasShopAndShipOrder || hasStoredFlag) && isHomePickupPending) {
+      if (!hasShownPendingAlertThisSessionRef.current) {
+        hasShownPendingAlertThisSessionRef.current = true;
+        setShowPendingPickupAlertModal(true);
+      }
+    }
+  }, [currentUser, orders, userAppointments]);
   const [categories, setCategories] = useState(['Pooja', 'Return Gifts', 'Decorative']);
   const [tickets, setTickets] = useState<Ticket[]>([
     {
@@ -5120,6 +5195,7 @@ export default function App() {
   const [showConflictModal, setShowConflictModal] = useState<{ show: boolean; item: any; source: any }>({ show: false, item: null, source: null });
   const [cancellingPickupId, setCancellingPickupId] = useState<string | null>(null);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
+  const [selectedOrdersForConsolidatedInvoice, setSelectedOrdersForConsolidatedInvoice] = useState<Order[] | null>(null);
   const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<Order | null>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
@@ -5335,6 +5411,19 @@ export default function App() {
           console.error('Failed to send pickup confirmation email:', err);
           toast.error(`Pickup scheduled, but ${err.message || 'failed to send email'}`);
         });
+    }
+
+    if (currentUser) {
+      localStorage.removeItem(`jiffex_pending_home_pickup_${currentUser.id}`);
+      if (currentUser.email) {
+        localStorage.removeItem(`jiffex_pending_home_pickup_${currentUser.email.toLowerCase()}`);
+      }
+    }
+    if (resolvedCustomerId) {
+      localStorage.removeItem(`jiffex_pending_home_pickup_${resolvedCustomerId}`);
+    }
+    if (resolvedEmail) {
+      localStorage.removeItem(`jiffex_pending_home_pickup_${resolvedEmail.toLowerCase()}`);
     }
 
     setLastBookingRef(newOrder.id);
@@ -6320,7 +6409,7 @@ export default function App() {
         if (isAdminRole || isAgentRole) {
           api.getAllOrders().then(processOrders).catch(console.error);
         } else {
-          api.getOrders(uId).then(processOrders).catch(console.error);
+          api.getOrders(uId, currentUser?.email, currentUser?.phone).then(processOrders).catch(console.error);
         }
       };
 
@@ -6484,10 +6573,6 @@ export default function App() {
     // Optimistic update
     setItems([...items, newItem]);
     setShowConflictModal({ show: false, item: null, source: null });
-
-    if (source === 'Store') {
-      setShowJiffySuggestion(true);
-    }
 
     // Try to sync to backend database
     if (dbStatus.checked && currentUser) {
@@ -6703,13 +6788,43 @@ export default function App() {
     const isWarehouseCheckout = cartItems.some(i => i.source === 'Warehouse');
     const paymentStatus = isWarehouseCheckout ? 'Pending' : isPayAtHome ? 'Pay at Home' : 'Paid';
 
-    // Validate checkout details
-    if (shippingPreference !== 'LocalPickup') {
-      if (!address.fullName || !address.phone || !address.addressLine1 || !address.city || !address.zipCode) {
+    const hasHomePickupActive = (hasScheduledPickup || !!selectedPickupDate || pickupConsolidationOption === 'shop_and_ship') && cartItems.some(i => i.source === 'Store');
+
+    let finalDestination = { ...address };
+
+    if (shippingPreference === 'LocalPickup' || shopItemsShippingDestination === 'warehouse') {
+      finalDestination = {
+        fullName: WAREHOUSE_ADDRESS.name || 'Jiffex Warehouse Hub',
+        email: currentUser?.email || '',
+        phone: WAREHOUSE_ADDRESS.phone || '9999999999',
+        addressLine1: WAREHOUSE_ADDRESS.street || 'Jiffex Hub',
+        city: WAREHOUSE_ADDRESS.city || 'City',
+        state: WAREHOUSE_ADDRESS.state || 'State',
+        zipCode: WAREHOUSE_ADDRESS.zip || '00000',
+        country: WAREHOUSE_ADDRESS.country || 'USA'
+      };
+    } else if (hasHomePickupActive || (!address.fullName || !address.addressLine1)) {
+      finalDestination = {
+        fullName: address.fullName || pickupDestination.fullName || pickupName || currentUser?.name || 'Customer',
+        email: address.email || pickupDestination.email || currentUser?.email || '',
+        phone: address.phone || pickupDestination.phone || pickupPhone || currentUser?.phone || '9999999999',
+        addressLine1: address.addressLine1 || pickupDestination.addressLine1 || (pickupAddress.street ? `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}` : 'Home Address'),
+        city: address.city || pickupDestination.city || pickupAddress.city || 'City',
+        state: address.state || pickupDestination.state || pickupAddress.state || 'State',
+        zipCode: address.zipCode || pickupDestination.zipCode || pickupAddress.zip || '000000',
+        country: address.country || pickupDestination.country || 'USA'
+      };
+    }
+
+    // Validate checkout details (skipped if Home Pickup or Warehouse is active since details are synced/preset)
+    if (shippingPreference !== 'LocalPickup' && shopItemsShippingDestination !== 'warehouse' && !hasHomePickupActive) {
+      if (!finalDestination.fullName || !finalDestination.phone || !finalDestination.addressLine1 || !finalDestination.city || !finalDestination.zipCode) {
         toast.error('Please complete your shipping address details including your contact phone number.');
         return;
       }
     }
+
+    setAddress(finalDestination);
 
     // Infer order source from cart items as backup if orderId is falsy
     let finalOrderId = orderId;
@@ -6734,6 +6849,8 @@ export default function App() {
       ? Math.max(0, totalCost - (totalCost * (appliedCoupon.discountPercent / 100))) 
       : totalCost;
 
+    const finalShippingDate = selectedDate || selectedPickupDate || SHIPPING_DATES[0];
+
     const newOrder: Order = {
       id: finalOrderId,
       customerId: currentUser.id,
@@ -6742,8 +6859,8 @@ export default function App() {
       totalCost: finalCostToPay,
       status: isWarehouseCheckout ? 'Request Placed' : (isPickupType ? 'Scheduled' : 'Request Placed'),
       createdAt: new Date().toISOString(),
-      shippingDate: selectedDate,
-      destination: address,
+      shippingDate: finalShippingDate,
+      destination: finalDestination,
       paymentStatus: paymentStatus,
       pickupType: isPickupType ? 'AllAgent' : undefined,
       assignedAgent: assignedAgent,
@@ -6754,6 +6871,24 @@ export default function App() {
       // Optimistic update
       setOrders([...orders, orderToSave]);
       setIsPaid(true);
+
+      const isHomePickupPending = !userAppointments.some(a => a.status === 'Scheduled');
+      const hasShopItemsInOrder = (orderToSave.id && orderToSave.id.startsWith('SH-')) || 
+                                  (orderToSave.items && orderToSave.items.some(i => i.source === 'Store' || (i.source as any) === 'shop')) || 
+                                  cartItems.some(i => i.source === 'Store' || (i.source as any) === 'shop') ||
+                                  (activeTab as any) === 'shop' || (activeTab as any) === 'Shop';
+      const chosenHomePickup = shopConsolidationOption === 'pickup' || pickupConsolidationOption === 'shop_and_ship' || shopItemsShippingDestination === 'home' || shippingPreference === 'LocalPickup' || shopConsolidationOption === null || shopConsolidationOption === 'store_only';
+
+      if (hasShopItemsInOrder && chosenHomePickup && isHomePickupPending && shopConsolidationOption !== 'warehouse') {
+        setShowPendingPickupAlertModal(true);
+        hasShownPendingAlertThisSessionRef.current = true;
+        if (currentUser) {
+          localStorage.setItem(`jiffex_pending_home_pickup_${currentUser.id}`, 'true');
+          if (currentUser.email) {
+            localStorage.setItem(`jiffex_pending_home_pickup_${currentUser.email.toLowerCase()}`, 'true');
+          }
+        }
+      }
       
       // Delete the checked out items from the active cart in the database
       for (const item of cartItems) {
@@ -6793,7 +6928,7 @@ export default function App() {
             setOrders(prev => prev.map(o => o.id === finalOrderId ? finalSavedOrder : o));
           }
 
-          // Automatically send invoice email with PDF
+          // Automatically send order confirmation email
           const recipientEmail = address.email || currentUser.email;
           if (isWarehouseCheckout) {
             await api.sendOrderConfirmationEmail(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
@@ -6803,8 +6938,9 @@ export default function App() {
             await api.sendOrderConfirmationEmail(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
             toast.success(`Order confirmed! Confirmation sent to ${recipientEmail}. Final billing will be done at your home.`);
           } else {
-            await api.sendInvoicePDF(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
-            toast.success(`Payment successful! Invoice sent to ${recipientEmail}`);
+            // Online paid / UPI: send order confirmation. Invoice will be consolidated on completion.
+            await api.sendOrderConfirmationEmail(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
+            toast.success(`Payment successful! Order confirmation sent to ${recipientEmail}. Your consolidated tax invoice will be generated when all active orders are completed.`);
           }
         } catch (err: any) {
           console.error('Failed to sync order or send email:', err.message);
@@ -9263,8 +9399,16 @@ export default function App() {
     }
     
     // Merge orders and appointments for a complete view
-    const customerOrders = orders.filter(o => (o.customerId || o.customer_id) === currentUser.id);
-    const customerAppointments = appointments.filter(a => (a.customerId || a.customer_id) === currentUser.id);
+    const customerOrders = orders.filter(o => 
+      (o.customerId || o.customer_id) === currentUser.id ||
+      (currentUser.email && currentUser.email !== 'guest@example.com' && (o.destination?.email || (o as any).email)?.toLowerCase() === currentUser.email.toLowerCase()) ||
+      (currentUser.phone && (o.destination?.phone || (o as any).phone) === currentUser.phone)
+    );
+    const customerAppointments = appointments.filter(a => 
+      (a.customerId || a.customer_id) === currentUser.id ||
+      (currentUser.email && currentUser.email !== 'guest@example.com' && (a.email || (a as any).destination?.email)?.toLowerCase() === currentUser.email.toLowerCase()) ||
+      (currentUser.phone && (a.phone || (a as any).destination?.phone) === currentUser.phone)
+    );
     
     // Combine them, avoiding duplicates by ID
     const unifiedHistory = [...customerOrders];
@@ -9327,6 +9471,62 @@ export default function App() {
           </div>
 
           <div className="space-y-4">
+            {(() => {
+              const completedOrdersList = unifiedHistory.filter(o => o.status === 'Delivered' && o.items && o.items.length > 0);
+              if (completedOrdersList.length === 0) return null;
+              
+              const allCompletedActive = unifiedHistory.filter(o => o.status !== 'Cancelled').every(o => o.status === 'Delivered');
+              
+              return (
+                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border border-indigo-100 rounded-3xl p-5 mx-4 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
+                    <FileText size={100} className="text-indigo-600" />
+                  </div>
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="p-1.5 bg-indigo-600 text-white rounded-lg flex items-center justify-center">
+                        <FileText size={14} />
+                      </span>
+                      <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">CONSOLIDATED TAX INVOICE</span>
+                    </div>
+                    <h4 className="text-sm font-black text-slate-900">
+                      {allCompletedActive 
+                        ? 'All Shipments Completed!' 
+                        : `${completedOrdersList.length} of ${unifiedHistory.filter(o => o.status !== 'Cancelled').length} Shipments Completed`}
+                    </h4>
+                    <p className="text-[11px] text-slate-600 mt-1 max-w-md leading-relaxed">
+                      To keep your billing clean, JiffEX generates a single consolidated invoice grouping all completed orders.
+                    </p>
+                    
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button 
+                        onClick={() => setSelectedOrdersForConsolidatedInvoice(completedOrdersList)}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 px-4 rounded-xl transition shadow-md shadow-indigo-100 flex items-center gap-1.5 cursor-pointer border-0"
+                      >
+                        <Search size={14} />
+                        <span>View Consolidated Invoice</span>
+                      </button>
+                      
+                      <button 
+                        onClick={async () => {
+                          const promise = api.sendConsolidatedInvoicePDF(currentUser.email, completedOrdersList, COMPANY_DETAILS);
+                          toast.promise(promise, {
+                            loading: 'Sending consolidated invoice...',
+                            success: 'Single consolidated invoice sent to your email!',
+                            error: 'Could not send consolidated invoice via Email.'
+                          });
+                        }}
+                        className="bg-white hover:bg-indigo-50 text-indigo-600 border border-indigo-200 text-xs font-bold py-2 px-4 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Share size={14} />
+                        <span>Email Invoice</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {unifiedHistory.length === 0 ? (
               <div className="text-center py-12 text-slate-400 bg-white border border-slate-100 rounded-2xl p-4 shadow-sm mx-4">
                 <Package size={48} className="mx-auto mb-4 opacity-20" />
@@ -9856,6 +10056,64 @@ export default function App() {
           </button>
         </div>
         
+        {(() => {
+          const completedOrdersList = unifiedHistory.filter(o => o.status === 'Delivered' && o.items && o.items.length > 0);
+          if (completedOrdersList.length === 0) return null;
+          
+          const allCompletedActive = unifiedHistory.filter(o => o.status !== 'Cancelled').every(o => o.status === 'Delivered');
+          
+          return (
+            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border border-indigo-100 rounded-3xl p-6 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+                <FileText size={120} className="text-indigo-600" />
+              </div>
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="p-1.5 bg-indigo-600 text-white rounded-lg flex items-center justify-center">
+                      <FileText size={16} />
+                    </span>
+                    <span className="text-xs font-black text-indigo-700 uppercase tracking-widest">CONSOLIDATED TAX INVOICE</span>
+                  </div>
+                  <h4 className="text-lg font-black text-slate-900">
+                    {allCompletedActive 
+                      ? 'All Shipments Completed!' 
+                      : `${completedOrdersList.length} of ${unifiedHistory.filter(o => o.status !== 'Cancelled').length} Shipments Completed`}
+                  </h4>
+                  <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
+                    To keep your billing clean and reduce duplicate files, JiffEX generates a single consolidated invoice grouping all completed orders.
+                  </p>
+                </div>
+                
+                <div className="flex gap-3 shrink-0">
+                  <button 
+                    onClick={() => setSelectedOrdersForConsolidatedInvoice(completedOrdersList)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3 px-5 rounded-xl transition shadow-md shadow-indigo-100 flex items-center gap-1.5 cursor-pointer border-0"
+                  >
+                    <Search size={16} />
+                    <span>View Consolidated Invoice</span>
+                  </button>
+                  
+                  <button 
+                    onClick={async () => {
+                      const promise = api.sendConsolidatedInvoicePDF(currentUser.email, completedOrdersList, COMPANY_DETAILS);
+                      toast.promise(promise, {
+                        loading: 'Sending consolidated invoice...',
+                        success: 'Single consolidated invoice sent to your email!',
+                        error: 'Could not send consolidated invoice via Email.'
+                      });
+                    }}
+                    className="bg-white hover:bg-indigo-50 text-indigo-600 border border-indigo-200 text-xs font-bold py-3 px-5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Share size={16} />
+                    <span>Email Invoice</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
           <div className="grid grid-cols-1 gap-6">
             {unifiedHistory.length === 0 ? (
@@ -10328,9 +10586,137 @@ export default function App() {
               </div>
             )}
           </AnimatePresence>
+
+          {/* Consolidated Invoice Modal */}
+          <AnimatePresence>
+            {selectedOrdersForConsolidatedInvoice && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                  className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
+                >
+                  <div className="flex justify-between items-start mb-8">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Logo iconSize={18} />
+                      </div>
+                      <h2 className="text-2xl font-black text-slate-900">Consolidated Tax Invoice</h2>
+                      <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">
+                        Invoice ID: CONSOL-{currentUser.name?.slice(0, 3).toUpperCase() || 'USR'}-{new Date().getTime().toString().slice(-4)}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedOrdersForConsolidatedInvoice(null)}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                    >
+                      <XCircle size={24} className="text-slate-400" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-8 mb-8">
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
+                      <div className="text-sm font-bold text-slate-900">JiffEX Warehouse</div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {WAREHOUSE_ADDRESS.street}<br />
+                        {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
+                        {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
+                      <div className="text-sm font-bold text-slate-900">{selectedOrdersForConsolidatedInvoice[0]?.destination?.fullName}</div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {selectedOrdersForConsolidatedInvoice[0]?.destination?.addressLine1}<br />
+                        {selectedOrdersForConsolidatedInvoice[0]?.destination?.city}, {selectedOrdersForConsolidatedInvoice[0]?.destination?.state}<br />
+                        {selectedOrdersForConsolidatedInvoice[0]?.destination?.zipCode}, {selectedOrdersForConsolidatedInvoice[0]?.destination?.country}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-6 mb-8">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Consolidated Item Details</h4>
+                    <div className="space-y-3">
+                      {selectedOrdersForConsolidatedInvoice.flatMap(order => 
+                        (order.items || []).map((item, idx) => ({ ...item, orderId: order.id }))
+                      ).map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
+                              {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
+                                <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
+                                <span className="text-indigo-600 font-bold text-[9px]">Order: {item.orderId}</span>
+                                <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
+                                <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-sm font-bold text-slate-900">
+                            {item.price ? `₹${item.price}` : '-'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900 rounded-2xl p-6 text-white mb-4">
+                    <div className="flex justify-between items-center mb-3 pb-3 border-b border-white/10">
+                      <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Completed Orders Included</span>
+                      <span className="font-bold text-xs text-indigo-400">{selectedOrdersForConsolidatedInvoice.map(o => o.id).join(', ')}</span>
+                    </div>
+                    <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
+                      <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Consolidated Total Weight</span>
+                      <span className="font-bold">
+                        {selectedOrdersForConsolidatedInvoice.reduce((sum, o) => sum + getSafeOrderTotalWeight(o), 0).toFixed(2)} kg
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Consolidated Grand Total</span>
+                        <div className="text-3xl font-black">
+                          ₹{Math.round(selectedOrdersForConsolidatedInvoice.reduce((sum, o) => sum + Number(o.totalCost || o.total_cost || 0), 0))}
+                        </div>
+                      </div>
+                      <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
+                        PAID
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 flex gap-4">
+                    <button 
+                      onClick={() => window.print()}
+                      className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer border-0"
+                    >
+                      <Printer size={18} /> Print
+                    </button>
+                    <button 
+                      onClick={async () => {
+                        const promise = api.sendConsolidatedInvoicePDF(currentUser.email, selectedOrdersForConsolidatedInvoice, COMPANY_DETAILS);
+                        toast.promise(promise, {
+                          loading: 'Sending consolidated invoice...',
+                          success: 'Single consolidated invoice sent to your email!',
+                          error: 'Could not send consolidated invoice via Email.'
+                        });
+                      }}
+                      className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer border-0"
+                    >
+                      <Share size={18} /> Share to Email
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
         </div>
       );
-    }, [orders, appointments, currentUser, setActiveTab, selectedOrderForInvoice, selectedOrderForDetails, isMobile]);
+    }, [orders, appointments, currentUser, setActiveTab, selectedOrderForInvoice, selectedOrderForDetails, selectedOrdersForConsolidatedInvoice, isMobile]);
 
 
   const WorkOrderSection = useMemo(() => {
@@ -13018,6 +13404,9 @@ export default function App() {
                         setPickupDestination={setPickupDestination}
                         pickupConsolidationOption={pickupConsolidationOption}
                         setPickupConsolidationOption={setPickupConsolidationOption}
+                        shopItemsShippingDestination={shopItemsShippingDestination}
+                        setShopItemsShippingDestination={setShopItemsShippingDestination}
+                        hasShopItems={items.some(i => i.source === 'Store')}
                         handleSchedulePickup={handleSchedulePickup}
                         currentUser={currentUser}
                         activePickup={activePickup}
@@ -14153,6 +14542,124 @@ export default function App() {
                                             : "We'll dispatch only your home-collected packages. Standard weights, volumes, and custom declarations will apply."
                                           }
                                         </p>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Shop Items Shipping Destination Selection Card */}
+                                  {(pickupConsolidationOption === 'shop_and_ship' || items.some(i => i.source === 'Store')) && (
+                                    <div className="mt-6 p-6 rounded-3xl bg-indigo-50/40 border-2 border-indigo-200 shadow-sm space-y-4 text-left">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-md shadow-indigo-200">
+                                            <ShoppingBag size={20} />
+                                          </div>
+                                          <div>
+                                            <h5 className="font-extrabold text-slate-900 text-sm">Shop Items Shipping Destination</h5>
+                                            <p className="text-xs text-slate-500 font-medium">
+                                              Where would you like your selected Shop items delivered?
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full">
+                                          Home Pickup Schedule Linked
+                                        </span>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                                        {/* Option 1: Ship to my home */}
+                                        <div 
+                                          onClick={() => {
+                                            setShopItemsShippingDestination('home');
+                                            toast.success("Shop items set to ship to your Home Destination Address!");
+                                          }}
+                                          className={`cursor-pointer p-5 rounded-2xl border-2 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden ${
+                                            shopItemsShippingDestination === 'home'
+                                              ? 'bg-white border-indigo-600 shadow-lg shadow-indigo-100 ring-2 ring-indigo-600/20'
+                                              : 'bg-white/80 border-slate-200 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="space-y-3">
+                                            <div className="flex items-center justify-between">
+                                              <div className={`p-2.5 rounded-xl ${shopItemsShippingDestination === 'home' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                                <Home size={18} />
+                                              </div>
+                                              {shopItemsShippingDestination === 'home' && (
+                                                <span className="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                                                  Selected
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div>
+                                              <h6 className="font-black text-slate-900 text-sm">Ship to my home</h6>
+                                              <p className="text-slate-500 text-[11px] leading-relaxed mt-1 font-medium">
+                                                Deliver shop items directly to your destination address on your scheduled shipping date.
+                                              </p>
+                                            </div>
+
+                                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-[11px] space-y-1">
+                                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Schedule & Address Details</p>
+                                              <p className="font-bold text-slate-800">📅 Shipping Date: <span className="text-indigo-600">{new Date(selectedPickupDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span></p>
+                                              <p className="font-bold text-slate-800 truncate">📍 Destination: <span className="text-slate-600">{pickupDestination.fullName || 'Receiver'}, {pickupDestination.city || 'City'}, {pickupDestination.country || 'USA'}</span></p>
+                                            </div>
+                                          </div>
+
+                                          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                                            <span className={`text-[10px] font-black uppercase tracking-wider ${shopItemsShippingDestination === 'home' ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                              Home Destination Delivery
+                                            </span>
+                                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${shopItemsShippingDestination === 'home' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>
+                                              {shopItemsShippingDestination === 'home' && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* Option 2: Ship to Jiffex warehouse */}
+                                        <div 
+                                          onClick={() => {
+                                            setShopItemsShippingDestination('warehouse');
+                                            toast.success("Shop items set to ship to Jiffex Warehouse Hub!");
+                                          }}
+                                          className={`cursor-pointer p-5 rounded-2xl border-2 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden ${
+                                            shopItemsShippingDestination === 'warehouse'
+                                              ? 'bg-white border-indigo-600 shadow-lg shadow-indigo-100 ring-2 ring-indigo-600/20'
+                                              : 'bg-white/80 border-slate-200 hover:border-slate-300'
+                                          }`}
+                                        >
+                                          <div className="space-y-3">
+                                            <div className="flex items-center justify-between">
+                                              <div className={`p-2.5 rounded-xl ${shopItemsShippingDestination === 'warehouse' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                                <Warehouse size={18} />
+                                              </div>
+                                              {shopItemsShippingDestination === 'warehouse' && (
+                                                <span className="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                                                  Selected
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div>
+                                              <h6 className="font-black text-slate-900 text-sm">Ship to Jiffex warehouse</h6>
+                                              <p className="text-slate-500 text-[11px] leading-relaxed mt-1 font-medium">
+                                                Deliver shop items to Jiffex Warehouse for holding, inspection, or separate processing.
+                                              </p>
+                                            </div>
+
+                                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-[11px] space-y-1">
+                                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Warehouse Hub Details</p>
+                                              <p className="font-bold text-slate-800">🏬 Hub: <span className="text-emerald-700">{WAREHOUSE_ADDRESS.name}</span></p>
+                                              <p className="font-bold text-slate-800 truncate">📍 Address: <span className="text-slate-600">{WAREHOUSE_ADDRESS.street}, {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state} {WAREHOUSE_ADDRESS.zipCode}</span></p>
+                                            </div>
+                                          </div>
+
+                                          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                                            <span className={`text-[10px] font-black uppercase tracking-wider ${shopItemsShippingDestination === 'warehouse' ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                              Jiffex Hub Holding
+                                            </span>
+                                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${shopItemsShippingDestination === 'warehouse' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>
+                                              {shopItemsShippingDestination === 'warehouse' && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
+                                            </div>
+                                          </div>
+                                        </div>
                                       </div>
                                     </div>
                                   )}
@@ -15585,56 +16092,6 @@ export default function App() {
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col items-center gap-8">
-          <AnimatePresence>
-            {showJiffySuggestion && !hasActivePickup && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-                className="w-full max-w-3xl"
-              >
-                <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 relative group hover:shadow-xl hover:shadow-indigo-500/5 transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-200">
-                      <Package className="text-white" size={24} />
-                    </div>
-                    <div>
-                      <h4 className="text-lg font-black text-slate-900 leading-tight">Ship more from home or Pickup from home?</h4>
-                      <p className="text-slate-500 text-sm">Want to get some items from home or anywhere to ship along with your Shop items? Add warehouse items or schedule an agent pickup.</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <button 
-                      onClick={() => {
-                        navigateTo('warehouse');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-200"
-                    >
-                      <Package size={16} /> Add warehouse items <ArrowRight size={16} />
-                    </button>
-                    <button 
-                      onClick={() => {
-                        navigateTo('pickup');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-200"
-                    >
-                      <Truck size={16} /> Schedule Pickup from home <ArrowRight size={16} />
-                    </button>
-                  </div>
-                  <button 
-                    onClick={() => setShowJiffySuggestion(false)}
-                    className="absolute top-4 right-4 text-slate-300 hover:text-slate-500 transition-colors"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
       </div>
     );
   }, [selectedCategory, searchQuery, sortBy, minPrice, maxPrice, showFilters, addItem, removeStoreItem, handleCheckout, items, storeProducts, currentUser, showJiffySuggestion, setActiveTab, appointments, lastBookingRef, isMobile, setIsMobileMenuOpen]);
@@ -15708,14 +16165,19 @@ export default function App() {
           </div>
 
           {/* Custom consolidation guidance on payment success */}
-          {shopConsolidationOption === 'pickup' && (
-            <div className="p-6 bg-indigo-50 border border-indigo-100 rounded-3xl text-left space-y-3 max-w-xl mx-auto shadow-sm">
-              <h4 className="font-black text-indigo-950 text-base flex items-center gap-2">
-                <Truck className="text-indigo-600 animate-bounce" size={20} />
-                Now, let's schedule your Home Pickup!
-              </h4>
+          {(((orderId && orderId.startsWith('SH-')) || shopConsolidationOption === 'pickup' || pickupConsolidationOption === 'shop_and_ship' || shopItemsShippingDestination === 'home' || shippingPreference === 'LocalPickup' || items.some(i => i.source === 'Store')) && !userAppointments.some(a => a.status === 'Scheduled') && shopConsolidationOption !== 'warehouse') && (
+            <div className="p-6 bg-amber-50 border border-amber-200/80 rounded-3xl text-left space-y-3 max-w-xl mx-auto shadow-sm">
+              <div className="flex items-center justify-between">
+                <h4 className="font-black text-amber-950 text-base flex items-center gap-2">
+                  <AlertCircle className="text-amber-600 animate-bounce" size={20} />
+                  Home Pickup is Pending!
+                </h4>
+                <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider bg-amber-100/80 px-2.5 py-1 rounded-full border border-amber-200">
+                  Action Required
+                </span>
+              </div>
               <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-                Since you chose to send additional items via Home Pickup, our courier agent can collect them from your address. Click below to book your pickup slot.
+                Your Shop & Ship order is completed, but your Home Pickup schedule is pending. Would you like to complete your Home Pickup schedule now?
               </p>
               <button
                 onClick={() => {
@@ -15724,9 +16186,9 @@ export default function App() {
                   setOrderId(null);
                   setShopConsolidationOption(null);
                 }}
-                className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow shadow-indigo-200"
+                className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow shadow-indigo-200 cursor-pointer"
               >
-                Schedule Home Pickup Now →
+                <Calendar size={16} /> Complete Home Pickup Now →
               </button>
             </div>
           )}
@@ -15772,6 +16234,7 @@ export default function App() {
     }
 
     if (isMobile) {
+      const hasHomePickupActive = (userAppointments.some(a => a.status === 'Scheduled') || !!selectedPickupDate || pickupConsolidationOption === 'shop_and_ship') && cartItems.some(i => i.source === 'Store');
       const currentStep = isPaid ? 5 : activeCheckoutStep;
       return (
         <div className="max-w-md mx-auto space-y-6 pb-12 pt-4">
@@ -15781,7 +16244,11 @@ export default function App() {
               <button 
                 onClick={() => {
                   if (currentStep > 1) {
-                    setActiveCheckoutStep(currentStep - 1);
+                    if (hasHomePickupActive && currentStep === 4) {
+                      setActiveCheckoutStep(1);
+                    } else {
+                      setActiveCheckoutStep(currentStep - 1);
+                    }
                   } else {
                     goBack();
                   }
@@ -15794,21 +16261,30 @@ export default function App() {
             <div>
               <h2 className="text-xl font-black text-slate-900 tracking-tight">Shop & Ship Checkout</h2>
               {currentStep !== 5 && (
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Step {currentStep} of 5</p>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                  {hasHomePickupActive 
+                    ? `Step ${currentStep === 4 ? 2 : currentStep === 5 ? 3 : 1} of 3`
+                    : `Step ${currentStep} of 5`
+                  }
+                </p>
               )}
             </div>
           </div>
 
           {/* Stepper Progress Bar */}
           {currentStep !== 5 && (
-            <div className="grid grid-cols-5 gap-1 items-center justify-between text-center py-3 border border-slate-100 bg-white rounded-xl shadow-sm">
-              {[
+            <div className={`grid ${hasHomePickupActive ? 'grid-cols-3' : 'grid-cols-5'} gap-1 items-center justify-between text-center py-3 border border-slate-100 bg-white rounded-xl shadow-sm`}>
+              {(hasHomePickupActive ? [
+                { step: 1, label: 'Items' },
+                { step: 4, label: 'Review & Pay' },
+                { step: 5, label: 'Done' }
+              ] : [
                 { step: 1, label: 'Items' },
                 { step: 2, label: 'Address' },
                 { step: 3, label: 'Schedule' },
                 { step: 4, label: 'Review' },
                 { step: 5, label: 'Done' }
-              ].map((s) => {
+              ]).map((s) => {
                 const isActive = currentStep === s.step;
                 const isCompleted = currentStep > s.step;
                 return (
@@ -15818,7 +16294,7 @@ export default function App() {
                       isActive ? 'bg-[#091535] text-white ring-4 ring-indigo-100' :
                       'bg-slate-100 text-slate-400'
                     }`}>
-                      {s.step}
+                      {s.step === 4 && hasHomePickupActive ? 2 : s.step === 5 && hasHomePickupActive ? 3 : s.step}
                     </div>
                     <span className={`text-[9px] font-black tracking-tight mt-1 transition-colors ${
                       isActive || isCompleted ? 'text-[#091535] font-black' : 'text-slate-400 font-bold'
@@ -15925,10 +16401,10 @@ export default function App() {
                     Back to Cart
                   </button>
                   <button 
-                    onClick={() => setActiveCheckoutStep(2)}
+                    onClick={() => setActiveCheckoutStep(hasHomePickupActive ? 4 : 2)}
                     className="flex-1 py-3.5 bg-[#091535] text-white font-black rounded-xl text-xs transition-all active:scale-[0.98] shadow-md shadow-indigo-100 cursor-pointer"
                   >
-                    Next: Address →
+                    {hasHomePickupActive ? 'Next: Payment →' : 'Next: Address →'}
                   </button>
                 </div>
               </div>
@@ -16310,7 +16786,7 @@ export default function App() {
                 {/* Navigation Buttons */}
                 <div className="pt-4 flex gap-3">
                   <button 
-                    onClick={() => setActiveCheckoutStep(3)}
+                    onClick={() => setActiveCheckoutStep(hasHomePickupActive ? 1 : 3)}
                     className="py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs px-5 transition-all active:scale-[0.98] cursor-pointer"
                   >
                     ← Back
@@ -16392,14 +16868,19 @@ export default function App() {
                 </div>
 
                 {/* Consolidation Options Prompts */}
-                {shopConsolidationOption === 'pickup' && (
-                  <div className="p-5 bg-indigo-50 border border-indigo-100 rounded-2xl text-left space-y-2.5">
-                    <h4 className="font-black text-indigo-950 text-xs flex items-center gap-1.5">
-                      <Truck className="text-indigo-600 animate-bounce" size={15} />
-                      Schedule your Home Pickup!
-                    </h4>
+                {(((orderId && orderId.startsWith('SH-')) || shopConsolidationOption === 'pickup' || pickupConsolidationOption === 'shop_and_ship' || shopItemsShippingDestination === 'home' || shippingPreference === 'LocalPickup' || items.some(i => i.source === 'Store')) && !userAppointments.some(a => a.status === 'Scheduled') && shopConsolidationOption !== 'warehouse') && (
+                  <div className="p-5 bg-amber-50 border border-amber-200/80 rounded-2xl text-left space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-black text-amber-950 text-xs flex items-center gap-1.5">
+                        <AlertCircle className="text-amber-600 animate-bounce" size={15} />
+                        Home Pickup is Pending!
+                      </h4>
+                      <span className="text-[9px] font-black text-amber-700 uppercase tracking-wider bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-200">
+                        Action Required
+                      </span>
+                    </div>
                     <p className="text-[10px] text-slate-600 leading-relaxed font-semibold">
-                      You opted to send additional items via Home Pickup. Schedule our courier agent to collect them.
+                      Your Shop & Ship order is completed, but your Home Pickup schedule is pending. Would you like to complete it now?
                     </p>
                     <button
                       onClick={() => {
@@ -16410,7 +16891,7 @@ export default function App() {
                       }}
                       className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow shadow-indigo-200 cursor-pointer"
                     >
-                      Schedule Home Pickup Now →
+                      <Calendar size={14} /> Complete Home Pickup Now →
                     </button>
                   </div>
                 )}
@@ -16484,170 +16965,250 @@ export default function App() {
           )}
           
           {/* Shipping Preference Selection */}
-          {!isWarehouseCheckout && userAppointments.some(a => a.status === 'Scheduled') && cartItems.length > 0 && (
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <Truck className="text-indigo-600" /> Ship more from home or Pickup from home?
-              </h3>
+          {(!isWarehouseCheckout || cartItems.some(i => i.source === 'Store')) && (userAppointments.some(a => a.status === 'Scheduled') || selectedPickupDate) && cartItems.length > 0 && (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold flex items-center gap-2 text-slate-900">
+                  <Truck className="text-indigo-600" /> Shop Items Shipping Destination
+                </h3>
+                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                  Linked with Home Pickup Schedule
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium">
+                Your shipping date ({selectedPickupDate ? new Date(selectedPickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Scheduled Date'}) and destination address details are synced from your Home Pickup schedule.
+              </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div 
                   onClick={() => {
+                    setShopItemsShippingDestination('home');
                     setShippingPreference('International');
-                    setAddress({
-                      fullName: pickupName || currentUser?.name || '',
-                      email: currentUser?.email || '',
-                      phone: pickupPhone || '',
-                      addressLine1: `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}`,
-                      city: pickupAddress.city,
-                      state: pickupAddress.state,
-                      zipCode: pickupAddress.zip,
-                      country: 'India'
-                    });
+                    if (pickupDestination && pickupDestination.addressLine1) {
+                      setAddress({
+                        fullName: pickupDestination.fullName || pickupName || currentUser?.name || '',
+                        email: pickupDestination.email || currentUser?.email || '',
+                        phone: pickupDestination.phone || pickupPhone || '',
+                        addressLine1: pickupDestination.addressLine1,
+                        city: pickupDestination.city,
+                        state: pickupDestination.state,
+                        zipCode: pickupDestination.zipCode,
+                        country: pickupDestination.country || 'USA'
+                      });
+                    } else {
+                      setAddress({
+                        fullName: pickupName || currentUser?.name || '',
+                        email: currentUser?.email || '',
+                        phone: pickupPhone || '',
+                        addressLine1: `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}`,
+                        city: pickupAddress.city,
+                        state: pickupAddress.state,
+                        zipCode: pickupAddress.zip,
+                        country: 'India'
+                      });
+                    }
+                    toast.success('Shipping destination updated to Home Address!');
                   }}
-                  className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${shippingPreference === 'International' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 hover:border-slate-200'}`}
+                  className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${
+                    shopItemsShippingDestination === 'home' || shippingPreference === 'International' 
+                      ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-1 ring-indigo-600/20' 
+                      : 'border-slate-100 hover:border-slate-200 bg-white'
+                  }`}
                 >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${shippingPreference === 'International' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                      <Globe size={20} />
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${shopItemsShippingDestination === 'home' || shippingPreference === 'International' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                        <Home size={20} />
+                      </div>
+                      <div>
+                        <div className="font-extrabold text-slate-900 text-sm">Ship to my home</div>
+                        <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider">Home Pickup Schedule Synced</span>
+                      </div>
                     </div>
-                    <div className="font-bold">Ship to my home</div>
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${(shopItemsShippingDestination === 'home' || shippingPreference === 'International') ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>
+                      {(shopItemsShippingDestination === 'home' || shippingPreference === 'International') && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Consolidate with your pickup items and ship to your home address. <span className="font-bold text-indigo-600">{cartItems.some(i => i.source === 'Store') ? 'Pay Now to confirm.' : 'Pay at Home enabled.'}</span>
+                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                    Shop items will be packaged and shipped directly to your home destination address alongside your home pickup shipment.
                   </p>
+                  <div className="mt-3 pt-3 border-t border-slate-200/60 text-[11px] text-slate-500 space-y-1">
+                    <p>📅 <span className="font-bold text-slate-700">Shipping Date:</span> {selectedPickupDate ? new Date(selectedPickupDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Scheduled Pickup Date'}</p>
+                    <p className="truncate">📍 <span className="font-bold text-slate-700">Destination:</span> {pickupDestination.fullName || address.fullName || 'Receiver'}, {pickupDestination.city || address.city || 'City'}, {pickupDestination.country || address.country || 'USA'}</p>
+                  </div>
                 </div>
+
                 <div 
                   onClick={() => {
+                    setShopItemsShippingDestination('warehouse');
                     setShippingPreference('LocalPickup');
                     setAddress(WAREHOUSE_ADDRESS);
+                    toast.success('Shipping destination updated to Jiffex Warehouse!');
                   }}
-                  className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${shippingPreference === 'LocalPickup' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 hover:border-slate-200'}`}
+                  className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${
+                    shopItemsShippingDestination === 'warehouse' || shippingPreference === 'LocalPickup'
+                      ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-1 ring-indigo-600/20' 
+                      : 'border-slate-100 hover:border-slate-200 bg-white'
+                  }`}
                 >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${shippingPreference === 'LocalPickup' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                      <Package size={20} />
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${shopItemsShippingDestination === 'warehouse' || shippingPreference === 'LocalPickup' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                        <Warehouse size={20} />
+                      </div>
+                      <div>
+                        <div className="font-extrabold text-slate-900 text-sm">Ship to Jiffex warehouse</div>
+                        <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Jiffex Hub Holding</span>
+                      </div>
                     </div>
-                    <div className="font-bold">Bring items during Home Pickup</div>
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${(shopItemsShippingDestination === 'warehouse' || shippingPreference === 'LocalPickup') ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>
+                      {(shopItemsShippingDestination === 'warehouse' || shippingPreference === 'LocalPickup') && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Our agent will bring these items when they come for your pickup. <span className="font-bold text-emerald-600">Pay Now to confirm.</span>
+                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                    Shop items will be sent to the JiffEX Warehouse hub first for storage, inspection, or separate processing.
                   </p>
+                  <div className="mt-3 pt-3 border-t border-slate-200/60 text-[11px] text-slate-500 space-y-1">
+                    <p>🏬 <span className="font-bold text-slate-700">Hub:</span> {WAREHOUSE_ADDRESS.name}</p>
+                    <p className="truncate">📍 <span className="font-bold text-slate-700">Address:</span> {WAREHOUSE_ADDRESS.street}, {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}</p>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Address Form */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <MapPin className="text-red-500" /> {shippingPreference === 'LocalPickup' ? 'Warehouse Destination' : 'Destination Address'}
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Full Name</label>
-                <input 
-                  type="text" 
-                  disabled={shippingPreference === 'LocalPickup'}
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                  value={address.fullName}
-                  onChange={e => setAddress({...address, fullName: e.target.value})}
-                />
+          {/* Address Form & Shipping Date (Hidden when Home Pickup is selected as details are synced) */}
+          {((userAppointments.some(a => a.status === 'Scheduled') || selectedPickupDate || pickupConsolidationOption === 'shop_and_ship') && cartItems.some(i => i.source === 'Store')) ? (
+            <div className="bg-emerald-50 border border-emerald-200/80 p-5 rounded-2xl flex items-center justify-between text-emerald-900 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-sm">
+                  <Check size={20} />
+                </div>
+                <div>
+                  <p className="font-extrabold text-sm text-slate-900">Destination Address & Shipping Date Synced</p>
+                  <p className="text-xs text-slate-600 font-medium">
+                    Automatically managed through your Home Pickup schedule ({selectedPickupDate ? new Date(selectedPickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Scheduled Pickup Date'})
+                  </p>
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Email</label>
-                <input 
-                  type="email" 
-                  disabled={shippingPreference === 'LocalPickup'}
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                  value={address.email}
-                  onChange={e => setAddress({...address, email: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Phone</label>
-                <input 
-                  type="tel" 
-                  disabled={shippingPreference === 'LocalPickup'}
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                  value={address.phone}
-                  onChange={e => setAddress({...address, phone: e.target.value})}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Address Line 1</label>
-                <input 
-                  type="text" 
-                  disabled={shippingPreference === 'LocalPickup'}
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                  value={address.addressLine1}
-                  onChange={e => setAddress({...address, addressLine1: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">City</label>
-                <input 
-                  type="text" 
-                  disabled={shippingPreference === 'LocalPickup'}
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                  value={address.city}
-                  onChange={e => setAddress({...address, city: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Zip Code</label>
-                <input 
-                  type="text" 
-                  disabled={shippingPreference === 'LocalPickup'}
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                  placeholder="e.g. 123456"
-                  value={address.zipCode}
-                  onChange={e => setAddress({...address, zipCode: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Country</label>
-                <select 
-                  disabled={shippingPreference === 'LocalPickup'}
-                  className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                  value={address.country}
-                  onChange={e => setAddress({...address, country: e.target.value})}
-                >
-                  {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+              <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full border border-emerald-200">
+                Home Pickup Active
+              </span>
             </div>
-            {shippingPreference && (
-              <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-2 text-xs text-amber-700">
-                <Info size={14} />
-                <span>
-                  {shippingPreference === 'LocalPickup' 
-                    ? 'Warehouse address is used for local pickup items.' 
-                    : 'Address pre-filled from your pickup location. You can modify it if needed.'}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Shipping Date */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <Calendar className="text-indigo-600" /> Select Shipping Date
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {SHIPPING_DATES.map(date => (
-                <button 
-                  key={date}
-                  onClick={() => setSelectedDate(date)}
-                  className={`p-4 rounded-xl border-2 transition-all text-center ${selectedDate === date ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}
-                >
-                  <div className="text-xs font-bold uppercase opacity-60 mb-1">
-                    {new Date(date).toLocaleString('default', { month: 'long' })}
+          ) : (
+            <>
+              {/* Address Form */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                  <MapPin className="text-red-500" /> {shippingPreference === 'LocalPickup' ? 'Warehouse Destination' : 'Destination Address'}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Full Name</label>
+                    <input 
+                      type="text" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.fullName}
+                      onChange={e => setAddress({...address, fullName: e.target.value})}
+                    />
                   </div>
-                  <div className="text-xl font-black">{date.split('-')[2]}</div>
-                </button>
-              ))}
-            </div>
-          </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Email</label>
+                    <input 
+                      type="email" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.email}
+                      onChange={e => setAddress({...address, email: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Phone</label>
+                    <input 
+                      type="tel" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.phone}
+                      onChange={e => setAddress({...address, phone: e.target.value})}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Address Line 1</label>
+                    <input 
+                      type="text" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.addressLine1}
+                      onChange={e => setAddress({...address, addressLine1: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">City</label>
+                    <input 
+                      type="text" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.city}
+                      onChange={e => setAddress({...address, city: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Zip Code</label>
+                    <input 
+                      type="text" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      placeholder="e.g. 123456"
+                      value={address.zipCode}
+                      onChange={e => setAddress({...address, zipCode: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Country</label>
+                    <select 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.country}
+                      onChange={e => setAddress({...address, country: e.target.value})}
+                    >
+                      {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {shippingPreference && (
+                  <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-2 text-xs text-amber-700">
+                    <Info size={14} />
+                    <span>
+                      {shippingPreference === 'LocalPickup' 
+                        ? 'Warehouse address is used for local pickup items.' 
+                        : 'Address pre-filled from your pickup location. You can modify it if needed.'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Shipping Date */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                  <Calendar className="text-indigo-600" /> Select Shipping Date
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {SHIPPING_DATES.map(date => (
+                    <button 
+                      key={date}
+                      onClick={() => setSelectedDate(date)}
+                      className={`p-4 rounded-xl border-2 transition-all text-center ${selectedDate === date ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}
+                    >
+                      <div className="text-xs font-bold uppercase opacity-60 mb-1">
+                        {new Date(date).toLocaleString('default', { month: 'long' })}
+                      </div>
+                      <div className="text-xl font-black">{date.split('-')[2]}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Payment */}
           {!isWarehouseCheckout && (
@@ -16900,6 +17461,8 @@ export default function App() {
     setLastBookingRef(null);
     setIsSchedulingNewPickup(false);
     setShowPickupConfirmModal(false);
+    setShowPendingPickupAlertModal(false);
+    hasShownPendingAlertThisSessionRef.current = false;
     
     // 2. Perform background async Supabase signOut
     try {
@@ -17928,6 +18491,62 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {showPendingPickupAlertModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[2rem] p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden text-left relative"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center shadow-inner">
+                  <AlertCircle size={28} />
+                </div>
+                <button 
+                  onClick={() => setShowPendingPickupAlertModal(false)}
+                  className="w-9 h-9 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-200 transition-all cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-3 mb-6">
+                <span className="inline-block text-[10px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200/80">
+                  Home Pickup Pending
+                </span>
+                <h3 className="text-xl font-black text-slate-900 leading-snug">
+                  Your Shop & Ship Order is Confirmed!
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                  Your Shop & Ship order payment has been placed successfully. However, your <span className="font-bold text-slate-900">Home Pickup schedule is currently pending</span>. Would you like to complete your Home Pickup schedule now?
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                <button
+                  onClick={() => {
+                    setShowPendingPickupAlertModal(false);
+                    navigateTo('pickup');
+                    setIsPaid(false);
+                    setOrderId(null);
+                    setShopConsolidationOption(null);
+                  }}
+                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs transition-all shadow-md shadow-indigo-100 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+                >
+                  <Calendar size={16} /> Complete Home Pickup Now →
+                </button>
+                <button
+                  onClick={() => setShowPendingPickupAlertModal(false)}
+                  className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition-all cursor-pointer active:scale-[0.98]"
+                >
+                  I'll Complete It Later
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {showPickupConfirmModal && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
             <motion.div 
@@ -18333,6 +18952,20 @@ export default function App() {
       </AnimatePresence>
 
       <Toaster position="top-center" richColors />
+      <VapiVoiceAssistant
+        activeTab={activeTab}
+        setActiveTab={navigateTo}
+        currentUser={currentUser}
+        orders={orders}
+        userAppointments={userAppointments}
+        cartItems={items}
+        storeProducts={storeProducts}
+        addItem={addItem}
+        setItems={setItems}
+        setSelectedOrderForDetails={setSelectedOrderForDetails}
+        setShowLoginModal={setShowLoginModal}
+        api={api}
+      />
     </div>
   );
 }

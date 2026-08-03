@@ -287,57 +287,7 @@ const StoreSection = ({
         )}
       </div>
 
-      {/* Action Buttons */}
-      <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col items-center gap-8">
-        <AnimatePresence>
-          {showJiffySuggestion && !hasActivePickup && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              className="w-full max-w-3xl"
-            >
-              <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 relative group hover:shadow-xl hover:shadow-indigo-500/5 transition-all">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-200">
-                    <Package className="text-white" size={24} />
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-black text-slate-900 leading-tight">Ship more from home or Pickup from home?</h4>
-                    <p className="text-slate-500 text-sm">Want to get some items from home or anywhere to ship along with your Shop items? Add warehouse items or schedule an agent pickup.</p>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 shrink-0">
-                  <button 
-                    onClick={() => {
-                      navigateTo('warehouse');
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-200"
-                  >
-                    <Package size={16} /> Add warehouse items <ArrowRight size={16} />
-                  </button>
-                  <button 
-                    onClick={() => {
-                      navigateTo('pickup');
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-lg shadow-emerald-200"
-                  >
-                    <Truck size={16} /> Schedule Pickup from home <ArrowRight size={16} />
-                  </button>
-                </div>
-                <button 
-                  onClick={() => setShowJiffySuggestion(false)}
-                  className="absolute top-4 right-4 text-slate-300 hover:text-slate-500 transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+
     </div>
   );
 };
