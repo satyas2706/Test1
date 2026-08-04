@@ -801,18 +801,8 @@ const normalizeCountryName = (input: string, availableRates: Record<string, numb
           quickQuoteMethod: p.qMethod || 'Express',
           quickQuoteCalculatedInr: `₹${currentFinalInr.toFixed(2)}`,
           shippingRatesTable: ratesSummary,
-          activeShippingDiscounts: discountsSummary
-        },
-        assistantOverrides: {
-          systemPrompt: `You are JiffEX AI Voice Assistant, a polite customer service voice agent for JiffEX Courier & Parcel Delivery.
-
-SHIPPING RATES & QUOTE INSTRUCTIONS:
-When a customer asks for a shipping quote, rate, price, or cost:
-1. Rate Card (INR per KG): ${ratesSummary}
-2. Discounts: ${discountsSummary}
-3. Express Shipping = Weight * Rate * 1.0. Standard Shipping = Weight * Rate * 0.7. (1 USD = 83 INR).
-4. Always state the calculated quote immediately in Indian Rupees (₹) and US Dollars ($).
-5. Always trigger the calculate_quote tool to update the customer's screen.`
+          activeShippingDiscounts: discountsSummary,
+          rateCardContext: `Rate Card: ${ratesSummary}. Discounts: ${discountsSummary}`
         }
       });
     } catch (err: any) {
