@@ -3485,10 +3485,8 @@ app.post("/api/track-carrier", async (req, res) => {
   }
 });
 
-
 // API: Vapi endpoint to get shipment status (supports POST /get_shipment_status and /api/get_shipment_status)
 const handleGetShipmentStatus = async (req: express.Request, res: express.Response) => {
-  console.log("=== Shipment Status Endpoint Called ===");
   try {
     const body = req.body || {};
     // Extract parameters flexibly from top-level or nested tool call arguments
@@ -3609,9 +3607,97 @@ const handleGetShipmentStatus = async (req: express.Request, res: express.Respon
     res.status(500).json({ error: err.message || "Failed to retrieve shipment status" });
   }
 };
-console.log("Registering shipment status endpoints...");
+
 app.post("/get_shipment_status", handleGetShipmentStatus);
 app.post("/api/get_shipment_status", handleGetShipmentStatus);
+
+// API: Vapi endpoint to get shipping quote (supports POST/GET /get_shipping_quote and /api/get_shipping_quote)
+const handleGetShippingQuote = async (req: express.Request, res: express.Response) => {
+  console.log("=== Shipping Quote Endpoint Called ===");
+  console.log("Method:", req.method);
+  console.log("Body:", JSON.stringify(req.body, null, 2));
+  console.log("Query:", JSON.stringify(req.query, null, 2));
+  try {
+    const body = req.method === 'GET' ? req.query : (req.body || {});
+    // Extract parameters flexibly from top-level body/query or nested tool call arguments
+    const args = body.arguments || body.message?.toolCalls?.[0]?.function?.arguments || body.message?.call?.customer || {};
+    
+    let rawCountry = (body.destinationCountry || body.destination_country || body.country || args.destinationCountry || args.destination_country || args.country || 'USA').toString().trim();
+    let weight = parseFloat(body.weightKg || body.weight || args.weightKg || args.weight || 1);
+    if (isNaN(weight) || weight <= 0) weight = 1;
+
+    let method = (body.method || body.shippingMethod || args.method || args.shippingMethod || 'Express').toString().trim();
+
+    // Normalize country
+    const countryLower = rawCountry.toLowerCase();
+    let normalizedCountry = 'USA';
+    if (countryLower.includes('uk') || countryLower.includes('kingdom') || countryLower.includes('england') || countryLower.includes('london')) {
+      normalizedCountry = 'UK';
+    } else if (countryLower.includes('ca') || countryLower.includes('canada')) {
+      normalizedCountry = 'Canada';
+    } else if (countryLower.includes('au') || countryLower.includes('australia')) {
+      normalizedCountry = 'Australia';
+    } else if (countryLower.includes('uae') || countryLower.includes('dubai') || countryLower.includes('emirates')) {
+      normalizedCountry = 'UAE';
+    } else if (countryLower.includes('de') || countryLower.includes('germany') || countryLower.includes('deutschland')) {
+      normalizedCountry = 'Germany';
+    } else if (countryLower.includes('sg') || countryLower.includes('singapore')) {
+      normalizedCountry = 'Singapore';
+    } else if (countryLower.includes('in') || countryLower.includes('india')) {
+      normalizedCountry = 'India';
+    } else if (countryLower.includes('us') || countryLower.includes('america') || countryLower.includes('states')) {
+      normalizedCountry = 'USA';
+    } else {
+      normalizedCountry = rawCountry.charAt(0).toUpperCase() + rawCountry.slice(1);
+    }
+
+    // Default rate lookup in USD/kg
+    const ratesInUsd: Record<string, number> = {
+      'USA': 12,
+      'UK': 10,
+      'Canada': 11,
+      'Australia': 13,
+      'UAE': 8,
+      'Germany': 9,
+      'Singapore': 7,
+      'India': 5,
+    };
+
+    const baseUsdPerKg = ratesInUsd[normalizedCountry] || 12;
+    const isStandard = method.toLowerCase().includes('standard');
+    const methodMultiplier = isStandard ? 0.7 : 1.0;
+    
+    // Calculate price in USD and INR (1 USD = 83 INR)
+    const totalUsd = baseUsdPerKg * weight * methodMultiplier;
+    const totalInr = Math.round(totalUsd * 83);
+    
+    const formattedPrice = `₹${totalInr.toLocaleString('en-IN')}`;
+    const deliveryTime = isStandard ? '10–14 business days' : '5–7 business days';
+
+    console.log(`[get_shipping_quote] Country: ${normalizedCountry}, Weight: ${weight}kg, Method: ${method} -> Price: ${formattedPrice}`);
+
+    return res.json({
+      country: normalizedCountry,
+      destinationCountry: normalizedCountry,
+      price: formattedPrice,
+      deliveryTime: deliveryTime,
+      currency: "INR",
+      priceInr: totalInr,
+      priceUsd: parseFloat(totalUsd.toFixed(2)),
+      weightKg: weight,
+      method: isStandard ? 'Standard' : 'Express',
+      message: `Shipping quote for ${normalizedCountry} (${weight} kg, ${isStandard ? 'Standard' : 'Express'}) is ${formattedPrice} with estimated delivery in ${deliveryTime}.`
+    });
+  } catch (err: any) {
+    console.error("[get_shipping_quote ERROR]:", err.message);
+    res.status(500).json({ error: err.message || "Failed to calculate shipping quote" });
+  }
+};
+
+app.post("/get_shipping_quote", handleGetShippingQuote);
+app.post("/api/get_shipping_quote", handleGetShippingQuote);
+app.get("/get_shipping_quote", handleGetShippingQuote);
+app.get("/api/get_shipping_quote", handleGetShippingQuote);
 
 async function startServer() {
   console.log("[Server Initialization] Seeding Supabase database if empty...");

@@ -386,9 +386,16 @@ const normalizeCountryName = (input: string, availableRates: Record<string, numb
 
       const ratesSummary = Object.entries(availableRates).map(([c, r]) => `${c}: ₹${r}/kg`).join(', ');
 
+      const formattedPriceStr = `₹${Math.round(finalPriceInr).toLocaleString('en-IN')}`;
+      const deliveryTimeStr = method === 'Express' ? '5–7 business days' : '10–14 business days';
+
       return {
         success: true,
         country: normalizedCountry,
+        destinationCountry: normalizedCountry,
+        price: formattedPriceStr,
+        deliveryTime: deliveryTimeStr,
+        currency: 'INR',
         weightKg: weightVal,
         deliveryMethod: method,
         ratePerKg: ratePerKg,
@@ -397,7 +404,7 @@ const normalizeCountryName = (input: string, availableRates: Record<string, numb
         discountSavedInr: parseFloat(discountAmount.toFixed(2)),
         totalCostInr: parseFloat(finalPriceInr.toFixed(2)),
         totalCostUsd: parseFloat(finalPriceUsd),
-        estimatedDeliveryDays: method === 'Express' ? '5-7 Business Days' : '10-14 Business Days',
+        estimatedDeliveryDays: deliveryTimeStr,
         shippingRatesTable: ratesSummary,
         quoteSummary: quoteMessage,
         message: quoteMessage
