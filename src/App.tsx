@@ -18965,6 +18965,15 @@ export default function App() {
         setSelectedOrderForDetails={setSelectedOrderForDetails}
         setShowLoginModal={setShowLoginModal}
         api={api}
+        shippingRates={shippingRates}
+        shippingDiscounts={shippingDiscounts}
+        coupons={coupons}
+        qCountry={qCountry}
+        setQCountry={setQCountry}
+        qWeight={qWeight}
+        setQWeight={setQWeight}
+        qMethod={qMethod}
+        setQMethod={setQMethod}
       />
     </div>
   );

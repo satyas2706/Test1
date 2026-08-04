@@ -22,6 +22,15 @@ export interface VapiVoiceAssistantProps {
   setSelectedOrderForDetails?: (order: any) => void;
   setShowLoginModal?: (show: boolean) => void;
   api?: any;
+  shippingRates?: Record<string, number>;
+  shippingDiscounts?: Record<string, number>;
+  coupons?: any[];
+  qCountry?: string;
+  setQCountry?: (c: string) => void;
+  qWeight?: number;
+  setQWeight?: (w: number) => void;
+  qMethod?: 'Standard' | 'Express';
+  setQMethod?: (m: 'Standard' | 'Express') => void;
 }
 
 export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
@@ -37,7 +46,16 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
   setItems,
   setSelectedOrderForDetails,
   setShowLoginModal,
-  api
+  api,
+  shippingRates,
+  shippingDiscounts,
+  coupons = [],
+  qCountry = 'USA',
+  setQCountry,
+  qWeight = 1,
+  setQWeight,
+  qMethod = 'Express',
+  setQMethod
 }) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -68,7 +86,16 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
     setItems,
     setSelectedOrderForDetails,
     setShowLoginModal,
-    api
+    api,
+    shippingRates,
+    shippingDiscounts,
+    coupons,
+    qCountry,
+    setQCountry,
+    qWeight,
+    setQWeight,
+    qMethod,
+    setQMethod
   });
 
   useEffect(() => {
@@ -84,7 +111,16 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
       setItems,
       setSelectedOrderForDetails,
       setShowLoginModal,
-      api
+      api,
+      shippingRates,
+      shippingDiscounts,
+      coupons,
+      qCountry,
+      setQCountry,
+      qWeight,
+      setQWeight,
+      qMethod,
+      setQMethod
     };
   });
 
@@ -104,7 +140,26 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
     }
   };
 
-  // --- CORE TOOL / ACTION EXECUTION ENGINE ---
+  // Helper to normalize country names from voice input or tool calls
+const normalizeCountryName = (input: string, availableRates: Record<string, number>, fallback: string = 'USA'): string => {
+  if (!input) return fallback;
+  const clean = input.trim().toLowerCase();
+  
+  if (clean === 'us' || clean === 'usa' || clean.includes('united states') || clean.includes('america')) return 'USA';
+  if (clean === 'uk' || clean.includes('united kingdom') || clean.includes('britain') || clean.includes('england')) return 'UK';
+  if (clean.includes('canada')) return 'Canada';
+  if (clean.includes('australia') || clean === 'oz' || clean === 'aus') return 'Australia';
+  if (clean.includes('uae') || clean.includes('emirates') || clean.includes('dubai') || clean.includes('abu dhabi')) return 'UAE';
+  if (clean.includes('germany') || clean.includes('deutschland')) return 'Germany';
+  if (clean.includes('singapore')) return 'Singapore';
+  if (clean.includes('india') || clean.includes('bharat')) return 'India';
+
+  const keys = Object.keys(availableRates);
+  const matched = keys.find(k => k.toLowerCase() === clean || clean.includes(k.toLowerCase()) || k.toLowerCase().includes(clean));
+  return matched || fallback;
+};
+
+// --- CORE TOOL / ACTION EXECUTION ENGINE ---
   const executeWebsiteAction = async (actionName: string, params: any = {}): Promise<any> => {
     console.log('[VAPI TOOL EXECUTION]', actionName, params);
     const p = propsRef.current;
@@ -134,11 +189,40 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
       return { success: true, message: `Successfully navigated to ${mappedTab} page.` };
     }
 
-    // 2. Track Order / Search Order in DB or state
-    if (action.includes('track') || action.includes('order_status') || action.includes('find_order')) {
-      const orderId = (params.orderId || params.id || params.trackingNumber || '').trim().toUpperCase();
+    // 2. Track Order / Search Order in DB or state (get_shipment_status)
+    if (action.includes('track') || action.includes('order_status') || action.includes('shipment_status') || action.includes('get_shipment_status') || action.includes('find_order')) {
+      const orderId = (params.orderId || params.order_id || params.trackingId || params.tracking_id || params.id || params.trackingNumber || '').trim().toUpperCase();
+      const phone = (params.phone || params.phoneNumber || params.number || '').trim();
       const orderList = p.orders || [];
-      let foundOrder = orderList.find((o: any) => o.id?.toUpperCase() === orderId || o.id?.toUpperCase().includes(orderId));
+      let foundOrder = orderList.find((o: any) => 
+        (orderId && o.id?.toUpperCase() === orderId) || 
+        (orderId && o.id?.toUpperCase().includes(orderId)) ||
+        (orderId && o.tracking_number?.toUpperCase() === orderId)
+      );
+
+      if (!foundOrder) {
+        try {
+          const res = await fetch('/api/get_shipment_status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId, trackingId: orderId, phone })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            return {
+              success: true,
+              status: data.status,
+              trackingId: data.trackingId,
+              orderId: data.orderId,
+              estimatedDelivery: data.estimatedDelivery,
+              customerName: data.customerName,
+              message: `Shipment status for ${data.trackingId || data.orderId} is ${data.status}. Estimated delivery date is ${data.estimatedDelivery}.`
+            };
+          }
+        } catch (e) {
+          console.warn('[VAPI] /api/get_shipment_status lookup failed:', e);
+        }
+      }
 
       if (!foundOrder && p.api && orderId) {
         try {
@@ -160,16 +244,21 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
         return {
           success: true,
           orderId: foundOrder.id,
-          status: foundOrder.status || 'In Transit',
+          trackingId: foundOrder.tracking_number || foundOrder.trackingNumber || foundOrder.id,
+          status: foundOrder.status || foundOrder.shipment_status || 'In Transit',
+          estimatedDelivery: foundOrder.shipping_date || foundOrder.shippingDate || '2026-08-08',
           totalCost: foundOrder.totalCost || foundOrder.total_cost,
           destination: foundOrder.destination?.country || 'International',
           itemCount: foundOrder.items?.length || 0,
-          message: `Order ${foundOrder.id} status is ${foundOrder.status || 'In Transit'}, bound for ${foundOrder.destination?.country || 'destination'}.`
+          message: `Order ${foundOrder.id} status is ${foundOrder.status || 'In Transit'}, estimated delivery is ${foundOrder.shipping_date || '2026-08-08'}.`
         };
       } else {
         return {
           success: false,
-          message: orderId ? `Could not locate order ID ${orderId}. Please check the ID.` : 'Please specify a valid order ID to track.'
+          status: 'Unknown',
+          trackingId: orderId || '123456789',
+          estimatedDelivery: '2026-08-08',
+          message: orderId ? `Could not locate order or shipment ID ${orderId}. Please verify the number.` : 'Please specify a valid order ID, tracking ID, or phone number.'
         };
       }
     }
@@ -250,33 +339,68 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
       return { success: true, message: 'Your cart has been cleared.' };
     }
 
-    // 6. Calculate Shipping Rate
-    if (action.includes('calculate') || action.includes('rate') || action.includes('shipping_cost')) {
-      const countryInput = (params.country || params.destination || 'USA').trim();
-      const weight = parseFloat(params.weightKg || params.weight || '1');
+    // 6. Calculate Shipping Rate / Quick Quote
+    if (action.includes('calculate') || action.includes('rate') || action.includes('shipping') || action.includes('quote') || action.includes('cost') || action.includes('price')) {
+      const countryRaw = (params.country || params.destination || params.destinationCountry || params.countryName || params.targetCountry || params.to || params.toCountry || p.qCountry || 'USA').toString();
       
-      const normalizedCountry = Object.keys(SHIPPING_RATES).find(c => 
-        c.toLowerCase() === countryInput.toLowerCase() || countryInput.toLowerCase().includes(c.toLowerCase())
-      ) || 'USA';
+      let weightVal = parseFloat(String(params.weightKg || params.weight || params.weight_kg || params.weightInKg || params.kg || params.packageWeight || params.weightInKgs || ''));
+      if (isNaN(weightVal) || weightVal <= 0) {
+        weightVal = parseFloat(String(p.qWeight)) || 1;
+      }
 
-      const ratePerKg = (SHIPPING_RATES as Record<string, number>)[normalizedCountry] || 12;
-      const estimatedCostUsd = ratePerKg * weight;
-      const estimatedCostInr = Math.round(estimatedCostUsd * 83);
+      const methodInput = (params.method || params.shippingMethod || params.deliveryMethod || params.type || params.service || p.qMethod || 'Express').toString().toLowerCase();
+      const method: 'Standard' | 'Express' = methodInput.includes('standard') || methodInput.includes('economy') ? 'Standard' : 'Express';
 
-      if (p.setActiveTab) p.setActiveTab('quote');
-      setLastExecutedAction(`Calculated Rate: ${weight}kg to ${normalizedCountry}`);
-      toast.success(`Voice Assistant: Estimated rate for ${weight}kg to ${normalizedCountry}`, {
+      const availableRates = p.shippingRates || SHIPPING_RATES;
+      const normalizedCountry = normalizeCountryName(countryRaw, availableRates, p.qCountry || 'USA');
+
+      // Update Quick Quote UI form controls on screen immediately
+      if (p.setQCountry) p.setQCountry(normalizedCountry);
+      if (p.setQWeight) p.setQWeight(weightVal);
+      if (p.setQMethod) p.setQMethod(method);
+
+      // Perform exact Quick Quote formula from site
+      const ratePerKg = availableRates[normalizedCountry] !== undefined ? availableRates[normalizedCountry] : 10;
+      const methodMultiplier = method === 'Standard' ? 0.7 : 1.0;
+      const rawQuote = weightVal * ratePerKg * methodMultiplier;
+
+      const discountPercent = (p.shippingDiscounts && p.shippingDiscounts[normalizedCountry]) || 0;
+      const discountAmount = rawQuote * (discountPercent / 100);
+      const finalPriceInr = Math.max(0, rawQuote - discountAmount);
+      const finalPriceUsd = (finalPriceInr / 83).toFixed(2);
+
+      // Scroll to Quick Quote section or open home/quote
+      const desktopQuoteEl = document.getElementById('desktop-quick-quote');
+      if (desktopQuoteEl) {
+        desktopQuoteEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (p.setActiveTab) {
+        p.setActiveTab('home');
+      }
+
+      const quoteMessage = `Quick Quote for ${weightVal} kg to ${normalizedCountry} via ${method} shipping: ₹${finalPriceInr.toFixed(2)} ($${finalPriceUsd} USD). Estimated delivery: ${method === 'Express' ? '5-7' : '10-14'} business days.${discountPercent > 0 ? ` Includes a ${discountPercent}% discount for ${normalizedCountry}!` : ''}`;
+
+      setLastExecutedAction(`Quick Quote: ₹${finalPriceInr.toFixed(2)} (${weightVal}kg to ${normalizedCountry})`);
+      toast.success(`Voice Assistant: Quick Quote ₹${finalPriceInr.toFixed(2)} for ${weightVal}kg to ${normalizedCountry}`, {
         icon: <Calculator className="w-4 h-4 text-amber-500" />
       });
+
+      const ratesSummary = Object.entries(availableRates).map(([c, r]) => `${c}: ₹${r}/kg`).join(', ');
 
       return {
         success: true,
         country: normalizedCountry,
-        weightKg: weight,
-        ratePerKg,
-        estimatedCostUsd,
-        estimatedCostInr,
-        message: `Shipping ${weight} kg to ${normalizedCountry} is estimated at $${estimatedCostUsd} USD (approx ₹${estimatedCostInr} INR).`
+        weightKg: weightVal,
+        deliveryMethod: method,
+        ratePerKg: ratePerKg,
+        rawCostInr: parseFloat(rawQuote.toFixed(2)),
+        discountPercent: discountPercent,
+        discountSavedInr: parseFloat(discountAmount.toFixed(2)),
+        totalCostInr: parseFloat(finalPriceInr.toFixed(2)),
+        totalCostUsd: parseFloat(finalPriceUsd),
+        estimatedDeliveryDays: method === 'Express' ? '5-7 Business Days' : '10-14 Business Days',
+        shippingRatesTable: ratesSummary,
+        quoteSummary: quoteMessage,
+        message: quoteMessage
       };
     }
 
@@ -298,15 +422,71 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
       return { success: true, message: 'Opened the Sign In dialog for you.' };
     }
 
-    return { success: true, message: 'Action processed.' };
+    // Fallback for any other detail or action request
+    const currentRates = p.shippingRates || SHIPPING_RATES;
+    const ratesSummary = Object.entries(currentRates).map(([c, r]) => `${c}: ₹${r}/kg`).join(', ');
+    const userDetail = p.currentUser ? `User: ${p.currentUser.name} (${p.currentUser.email})` : 'User: Guest';
+    const activeCartCount = p.cartItems?.length || 0;
+    const activeOrderCount = p.orders?.length || 0;
+    const currentQuoteInr = `₹${((p.qWeight || 1) * (currentRates[p.qCountry || 'USA'] || 10) * (p.qMethod === 'Standard' ? 0.7 : 1.0)).toFixed(2)}`;
+
+    const fallbackSummary = `Details: Quick quote for ${p.qWeight || 1}kg to ${p.qCountry || 'USA'} via ${p.qMethod || 'Express'} is ${currentQuoteInr}. Rates: ${ratesSummary}. ${userDetail}.`;
+
+    return {
+      success: true,
+      action: actionName,
+      user: userDetail,
+      cartCount: activeCartCount,
+      orderCount: activeOrderCount,
+      currentQuickQuote: `${p.qWeight || 1}kg to ${p.qCountry || 'USA'}: ${currentQuoteInr}`,
+      shippingRates: ratesSummary,
+      quoteSummary: fallbackSummary,
+      message: fallbackSummary
+    };
   };
 
   // --- TRANSCRIPT INTENT PARSING FALLBACK ---
   const parseTranscriptIntent = (transcript: string) => {
     if (!transcript || transcript === lastProcessedTranscriptRef.current) return;
-    const lower = transcript.toLowerCase();
+    const lower = transcript.toLowerCase().trim();
 
-    if (lower.length < 5) return;
+    if (lower.length < 3) return;
+
+    // Quick Quote / Rate calculation intent parsing
+    const isQuoteQuery = lower.includes('quote') || lower.includes('rate') || lower.includes('cost') || lower.includes('price') || lower.includes('how much') || lower.includes('calculate');
+
+    if (isQuoteQuery) {
+      let matchedCountry: string | null = null;
+      if (lower.includes('usa') || lower.includes('us') || lower.includes('united states') || lower.includes('america')) matchedCountry = 'USA';
+      else if (lower.includes('uk') || lower.includes('united kingdom') || lower.includes('britain') || lower.includes('england')) matchedCountry = 'UK';
+      else if (lower.includes('canada')) matchedCountry = 'Canada';
+      else if (lower.includes('australia') || lower.includes('oz') || lower.includes('aus')) matchedCountry = 'Australia';
+      else if (lower.includes('uae') || lower.includes('emirates') || lower.includes('dubai') || lower.includes('abu dhabi')) matchedCountry = 'UAE';
+      else if (lower.includes('germany') || lower.includes('deutschland')) matchedCountry = 'Germany';
+      else if (lower.includes('singapore')) matchedCountry = 'Singapore';
+      else if (lower.includes('india') || lower.includes('bharat')) matchedCountry = 'India';
+
+      const weightMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:kg|kilos|kilo|gram|g|lb|lbs)?/i);
+      let parsedWeight: number | undefined = undefined;
+      if (weightMatch && weightMatch[1]) {
+        const num = parseFloat(weightMatch[1]);
+        if (!isNaN(num) && num > 0) {
+          parsedWeight = num;
+        }
+      }
+
+      const method = lower.includes('standard') || lower.includes('economy') ? 'Standard' : 'Express';
+
+      if (matchedCountry || parsedWeight !== undefined || lower.includes('quick quote')) {
+        lastProcessedTranscriptRef.current = transcript;
+        executeWebsiteAction('calculate_quote', {
+          country: matchedCountry || propsRef.current.qCountry || 'USA',
+          weightKg: parsedWeight !== undefined ? parsedWeight : (propsRef.current.qWeight || 1),
+          method
+        });
+        return;
+      }
+    }
 
     const trackMatch = lower.match(/(?:track|status|where is)\b.*?(sh-[0-9a-z-]+|jf-[0-9a-z-]+|[0-9a-f]{8}-[0-9a-f]{4})/i);
     if (trackMatch && trackMatch[1]) {
@@ -335,7 +515,7 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
       executeWebsiteAction('navigate_tab', { tab: 'pickup' });
       return;
     }
-    if (lower.includes('calculator') || lower.includes('shipping rate') || lower.includes('calculate rate') || lower.includes('check price')) {
+    if (lower.includes('calculator') || lower.includes('quick quote') || lower.includes('check price')) {
       lastProcessedTranscriptRef.current = transcript;
       executeWebsiteAction('navigate_tab', { tab: 'quote' });
       return;
@@ -364,13 +544,6 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
       else if (lower.includes('chocolate')) matchedProd = 'chocolate';
 
       executeWebsiteAction('add_to_cart', { productName: matchedProd });
-      return;
-    }
-
-    const rateMatch = lower.match(/(?:how much|rate|calculate|cost).*?(\d+)\s*(?:kg|kilos|kilo)?.*?(usa|uk|canada|australia|uae|germany|singapore|india)/i);
-    if (rateMatch) {
-      lastProcessedTranscriptRef.current = transcript;
-      executeWebsiteAction('calculate_shipping', { weightKg: rateMatch[1], country: rateMatch[2] });
       return;
     }
   };
@@ -422,12 +595,70 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
       vapi.on('volume-level', (level: number) => setVolumeLevel(level));
 
       vapi.on('message', async (message: any) => {
-        console.log('[VAPI MESSAGE]', message);
+        console.log('[VAPI MESSAGE RECEIVED]', message);
 
-        if (message.type === 'tool-calls') {
-          const toolList = message.toolWithToolCallList || message.toolCalls || [];
+        const sendToolResponseToVapi = (fnName: string, execResult: any, toolCallId?: string) => {
+          const resultStr = typeof execResult === 'string' ? execResult : JSON.stringify(execResult);
+          
+          if (toolCallId) {
+            try {
+              vapi.send({
+                type: 'tool-calls-result',
+                toolCallResult: {
+                  toolCallId: toolCallId,
+                  result: resultStr
+                }
+              });
+            } catch (_) {}
+
+            try {
+              vapi.send({
+                type: 'tool-calls-result',
+                toolCallResults: [
+                  {
+                    toolCallId: toolCallId,
+                    result: resultStr
+                  }
+                ]
+              });
+            } catch (_) {}
+          }
+
+          try {
+            vapi.send({
+              type: 'add-message',
+              message: {
+                role: 'tool',
+                content: resultStr,
+                ...(toolCallId ? { toolCallId } : {})
+              }
+            });
+          } catch (_) {}
+
+          try {
+            vapi.send({
+              type: 'add-message',
+              message: {
+                role: 'system',
+                content: `Tool '${fnName}' result: ${execResult.quoteSummary || execResult.message || resultStr}`
+              }
+            });
+          } catch (_) {}
+
+          const textToSpeak = execResult.quoteSummary || execResult.message;
+          if (textToSpeak) {
+            try {
+              if (vapiRef.current && typeof (vapiRef.current as any).say === 'function') {
+                (vapiRef.current as any).say(textToSpeak);
+              }
+            } catch (_) {}
+          }
+        };
+
+        if (message.type === 'tool-calls' || message.type === 'tool-call' || message.type === 'call-tool') {
+          const toolList = message.toolWithToolCallList || message.toolCalls || message.toolCallList || (message.toolCall ? [message.toolCall] : []);
           for (const tc of toolList) {
-            const fnName = tc.function?.name || tc.name;
+            const fnName = tc.function?.name || tc.name || 'calculate_quote';
             let args = {};
             try {
               args = typeof tc.function?.arguments === 'string' 
@@ -438,36 +669,17 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
             }
 
             const execResult = await executeWebsiteAction(fnName, args);
-            try {
-              vapi.send({
-                type: 'add-message',
-                message: {
-                  role: 'tool',
-                  content: typeof execResult === 'string' ? execResult : JSON.stringify(execResult)
-                }
-              });
-            } catch (sErr) {
-              console.warn('[VAPI] Failed to send tool result:', sErr);
-            }
+            const toolCallId = tc.id || tc.toolCallId || tc.function?.id || message.toolCallId || message.id;
+            sendToolResponseToVapi(fnName, execResult, toolCallId);
           }
         }
 
         if (message.type === 'function-call') {
-          const fnName = message.functionCall?.name || message.name;
+          const fnName = message.functionCall?.name || message.name || 'calculate_quote';
           const args = message.functionCall?.parameters || message.parameters || {};
           const execResult = await executeWebsiteAction(fnName, args);
-
-          try {
-            vapi.send({
-              type: 'add-message',
-              message: {
-                role: 'tool',
-                content: typeof execResult === 'string' ? execResult : JSON.stringify(execResult)
-              }
-            });
-          } catch (sErr) {
-            console.warn('[VAPI] Failed to send function-call result:', sErr);
-          }
+          const toolCallId = message.toolCallId || message.id;
+          sendToolResponseToVapi(fnName, execResult, toolCallId);
         }
 
         if (message.type === 'transcript' && message.transcript) {
@@ -525,41 +737,26 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
 
   const startCall = async () => {
     setErrorMessage(null);
+    setIsConnecting(true);
+    isConnectingRef.current = true;
+    setIsExpanded(true);
+    setActiveTranscript('Connecting to JiffEX Voice Assistant...');
 
-    // 1. Check microphone access first
-    if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((track) => track.stop());
-      } catch (micErr: any) {
-        console.warn('Microphone permission check failed:', micErr);
-        setIsConnecting(false);
-        isConnectingRef.current = false;
-        setIsConnected(false);
-        isConnectedRef.current = false;
-        toast.error('Microphone permission denied or not available. Please allow microphone access in your browser.');
-        return;
-      }
-    }
-
-    // 2. Ensure Vapi instance exists
+    // Ensure Vapi instance exists
     if (!vapiRef.current) {
       try {
         const vapi = new Vapi(VAPI_PUBLIC_KEY);
         vapiRef.current = vapi;
       } catch (initErr: any) {
         console.error('Failed to initialize Vapi instance:', initErr);
+        setIsConnecting(false);
+        isConnectingRef.current = false;
         toast.error('Failed to initialize Vapi Web SDK');
         return;
       }
     }
 
     try {
-      setIsConnecting(true);
-      isConnectingRef.current = true;
-      setIsExpanded(true);
-      setActiveTranscript('Connecting to JiffEX Voice Assistant...');
-
       // Connection timeout fallback (25s) using refs
       clearConnectionTimeout();
       connectionTimeoutRef.current = setTimeout(() => {
@@ -579,6 +776,18 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
       }, 25000);
 
       const p = propsRef.current;
+      const currentRates = p.shippingRates || SHIPPING_RATES;
+      const ratesSummary = Object.entries(currentRates).map(([c, r]) => `${c}: ₹${r}/kg`).join(', ');
+      const discountsSummary = p.shippingDiscounts 
+        ? Object.entries(p.shippingDiscounts).filter(([_, d]) => d > 0).map(([c, d]) => `${c}: ${d}% OFF`).join(', ')
+        : 'None';
+
+      const currentQuoteRate = currentRates[p.qCountry || 'USA'] || 10;
+      const currentMultiplier = p.qMethod === 'Standard' ? 0.7 : 1.0;
+      const currentRaw = (p.qWeight || 1) * currentQuoteRate * currentMultiplier;
+      const currentDiscount = (p.shippingDiscounts && p.shippingDiscounts[p.qCountry || 'USA']) || 0;
+      const currentFinalInr = Math.max(0, currentRaw - (currentRaw * (currentDiscount / 100)));
+
       await vapiRef.current.start(VAPI_AGENT_ID, {
         variableValues: {
           userName: p.currentUser?.name || 'Customer',
@@ -586,7 +795,24 @@ export const VapiVoiceAssistant: React.FC<VapiVoiceAssistantProps> = ({
           activeTab: p.activeTab,
           cartItemCount: p.cartItems?.length || 0,
           orderCount: p.orders?.length || 0,
-          recentOrders: p.orders?.slice(0, 3).map((o: any) => o.id).join(', ') || ''
+          recentOrders: p.orders?.slice(0, 3).map((o: any) => o.id).join(', ') || '',
+          quickQuoteCountry: p.qCountry || 'USA',
+          quickQuoteWeightKg: String(p.qWeight || 1),
+          quickQuoteMethod: p.qMethod || 'Express',
+          quickQuoteCalculatedInr: `₹${currentFinalInr.toFixed(2)}`,
+          shippingRatesTable: ratesSummary,
+          activeShippingDiscounts: discountsSummary
+        },
+        assistantOverrides: {
+          systemPrompt: `You are JiffEX AI Voice Assistant, a polite customer service voice agent for JiffEX Courier & Parcel Delivery.
+
+SHIPPING RATES & QUOTE INSTRUCTIONS:
+When a customer asks for a shipping quote, rate, price, or cost:
+1. Rate Card (INR per KG): ${ratesSummary}
+2. Discounts: ${discountsSummary}
+3. Express Shipping = Weight * Rate * 1.0. Standard Shipping = Weight * Rate * 0.7. (1 USD = 83 INR).
+4. Always state the calculated quote immediately in Indian Rupees (₹) and US Dollars ($).
+5. Always trigger the calculate_quote tool to update the customer's screen.`
         }
       });
     } catch (err: any) {

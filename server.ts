@@ -3485,6 +3485,134 @@ app.post("/api/track-carrier", async (req, res) => {
   }
 });
 
+
+// API: Vapi endpoint to get shipment status (supports POST /get_shipment_status and /api/get_shipment_status)
+const handleGetShipmentStatus = async (req: express.Request, res: express.Response) => {
+  console.log("=== Shipment Status Endpoint Called ===");
+  try {
+    const body = req.body || {};
+    // Extract parameters flexibly from top-level or nested tool call arguments
+    const args = body.arguments || body.message?.toolCalls?.[0]?.function?.arguments || body.message?.call?.customer || {};
+    
+    let orderId = (body.orderId || body.order_id || args.orderId || args.order_id || '').toString().trim();
+    let trackingId = (body.trackingId || body.tracking_id || body.trackingNumber || body.tracking_number || args.trackingId || args.tracking_id || args.trackingNumber || args.tracking_number || '').toString().trim();
+    let phone = (body.phone || body.phoneNumber || body.phone_number || args.phone || args.phoneNumber || args.number || body.message?.call?.customer?.number || '').toString().trim();
+
+    console.log(`[Vapi get_shipment_status] Request params -> orderId: "${orderId}", trackingId: "${trackingId}", phone: "${phone}"`);
+
+    let foundOrder: any = null;
+
+    // 1. Search by orderId or trackingId if provided
+    const primarySearchTerm = trackingId || orderId;
+    if (primarySearchTerm) {
+      const cleanSearch = primarySearchTerm.toUpperCase();
+      
+      // First check memory / cache
+      foundOrder = cachedAllOrders.find(o => 
+        (o.id && o.id.toUpperCase() === cleanSearch) || 
+        (o.tracking_number && o.tracking_number.toUpperCase() === cleanSearch) ||
+        (o.trackingNumber && o.trackingNumber.toUpperCase() === cleanSearch)
+      ) || memOrders.find(o => 
+        (o.id && o.id.toUpperCase() === cleanSearch) || 
+        (o.tracking_number && o.tracking_number.toUpperCase() === cleanSearch) ||
+        (o.trackingNumber && o.trackingNumber.toUpperCase() === cleanSearch)
+      );
+
+      if (!foundOrder && supabase) {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .or(`id.ilike.${cleanSearch},tracking_number.ilike.${cleanSearch}`)
+          .maybeSingle();
+        if (!error && data) {
+          foundOrder = data;
+        }
+      }
+    }
+
+    // 2. If not found by ID, search by phone if provided
+    if (!foundOrder && phone) {
+      const cleanDigits = phone.replace(/\D/g, ''); // Digits only
+      if (cleanDigits.length >= 4) {
+        // Search in memOrders / cachedAllOrders
+        foundOrder = cachedAllOrders.find(o => {
+          const destPhone = (o.destination?.phone || o.phone || '').toString().replace(/\D/g, '');
+          return destPhone && (destPhone.includes(cleanDigits) || cleanDigits.includes(destPhone));
+        }) || memOrders.find(o => {
+          const destPhone = (o.destination?.phone || o.phone || '').toString().replace(/\D/g, '');
+          return destPhone && (destPhone.includes(cleanDigits) || cleanDigits.includes(destPhone));
+        });
+
+        if (!foundOrder && supabase) {
+          // Query database for matching phone
+          const { data, error } = await supabase
+            .from('orders')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50);
+          
+          if (!error && data) {
+            foundOrder = data.find((o: any) => {
+              let dest = o.destination;
+              if (typeof dest === 'string') {
+                try { dest = JSON.parse(dest); } catch (e) { dest = {}; }
+              }
+              const destPhone = (dest?.phone || o.phone || '').toString().replace(/\D/g, '');
+              return destPhone && (destPhone.includes(cleanDigits) || cleanDigits.includes(destPhone));
+            });
+          }
+        }
+      }
+    }
+
+    // 3. Fallback: If no parameters given or still not found, return latest order or 404
+    if (!foundOrder && !orderId && !trackingId && !phone) {
+      if (cachedAllOrders.length > 0) {
+        foundOrder = cachedAllOrders[0];
+      } else if (memOrders.length > 0) {
+        foundOrder = memOrders[0];
+      } else if (supabase) {
+        const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(1).maybeSingle();
+        if (data) foundOrder = data;
+      }
+    }
+
+    if (!foundOrder) {
+      return res.status(404).json({
+        error: "Shipment not found",
+        message: "No active shipment found matching the provided details."
+      });
+    }
+
+    // Format destination string if present
+    let destObj = foundOrder.destination;
+    if (typeof destObj === 'string') {
+      try { destObj = JSON.parse(destObj); } catch (e) { destObj = {}; }
+    }
+
+    const effectiveTrackingId = foundOrder.tracking_number || foundOrder.trackingNumber || foundOrder.id;
+    const effectiveStatus = foundOrder.shipment_status || foundOrder.shipmentStatus || foundOrder.status || "In Transit";
+    const effectiveDelivery = foundOrder.shipping_date || foundOrder.shippingDate || destObj?.date || "2026-08-08";
+
+    return res.json({
+      status: effectiveStatus,
+      trackingId: effectiveTrackingId,
+      orderId: foundOrder.id,
+      estimatedDelivery: effectiveDelivery,
+      customerName: destObj?.fullName || foundOrder.customer_name || foundOrder.customerName || "Valued Customer",
+      destination: destObj?.city ? `${destObj.city}, ${destObj.country || ''}` : undefined,
+      carrier: foundOrder.carrier || "JiffEX"
+    });
+
+  } catch (err: any) {
+    console.error("[get_shipment_status ERROR]:", err.message);
+    res.status(500).json({ error: err.message || "Failed to retrieve shipment status" });
+  }
+};
+console.log("Registering shipment status endpoints...");
+app.post("/get_shipment_status", handleGetShipmentStatus);
+app.post("/api/get_shipment_status", handleGetShipmentStatus);
+
 async function startServer() {
   console.log("[Server Initialization] Seeding Supabase database if empty...");
   seedDatabaseIfEmpty().catch(err => {
