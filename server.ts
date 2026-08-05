@@ -3613,12 +3613,14 @@ app.post("/api/get_shipment_status", handleGetShipmentStatus);
 
 // API: Vapi endpoint to get shipping quote (supports POST/GET /get_shipping_quote and /api/get_shipping_quote)
 const handleGetShippingQuote = async (req: express.Request, res: express.Response) => {
-  console.log("=== Shipping Quote Endpoint Called ===");
+   console.log("========== VAPI SHIPPING QUOTE ==========");
   console.log("Method:", req.method);
+  console.log("Headers:", req.headers);
   console.log("Body:", JSON.stringify(req.body, null, 2));
   console.log("Query:", JSON.stringify(req.query, null, 2));
   try {
     const body = req.method === 'GET' ? req.query : (req.body || {});
+    console.log("Parsed Body:", JSON.stringify(body, null, 2));
     // Extract parameters flexibly from top-level body/query or nested tool call arguments
     const args = body.arguments || body.message?.toolCalls?.[0]?.function?.arguments || body.message?.call?.customer || {};
     
