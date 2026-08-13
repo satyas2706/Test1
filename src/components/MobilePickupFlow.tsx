@@ -18,9 +18,11 @@ import {
   X,
   AlertTriangle,
   Home,
+  Store,
   Warehouse
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { SinglePagePickupForm } from './SinglePagePickupForm';
 
 interface MobilePickupFlowProps {
   activePickupStep: number;
@@ -44,6 +46,8 @@ interface MobilePickupFlowProps {
   setPickupAddress: (addr: any) => void;
   pickupDestination: { fullName: string; phone: string; addressLine1: string; city: string; state: string; zipCode: string; country: string };
   setPickupDestination: (addr: any) => void;
+  provideDestinationLater?: boolean;
+  setProvideDestinationLater?: (val: boolean) => void;
   pickupConsolidationOption: 'shop_and_ship' | 'pickup_only' | null;
   setPickupConsolidationOption: (opt: 'shop_and_ship' | 'pickup_only' | null) => void;
   shopItemsShippingDestination?: 'home' | 'warehouse';
@@ -54,6 +58,17 @@ interface MobilePickupFlowProps {
   activePickup: any;
   lastBookingRef: string;
   navigateTo: (tab: string) => void;
+  shippingRates?: Record<string, number>;
+  shippingDiscounts?: Record<string, number>;
+  pickupVehicleType?: string;
+  setPickupVehicleType?: (weight: string) => void;
+  pickupEmail?: string;
+  setPickupEmail?: (email: string) => void;
+  pickupSpecialInstructions?: string;
+  setPickupSpecialInstructions?: (val: string) => void;
+  savePickupToProfile?: boolean;
+  setSavePickupToProfile?: (val: boolean) => void;
+  savePickupProfileToDb?: () => void;
 }
 
 export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
@@ -78,6 +93,8 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
   setPickupAddress,
   pickupDestination,
   setPickupDestination,
+  provideDestinationLater = false,
+  setProvideDestinationLater,
   pickupConsolidationOption,
   setPickupConsolidationOption,
   shopItemsShippingDestination = 'home',
@@ -88,6 +105,17 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
   activePickup,
   lastBookingRef,
   navigateTo,
+  shippingRates,
+  shippingDiscounts,
+  pickupVehicleType,
+  setPickupVehicleType,
+  pickupEmail,
+  setPickupEmail,
+  pickupSpecialInstructions,
+  setPickupSpecialInstructions,
+  savePickupToProfile,
+  setSavePickupToProfile,
+  savePickupProfileToDb,
 }) => {
 
   const [showRequirementsModal, setShowRequirementsModal] = React.useState(false);
@@ -186,6 +214,51 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
   const istNow = getISTTime();
   const istDateStr = istNow.toISOString().split('T')[0];
 
+  if (activePickupStep !== 5) {
+    return (
+      <SinglePagePickupForm
+        pickupItemType={pickupItemType}
+        setPickupItemType={setPickupItemType}
+        pickupVehicleType={pickupVehicleType || pickupEstimatedWeight || '5 to 20 kg'}
+        setPickupVehicleType={setPickupVehicleType || setPickupEstimatedWeight}
+        pickupEstimatedWeight={pickupEstimatedWeight}
+        setPickupEstimatedWeight={setPickupEstimatedWeight}
+        selectedPickupDate={selectedPickupDate}
+        setSelectedPickupDate={setSelectedPickupDate}
+        selectedPickupTime={selectedPickupTime}
+        setSelectedPickupTime={setSelectedPickupTime}
+        filteredPickupSlots={filteredPickupSlots}
+        pickupName={pickupName}
+        setPickupName={setPickupName}
+        pickupPhone={pickupPhone}
+        setPickupPhone={setPickupPhone}
+        pickupEmail={pickupEmail || ''}
+        setPickupEmail={setPickupEmail || (() => {})}
+        pickupAddress={pickupAddress}
+        setPickupAddress={setPickupAddress}
+        pickupSpecialInstructions={pickupSpecialInstructions || ''}
+        setPickupSpecialInstructions={setPickupSpecialInstructions || (() => {})}
+        savePickupToProfile={savePickupToProfile ?? true}
+        setSavePickupToProfile={setSavePickupToProfile || (() => {})}
+        pickupDestination={pickupDestination}
+        setPickupDestination={setPickupDestination}
+        provideDestinationLater={provideDestinationLater}
+        setProvideDestinationLater={setProvideDestinationLater || (() => {})}
+        pickupConsolidationOption={pickupConsolidationOption}
+        setPickupConsolidationOption={setPickupConsolidationOption}
+        shopItemsShippingDestination={shopItemsShippingDestination}
+        setShopItemsShippingDestination={setShopItemsShippingDestination || (() => {})}
+        hasShopItems={hasShopItems}
+        handleSchedulePickup={handleSchedulePickup}
+        currentUser={currentUser}
+        shippingRates={shippingRates || {}}
+        shippingDiscounts={shippingDiscounts || {}}
+        savePickupProfileToDb={savePickupProfileToDb}
+        navigateTo={navigateTo}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4 px-3 py-1">
       {/* 1. Header & Home Pickup Banner */}
@@ -197,9 +270,9 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
               <Truck size={22} />
             </div>
             <div>
-              <h2 className="text-lg font-black tracking-tight leading-none text-white">Home Pickup</h2>
+              <h2 className="text-lg font-black tracking-tight leading-none text-white">Schedule a Home Pickup</h2>
               <p className="text-[10px] text-slate-300 font-bold mt-1.5 leading-tight">
-                Schedule an agent to collect from your home
+                Tell us what you're shipping, when you'd like pickup, and where we should collect it.
               </p>
             </div>
           </div>
@@ -581,80 +654,124 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="space-y-1">
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Receiver Full Name</label>
+                {/* Option to provide destination details later */}
+                <div className="bg-amber-50 p-3 rounded-xl border border-amber-200/80 flex items-start gap-2.5">
                   <input 
-                    type="text"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
-                    value={pickupDestination.fullName || ''}
-                    onChange={(e) => setPickupDestination({...pickupDestination, fullName: e.target.value})}
-                    placeholder="Enter receiver's name"
+                    type="checkbox"
+                    id="provide-destination-later-mobile"
+                    className="w-4 h-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500 mt-0.5 cursor-pointer accent-amber-600"
+                    checked={provideDestinationLater}
+                    onChange={(e) => {
+                      const isChecked = e.target.checked;
+                      if (setProvideDestinationLater) setProvideDestinationLater(isChecked);
+                      if (isChecked) {
+                        toast.info("Destination details set to be provided later before warehouse dispatch.");
+                      }
+                    }}
                   />
+                  <label htmlFor="provide-destination-later-mobile" className="text-xs font-bold text-slate-800 cursor-pointer select-none">
+                    I don't know the destination yet
+                  </label>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Receiver Phone Number</label>
-                  <input 
-                    type="tel"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
-                    value={pickupDestination.phone || ''}
-                    onChange={(e) => setPickupDestination({...pickupDestination, phone: e.target.value})}
-                    placeholder="Enter phone with country code"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Destination Street Address</label>
-                  <input 
-                    type="text"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
-                    value={pickupDestination.addressLine1 || ''}
-                    onChange={(e) => setPickupDestination({...pickupDestination, addressLine1: e.target.value})}
-                    placeholder="Street Address"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">City</label>
-                    <input 
-                      type="text"
-                      className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
-                      value={pickupDestination.city || ''}
-                      onChange={(e) => setPickupDestination({...pickupDestination, city: e.target.value})}
-                      placeholder="City"
-                    />
+
+                {provideDestinationLater ? (
+                  <div className="p-3.5 bg-amber-50/90 border border-amber-200/80 rounded-2xl space-y-2 text-left">
+                    <div className="flex items-center gap-2 text-amber-900">
+                      <Clock size={16} className="shrink-0 text-amber-600" />
+                      <p className="text-xs font-bold leading-snug">
+                        You can provide the destination later. We'll contact you before shipping.
+                      </p>
+                    </div>
+
+                    <div className="pt-1 text-left space-y-1">
+                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Expected Destination Country (Optional)</label>
+                      <select 
+                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm h-[38px]"
+                        value={pickupDestination.country || 'United States'}
+                        onChange={(e) => setPickupDestination({...pickupDestination, country: e.target.value})}
+                      >
+                        {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">State / Region</label>
-                    <input 
-                      type="text"
-                      className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
-                      value={pickupDestination.state || ''}
-                      onChange={(e) => setPickupDestination({...pickupDestination, state: e.target.value})}
-                      placeholder="State"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Zip / Postal Code</label>
-                    <input 
-                      type="text"
-                      className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
-                      value={pickupDestination.zipCode || ''}
-                      onChange={(e) => setPickupDestination({...pickupDestination, zipCode: e.target.value})}
-                      placeholder="Zipcode"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Country</label>
-                    <select 
-                      className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm h-[38px]"
-                      value={pickupDestination.country || 'United States'}
-                      onChange={(e) => setPickupDestination({...pickupDestination, country: e.target.value})}
-                    >
-                      {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Receiver Full Name</label>
+                      <input 
+                        type="text"
+                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                        value={pickupDestination.fullName || ''}
+                        onChange={(e) => setPickupDestination({...pickupDestination, fullName: e.target.value})}
+                        placeholder="Enter receiver's name"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Receiver Phone Number</label>
+                      <input 
+                        type="tel"
+                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                        value={pickupDestination.phone || ''}
+                        onChange={(e) => setPickupDestination({...pickupDestination, phone: e.target.value})}
+                        placeholder="Enter phone with country code"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Destination Street Address</label>
+                      <input 
+                        type="text"
+                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                        value={pickupDestination.addressLine1 || ''}
+                        onChange={(e) => setPickupDestination({...pickupDestination, addressLine1: e.target.value})}
+                        placeholder="Street Address"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">City</label>
+                        <input 
+                          type="text"
+                          className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                          value={pickupDestination.city || ''}
+                          onChange={(e) => setPickupDestination({...pickupDestination, city: e.target.value})}
+                          placeholder="City"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">State / Region</label>
+                        <input 
+                          type="text"
+                          className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                          value={pickupDestination.state || ''}
+                          onChange={(e) => setPickupDestination({...pickupDestination, state: e.target.value})}
+                          placeholder="State"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Zip / Postal Code</label>
+                        <input 
+                          type="text"
+                          className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                          value={pickupDestination.zipCode || ''}
+                          onChange={(e) => setPickupDestination({...pickupDestination, zipCode: e.target.value})}
+                          placeholder="Zipcode"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Country</label>
+                        <select 
+                          className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm h-[38px]"
+                          value={pickupDestination.country || 'United States'}
+                          onChange={(e) => setPickupDestination({...pickupDestination, country: e.target.value})}
+                        >
+                          {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div className="flex gap-3 pt-3">
                   <button 
@@ -675,9 +792,11 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                         setPickupDetailsTab('pickup');
                         return;
                       }
-                      if (!pickupDestination.fullName || !pickupDestination.phone || !pickupDestination.addressLine1 || !pickupDestination.city || !pickupDestination.state || !pickupDestination.zipCode) {
-                        toast.error('Please fill in all required Destination fields.');
-                        return;
+                      if (!provideDestinationLater) {
+                        if (!pickupDestination.fullName || !pickupDestination.phone || !pickupDestination.addressLine1 || !pickupDestination.city || !pickupDestination.state || !pickupDestination.zipCode) {
+                          toast.error('Please fill in all required Destination fields or check "I will provide details later".');
+                          return;
+                        }
                       }
                       setActivePickupStep(4);
                       window.scrollTo(0, 0);
@@ -716,45 +835,96 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
               </div>
               <div className="border-t border-slate-200/50 pt-2.5">
                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Destination Address</p>
-                <p className="text-xs font-black text-[#0A142F] mt-0.5">{pickupDestination.fullName} ({pickupDestination.phone})</p>
-                <p className="text-[10px] text-slate-500 font-medium leading-tight mt-0.5">{pickupDestination.addressLine1}, {pickupDestination.city}, {pickupDestination.state} {pickupDestination.zipCode}, {pickupDestination.country}</p>
+                {provideDestinationLater ? (
+                  <div className="mt-1">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black border border-amber-200">
+                      <Clock size={11} /> Provide Details Later
+                    </span>
+                    <p className="text-[10px] text-slate-500 font-medium leading-tight mt-1">Address will be collected prior to warehouse dispatch. Country: {pickupDestination.country || 'USA'}</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs font-black text-[#0A142F] mt-0.5">{pickupDestination.fullName} ({pickupDestination.phone})</p>
+                    <p className="text-[10px] text-slate-500 font-medium leading-tight mt-0.5">{pickupDestination.addressLine1}, {pickupDestination.city}, {pickupDestination.state} {pickupDestination.zipCode}, {pickupDestination.country}</p>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Online Store Purchases Consolidation (Optional) */}
-            <div className="p-3.5 rounded-xl border border-indigo-150 bg-indigo-50/20 text-left space-y-2.5">
-              <div className="flex items-center gap-2">
-                <ShoppingBag className="text-indigo-600" size={15} />
-                <span className="text-[9.5px] font-black uppercase text-[#091535] tracking-wider">Consolidate Store Purchases? (Optional)</span>
+            {/* Store Items Option Card */}
+            <div className="p-4 rounded-2xl border bg-gradient-to-br from-amber-50/80 via-orange-50/30 to-white border-amber-200/80 text-left space-y-3">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-900 text-[10px] font-black uppercase tracking-wider border border-amber-500/30">
+                  <Store size={12} className="text-amber-700" /> Store Option *
+                </div>
+                <h4 className="text-xs sm:text-sm font-black text-[#0A142F] leading-snug">
+                  Would you like to add items from the Jiffex Store to your shipment?
+                </h4>
+                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                  You can add return gifts and other store items, and we'll ship them together with the items we collect from your home.
+                </p>
               </div>
-              <p className="text-[9.5px] text-slate-500 font-medium leading-relaxed">
-                Would you like to combine online orders with your home pickup items to save up to 60% on shipping?
-              </p>
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <button 
-                  type="button"
-                  onClick={() => setPickupConsolidationOption('shop_and_ship')}
-                  className={`p-2.5 rounded-xl border-2 transition-all text-center flex flex-col items-center justify-center gap-0.5 bg-white shadow-sm cursor-pointer ${
-                    pickupConsolidationOption === 'shop_and_ship' 
-                      ? 'border-indigo-600 bg-indigo-50' 
-                      : 'border-slate-100 hover:border-slate-200'
+
+              <div className="space-y-2 pt-1">
+                {/* Option 1 */}
+                <div
+                  onClick={() => {
+                    if (setPickupConsolidationOption) {
+                      setPickupConsolidationOption('shop_and_ship');
+                    }
+                  }}
+                  className={`p-3 rounded-xl border-2 transition-all cursor-pointer space-y-2 ${
+                    pickupConsolidationOption === 'shop_and_ship'
+                      ? 'bg-amber-50 border-amber-500 shadow-xs'
+                      : 'bg-white border-slate-200'
                   }`}
                 >
-                  <span className="text-[10px] font-black text-slate-900 leading-none">Yes, Consolidate</span>
-                  <span className="text-[7.5px] font-bold text-indigo-600 uppercase tracking-wider mt-0.5">Save on Shipping</span>
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setPickupConsolidationOption('pickup_only')}
-                  className={`p-2.5 rounded-xl border-2 transition-all text-center flex flex-col items-center justify-center gap-0.5 bg-white shadow-sm cursor-pointer ${
-                    pickupConsolidationOption === 'pickup_only' 
-                      ? 'border-indigo-600 bg-indigo-50' 
-                      : 'border-slate-100 hover:border-slate-200'
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        pickupConsolidationOption === 'shop_and_ship' ? 'border-amber-600 bg-amber-500' : 'border-slate-300 bg-white'
+                      }`}>
+                        {pickupConsolidationOption === 'shop_and_ship' && <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
+                      </div>
+                      <span className="font-extrabold text-xs text-[#0A142F]">
+                        Yes, I'd like to shop from Jiffex Store 🛒
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                    I'll choose items from the store to add to my shipment.
+                  </p>
+                </div>
+
+                {/* Option 2 */}
+                <div
+                  onClick={() => {
+                    if (setPickupConsolidationOption) {
+                      setPickupConsolidationOption('pickup_only');
+                    }
+                  }}
+                  className={`p-3 rounded-xl border-2 transition-all cursor-pointer space-y-1 ${
+                    pickupConsolidationOption === 'pickup_only'
+                      ? 'bg-amber-50 border-amber-500 shadow-xs'
+                      : 'bg-white border-slate-200'
                   }`}
                 >
-                  <span className="text-[10px] font-black text-slate-900 leading-none">No, Direct Only</span>
-                  <span className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Home Collected</span>
-                </button>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        pickupConsolidationOption === 'pickup_only' ? 'border-amber-600 bg-amber-500' : 'border-slate-300 bg-white'
+                      }`}>
+                        {pickupConsolidationOption === 'pickup_only' && <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
+                      </div>
+                      <span className="font-extrabold text-[11px] text-[#0A142F]">
+                        No, just pick up my items 🏠
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                    I'll only be shipping the items collected from my home.
+                  </p>
+                </div>
               </div>
             </div>
 

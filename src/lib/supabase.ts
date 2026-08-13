@@ -90,15 +90,17 @@ export let supabase: any;
 try {
   supabase = createClient(finalUrl, finalKey, {
     auth: {
-      persistSession: false,
+      persistSession: true,
+      autoRefreshToken: true,
       detectSessionInUrl: false
     }
   });
 } catch (e) {
-  console.warn('[Supabase] Initial client creation failed, creating fallback client with storage disabled:', e);
+  console.warn('[Supabase] Initial client creation failed, creating fallback client:', e);
   supabase = createClient(finalUrl, finalKey, {
     auth: {
-      persistSession: false,
+      persistSession: true,
+      autoRefreshToken: true,
       detectSessionInUrl: false
     }
   });
@@ -118,7 +120,8 @@ export function updateSupabaseConfig(url: string, key: string) {
     try {
       supabase = createClient(url, key, {
         auth: {
-          persistSession: false,
+          persistSession: true,
+          autoRefreshToken: true,
           detectSessionInUrl: false
         }
       });

@@ -3,18 +3,18 @@ import { motion } from 'motion/react';
 import { MessageSquare, Mail, HelpCircle, ArrowRight, Phone, Sparkles } from 'lucide-react';
 
 const SupportSection = () => {
-  const triggerVoiceCall = () => {
-    window.dispatchEvent(new CustomEvent('jiffex-start-vapi-call'));
+  const handleSupportContact = () => {
+    window.location.href = 'mailto:support@jiffex.com';
   };
 
   return (
     <div className="space-y-12 pb-24">
       <div className="text-center space-y-4">
         <h3 className="text-4xl font-black text-slate-900 tracking-tight">Need Help?</h3>
-        <p className="text-slate-500 max-w-2xl mx-auto">Our support team and AI Voice Agent are here to ensure your shipping experience is flawless.</p>
+        <p className="text-slate-500 max-w-2xl mx-auto">Our support team and AI Assistants are here to ensure your shipping experience is flawless.</p>
       </div>
 
-      {/* Featured Vapi AI Voice Call Banner */}
+      {/* Featured AI Voice Assistant Banner */}
       <motion.div
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -25,24 +25,24 @@ const SupportSection = () => {
         <div className="space-y-3 max-w-xl text-left relative z-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-black uppercase tracking-wider">
             <Sparkles size={14} className="animate-spin text-indigo-400" />
-            <span>24/7 AI Voice Assistant</span>
+            <span>24/7 AI Voice & Phone Support</span>
           </div>
           <h4 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-            Speak Directly with our AI Agent
+            Instant Support & Automated Logistics
           </h4>
           <p className="text-sm text-slate-300 leading-relaxed font-medium">
-            Have questions about your rates, scheduled home pickup, shop & ship consolidation, or tracking? Call our Vapi-powered voice assistant right in your browser.
+            Have questions about your rates, scheduled home pickup, shop & ship consolidation, or tracking? Contact our support team for instant assistance.
           </p>
         </div>
 
         <button
-          onClick={triggerVoiceCall}
+          onClick={handleSupportContact}
           className="relative z-10 shrink-0 px-8 py-5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-black text-base rounded-2xl shadow-xl shadow-indigo-500/25 flex items-center gap-3 transition-all active:scale-95 cursor-pointer group"
         >
           <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:rotate-12 transition-transform">
-            <Phone size={18} />
+            <Mail size={18} />
           </div>
-          <span>Start Voice Call Now</span>
+          <span>Contact Support</span>
         </button>
       </motion.div>
 
@@ -50,12 +50,12 @@ const SupportSection = () => {
         {[
           { 
             icon: MessageSquare, 
-            title: "Live Chat", 
-            desc: "Chat with our logistics experts for immediate assistance with your shipment.",
-            action: "Start Chat",
+            title: "Live Support", 
+            desc: "Reach out to our logistics team for immediate assistance with your shipment.",
+            action: "Contact Us",
             color: "text-indigo-600",
             bg: "bg-indigo-50",
-            onClick: triggerVoiceCall
+            onClick: handleSupportContact
           },
           { 
             icon: Mail, 

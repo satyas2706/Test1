@@ -5,8 +5,8 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Logo } from './components/Logo';
-import { VapiVoiceAssistant } from './components/VapiVoiceAssistant';
 import { MobilePickupFlow } from './components/MobilePickupFlow';
+import { SinglePagePickupForm } from './components/SinglePagePickupForm';
 import { MobileDropOffFlow } from './components/MobileDropOffFlow';
 import { 
   Package, 
@@ -4456,6 +4456,64 @@ const loadRazorpayScript = (): Promise<boolean> => {
   });
 };
 
+const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 1 day (24 hours)
+
+interface StoredActiveSession {
+  email: string;
+  name?: string;
+  loginTime: number;
+  expiresAt: number;
+}
+
+const getValidActiveSession = (): StoredActiveSession | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem('jiffex_active_user_session');
+    if (!raw) return null;
+    const sessionData: StoredActiveSession = JSON.parse(raw);
+    if (!sessionData || !sessionData.expiresAt || !sessionData.email) {
+      localStorage.removeItem('jiffex_active_user_session');
+      return null;
+    }
+    if (Date.now() > sessionData.expiresAt) {
+      console.log('[Session Manager] Session expired (> 1 day old). Clearing active session.');
+      localStorage.removeItem('jiffex_active_user_session');
+      return null;
+    }
+    return sessionData;
+  } catch (e) {
+    console.error('[Session Manager] Error parsing active user session:', e);
+    localStorage.removeItem('jiffex_active_user_session');
+    return null;
+  }
+};
+
+const saveActiveSession = (email: string, name?: string) => {
+  if (typeof window === 'undefined' || !email) return;
+  try {
+    const now = Date.now();
+    const sessionData: StoredActiveSession = {
+      email: email.trim(),
+      name: (name || '').trim(),
+      loginTime: now,
+      expiresAt: now + SESSION_EXPIRY_MS // 1 day duration
+    };
+    localStorage.setItem('jiffex_active_user_session', JSON.stringify(sessionData));
+    console.log('[Session Manager] Saved 1-day user session valid until:', new Date(sessionData.expiresAt).toLocaleString());
+  } catch (e) {
+    console.error('[Session Manager] Failed to save active user session:', e);
+  }
+};
+
+const clearActiveSession = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem('jiffex_active_user_session');
+  } catch (e) {
+    console.error('[Session Manager] Failed to clear active session:', e);
+  }
+};
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -4706,17 +4764,27 @@ export default function App() {
     zipCode: '',
     country: COUNTRIES[0],
   });
+  const [provideDestinationLater, setProvideDestinationLater] = useState(false);
   const [pickupLanguage, setPickupLanguage] = useState('English');
-  const [pickupItemType, setPickupItemType] = useState('Everyday Items');
+  const [pickupItemType, setPickupItemType] = useState('Packages & Parcels');
   const [pickupVehicleType, setPickupVehicleType] = useState('Less than 5 kg');
   const [pickupSpecialInstructions, setPickupSpecialInstructions] = useState('');
   const [pickupCategory, setPickupCategory] = useState('Personal Effects');
   const [pickupEstimatedWeight, setPickupEstimatedWeight] = useState('Less than 5 kg');
   const [savePickupToProfile, setSavePickupToProfile] = useState(true);
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; checked: boolean }>({ connected: false, checked: false });
-  const [isGuestMode, setIsGuestMode] = useState(false);
-  const [guestEmail, setGuestEmail] = useState('');
-  const [guestName, setGuestName] = useState('');
+  const [isGuestMode, setIsGuestMode] = useState<boolean>(() => {
+    const s = getValidActiveSession();
+    return !!s;
+  });
+  const [guestEmail, setGuestEmail] = useState<string>(() => {
+    const s = getValidActiveSession();
+    return s ? s.email : '';
+  });
+  const [guestName, setGuestName] = useState<string>(() => {
+    const s = getValidActiveSession();
+    return s ? (s.name || '') : '';
+  });
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginTriggerSource, setLoginTriggerSource] = useState<'default' | 'checkout' | 'pickup'>('default');
   const [showPickupConfirmModal, setShowPickupConfirmModal] = useState(false);
@@ -4888,7 +4956,7 @@ export default function App() {
       }
     }
   }, [currentUser, orders, userAppointments]);
-  const [categories, setCategories] = useState(['Pooja', 'Return Gifts', 'Decorative']);
+  const [categories, setCategories] = useState(['Pooja', 'Return Gifts', 'Decorative', 'Sweets & Snacks', 'Spices & Gourmet']);
   const [tickets, setTickets] = useState<Ticket[]>([
     {
       id: 'TKT-8821',
@@ -5371,13 +5439,13 @@ export default function App() {
       createdAt: new Date().toISOString(),
       shippingDate: selectedPickupDate,
       destination: {
-        fullName: pickupDestination.fullName || resolvedName,
+        fullName: provideDestinationLater ? (pickupDestination.fullName || 'To Be Provided Later') : (pickupDestination.fullName || resolvedName),
         email: pickupDestination.email || resolvedEmail,
         phone: pickupDestination.phone || pickupPhone,
-        addressLine1: pickupDestination.addressLine1 || '',
-        city: pickupDestination.city || '',
-        state: pickupDestination.state || '',
-        zipCode: pickupDestination.zipCode || '',
+        addressLine1: provideDestinationLater ? 'Address details will be provided later (Pending Dispatch)' : (pickupDestination.addressLine1 || ''),
+        city: provideDestinationLater ? 'To Be Provided Later' : (pickupDestination.city || ''),
+        state: provideDestinationLater ? 'To Be Provided Later' : (pickupDestination.state || ''),
+        zipCode: provideDestinationLater ? '000000' : (pickupDestination.zipCode || ''),
         country: pickupDestination.country || COUNTRIES[0]
       },
       pickupAddress: {
@@ -5397,7 +5465,8 @@ export default function App() {
       languagePreference: pickupLanguage,
       itemType: pickupItemType,
       vehicleType: pickupVehicleType,
-      customerName: resolvedName
+      customerName: resolvedName,
+      pickupConsolidationOption: pickupConsolidationOption
     } as any;
     
     setOrders([...orders, newOrder]);
@@ -5509,6 +5578,7 @@ export default function App() {
       zipCode: '',
       country: COUNTRIES[0],
     });
+    setProvideDestinationLater(false);
     setPickupLanguage('English');
     setPickupSpecialInstructions('');
     setPickupCategory('Personal Effects');
@@ -5609,6 +5679,9 @@ export default function App() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
+        if (session?.user?.email) {
+          saveActiveSession(session.user.email, session.user.user_metadata?.full_name);
+        }
         setAuthLoading(false);
       } catch (err) {
         console.warn('Supabase auth getSession error:', err);
@@ -5618,6 +5691,9 @@ export default function App() {
       try {
         const { data } = supabase.auth.onAuthStateChange((_event, session) => {
           setSession(session);
+          if (session?.user?.email) {
+            saveActiveSession(session.user.email, session.user.user_metadata?.full_name);
+          }
         });
         subscription = data.subscription;
       } catch (err) {
@@ -5633,6 +5709,22 @@ export default function App() {
       }
     };
   }, []);
+
+  // Periodic check for 1-day session expiration
+  useEffect(() => {
+    const checkSessionExpiry = () => {
+      const activeSession = getValidActiveSession();
+      if ((isGuestMode || session || currentUser) && !activeSession) {
+        console.log('[Session Manager] 1-day session expired while logged in. Logging out.');
+        toast.info('Your 24-hour session has expired. Please log in again.');
+        handleLogout();
+      }
+    };
+
+    checkSessionExpiry();
+    const interval = setInterval(checkSessionExpiry, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, [isGuestMode, session, currentUser]);
 
   // Sync agents database list with Supabase when connected
   useEffect(() => {
@@ -13378,8 +13470,8 @@ export default function App() {
                   </div>
                 ) : mode === 'Pickup' ? (
                   <>
-                    {/* MOBILE ONLY VIEW FOR SCHEDULE PICKUP */}
-                    <div className="block md:hidden">
+                    {/* SCHEDULE PICKUP - ONE PAGE FORM FOR ALL DEVICES */}
+                    <div>
                       <MobilePickupFlow
                         activePickupStep={activePickupStep}
                         setActivePickupStep={setActivePickupStep}
@@ -13402,6 +13494,8 @@ export default function App() {
                         setPickupAddress={setPickupAddress}
                         pickupDestination={pickupDestination}
                         setPickupDestination={setPickupDestination}
+                        provideDestinationLater={provideDestinationLater}
+                        setProvideDestinationLater={setProvideDestinationLater}
                         pickupConsolidationOption={pickupConsolidationOption}
                         setPickupConsolidationOption={setPickupConsolidationOption}
                         shopItemsShippingDestination={shopItemsShippingDestination}
@@ -13412,11 +13506,22 @@ export default function App() {
                         activePickup={activePickup}
                         lastBookingRef={lastBookingRef}
                         navigateTo={navigateTo}
+                        shippingRates={shippingRates}
+                        shippingDiscounts={shippingDiscounts}
+                        pickupVehicleType={pickupVehicleType}
+                        setPickupVehicleType={setPickupVehicleType}
+                        pickupEmail={pickupEmail}
+                        setPickupEmail={setPickupEmail}
+                        pickupSpecialInstructions={pickupSpecialInstructions}
+                        setPickupSpecialInstructions={setPickupSpecialInstructions}
+                        savePickupToProfile={savePickupToProfile}
+                        setSavePickupToProfile={setSavePickupToProfile}
+                        savePickupProfileToDb={savePickupProfileToDb}
                       />
                     </div>
 
-                    {/* LAPTOP/DESKTOP ONLY VIEW (Completely untouched) */}
-                    <div className="hidden md:block space-y-4">
+                    {/* DESKTOP VIEW DISABLED IN FAVOR OF SINGLE PAGE FORM */}
+                    <div className="hidden">
                   {mode === 'Pickup' && activePickupStep !== 5 && (
                     <>
                       {/* Header Section with Progress for Pickup */}
@@ -13429,9 +13534,9 @@ export default function App() {
                         <Truck size={28} />
                       </div>
                       <div>
-                        <h2 className="text-2xl font-black text-deep-blue tracking-tight">Home Pickup</h2>
+                        <h2 className="text-2xl font-black text-deep-blue tracking-tight">Schedule a Home Pickup</h2>
                         <p className="text-sm text-slate-500 font-medium">
-                          {activePickupStep === 5 ? 'Booking Confirmed' : (hasActivePickup && !isSchedulingNewPickup) ? 'Add items to your scheduled pickup' : 'Schedule an agent to collect from your home'}
+                          {activePickupStep === 5 ? 'Booking Confirmed' : (hasActivePickup && !isSchedulingNewPickup) ? 'Add items to your scheduled pickup' : "Tell us what you're shipping, when you'd like pickup, and where we should collect it."}
                         </p>
                       </div>
                     </div>
@@ -14068,111 +14173,165 @@ export default function App() {
                             </div>
                           ) : (
                             <div className="space-y-6">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Name</label>
-                                  <div className="relative">
-                                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                              {/* Option card to provide destination details later */}
+                              <div className="bg-amber-50/80 p-4 rounded-2xl border border-amber-200/90 flex items-center gap-3 transition-all">
+                                <input 
+                                  type="checkbox" 
+                                  id="provide-destination-later-desktop"
+                                  className="w-5 h-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500 cursor-pointer accent-amber-600"
+                                  checked={provideDestinationLater}
+                                  onChange={(e) => {
+                                    const isChecked = e.target.checked;
+                                    setProvideDestinationLater(isChecked);
+                                    if (isChecked) {
+                                      toast.info("You can provide the destination later. We'll contact you before shipping.");
+                                    }
+                                  }}
+                                />
+                                <label htmlFor="provide-destination-later-desktop" className="text-xs font-bold text-slate-800 cursor-pointer select-none">
+                                  I don't know the destination yet
+                                </label>
+                              </div>
+
+                              {provideDestinationLater ? (
+                                <div className="p-5 bg-amber-50/90 border border-amber-200/80 rounded-2xl space-y-3">
+                                  <div className="flex items-center gap-3 text-amber-900">
+                                    <Clock size={20} className="shrink-0 text-amber-600" />
+                                    <p className="text-xs font-bold leading-snug">
+                                      You can provide the destination later. We'll contact you before shipping.
+                                    </p>
+                                  </div>
+                                  
+                                  {/* Expected Destination Country (Optional) */}
+                                  <div className="pt-2 text-left space-y-2 max-w-sm mx-auto">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Expected Destination Country (Optional)</label>
+                                    <div className="relative">
+                                      <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10" size={18} />
+                                      <select 
+                                        className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-white transition-all font-medium text-sm appearance-none cursor-pointer pr-10"
+                                        value={pickupDestination.country}
+                                        onChange={(e) => setPickupDestination({...pickupDestination, country: e.target.value})}
+                                      >
+                                        {COUNTRIES.map(c => (
+                                          <option key={c} value={c}>{c}</option>
+                                        ))}
+                                      </select>
+                                      <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-slate-400">
+                                        <ChevronDown size={18} />
+                                      </div>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 font-medium italic">Selecting country helps us estimate shipping rates for your review.</p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Name</label>
+                                      <div className="relative">
+                                        <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                        <input 
+                                          type="text" 
+                                          className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                          placeholder="Receiver full name"
+                                          value={pickupDestination.fullName}
+                                          onChange={(e) => setPickupDestination({...pickupDestination, fullName: e.target.value})}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Phone</label>
+                                      <div className="relative">
+                                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                        <input 
+                                          type="tel" 
+                                          className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                          placeholder="Receiver contact phone"
+                                          value={pickupDestination.phone}
+                                          onChange={(e) => setPickupDestination({...pickupDestination, phone: e.target.value})}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Email</label>
+                                    <div className="relative">
+                                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                      <input 
+                                        type="email" 
+                                        className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                        placeholder="Receiver email (optional)"
+                                        value={pickupDestination.email}
+                                        onChange={(e) => setPickupDestination({...pickupDestination, email: e.target.value})}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination Address</label>
                                     <input 
                                       type="text" 
-                                      className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                      placeholder="Receiver full name"
-                                      value={pickupDestination.fullName}
-                                      onChange={(e) => setPickupDestination({...pickupDestination, fullName: e.target.value})}
+                                      className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                      placeholder="Street Address, Block, Apartment Info"
+                                      value={pickupDestination.addressLine1}
+                                      onChange={(e) => setPickupDestination({...pickupDestination, addressLine1: e.target.value})}
                                     />
                                   </div>
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Phone</label>
-                                  <div className="relative">
-                                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                    <input 
-                                      type="tel" 
-                                      className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                      placeholder="Receiver contact phone"
-                                      value={pickupDestination.phone}
-                                      onChange={(e) => setPickupDestination({...pickupDestination, phone: e.target.value})}
-                                    />
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div className="space-y-2">
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination City</label>
+                                      <input 
+                                        type="text" 
+                                        className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                        placeholder="Destination City"
+                                        value={pickupDestination.city}
+                                        onChange={(e) => setPickupDestination({...pickupDestination, city: e.target.value})}
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination State</label>
+                                      <input 
+                                        type="text" 
+                                        className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                        placeholder="Destination State"
+                                        value={pickupDestination.state}
+                                        onChange={(e) => setPickupDestination({...pickupDestination, state: e.target.value})}
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">ZIP / Post Code</label>
+                                      <input 
+                                        type="text" 
+                                        className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                        placeholder="ZIP or Postal Code"
+                                        value={pickupDestination.zipCode}
+                                        onChange={(e) => setPickupDestination({...pickupDestination, zipCode: e.target.value})}
+                                      />
+                                    </div>
                                   </div>
-                                </div>
-                              </div>
 
-                              <div className="space-y-2">
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Email</label>
-                                <div className="relative">
-                                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                  <input 
-                                    type="email" 
-                                    className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                    placeholder="Receiver email (optional)"
-                                    value={pickupDestination.email}
-                                    onChange={(e) => setPickupDestination({...pickupDestination, email: e.target.value})}
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="space-y-2">
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination Address</label>
-                                <input 
-                                  type="text" 
-                                  className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                  placeholder="Street Address, Block, Apartment Info"
-                                  value={pickupDestination.addressLine1}
-                                  onChange={(e) => setPickupDestination({...pickupDestination, addressLine1: e.target.value})}
-                                />
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <div className="space-y-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination City</label>
-                                  <input 
-                                    type="text" 
-                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                    placeholder="Destination City"
-                                    value={pickupDestination.city}
-                                    onChange={(e) => setPickupDestination({...pickupDestination, city: e.target.value})}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination State</label>
-                                  <input 
-                                    type="text" 
-                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                    placeholder="Destination State"
-                                    value={pickupDestination.state}
-                                    onChange={(e) => setPickupDestination({...pickupDestination, state: e.target.value})}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">ZIP / Post Code</label>
-                                  <input 
-                                    type="text" 
-                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                    placeholder="ZIP or Postal Code"
-                                    value={pickupDestination.zipCode}
-                                    onChange={(e) => setPickupDestination({...pickupDestination, zipCode: e.target.value})}
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="space-y-2">
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination Country</label>
-                                <div className="relative">
-                                  <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10" size={18} />
-                                  <select 
-                                    className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm appearance-none cursor-pointer pr-10"
-                                    value={pickupDestination.country}
-                                    onChange={(e) => setPickupDestination({...pickupDestination, country: e.target.value})}
-                                  >
-                                    {COUNTRIES.map(c => (
-                                      <option key={c} value={c}>{c}</option>
-                                    ))}
-                                  </select>
-                                  <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-slate-400">
-                                    <ChevronDown size={18} />
+                                  <div className="space-y-2">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination Country</label>
+                                    <div className="relative">
+                                      <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10" size={18} />
+                                      <select 
+                                        className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm appearance-none cursor-pointer pr-10"
+                                        value={pickupDestination.country}
+                                        onChange={(e) => setPickupDestination({...pickupDestination, country: e.target.value})}
+                                      >
+                                        {COUNTRIES.map(c => (
+                                          <option key={c} value={c}>{c}</option>
+                                        ))}
+                                      </select>
+                                      <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-slate-400">
+                                        <ChevronDown size={18} />
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
-                              </div>
+                                </>
+                              )}
                             </div>
                           )}
 
@@ -14231,9 +14390,11 @@ export default function App() {
                                       setPickupDetailsTab('pickup');
                                       return;
                                     }
-                                    if (!pickupDestination.fullName || !pickupDestination.phone || !pickupDestination.addressLine1 || !pickupDestination.city || !pickupDestination.state || !pickupDestination.zipCode) {
-                                      toast.error('Please fill in all required Destination fields');
-                                      return;
+                                    if (!provideDestinationLater) {
+                                      if (!pickupDestination.fullName || !pickupDestination.phone || !pickupDestination.addressLine1 || !pickupDestination.city || !pickupDestination.state || !pickupDestination.zipCode) {
+                                        toast.error('Please fill in all required Destination fields or check "I will provide details later"');
+                                        return;
+                                      }
                                     }
                                     if (savePickupToProfile && currentUser) {
                                       savePickupProfileToDb();
@@ -14298,12 +14459,24 @@ export default function App() {
                                       </div>
                                       <div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Destination Address (To)</p>
-                                        <p className="font-bold text-slate-900 text-xs mt-1 leading-relaxed">
-                                          {pickupDestination.fullName} (+{pickupDestination.phone})<br />
-                                          {pickupDestination.addressLine1}<br />
-                                          {pickupDestination.city}, {pickupDestination.state} - {pickupDestination.zipCode}<br />
-                                          {pickupDestination.country}
-                                        </p>
+                                        {provideDestinationLater ? (
+                                          <div className="mt-1">
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-black border border-amber-200">
+                                              <Clock size={12} /> Provide Details Later
+                                            </span>
+                                            <p className="font-bold text-slate-700 text-xs mt-1.5 leading-relaxed">
+                                              Address will be collected before warehouse dispatch.
+                                              {pickupDestination.country && <span className="block text-[11px] text-slate-500 font-medium mt-0.5">Expected Country: {pickupDestination.country}</span>}
+                                            </p>
+                                          </div>
+                                        ) : (
+                                          <p className="font-bold text-slate-900 text-xs mt-1 leading-relaxed">
+                                            {pickupDestination.fullName} (+{pickupDestination.phone})<br />
+                                            {pickupDestination.addressLine1}<br />
+                                            {pickupDestination.city}, {pickupDestination.state} - {pickupDestination.zipCode}<br />
+                                            {pickupDestination.country}
+                                          </p>
+                                        )}
                                       </div>
                                     </div>
                                     {pickupSpecialInstructions && (
@@ -14752,6 +14925,32 @@ export default function App() {
                             </button>
                           </div>
                         </div>
+
+                        {/* Store Shopping Callout for Shop & Ship Customers */}
+                        {pickupConsolidationOption === 'shop_and_ship' && (
+                          <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-amber-500 via-amber-400 to-orange-400 text-slate-950 shadow-lg border border-amber-300 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+                            <div className="space-y-1.5">
+                              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-950 text-amber-400 text-[10px] font-black uppercase tracking-wider">
+                                <Store size={12} className="text-amber-400" /> Jiffex Store Option Selected
+                              </div>
+                              <h3 className="text-base sm:text-lg font-black text-slate-950 leading-snug">
+                                Complete Your Order by Shopping from Jiffex Store 🛒
+                              </h3>
+                              <p className="text-xs sm:text-sm text-slate-900 font-semibold max-w-xl leading-relaxed">
+                                You opted to shop from Jiffex Store! Browse our store to select return gifts, sweets, snacks, or other items. We'll pack and ship them together with the items collected from your home.
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                navigateTo('store');
+                                window.scrollTo(0, 0);
+                              }}
+                              className="px-6 py-3.5 bg-[#0A142F] hover:bg-slate-800 text-amber-400 font-extrabold text-xs sm:text-sm rounded-2xl shadow-md transition-all active:scale-95 shrink-0 flex items-center justify-center gap-2 cursor-pointer border border-amber-400/30 w-full md:w-auto"
+                            >
+                              Shop Jiffex Store Now <ArrowRight size={16} className="text-amber-400" />
+                            </button>
+                          </div>
+                        )}
 
                         {/* Two Column Grid */}
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -17451,6 +17650,7 @@ export default function App() {
 
   const handleLogout = async () => {
     // 1. Immediately and synchronously clear all local state and items to avoid transition lag or state re-fetching
+    clearActiveSession();
     setItems([]);
     setOrders([]);
     setSession(null);
@@ -18349,6 +18549,7 @@ export default function App() {
                   </p>
                 </div>
                 <Login onSuccess={(email, name) => {
+                  saveActiveSession(email, name);
                   setGuestEmail(email);
                   if (name) setGuestName(name);
                   setIsGuestMode(true);
@@ -18952,29 +19153,6 @@ export default function App() {
       </AnimatePresence>
 
       <Toaster position="top-center" richColors />
-      <VapiVoiceAssistant
-        activeTab={activeTab}
-        setActiveTab={navigateTo}
-        currentUser={currentUser}
-        orders={orders}
-        userAppointments={userAppointments}
-        cartItems={items}
-        storeProducts={storeProducts}
-        addItem={addItem}
-        setItems={setItems}
-        setSelectedOrderForDetails={setSelectedOrderForDetails}
-        setShowLoginModal={setShowLoginModal}
-        api={api}
-        shippingRates={shippingRates}
-        shippingDiscounts={shippingDiscounts}
-        coupons={coupons}
-        qCountry={qCountry}
-        setQCountry={setQCountry}
-        qWeight={qWeight}
-        setQWeight={setQWeight}
-        qMethod={qMethod}
-        setQMethod={setQMethod}
-      />
     </div>
   );
 }

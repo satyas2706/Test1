@@ -597,14 +597,14 @@ app.get("/api/supabase-config", (req, res) => {
 
 const DEFAULT_SHIPPING_SETTINGS = {
   rates: {
-    'USA': 12,
-    'UK': 10,
-    'Canada': 11,
-    'Australia': 13,
-    'UAE': 8,
-    'Germany': 9,
-    'Singapore': 7,
-    'India': 5,
+    'USA': 996,
+    'UK': 830,
+    'Canada': 913,
+    'Australia': 1079,
+    'UAE': 664,
+    'Germany': 747,
+    'Singapore': 581,
+    'India': 415,
   },
   discounts: {
     'USA': 0,
@@ -3485,7 +3485,7 @@ app.post("/api/track-carrier", async (req, res) => {
   }
 });
 
-// API: Vapi endpoint to get shipment status (supports POST /get_shipment_status and /api/get_shipment_status)
+// API: Endpoint to get shipment status (supports POST /get_shipment_status and /api/get_shipment_status)
 const handleGetShipmentStatus = async (req: express.Request, res: express.Response) => {
   try {
     const body = req.body || {};
@@ -3496,7 +3496,7 @@ const handleGetShipmentStatus = async (req: express.Request, res: express.Respon
     let trackingId = (body.trackingId || body.tracking_id || body.trackingNumber || body.tracking_number || args.trackingId || args.tracking_id || args.trackingNumber || args.tracking_number || '').toString().trim();
     let phone = (body.phone || body.phoneNumber || body.phone_number || args.phone || args.phoneNumber || args.number || body.message?.call?.customer?.number || '').toString().trim();
 
-    console.log(`[Vapi get_shipment_status] Request params -> orderId: "${orderId}", trackingId: "${trackingId}", phone: "${phone}"`);
+    console.log(`[get_shipment_status] Request params -> orderId: "${orderId}", trackingId: "${trackingId}", phone: "${phone}"`);
 
     let foundOrder: any = null;
 
@@ -3611,17 +3611,11 @@ const handleGetShipmentStatus = async (req: express.Request, res: express.Respon
 app.post("/get_shipment_status", handleGetShipmentStatus);
 app.post("/api/get_shipment_status", handleGetShipmentStatus);
 
-// API: Vapi endpoint to get shipping quote (supports POST/GET /get_shipping_quote and /api/get_shipping_quote)
+// API: Endpoint to get shipping quote (supports POST/GET /get_shipping_quote and /api/get_shipping_quote)
 const handleGetShippingQuote = async (req: express.Request, res: express.Response) => {
-   console.log("========== VAPI SHIPPING QUOTE ==========");
-  console.log("Method:", req.method);
-  console.log("Headers:", req.headers);
-  console.log("Body:", JSON.stringify(req.body, null, 2));
-  console.log("Query:", JSON.stringify(req.query, null, 2));
+  console.log("========== SHIPPING QUOTE REQUEST ==========");
   try {
     const body = req.method === 'GET' ? req.query : (req.body || {});
-    console.log("Parsed Body:", JSON.stringify(body, null, 2));
-    // Extract parameters flexibly from top-level body/query or nested tool call arguments
     const args = body.arguments || body.message?.toolCalls?.[0]?.function?.arguments || body.message?.call?.customer || {};
     
     let rawCountry = (body.destinationCountry || body.destination_country || body.country || args.destinationCountry || args.destination_country || args.country || 'USA').toString().trim();
@@ -3653,27 +3647,21 @@ const handleGetShippingQuote = async (req: express.Request, res: express.Respons
       normalizedCountry = rawCountry.charAt(0).toUpperCase() + rawCountry.slice(1);
     }
 
-    // Default rate lookup in USD/kg
-    const ratesInUsd: Record<string, number> = {
-      'USA': 12,
-      'UK': 10,
-      'Canada': 11,
-      'Australia': 13,
-      'UAE': 8,
-      'Germany': 9,
-      'Singapore': 7,
-      'India': 5,
-    };
+    // Fetch live rates & discounts from Supabase shipping_settings
+    const settings = await getShippingSettings();
+    const rates = settings.rates || {};
+    const discounts = settings.discounts || {};
 
-    const baseUsdPerKg = ratesInUsd[normalizedCountry] || 12;
+    const rate = Number(rates[normalizedCountry]) || Number(rates['USA']) || 996;
     const isStandard = method.toLowerCase().includes('standard');
     const methodMultiplier = isStandard ? 0.7 : 1.0;
-    
-    // Calculate price in USD and INR (1 USD = 83 INR)
-    const totalUsd = baseUsdPerKg * weight * methodMultiplier;
-    const totalInr = Math.round(totalUsd * 83);
-    
-    const formattedPrice = `₹${totalInr.toLocaleString('en-IN')}`;
+
+    const rawQuote = weight * rate * methodMultiplier;
+    const discountPercent = Number(discounts[normalizedCountry]) || 0;
+    const discountAmount = rawQuote * (discountPercent / 100);
+    const finalPriceInr = Math.max(0, Math.round(rawQuote - discountAmount));
+
+    const formattedPrice = `₹${finalPriceInr.toLocaleString('en-IN')}`;
     const deliveryTime = isStandard ? '10–14 business days' : '5–7 business days';
 
     console.log(`[get_shipping_quote] Country: ${normalizedCountry}, Weight: ${weight}kg, Method: ${method} -> Price: ${formattedPrice}`);
@@ -3684,10 +3672,10 @@ const handleGetShippingQuote = async (req: express.Request, res: express.Respons
       price: formattedPrice,
       deliveryTime: deliveryTime,
       currency: "INR",
-      priceInr: totalInr,
-      priceUsd: parseFloat(totalUsd.toFixed(2)),
+      priceInr: finalPriceInr,
       weightKg: weight,
       method: isStandard ? 'Standard' : 'Express',
+      discountPercent: discountPercent,
       message: `Shipping quote for ${normalizedCountry} (${weight} kg, ${isStandard ? 'Standard' : 'Express'}) is ${formattedPrice} with estimated delivery in ${deliveryTime}.`
     });
   } catch (err: any) {
