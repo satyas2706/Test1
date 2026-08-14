@@ -8,6 +8,8 @@ import { Logo } from './components/Logo';
 import { MobilePickupFlow } from './components/MobilePickupFlow';
 import { SinglePagePickupForm } from './components/SinglePagePickupForm';
 import { MobileDropOffFlow } from './components/MobileDropOffFlow';
+import { RateBand, CountryRateBands } from './types';
+import { DEFAULT_RATE_BANDS, calculateShippingCost } from './utils/shipping';
 import { 
   Package, 
   PackageCheck, 
@@ -162,7 +164,7 @@ const AutoScrollingShopProducts: React.FC<AutoScrollingShopProductsProps> = ({
     
     // Stabilize the list layout by ensuring there's a good volume of items to prevent blank areas
     let baseList = [...storeProducts];
-    while (baseList.length < 8) {
+    while (baseList.length < 10) {
       baseList = [...baseList, ...storeProducts];
     }
     
@@ -173,15 +175,15 @@ const AutoScrollingShopProducts: React.FC<AutoScrollingShopProductsProps> = ({
   const duration = useMemo(() => {
     if (!storeProducts || storeProducts.length === 0) return 20;
     let baseCount = storeProducts.length;
-    while (baseCount < 8) {
+    while (baseCount < 10) {
       baseCount += storeProducts.length;
     }
-    return baseCount * 5.5; // Beautifully natural scroll speed (5.5s per item)
+    return baseCount * 4.5; // Natural smooth scroll speed
   }, [storeProducts]);
 
   if (!storeProducts || storeProducts.length === 0) {
     return (
-      <div className="flex items-center justify-center h-[380px] text-xs text-slate-400">
+      <div className="flex items-center justify-center h-[280px] text-xs text-slate-400">
         Loading products...
       </div>
     );
@@ -189,8 +191,7 @@ const AutoScrollingShopProducts: React.FC<AutoScrollingShopProductsProps> = ({
 
   return (
     <div 
-      className="flex-1 relative overflow-hidden w-full select-none"
-      style={{ height: '360px' }}
+      className="flex-1 relative overflow-hidden w-full select-none min-h-[380px]"
     >
       <style>{`
         @keyframes marqueeVertical {
@@ -210,55 +211,60 @@ const AutoScrollingShopProducts: React.FC<AutoScrollingShopProductsProps> = ({
       `}</style>
 
       {/* Top & Bottom soft fading gradients to merge smoothly into container card */}
-      <div className="absolute top-0 left-0 right-0 h-14 bg-gradient-to-b from-teal-50 via-teal-50/40 to-transparent z-10 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-t from-teal-50 via-teal-50/40 to-transparent z-10 pointer-events-none" />
+      <div className="absolute top-0 left-0 right-0 h-10 bg-gradient-to-b from-teal-50 via-teal-50/40 to-transparent z-10 pointer-events-none" />
+      <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-teal-50 via-teal-50/40 to-transparent z-10 pointer-events-none" />
 
-      <div className="marquee-anim-container flex flex-col gap-3">
+      <div className="marquee-anim-container flex flex-col gap-2.5">
         {doubledProducts.map((product, index) => {
           const cartItem = items.find(i => i.name === product.name && i.source === 'Store');
           return (
             <div 
               key={`${product.id}-${index}`} 
-              className="bg-white/95 border border-slate-100 rounded-2xl p-3 flex flex-col justify-between hover:border-teal-300 hover:shadow-lg hover:shadow-teal-100/45 hover:translate-y-[-1px] transition-all relative group shadow-sm shrink-0"
+              className="bg-white/95 border border-slate-200/80 rounded-2xl p-3 flex items-center justify-between hover:border-teal-400 hover:shadow-md transition-all relative group shadow-xs shrink-0"
             >
-              <div className="flex gap-3">
-                <div className="w-16 h-16 bg-slate-50 rounded-xl overflow-hidden shrink-0 relative border border-slate-100">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-14 h-14 bg-slate-50 rounded-xl overflow-hidden shrink-0 relative border border-slate-100">
                   <img
                     src={product.image}
                     alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-350"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     referrerPolicy="no-referrer"
                   />
                 </div>
-                <div className="min-w-0 flex-1 flex flex-col justify-between py-0.5">
-                  <div>
-                    <span className="text-[8px] text-teal-600 font-extrabold uppercase tracking-wider block leading-none mb-1">{product.category}</span>
-                    <h4 className="text-[11px] font-extrabold text-slate-800 truncate" title={product.name}>
-                      {product.name}
-                    </h4>
-                  </div>
-                  <div className="flex items-center justify-between mt-1">
+                <div className="min-w-0 flex-1 flex flex-col justify-center">
+                  <span className="text-[9px] text-teal-600 font-black uppercase tracking-wider block leading-none mb-0.5">{product.category}</span>
+                  <h4 className="text-xs font-black text-slate-900 truncate" title={product.name}>
+                    {product.name}
+                  </h4>
+                  <div className="flex items-center gap-2 mt-1">
                     <span className="text-xs font-black text-teal-950">
                       ${product.price.toFixed(2)}
                     </span>
-                    <span className="text-[9px] text-slate-400 font-bold">
+                    <span className="text-[10px] text-slate-400 font-bold">
                       {product.weight} kg
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-2.5 pt-2 border-t border-slate-100 flex justify-between items-center">
-                <span className="text-[9px] text-slate-400 font-semibold italic">Consolidated</span>
-                <button
-                  onClick={() => {
-                    addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store');
-                    toast.success(`"${product.name}" added to your cart!`);
-                  }}
-                  className="px-2.5 py-1 bg-teal-50 text-teal-750 hover:bg-teal-650 hover:text-white rounded-md text-[9px] font-black cursor-pointer transition-all flex items-center gap-1 border border-teal-100/40"
-                >
-                  <Plus size={8} /> Add to Cart
-                </button>
+              <div className="shrink-0 ml-2">
+                {cartItem ? (
+                  <button
+                    type="button"
+                    onClick={() => removeStoreItem(product.name)}
+                    className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-black rounded-xl border border-rose-200 flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                  >
+                    Added ✓
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => addItem(product, 'Store')}
+                    className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-black rounded-xl border border-teal-500 flex items-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
+                  >
+                    + Add
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -546,6 +552,8 @@ interface AdminDashboardProps {
   onUpdateOrderItemWeight: (orderId: string, itemId: string, weight: number) => Promise<void>;
   shippingRates?: Record<string, number>;
   setShippingRates?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  shippingRateBands?: CountryRateBands;
+  setShippingRateBands?: React.Dispatch<React.SetStateAction<CountryRateBands>>;
   shippingDiscounts?: Record<string, number>;
   setShippingDiscounts?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }>;
@@ -1299,6 +1307,8 @@ const AdminDashboard = ({
   onUpdateOrderItemWeight,
   shippingRates = SHIPPING_RATES,
   setShippingRates,
+  shippingRateBands = {},
+  setShippingRateBands,
   shippingDiscounts = {},
   setShippingDiscounts,
   coupons = [],
@@ -1356,10 +1366,17 @@ const AdminDashboard = ({
   // Local state to manage shipping rate configuration in the admin panel
   const [editingRates, setEditingRates] = useState<Record<string, string>>({});
   const [editingDiscounts, setEditingDiscounts] = useState<Record<string, string>>({});
+  const [editingRateBands, setEditingRateBands] = useState<CountryRateBands>({});
   const [adminCoupons, setAdminCoupons] = useState<Array<{ code: string; discountPercent: number; isEnabled: boolean }>>([]);
   const [newCouponCode, setNewCouponCode] = useState('');
   const [newCouponPercent, setNewCouponPercent] = useState('');
   const [isSavingShipping, setIsSavingShipping] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (shippingRateBands) {
+      setEditingRateBands(JSON.parse(JSON.stringify(shippingRateBands)));
+    }
+  }, [shippingRateBands]);
 
   useEffect(() => {
     if (coupons) {
@@ -1448,12 +1465,17 @@ const AdminDashboard = ({
       
       const response = await api.updateShippingSettings({
         rates: parsedRates,
+        rateBands: editingRateBands,
         discounts: parsedDiscounts,
         coupons: adminCoupons
       });
       
       if (setShippingRates) {
         setShippingRates(response.rates);
+      }
+      if (setShippingRateBands && response.rateBands) {
+        setShippingRateBands(response.rateBands);
+        setEditingRateBands(response.rateBands);
       }
       if (setShippingDiscounts) {
         setShippingDiscounts(response.discounts);
@@ -3889,7 +3911,7 @@ const AdminDashboard = ({
 
                         <div className="space-y-3">
                           <div className="space-y-1">
-                            <label className="block text-[11px] font-bold text-slate-500">Shipping Rate</label>
+                            <label className="block text-[11px] font-bold text-slate-500">Base Rate (Fallback)</label>
                             <div className="relative">
                               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
                               <input
@@ -3904,7 +3926,7 @@ const AdminDashboard = ({
                                   }));
                                 }}
                                 className="w-full pl-7 pr-12 py-2 text-slate-800 text-sm font-black border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                                placeholder="e.g. 10"
+                                placeholder="e.g. 996"
                                 min="0"
                               />
                               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">/ kg</span>
@@ -3931,6 +3953,122 @@ const AdminDashboard = ({
                                 max="100"
                               />
                               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-rose-500">% OFF</span>
+                            </div>
+                          </div>
+
+                          {/* Weight Rate Bands section */}
+                          <div className="pt-2 border-t border-slate-100 space-y-2">
+                            <div className="flex justify-between items-center">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Weight Bands ({editingRateBands[country]?.length || 0})</label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const existing = editingRateBands[country] || [];
+                                  const lastMax = existing.length > 0 ? existing[existing.length - 1].maxWeight : 0;
+                                  const newBand: RateBand = {
+                                    id: `${country.toLowerCase()}-${Date.now()}`,
+                                    minWeight: lastMax,
+                                    maxWeight: lastMax + 5,
+                                    rate: Number(editingRates[country]) || 800,
+                                  };
+                                  setEditingRateBands(prev => ({
+                                    ...prev,
+                                    [country]: [...(prev[country] || []), newBand]
+                                  }));
+                                }}
+                                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800"
+                              >
+                                + Add Band
+                              </button>
+                            </div>
+
+                            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                              {(editingRateBands[country] || []).map((band, idx) => (
+                                <div key={band.id || idx} className="p-2 bg-slate-50 rounded-xl border border-slate-200/60 text-xs flex flex-col gap-1">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <div className="flex items-center gap-1">
+                                      <input
+                                        type="number"
+                                        step="0.1"
+                                        value={band.minWeight}
+                                        onChange={(e) => {
+                                          const val = parseFloat(e.target.value) || 0;
+                                          setEditingRateBands(prev => {
+                                            const updated = [...(prev[country] || [])];
+                                            updated[idx] = { ...updated[idx], minWeight: val };
+                                            return { ...prev, [country]: updated };
+                                          });
+                                        }}
+                                        className="w-12 py-0.5 px-1 bg-white border border-slate-200 rounded text-[10px] font-bold text-center"
+                                      />
+                                      <span className="text-[10px] text-slate-400">-</span>
+                                      <input
+                                        type="number"
+                                        step="0.1"
+                                        value={band.maxWeight >= 999 ? '999' : band.maxWeight}
+                                        onChange={(e) => {
+                                          const val = parseFloat(e.target.value) || 999;
+                                          setEditingRateBands(prev => {
+                                            const updated = [...(prev[country] || [])];
+                                            updated[idx] = { ...updated[idx], maxWeight: val };
+                                            return { ...prev, [country]: updated };
+                                          });
+                                        }}
+                                        className="w-12 py-0.5 px-1 bg-white border border-slate-200 rounded text-[10px] font-bold text-center"
+                                      />
+                                      <span className="text-[10px] text-slate-400 font-bold">kg</span>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingRateBands(prev => ({
+                                          ...prev,
+                                          [country]: (prev[country] || []).filter((_, i) => i !== idx)
+                                        }));
+                                      }}
+                                      className="text-slate-300 hover:text-rose-500 font-bold text-[10px]"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+
+                                  <div className="flex items-center justify-between gap-1">
+                                    <div className="relative flex-1">
+                                      <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-bold">₹</span>
+                                      <input
+                                        type="number"
+                                        value={band.rate}
+                                        onChange={(e) => {
+                                          const val = parseFloat(e.target.value) || 0;
+                                          setEditingRateBands(prev => {
+                                            const updated = [...(prev[country] || [])];
+                                            updated[idx] = { ...updated[idx], rate: val };
+                                            return { ...prev, [country]: updated };
+                                          });
+                                        }}
+                                        className="w-full pl-4 pr-1 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-black"
+                                      />
+                                    </div>
+                                    <label className="flex items-center gap-1 cursor-pointer text-[9px] font-bold text-slate-500">
+                                      <input
+                                        type="checkbox"
+                                        checked={Boolean(band.isFlat)}
+                                        onChange={(e) => {
+                                          const val = e.target.checked;
+                                          setEditingRateBands(prev => {
+                                            const updated = [...(prev[country] || [])];
+                                            updated[idx] = { ...updated[idx], isFlat: val };
+                                            return { ...prev, [country]: updated };
+                                          });
+                                        }}
+                                        className="w-3 h-3 text-indigo-600 rounded"
+                                      />
+                                      Flat
+                                    </label>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         </div>
@@ -4998,6 +5136,9 @@ export default function App() {
 
   // Shipping setting states
   const [shippingRates, setShippingRates] = useState<Record<string, number>>(SHIPPING_RATES);
+  const [shippingRateBands, setShippingRateBands] = useState<CountryRateBands>(DEFAULT_RATE_BANDS);
+  const [editingRateBands, setEditingRateBands] = useState<CountryRateBands>(DEFAULT_RATE_BANDS);
+  const [activeBandCountry, setActiveBandCountry] = useState<string | null>('USA');
   const [shippingDiscounts, setShippingDiscounts] = useState<Record<string, number>>({});
   const [coupons, setCoupons] = useState<Array<{ code: string; discountPercent: number; isEnabled: boolean }>>([]);
   const [couponCodeInput, setCouponCodeInput] = useState('');
@@ -5009,6 +5150,10 @@ export default function App() {
         const data = await api.getShippingSettings();
         if (data && data.rates) {
           setShippingRates(data.rates);
+        }
+        if (data && data.rateBands) {
+          setShippingRateBands(data.rateBands);
+          setEditingRateBands(data.rateBands);
         }
         if (data && data.discounts) {
           setShippingDiscounts(data.discounts);
@@ -5338,16 +5483,6 @@ export default function App() {
 
     if (pickupPhone.length !== 10 || !/^\d+$/.test(pickupPhone)) {
       toast.error('Contact Number must be exactly 10 digits.');
-      return;
-    }
-
-    if (!pickupConsolidationOption) {
-      setShowPickupConsolidationError(true);
-      toast.warning("Please choose a consolidation preference first: Do you want to shop Indian items from our store?");
-      const element = document.getElementById("pickup-consolidation-prompt-section");
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
       return;
     }
 
@@ -8944,27 +9079,38 @@ export default function App() {
                             </span>
                             <div className="text-xl font-black">
                               ₹{(() => {
-                                const rate = shippingRates[qCountry] || 10;
-                                const methodMultiplier = qMethod === 'Standard' ? 0.7 : 1.0;
-                                const rawQuote = qWeight * rate * methodMultiplier;
-                                const discountPercent = shippingDiscounts[qCountry] || 0;
-                                const discount = rawQuote * (discountPercent / 100);
-                                return Math.max(0, rawQuote - discount).toFixed(2);
+                                const res = calculateShippingCost({
+                                  country: qCountry,
+                                  weightKg: qWeight,
+                                  method: qMethod,
+                                  rates: shippingRates,
+                                  rateBands: shippingRateBands,
+                                  discounts: shippingDiscounts
+                                });
+                                return res.finalPriceInr.toLocaleString('en-IN');
                               })()}
                             </div>
                             {(() => {
-                              const discountPercent = shippingDiscounts[qCountry] || 0;
-                              if (discountPercent > 0) {
-                                const rate = shippingRates[qCountry] || 10;
-                                const methodMultiplier = qMethod === 'Standard' ? 0.7 : 1.0;
-                                const saved = qWeight * rate * methodMultiplier * (discountPercent / 100);
+                              const res = calculateShippingCost({
+                                country: qCountry,
+                                weightKg: qWeight,
+                                method: qMethod,
+                                rates: shippingRates,
+                                rateBands: shippingRateBands,
+                                discounts: shippingDiscounts
+                              });
+                              if (res.discountPercent > 0) {
                                 return (
                                   <div className="text-[7px] font-bold text-rose-300 mt-0.5">
-                                    Discount of {discountPercent}% Applied for {qCountry}! (Save ₹{saved.toFixed(2)})
+                                    Discount of {res.discountPercent}% Applied for {qCountry}! (Save ₹{Math.round(res.discountAmount).toLocaleString('en-IN')}) [Band: {res.appliedBandLabel}]
                                   </div>
                                 );
                               }
-                              return null;
+                              return (
+                                <div className="text-[7px] font-bold text-indigo-200 mt-0.5">
+                                  Band: {res.appliedBandLabel} (₹{res.baseRatePerKg}{res.isFlatRate ? ' flat' : '/kg'})
+                                </div>
+                              );
                             })()}
                             <div className="text-[7px] font-bold text-indigo-200 uppercase tracking-widest mt-1.5 flex items-center gap-1">
                               <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
@@ -9244,27 +9390,38 @@ export default function App() {
                         </span>
                         <div className="text-lg md:text-4xl font-black">
                           ₹{(() => {
-                            const rate = shippingRates[qCountry] || 10;
-                            const methodMultiplier = qMethod === 'Standard' ? 0.7 : 1.0;
-                            const rawQuote = qWeight * rate * methodMultiplier;
-                            const discountPercent = shippingDiscounts[qCountry] || 0;
-                            const discount = rawQuote * (discountPercent / 100);
-                            return Math.max(0, rawQuote - discount).toFixed(2);
+                            const res = calculateShippingCost({
+                              country: qCountry,
+                              weightKg: qWeight,
+                              method: qMethod,
+                              rates: shippingRates,
+                              rateBands: shippingRateBands,
+                              discounts: shippingDiscounts
+                            });
+                            return res.finalPriceInr.toLocaleString('en-IN');
                           })()}
                         </div>
                         {(() => {
-                          const discountPercent = shippingDiscounts[qCountry] || 0;
-                          if (discountPercent > 0) {
-                            const rate = shippingRates[qCountry] || 10;
-                            const methodMultiplier = qMethod === 'Standard' ? 0.7 : 1.0;
-                            const saved = qWeight * rate * methodMultiplier * (discountPercent / 100);
+                          const res = calculateShippingCost({
+                            country: qCountry,
+                            weightKg: qWeight,
+                            method: qMethod,
+                            rates: shippingRates,
+                            rateBands: shippingRateBands,
+                            discounts: shippingDiscounts
+                          });
+                          if (res.discountPercent > 0) {
                             return (
                               <div className="text-[7px] md:text-xs font-bold text-rose-300 mt-0.5">
-                                Discount of {discountPercent}% Applied for {qCountry}! (Save ₹{saved.toFixed(2)})
+                                Discount of {res.discountPercent}% Applied for {qCountry}! (Save ₹{Math.round(res.discountAmount).toLocaleString('en-IN')}) [Band: {res.appliedBandLabel}]
                               </div>
                             );
                           }
-                          return null;
+                          return (
+                            <div className="text-[7px] md:text-xs font-bold text-indigo-200 mt-0.5">
+                              Band: {res.appliedBandLabel} (₹{res.baseRatePerKg}{res.isFlatRate ? ' flat' : '/kg'})
+                            </div>
+                          );
                         })()}
                         <div className="text-[7px] md:text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-1 flex items-center gap-1">
                           <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
@@ -9491,16 +9648,36 @@ export default function App() {
     }
     
     // Merge orders and appointments for a complete view
-    const customerOrders = orders.filter(o => 
-      (o.customerId || o.customer_id) === currentUser.id ||
-      (currentUser.email && currentUser.email !== 'guest@example.com' && (o.destination?.email || (o as any).email)?.toLowerCase() === currentUser.email.toLowerCase()) ||
-      (currentUser.phone && (o.destination?.phone || (o as any).phone) === currentUser.phone)
-    );
-    const customerAppointments = appointments.filter(a => 
-      (a.customerId || a.customer_id) === currentUser.id ||
-      (currentUser.email && currentUser.email !== 'guest@example.com' && (a.email || (a as any).destination?.email)?.toLowerCase() === currentUser.email.toLowerCase()) ||
-      (currentUser.phone && (a.phone || (a as any).destination?.phone) === currentUser.phone)
-    );
+    const userCleanEmail = (currentUser.email || '').toLowerCase().trim();
+    const userGuestId = userCleanEmail ? `guest_${userCleanEmail.replace(/[^a-z0-9]/g, '_')}` : '';
+    const userPhone = (currentUser.phone || '').trim();
+    const userId = String(currentUser.id || '').toLowerCase().trim();
+
+    const customerOrders = orders.filter(o => {
+      const cId = String(o.customerId || o.customer_id || o.destination?.customerId || o.destination?.customer_id || '').toLowerCase().trim();
+      const isIdMatch = cId === userId || (userGuestId && cId === userGuestId) || (userCleanEmail && cId === userCleanEmail);
+
+      const destEmail = String(o.destination?.email || (o as any).email || (o as any).customerEmail || '').toLowerCase().trim();
+      const isEmailMatch = userCleanEmail && userCleanEmail !== 'guest@example.com' && destEmail === userCleanEmail;
+
+      const destPhone = String(o.destination?.phone || (o as any).phone || (o as any).customerPhone || '').trim();
+      const isPhoneMatch = userPhone && destPhone === userPhone;
+
+      return isIdMatch || isEmailMatch || isPhoneMatch;
+    });
+
+    const customerAppointments = appointments.filter(a => {
+      const cId = String(a.customerId || a.customer_id || (a as any).destination?.customerId || (a as any).destination?.customer_id || '').toLowerCase().trim();
+      const isIdMatch = cId === userId || (userGuestId && cId === userGuestId) || (userCleanEmail && cId === userCleanEmail);
+
+      const destEmail = String(a.email || (a as any).destination?.email || (a as any).customerEmail || '').toLowerCase().trim();
+      const isEmailMatch = userCleanEmail && userCleanEmail !== 'guest@example.com' && destEmail === userCleanEmail;
+
+      const destPhone = String(a.phone || (a as any).destination?.phone || (a as any).customerPhone || '').trim();
+      const isPhoneMatch = userPhone && destPhone === userPhone;
+
+      return isIdMatch || isEmailMatch || isPhoneMatch;
+    });
     
     // Combine them, avoiding duplicates by ID
     const unifiedHistory = [...customerOrders];
@@ -13507,6 +13684,7 @@ export default function App() {
                         lastBookingRef={lastBookingRef}
                         navigateTo={navigateTo}
                         shippingRates={shippingRates}
+                        shippingRateBands={shippingRateBands}
                         shippingDiscounts={shippingDiscounts}
                         pickupVehicleType={pickupVehicleType}
                         setPickupVehicleType={setPickupVehicleType}
@@ -14877,7 +15055,7 @@ export default function App() {
                          animate={{ opacity: 1, scale: 1 }}
                          exit={{ opacity: 0, scale: 0.95 }}
                          transition={{ duration: 0.3 }}
-                         className="p-6 md:p-8 rounded-[2.5rem] bg-gradient-to-b from-white via-slate-50/10 to-white border border-slate-150/70 shadow-[0_25px_60px_-15px_rgba(99,102,241,0.03)] text-left space-y-6 sm:space-y-8"
+                         className="p-4 sm:p-5 md:p-6 rounded-[2rem] bg-gradient-to-b from-white via-slate-50/10 to-white border border-slate-150/70 shadow-xl text-left space-y-4 sm:space-y-5"
                        >
                         {/* Compact Header Alert */}
                         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b border-slate-100">
@@ -14885,28 +15063,28 @@ export default function App() {
                             <motion.div 
                               initial={{ scale: 0 }}
                               animate={{ scale: 1 }}
-                              className="w-14 h-14 bg-gradient-to-tr from-teal-500 via-emerald-500 to-emerald-400 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/25"
+                              className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-tr from-teal-500 via-emerald-500 to-emerald-400 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/25"
                             >
-                              <CheckCircle2 size={28} />
+                              <CheckCircle2 size={32} />
                             </motion.div>
                             <div>
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-teal-50 text-teal-800 rounded-full text-[9px] uppercase font-black tracking-wider leading-none border border-teal-100/50">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 rounded-full text-[10px] uppercase font-black tracking-wider leading-none border border-emerald-200">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                                 Confirmed & Active
                               </span>
-                              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1.5 leading-none">
-                                Thanks, {activePickup?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 'there'}!
+                              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1.5 leading-tight">
+                                Thanks, {activePickup?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 'there'}! 🎉
                               </h2>
-                              <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+                              <p className="text-sm text-slate-600 font-semibold mt-0.5">
                                 Your home pickup is scheduled. Our agent is on the way!
                               </p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-3 bg-gradient-to-br from-indigo-50/45 to-indigo-50/15 p-3 rounded-2xl border border-indigo-100/40 shrink-0 self-stretch sm:self-auto justify-between md:justify-start">
+                          <div className="flex items-center gap-3 bg-gradient-to-br from-indigo-50/80 via-indigo-50/40 to-white p-3.5 rounded-2xl border border-indigo-200/60 shrink-0 self-stretch sm:self-auto justify-between md:justify-start shadow-xs">
                             <div>
-                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">Booking reference</p>
-                              <p className="text-base font-black text-indigo-750 tracking-widest mt-1 font-mono">
+                              <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest leading-none">Booking Reference</p>
+                              <p className="text-lg sm:text-xl font-black text-indigo-900 tracking-wider mt-1 font-mono">
                                 {lastBookingRef || activePickup?.id}
                               </p>
                             </div>
@@ -14918,10 +15096,10 @@ export default function App() {
                                   toast.success('Reference ID copied to clipboard!');
                                 }
                               }}
-                              className="p-2.5 bg-white text-indigo-600 hover:text-white hover:bg-indigo-600 rounded-xl border border-indigo-100/50 transition-all shadow-sm cursor-pointer"
+                              className="p-2.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl transition-all shadow-sm cursor-pointer"
                               title="Copy Reference"
                             >
-                              <Copy size={12} />
+                              <Copy size={14} />
                             </button>
                           </div>
                         </div>
@@ -14958,94 +15136,104 @@ export default function App() {
                           {/* 📋 GUIDES, EXPECTATIONS & DOCUMENTS (Left Column) */}
                           <div className="lg:col-span-8 space-y-6">
                             
-                            {/* What to Expect Timeline (Horizontal, from left to right) */}
-                            <div className="bg-gradient-to-b from-indigo-50/30 to-indigo-50/10 border border-indigo-100/20 rounded-3xl p-6 space-y-5">
-                              <div className="flex items-center gap-2">
-                                <div className="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-indigo-100/50">
+                            {/* What to Expect Timeline (Horizontal, evenly aligned with no trailing empty space) */}
+                            <div className="bg-gradient-to-b from-indigo-50/30 to-indigo-50/10 border border-indigo-100/30 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-indigo-200">
                                   <Clock size={18} />
                                 </div>
-                                <h4 className="text-base font-black text-indigo-950 uppercase tracking-wider">What to Expect</h4>
+                                <h4 className="text-sm sm:text-base font-black text-indigo-950 uppercase tracking-wider">What to Expect</h4>
                               </div>
                               
-                              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 relative">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3.5">
                                 {[
-                                  { title: "1. Agent Call", desc: "Agent calls 30m before arrival.", active: true },
-                                  { title: "2. Pickup & Weighing", desc: "Instant quote given on-site.", active: true },
-                                  { title: "3. Secure Sorting", desc: "Packed safely at warehouse.", active: false },
-                                  { title: "4. Global Delivery", desc: "Pay online to dispatch package.", active: false }
-                                ].map((step, i) => (
-                                  <div key={i} className="relative p-4 bg-white/95 border border-slate-100/80 rounded-2xl flex flex-col justify-between shadow-sm hover:border-indigo-100/40 hover:shadow-md transition-all">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${
-                                        step.active 
-                                          ? 'bg-gradient-to-tr from-teal-400 to-emerald-500 border-teal-100/50 shadow shadow-emerald-500/10' 
-                                          : 'bg-white border-slate-200'
-                                      }`} />
-                                      <p className="font-extrabold text-xs text-slate-800 leading-none">{step.title}</p>
+                                  { step: "Step 1", title: "Agent Call", desc: "Agent calls 30m before arrival.", active: true },
+                                  { step: "Step 2", title: "Pickup & Weighing", desc: "Instant quote given on-site.", active: true },
+                                  { step: "Step 3", title: "Secure Sorting", desc: "Packed safely at warehouse.", active: false },
+                                  { step: "Step 4", title: "Global Delivery", desc: "Pay online to dispatch package.", active: false }
+                                ].map((item, i) => (
+                                  <div key={i} className="p-4 bg-white/95 border border-slate-200/80 rounded-2xl flex flex-col justify-between shadow-xs hover:border-indigo-200 hover:shadow-md transition-all">
+                                    <div>
+                                      <div className="flex items-center justify-between gap-2 mb-2">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 font-mono bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100/50">
+                                          {item.step}
+                                        </span>
+                                        <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${
+                                          item.active 
+                                            ? 'bg-gradient-to-tr from-teal-400 to-emerald-500 border-teal-200 shadow-xs shadow-emerald-500/20' 
+                                            : 'bg-white border-slate-300'
+                                        }`} />
+                                      </div>
+                                      <p className="font-black text-sm text-slate-900 leading-snug">{item.title}</p>
                                     </div>
-                                    <p className="text-xs text-slate-500 font-medium leading-relaxed">{step.desc}</p>
+                                    <p className="text-xs text-slate-600 font-medium leading-relaxed mt-2">{item.desc}</p>
                                   </div>
                                 ))}
                               </div>
                             </div>
 
-                            {/* Documents Required & Prohibited Items Side-by-Side (Below What to expect) */}
+                            {/* Documents Required & Prohibited Items Side-by-Side (Zoomed in items) */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                               
                               {/* Documents Required */}
-                              <div className="bg-gradient-to-b from-sky-50/30 to-sky-50/10 border border-sky-100/20 rounded-3xl p-6 space-y-5">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-10 h-10 bg-gradient-to-tr from-sky-500 to-sky-450 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-sky-500/10">
-                                    <FileText size={18} />
-                                  </div>
-                                  <h4 className="text-base font-black text-sky-950 uppercase tracking-wider">Documents Required</h4>
-                                </div>
-                                
-                                <div className="space-y-4">
-                                  {[
-                                    { title: "ID Proof Copy", desc: "Aadhar, Passport or Driving License Copy" },
-                                    { title: "Itemized Declaration", desc: "Simple list of contents & quantities" },
-                                    { title: "Value Statement", desc: "Bills/Invoices for any luxurious brand garments" }
-                                  ].map((doc, i) => (
-                                    <div key={i} className="flex gap-4 p-4 rounded-2xl bg-white/95 border border-slate-100/60 shadow-sm hover:border-sky-100/50 hover:shadow-md transition-all">
-                                      <div className="w-6 h-6 rounded-full bg-sky-50 text-sky-650 flex items-center justify-center shrink-0 border border-sky-100/30">
-                                        <ShieldCheck size={14} />
-                                      </div>
-                                      <div className="text-xs">
-                                        <p className="font-extrabold text-sm text-slate-800 leading-snug">{doc.title}</p>
-                                        <p className="text-xs text-slate-500 mt-1 font-medium leading-relaxed">{doc.desc}</p>
-                                      </div>
+                              <div className="bg-gradient-to-b from-sky-50/40 to-sky-50/10 border border-sky-100/40 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm flex flex-col justify-between">
+                                <div>
+                                  <div className="flex items-center gap-2.5 mb-4">
+                                    <div className="w-9 h-9 bg-gradient-to-tr from-sky-600 to-sky-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-sky-200">
+                                      <FileText size={18} />
                                     </div>
-                                  ))}
+                                    <h4 className="text-sm sm:text-base font-black text-sky-950 uppercase tracking-wider">Documents Required</h4>
+                                  </div>
+                                  
+                                  <div className="space-y-3">
+                                    {[
+                                      { title: "ID Proof Copy", desc: "Aadhar, Passport or Driving License Copy" },
+                                      { title: "Itemized Declaration", desc: "Simple list of contents & quantities" },
+                                      { title: "Value Statement", desc: "Bills/Invoices for branded or valuable garments" },
+                                      { title: "Receiver Address Info", desc: "Full overseas address with zip code & contact number" }
+                                    ].map((doc, i) => (
+                                      <div key={i} className="flex items-start gap-3.5 p-3.5 sm:p-4 rounded-2xl bg-white/95 border border-slate-200/80 shadow-xs hover:border-sky-300 hover:shadow-md transition-all">
+                                        <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200/60 mt-0.5">
+                                          <ShieldCheck size={18} />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="font-black text-sm sm:text-[15px] text-slate-900 leading-snug">{doc.title}</p>
+                                          <p className="text-xs sm:text-[13px] text-slate-600 mt-0.5 font-medium leading-relaxed">{doc.desc}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
 
                               {/* Prohibited Items */}
-                              <div className="bg-gradient-to-b from-rose-50/25 to-rose-50/10 border border-rose-100/20 rounded-3xl p-6 space-y-5">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-10 h-10 bg-gradient-to-tr from-rose-500 to-rose-450 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-rose-500/10">
-                                    <AlertTriangle size={18} />
-                                  </div>
-                                  <h4 className="text-base font-black text-rose-950 uppercase tracking-wider">Prohibited Items</h4>
-                                </div>
-                                
-                                <div className="space-y-4">
-                                  {[
-                                    { title: "Aerosols & Perfumes", desc: "Body sprays, deodorants, or inflammable liquids" },
-                                    { title: "Cash & Jewellery", desc: "Currency notes, solid raw gold, silver bullion" },
-                                    { title: "Perishables", desc: "Open/homemade liquid curries, raw dairy products" },
-                                    { title: "Hazardous Materials", desc: "Ammunition, loose lithium batteries, explosive fuel" }
-                                  ].map((item, i) => (
-                                    <div key={i} className="flex gap-4 p-4 bg-white/95 border border-rose-100/15 rounded-2xl shadow-sm hover:border-rose-100/30 hover:shadow-md transition-all">
-                                      <div className="w-6 h-6 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100/30">
-                                        <XCircle size={14} />
-                                      </div>
-                                      <div className="text-xs">
-                                        <p className="font-black text-sm text-rose-950 leading-snug">{item.title}</p>
-                                        <p className="text-xs text-slate-500 mt-1 leading-relaxed font-semibold">{item.desc}</p>
-                                      </div>
+                              <div className="bg-gradient-to-b from-rose-50/30 to-rose-50/10 border border-rose-100/40 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm flex flex-col justify-between">
+                                <div>
+                                  <div className="flex items-center gap-2.5 mb-4">
+                                    <div className="w-9 h-9 bg-gradient-to-tr from-rose-600 to-rose-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-rose-200">
+                                      <AlertTriangle size={18} />
                                     </div>
-                                  ))}
+                                    <h4 className="text-sm sm:text-base font-black text-rose-950 uppercase tracking-wider">Prohibited Items</h4>
+                                  </div>
+                                  
+                                  <div className="space-y-3">
+                                    {[
+                                      { title: "Aerosols & Perfumes", desc: "Body sprays, deodorants, or inflammable liquids" },
+                                      { title: "Cash & Jewellery", desc: "Currency notes, solid raw gold, silver bullion" },
+                                      { title: "Perishables & Liquids", desc: "Open/homemade liquid curries, raw dairy products" },
+                                      { title: "Hazardous Materials", desc: "Ammunition, loose lithium batteries, explosive fuel" }
+                                    ].map((item, i) => (
+                                      <div key={i} className="flex items-start gap-3.5 p-3.5 sm:p-4 bg-white/95 border border-slate-200/80 rounded-2xl shadow-xs hover:border-rose-300 hover:shadow-md transition-all">
+                                        <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 border border-rose-200/60 mt-0.5">
+                                          <XCircle size={18} />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="font-black text-sm sm:text-[15px] text-rose-950 leading-snug">{item.title}</p>
+                                          <p className="text-xs sm:text-[13px] text-slate-600 mt-0.5 leading-relaxed font-medium">{item.desc}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
 
@@ -15084,7 +15272,7 @@ export default function App() {
                           
                           {/* 🛍️ CONSOLIDATED JIFFEX STORE SHOPPING INTEGRATION (Right Column - Scrollable) */}
                           <div className="lg:col-span-4 space-y-4">
-                            <div className="bg-gradient-to-br from-teal-50 via-teal-50/30 to-indigo-50/20 rounded-[2.5rem] border border-teal-500/15 p-5 sm:p-6 space-y-4 flex flex-col justify-between max-h-[660px] h-[660px] shadow-xl relative overflow-hidden backdrop-blur-sm">
+                            <div className="bg-gradient-to-br from-teal-50 via-teal-50/30 to-indigo-50/20 rounded-[2.5rem] border border-teal-500/15 p-5 sm:p-6 space-y-4 flex flex-col justify-between h-full min-h-[580px] max-h-[680px] shadow-xl relative overflow-hidden backdrop-blur-sm">
                               
                               <div className="space-y-3 flex-1 flex flex-col min-h-0">
                                 <div className="flex items-center justify-between gap-4 shrink-0">

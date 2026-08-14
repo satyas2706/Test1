@@ -1,3 +1,5 @@
+import React from 'react';
+
 export type UserRole = 'admin' | 'agent' | 'customer' | 'customer_service' | 'webmaster';
 
 export interface User {
@@ -167,4 +169,46 @@ export interface RefundRequest {
   reason: string;
   status: 'Pending Approval' | 'Approved' | 'Refunded' | 'Rejected';
   requestedAt: string;
+}
+
+export interface RateBand {
+  id: string;
+  minWeight: number;
+  maxWeight: number;
+  rate: number;
+  isFlat?: boolean;
+}
+
+export type CountryRateBands = Record<string, RateBand[]>;
+
+export interface AdminDashboardProps {
+  currentUser?: any;
+  orders?: any[];
+  appointments?: any[];
+  onAssignAgent?: (appointmentId: string, agentId: string) => void;
+  agents?: any[];
+  setAgents?: React.Dispatch<React.SetStateAction<any[]>>;
+  categories?: string[];
+  setCategories?: React.Dispatch<React.SetStateAction<string[]>>;
+  adminTab?: string;
+  setAdminTab?: (tab: string) => void;
+  storeProducts?: any[];
+  setStoreProducts?: React.Dispatch<React.SetStateAction<any[]>>;
+  setOrders?: React.Dispatch<React.SetStateAction<any[]>>;
+  setItems?: React.Dispatch<React.SetStateAction<any[]>>;
+  refundRequests?: any[];
+  setRefundRequests?: React.Dispatch<React.SetStateAction<any[]>>;
+  isWebmaster?: boolean;
+  onUpdateOrderItemStatus?: (orderId: string, itemIndex: number, newStatus: string) => void;
+  onUpdateOrderItemWeight?: (orderId: string, itemIndex: number, newWeightKg: number) => void;
+  shippingRates?: Record<string, number>;
+  setShippingRates?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  shippingRateBands?: CountryRateBands;
+  setShippingRateBands?: React.Dispatch<React.SetStateAction<CountryRateBands>>;
+  shippingDiscounts?: Record<string, number>;
+  setShippingDiscounts?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }>;
+  setCoupons?: React.Dispatch<React.SetStateAction<Array<{ code: string; discountPercent: number; isEnabled: boolean }>>>;
+  isAutoAssignAgentEnabled?: boolean;
+  setIsAutoAssignAgentEnabled?: React.Dispatch<React.SetStateAction<boolean>>;
 }

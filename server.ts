@@ -595,6 +595,65 @@ app.get("/api/supabase-config", (req, res) => {
   });
 });
 
+const DEFAULT_RATE_BANDS: Record<string, Array<{ id: string; minWeight: number; maxWeight: number; rate: number; isFlat?: boolean }>> = {
+  'USA': [
+    { id: 'usa-1', minWeight: 0, maxWeight: 0.5, rate: 1150 },
+    { id: 'usa-2', minWeight: 0.5, maxWeight: 2, rate: 996 },
+    { id: 'usa-3', minWeight: 2, maxWeight: 5, rate: 920 },
+    { id: 'usa-4', minWeight: 5, maxWeight: 10, rate: 850 },
+    { id: 'usa-5', minWeight: 10, maxWeight: 999, rate: 780 },
+  ],
+  'UK': [
+    { id: 'uk-1', minWeight: 0, maxWeight: 0.5, rate: 980 },
+    { id: 'uk-2', minWeight: 0.5, maxWeight: 2, rate: 830 },
+    { id: 'uk-3', minWeight: 2, maxWeight: 5, rate: 760 },
+    { id: 'uk-4', minWeight: 5, maxWeight: 10, rate: 700 },
+    { id: 'uk-5', minWeight: 10, maxWeight: 999, rate: 640 },
+  ],
+  'Canada': [
+    { id: 'can-1', minWeight: 0, maxWeight: 0.5, rate: 1080 },
+    { id: 'can-2', minWeight: 0.5, maxWeight: 2, rate: 913 },
+    { id: 'can-3', minWeight: 2, maxWeight: 5, rate: 840 },
+    { id: 'can-4', minWeight: 5, maxWeight: 10, rate: 780 },
+    { id: 'can-5', minWeight: 10, maxWeight: 999, rate: 720 },
+  ],
+  'Australia': [
+    { id: 'aus-1', minWeight: 0, maxWeight: 0.5, rate: 1250 },
+    { id: 'aus-2', minWeight: 0.5, maxWeight: 2, rate: 1079 },
+    { id: 'aus-3', minWeight: 2, maxWeight: 5, rate: 990 },
+    { id: 'aus-4', minWeight: 5, maxWeight: 10, rate: 910 },
+    { id: 'aus-5', minWeight: 10, maxWeight: 999, rate: 840 },
+  ],
+  'UAE': [
+    { id: 'uae-1', minWeight: 0, maxWeight: 0.5, rate: 780 },
+    { id: 'uae-2', minWeight: 0.5, maxWeight: 2, rate: 664 },
+    { id: 'uae-3', minWeight: 2, maxWeight: 5, rate: 600 },
+    { id: 'uae-4', minWeight: 5, maxWeight: 10, rate: 550 },
+    { id: 'uae-5', minWeight: 10, maxWeight: 999, rate: 500 },
+  ],
+  'Germany': [
+    { id: 'ger-1', minWeight: 0, maxWeight: 0.5, rate: 890 },
+    { id: 'ger-2', minWeight: 0.5, maxWeight: 2, rate: 747 },
+    { id: 'ger-3', minWeight: 2, maxWeight: 5, rate: 680 },
+    { id: 'ger-4', minWeight: 5, maxWeight: 10, rate: 620 },
+    { id: 'ger-5', minWeight: 10, maxWeight: 999, rate: 570 },
+  ],
+  'Singapore': [
+    { id: 'sg-1', minWeight: 0, maxWeight: 0.5, rate: 700 },
+    { id: 'sg-2', minWeight: 0.5, maxWeight: 2, rate: 581 },
+    { id: 'sg-3', minWeight: 2, maxWeight: 5, rate: 520 },
+    { id: 'sg-4', minWeight: 5, maxWeight: 10, rate: 470 },
+    { id: 'sg-5', minWeight: 10, maxWeight: 999, rate: 420 },
+  ],
+  'India': [
+    { id: 'ind-1', minWeight: 0, maxWeight: 0.5, rate: 500 },
+    { id: 'ind-2', minWeight: 0.5, maxWeight: 2, rate: 415 },
+    { id: 'ind-3', minWeight: 2, maxWeight: 5, rate: 360 },
+    { id: 'ind-4', minWeight: 5, maxWeight: 10, rate: 320 },
+    { id: 'ind-5', minWeight: 10, maxWeight: 999, rate: 280 },
+  ],
+};
+
 const DEFAULT_SHIPPING_SETTINGS = {
   rates: {
     'USA': 996,
@@ -606,6 +665,7 @@ const DEFAULT_SHIPPING_SETTINGS = {
     'Singapore': 581,
     'India': 415,
   },
+  rateBands: DEFAULT_RATE_BANDS,
   discounts: {
     'USA': 0,
     'UK': 0,
@@ -628,8 +688,11 @@ const getShippingSettings = async () => {
         .maybeSingle();
 
       if (!error && data) {
+        const rates = data.rates || DEFAULT_SHIPPING_SETTINGS.rates;
+        const rateBands = data.rate_bands || data.rateBands || rates?._rateBands || DEFAULT_SHIPPING_SETTINGS.rateBands;
         return {
-          rates: data.rates || DEFAULT_SHIPPING_SETTINGS.rates,
+          rates,
+          rateBands,
           discounts: data.discounts || DEFAULT_SHIPPING_SETTINGS.discounts,
           coupons: data.coupons || [
             { code: "SHIP5", discountPercent: 5, isEnabled: true },
@@ -657,11 +720,13 @@ const getShippingSettings = async () => {
 const saveShippingSettings = async (settings: any) => {
   if (supabase) {
     try {
+      // Package _rateBands into rates object as fallback for database compatibility
+      const ratesPayload = { ...settings.rates, _rateBands: settings.rateBands };
       const { error } = await supabase
         .from('shipping_settings')
         .upsert({
           id: 'global',
-          rates: settings.rates,
+          rates: ratesPayload,
           discounts: settings.discounts,
           coupons: settings.coupons,
           updated_at: new Date().toISOString()
@@ -686,11 +751,14 @@ app.get("/api/settings/shipping", async (req, res) => {
 });
 
 app.post("/api/settings/shipping", async (req, res) => {
-  const { rates, discounts, coupons } = req.body;
+  const { rates, rateBands, discounts, coupons } = req.body;
   const current = await getShippingSettings();
   
   if (rates) {
     current.rates = { ...current.rates, ...rates };
+  }
+  if (rateBands) {
+    current.rateBands = { ...current.rateBands, ...rateBands };
   }
   if (discounts) {
     // Make sure we sanitize incoming values to numbers
@@ -2917,10 +2985,18 @@ app.get("/api/orders/:customerId", async (req, res) => {
   const { customerId } = req.params;
   const { email, phone } = req.query;
 
+  const idsToFetch = [customerId];
+  if (email) {
+    const cleanEmail = String(email).toLowerCase().trim();
+    const guestId = `guest_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+    if (!idsToFetch.includes(guestId)) idsToFetch.push(guestId);
+    if (!idsToFetch.includes(cleanEmail)) idsToFetch.push(cleanEmail);
+  }
+
   if (!supabase) {
     const userOrders = memOrders.filter(o => {
       const cId = o.customer_id || o.customerId || o.destination?.customerId || o.destination?.customer_id;
-      const isIdMatch = String(cId) === String(customerId);
+      const isIdMatch = idsToFetch.some(id => String(cId).toLowerCase() === String(id).toLowerCase());
       
       const destEmail = o.destination?.email || o.email || "";
       const isEmailMatch = email && destEmail && String(destEmail).toLowerCase() === String(email).toLowerCase();
@@ -2930,63 +3006,64 @@ app.get("/api/orders/:customerId", async (req, res) => {
 
       return isIdMatch || isEmailMatch || isPhoneMatch;
     });
-    return res.json(userOrders.map(transformDbOrder));
+    return res.json(deduplicateOrders(userOrders.map(transformDbOrder)));
   }
 
   try {
-    const idsToFetch = [customerId];
-    if (email) {
-      const guestId = `guest_${String(email).toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-      if (guestId !== customerId) {
-        idsToFetch.push(guestId);
-      }
-    }
-
     const query = supabase
       .from('orders')
       .select('*')
       .in('customer_id', idsToFetch)
       .order('created_at', { ascending: false });
 
-    const { data, error } = await queryWithTimeout(query, 2000);
+    const { data, error } = await queryWithTimeout(query, 5000);
     if (error) throw error;
     
-    let mergedOrders = data || [];
+    let mergedOrders = [...(data || [])];
 
-    // Also fetch orders matching destination email/phone to capture standard guest orders
+    // Also fetch orders matching destination email if available
     if (email) {
-      const emailQuery = supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200);
-      
-      const { data: emailData, error: emailError } = await queryWithTimeout(emailQuery, 2000);
-      if (!emailError && emailData) {
-        const emailLower = String(email).toLowerCase();
-        emailData.forEach((o: any) => {
-          let dest = o.destination;
-          if (typeof dest === 'string') {
-            try { dest = JSON.parse(dest); } catch(e) { dest = {}; }
-          }
-          const destEmail = dest?.email || "";
-          const destPhone = dest?.phone || "";
-          const matchesEmail = destEmail && destEmail.toLowerCase() === emailLower;
-          const matchesPhone = phone && destPhone && String(destPhone) === String(phone);
-          
-          if (matchesEmail || matchesPhone) {
+      try {
+        const emailLower = String(email).toLowerCase().trim();
+        const { data: emailData } = await supabase
+          .from('orders')
+          .select('*')
+          .ilike('destination->>email', emailLower)
+          .order('created_at', { ascending: false })
+          .limit(100);
+        
+        if (emailData && Array.isArray(emailData)) {
+          emailData.forEach((o: any) => {
             if (!mergedOrders.some((existing: any) => existing.id === o.id)) {
               mergedOrders.push(o);
             }
-          }
-        });
+          });
+        }
+      } catch (e) {
+        // Non-blocking secondary lookup
       }
     }
+
+    // Merge in-memory orders matching user
+    memOrders.forEach((o: any) => {
+      const cId = o.customer_id || o.customerId || o.destination?.customerId || o.destination?.customer_id;
+      const isIdMatch = idsToFetch.some(id => String(cId).toLowerCase() === String(id).toLowerCase());
+      const destEmail = o.destination?.email || o.email || "";
+      const isEmailMatch = email && destEmail && String(destEmail).toLowerCase() === String(email).toLowerCase();
+      const destPhone = o.destination?.phone || o.phone || "";
+      const isPhoneMatch = phone && destPhone && String(destPhone) === String(phone);
+
+      if (isIdMatch || isEmailMatch || isPhoneMatch) {
+        if (!mergedOrders.some((existing: any) => existing.id === o.id)) {
+          mergedOrders.push(o);
+        }
+      }
+    });
 
     const transformed = mergedOrders.map(transformDbOrder);
     res.json(deduplicateOrders(transformed));
   } catch (err: any) {
-    console.log(`Serving filtered orders layout for user: ${customerId}`);
+    console.log(`Serving filtered orders fallback for user: ${customerId}`);
     
     // Return filtered orders from local cache & memory
     const mergedSet = new Map();
@@ -2996,7 +3073,7 @@ app.get("/api/orders/:customerId", async (req, res) => {
     const fallback = Array.from(mergedSet.values())
       .filter((o: any) => {
         const cId = o.customer_id || o.customerId || o.destination?.customerId || o.destination?.customer_id;
-        const isIdMatch = String(cId) === String(customerId);
+        const isIdMatch = idsToFetch.some(id => String(cId).toLowerCase() === String(id).toLowerCase());
         
         const destEmail = o.destination?.email || o.email || "";
         const isEmailMatch = email && destEmail && String(destEmail).toLowerCase() === String(email).toLowerCase();
@@ -3647,16 +3724,35 @@ const handleGetShippingQuote = async (req: express.Request, res: express.Respons
       normalizedCountry = rawCountry.charAt(0).toUpperCase() + rawCountry.slice(1);
     }
 
-    // Fetch live rates & discounts from Supabase shipping_settings
+    // Fetch live rates, rateBands & discounts from Supabase shipping_settings
     const settings = await getShippingSettings();
     const rates = settings.rates || {};
+    const rateBands = settings.rateBands || DEFAULT_RATE_BANDS;
     const discounts = settings.discounts || {};
 
-    const rate = Number(rates[normalizedCountry]) || Number(rates['USA']) || 996;
+    const countryBands = rateBands[normalizedCountry] || DEFAULT_RATE_BANDS[normalizedCountry] || DEFAULT_RATE_BANDS['USA'];
+    let baseRate = Number(rates[normalizedCountry]) || Number(rates['USA']) || 996;
+    let isFlatRate = false;
+    let appliedBandLabel = 'Base Rate';
+
+    if (countryBands && countryBands.length > 0) {
+      const sorted = [...countryBands].sort((a: any, b: any) => Number(a.minWeight) - Number(b.minWeight));
+      const matched = sorted.find((b: any) => weight >= Number(b.minWeight) && weight <= Number(b.maxWeight))
+        || (weight > Number(sorted[sorted.length - 1].maxWeight) ? sorted[sorted.length - 1] : sorted[0]);
+
+      if (matched) {
+        baseRate = Number(matched.rate) || baseRate;
+        isFlatRate = Boolean(matched.isFlat);
+        appliedBandLabel = Number(matched.maxWeight) >= 999 
+          ? `${matched.minWeight}+ kg` 
+          : `${matched.minWeight}–${matched.maxWeight} kg`;
+      }
+    }
+
     const isStandard = method.toLowerCase().includes('standard');
     const methodMultiplier = isStandard ? 0.7 : 1.0;
 
-    const rawQuote = weight * rate * methodMultiplier;
+    const rawQuote = isFlatRate ? baseRate * methodMultiplier : weight * baseRate * methodMultiplier;
     const discountPercent = Number(discounts[normalizedCountry]) || 0;
     const discountAmount = rawQuote * (discountPercent / 100);
     const finalPriceInr = Math.max(0, Math.round(rawQuote - discountAmount));
@@ -3664,7 +3760,7 @@ const handleGetShippingQuote = async (req: express.Request, res: express.Respons
     const formattedPrice = `₹${finalPriceInr.toLocaleString('en-IN')}`;
     const deliveryTime = isStandard ? '10–14 business days' : '5–7 business days';
 
-    console.log(`[get_shipping_quote] Country: ${normalizedCountry}, Weight: ${weight}kg, Method: ${method} -> Price: ${formattedPrice}`);
+    console.log(`[get_shipping_quote] Country: ${normalizedCountry}, Weight: ${weight}kg, Band: ${appliedBandLabel}, Method: ${method} -> Price: ${formattedPrice}`);
 
     return res.json({
       country: normalizedCountry,
@@ -3674,9 +3770,10 @@ const handleGetShippingQuote = async (req: express.Request, res: express.Respons
       currency: "INR",
       priceInr: finalPriceInr,
       weightKg: weight,
+      appliedBand: appliedBandLabel,
       method: isStandard ? 'Standard' : 'Express',
       discountPercent: discountPercent,
-      message: `Shipping quote for ${normalizedCountry} (${weight} kg, ${isStandard ? 'Standard' : 'Express'}) is ${formattedPrice} with estimated delivery in ${deliveryTime}.`
+      message: `Shipping quote for ${normalizedCountry} (${weight} kg [band: ${appliedBandLabel}], ${isStandard ? 'Standard' : 'Express'}) is ${formattedPrice} with estimated delivery in ${deliveryTime}.`
     });
   } catch (err: any) {
     console.error("[get_shipping_quote ERROR]:", err.message);

@@ -444,10 +444,10 @@ export const api = {
         if (userId !== 'all') {
           const idsToCheck = [userId];
           if (email) {
-            const guestId = `guest_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-            if (guestId !== userId) {
-              idsToCheck.push(guestId);
-            }
+            const cleanEmail = email.toLowerCase().trim();
+            const guestId = `guest_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
+            if (!idsToCheck.includes(guestId)) idsToCheck.push(guestId);
+            if (!idsToCheck.includes(cleanEmail)) idsToCheck.push(cleanEmail);
           }
           query = query.in('customer_id', idsToCheck);
         }
@@ -837,7 +837,7 @@ export const api = {
     return dbToItem({ id: itemId, weight });
   },
 
-  async getShippingSettings(): Promise<{ rates: Record<string, number>; discounts: Record<string, number>; coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }> }> {
+  async getShippingSettings(): Promise<{ rates: Record<string, number>; rateBands?: Record<string, any[]>; discounts: Record<string, number>; coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }> }> {
     try {
       const response = await fetch(`${API_URL}/api/settings/shipping`);
       if (response.ok) {
@@ -851,8 +851,11 @@ export const api = {
       try {
         const { data, error } = await supabase.from('shipping_settings').select('*').eq('id', 'global').maybeSingle();
         if (!error && data) {
+          const parsedRates = typeof data.rates === 'string' ? JSON.parse(data.rates) : data.rates;
+          const parsedRateBands = data.rate_bands || data.rateBands || (parsedRates && parsedRates._rateBands);
           return {
-            rates: typeof data.rates === 'string' ? JSON.parse(data.rates) : data.rates,
+            rates: parsedRates,
+            rateBands: typeof parsedRateBands === 'string' ? JSON.parse(parsedRateBands) : parsedRateBands,
             discounts: typeof data.discounts === 'string' ? JSON.parse(data.discounts) : data.discounts,
             coupons: typeof data.coupons === 'string' ? JSON.parse(data.coupons) : data.coupons
           };
@@ -863,7 +866,7 @@ export const api = {
     }
 
     return {
-      rates: { 'USA': 12, 'UK': 10, 'Canada': 11, 'Australia': 13, 'UAE': 8, 'Germany': 9, 'Singapore': 7, 'India': 5 },
+      rates: { 'USA': 996, 'UK': 830, 'Canada': 913, 'Australia': 1079, 'UAE': 664, 'Germany': 747, 'Singapore': 581, 'India': 415 },
       discounts: { 'USA': 0, 'UK': 0, 'Canada': 0, 'Australia': 0, 'UAE': 0, 'Germany': 0 },
       coupons: [
         { code: "SHIP5", discountPercent: 5, isEnabled: true },
@@ -872,7 +875,7 @@ export const api = {
     };
   },
 
-  async updateShippingSettings(updates: { rates?: Record<string, number>; discounts?: Record<string, number>; coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }> }): Promise<{ rates: Record<string, number>; discounts: Record<string, number>; coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }> }> {
+  async updateShippingSettings(updates: { rates?: Record<string, number>; rateBands?: Record<string, any[]>; discounts?: Record<string, number>; coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }> }): Promise<{ rates: Record<string, number>; rateBands?: Record<string, any[]>; discounts: Record<string, number>; coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }> }> {
     try {
       const response = await fetch(`${API_URL}/api/settings/shipping`, {
         method: 'POST',
@@ -888,13 +891,19 @@ export const api = {
 
     if (isSupabaseConfigured) {
       try {
+        const ratesWithBands = updates.rates ? { ...updates.rates, _rateBands: updates.rateBands } : undefined;
         const { data, error } = await supabase.from('shipping_settings').upsert({
           id: 'global',
-          ...updates
+          rates: ratesWithBands || updates.rates,
+          discounts: updates.discounts,
+          coupons: updates.coupons
         }).select().single();
         if (!error && data) {
+          const parsedRates = typeof data.rates === 'string' ? JSON.parse(data.rates) : data.rates;
+          const parsedRateBands = data.rate_bands || data.rateBands || (parsedRates && parsedRates._rateBands);
           return {
-            rates: typeof data.rates === 'string' ? JSON.parse(data.rates) : data.rates,
+            rates: parsedRates,
+            rateBands: typeof parsedRateBands === 'string' ? JSON.parse(parsedRateBands) : parsedRateBands,
             discounts: typeof data.discounts === 'string' ? JSON.parse(data.discounts) : data.discounts,
             coupons: typeof data.coupons === 'string' ? JSON.parse(data.coupons) : data.coupons
           };
@@ -905,7 +914,8 @@ export const api = {
     }
 
     return {
-      rates: updates.rates || { 'USA': 12, 'UK': 10, 'Canada': 11, 'Australia': 13, 'UAE': 8, 'Germany': 9, 'Singapore': 7, 'India': 5 },
+      rates: updates.rates || { 'USA': 996, 'UK': 830, 'Canada': 913, 'Australia': 1079, 'UAE': 664, 'Germany': 747, 'Singapore': 581, 'India': 415 },
+      rateBands: updates.rateBands,
       discounts: updates.discounts || { 'USA': 0, 'UK': 0, 'Canada': 0, 'Australia': 0, 'UAE': 0, 'Germany': 0 },
       coupons: updates.coupons || [{ code: "SHIP5", discountPercent: 5, isEnabled: true }]
     };

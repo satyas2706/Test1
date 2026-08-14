@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SinglePagePickupForm } from './SinglePagePickupForm';
+import { ShopIndianProductsCarousel } from './ShopIndianProductsCarousel';
 
 interface MobilePickupFlowProps {
   activePickupStep: number;
@@ -851,83 +852,6 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
               </div>
             </div>
 
-            {/* Store Items Option Card */}
-            <div className="p-4 rounded-2xl border bg-gradient-to-br from-amber-50/80 via-orange-50/30 to-white border-amber-200/80 text-left space-y-3">
-              <div className="space-y-1">
-                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-900 text-[10px] font-black uppercase tracking-wider border border-amber-500/30">
-                  <Store size={12} className="text-amber-700" /> Store Option *
-                </div>
-                <h4 className="text-xs sm:text-sm font-black text-[#0A142F] leading-snug">
-                  Would you like to add items from the Jiffex Store to your shipment?
-                </h4>
-                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
-                  You can add return gifts and other store items, and we'll ship them together with the items we collect from your home.
-                </p>
-              </div>
-
-              <div className="space-y-2 pt-1">
-                {/* Option 1 */}
-                <div
-                  onClick={() => {
-                    if (setPickupConsolidationOption) {
-                      setPickupConsolidationOption('shop_and_ship');
-                    }
-                  }}
-                  className={`p-3 rounded-xl border-2 transition-all cursor-pointer space-y-2 ${
-                    pickupConsolidationOption === 'shop_and_ship'
-                      ? 'bg-amber-50 border-amber-500 shadow-xs'
-                      : 'bg-white border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        pickupConsolidationOption === 'shop_and_ship' ? 'border-amber-600 bg-amber-500' : 'border-slate-300 bg-white'
-                      }`}>
-                        {pickupConsolidationOption === 'shop_and_ship' && <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
-                      </div>
-                      <span className="font-extrabold text-xs text-[#0A142F]">
-                        Yes, I'd like to shop from Jiffex Store 🛒
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
-                    I'll choose items from the store to add to my shipment.
-                  </p>
-                </div>
-
-                {/* Option 2 */}
-                <div
-                  onClick={() => {
-                    if (setPickupConsolidationOption) {
-                      setPickupConsolidationOption('pickup_only');
-                    }
-                  }}
-                  className={`p-3 rounded-xl border-2 transition-all cursor-pointer space-y-1 ${
-                    pickupConsolidationOption === 'pickup_only'
-                      ? 'bg-amber-50 border-amber-500 shadow-xs'
-                      : 'bg-white border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        pickupConsolidationOption === 'pickup_only' ? 'border-amber-600 bg-amber-500' : 'border-slate-300 bg-white'
-                      }`}>
-                        {pickupConsolidationOption === 'pickup_only' && <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
-                      </div>
-                      <span className="font-extrabold text-[11px] text-[#0A142F]">
-                        No, just pick up my items 🏠
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-                    I'll only be shipping the items collected from my home.
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* Shop Items Shipping Destination Option */}
             {(pickupConsolidationOption === 'shop_and_ship' || hasShopItems) && (
               <div className="p-3.5 rounded-xl border-2 border-indigo-200 bg-indigo-50/40 text-left space-y-2.5 shadow-sm">
@@ -1031,30 +955,30 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
 
         {/* Step 5: Done (Confirmed) */}
         {activePickupStep === 5 && (
-          <div className="space-y-6 text-left">
+          <div className="space-y-5 text-left">
             {/* Confirmation Card */}
-            <div className="bg-[#ecfdf5] border border-[#a7f3d0]/40 p-4 rounded-2xl flex flex-col gap-4 shadow-sm relative overflow-hidden">
+            <div className="bg-[#ecfdf5] border border-[#a7f3d0] p-4 rounded-2xl flex flex-col gap-3.5 shadow-sm relative overflow-hidden">
               <div className="flex items-start gap-3.5 z-10">
-                <div className="w-11 h-11 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-200">
-                  <CheckCircle2 size={24} />
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-200">
+                  <CheckCircle2 size={28} />
                 </div>
                 <div>
-                  <span className="inline-block text-[9px] font-extrabold text-emerald-700 tracking-wider bg-emerald-100 px-2 py-0.5 rounded-full mb-1">
+                  <span className="inline-block text-[9px] font-black text-emerald-800 tracking-wider bg-emerald-100/90 border border-emerald-200 px-2.5 py-0.5 rounded-full mb-1">
                     CONFIRMED & ACTIVE
                   </span>
-                  <h2 className="text-sm font-black text-slate-900 leading-tight">
-                    Thanks, {activePickup?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 's'}!
+                  <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                    Thanks, {activePickup?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 'there'}! 🎉
                   </h2>
-                  <p className="text-[10px] text-slate-500 font-semibold leading-normal mt-1">
+                  <p className="text-xs text-slate-600 font-semibold leading-normal mt-0.5">
                     Your home pickup is scheduled. Our agent is on the way!
                   </p>
                 </div>
               </div>
               
-              <div className="bg-white border border-slate-100 p-3 rounded-xl flex items-center justify-between gap-3 shrink-0 shadow-sm">
+              <div className="bg-white border border-slate-200/80 p-3 rounded-xl flex items-center justify-between gap-3 shrink-0 shadow-xs">
                 <div className="text-left">
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">BOOKING REFERENCE</p>
-                  <p className="text-xs font-black text-[#091535] tracking-wide mt-1.5 font-mono">
+                  <p className="text-[9px] font-black text-indigo-900 uppercase tracking-widest leading-none">BOOKING REFERENCE</p>
+                  <p className="text-sm font-black text-[#091535] tracking-wider mt-1 font-mono">
                     {lastBookingRef || activePickup?.id || 'PH-00072'}
                   </p>
                 </div>
@@ -1066,12 +990,36 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                       toast.success('Reference ID copied to clipboard!');
                     }
                   }}
-                  className="p-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-all shrink-0 cursor-pointer"
+                  className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all shrink-0 cursor-pointer shadow-xs"
                 >
-                  <Copy size={13} className="stroke-[2.5]" />
+                  <Copy size={14} className="stroke-[2.5]" />
                 </button>
               </div>
             </div>
+
+            {/* Store Shopping Callout for Shop & Ship Customers */}
+            {pickupConsolidationOption === 'shop_and_ship' && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-orange-400 text-slate-950 shadow-md border border-amber-300 space-y-2 text-left">
+                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-950 text-amber-400 text-[9px] font-black uppercase tracking-wider">
+                  <Store size={11} className="text-amber-400" /> Jiffex Store Option Selected
+                </div>
+                <h4 className="text-xs font-black text-slate-950 leading-tight">
+                  Complete Your Order by Shopping from Jiffex Store 🛒
+                </h4>
+                <p className="text-[10.5px] text-slate-900 font-semibold leading-relaxed">
+                  You opted to shop from Jiffex Store! Browse our store to select return gifts, sweets, snacks, or other items to ship with your home pickup.
+                </p>
+                <button
+                  onClick={() => {
+                    if (navigateTo) navigateTo('store');
+                    window.scrollTo(0, 0);
+                  }}
+                  className="w-full py-2.5 bg-[#0A142F] hover:bg-slate-800 text-amber-400 font-extrabold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-amber-400/30"
+                >
+                  Shop Jiffex Store Now <ArrowRight size={14} className="text-amber-400" />
+                </button>
+              </div>
+            )}
 
             {/* WHAT TO EXPECT Timeline */}
             <div className="space-y-3">
@@ -1082,7 +1030,7 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                 <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider">WHAT TO EXPECT</h3>
               </div>
 
-              <div className="flex gap-3 overflow-x-auto pb-3 pt-1 scrollbar-hide snap-x -mx-1 px-1">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {[
                   {
                     step: 1,
@@ -1111,23 +1059,23 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                 ].map((item) => (
                   <div 
                     key={item.step} 
-                    className="flex-shrink-0 w-[145px] bg-white border border-slate-100 p-3 rounded-xl shadow-sm snap-start flex flex-col justify-between"
+                    className="bg-white border border-slate-200/80 p-3 rounded-xl shadow-2xs flex flex-col justify-between"
                   >
                     <div>
                       <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-mono">STEP {item.step}</span>
                         {item.completed ? (
-                          <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 text-[10px]">
+                          <div className="w-4.5 h-4.5 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 text-[10px]">
                             <Check size={11} className="stroke-[3]" />
                           </div>
                         ) : (
-                          <div className="w-5 h-5 rounded-full border border-slate-300 text-slate-400 flex items-center justify-center shrink-0 text-[9px] font-bold">
+                          <div className="w-4.5 h-4.5 rounded-full border border-slate-300 text-slate-400 flex items-center justify-center shrink-0 text-[9px] font-bold">
                             {item.step}
                           </div>
                         )}
-                        <span className="text-[9px] font-black text-slate-300 font-mono">STEP {item.step}</span>
                       </div>
-                      <h4 className="text-[11px] font-black text-slate-900 mt-2.5 leading-tight">{item.title}</h4>
-                      <p className="text-[9px] text-slate-400 font-medium leading-tight mt-1">{item.subtext}</p>
+                      <h4 className="text-xs font-black text-slate-900 mt-2 leading-tight">{item.title}</h4>
+                      <p className="text-[10px] text-slate-500 font-medium leading-tight mt-1">{item.subtext}</p>
                     </div>
                   </div>
                 ))}
@@ -1135,37 +1083,38 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
             </div>
 
             {/* Two-Column Information Section */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Left Column: DOCUMENTS REQUIRED */}
-              <div className="space-y-3 text-left">
+              <div className="space-y-2.5 text-left">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
                     <FileText size={13} className="stroke-[2.5]" />
                   </div>
-                  <h3 className="text-[11px] font-black uppercase text-[#091535] tracking-wider">DOCUMENTS REQUIRED</h3>
+                  <h3 className="text-xs font-black uppercase text-[#091535] tracking-wider">DOCUMENTS REQUIRED</h3>
                 </div>
 
                 <div className="space-y-2">
                   {[
                     { title: 'ID Proof Copy', subtext: 'Aadhar, Passport or Driving License Copy' },
                     { title: 'Itemized Declaration', subtext: 'Simple list of contents & quantities' },
-                    { title: 'Value Statement', subtext: 'Bills/Invoices for any luxurious brand garments' }
+                    { title: 'Value Statement', subtext: 'Bills/Invoices for brand items' },
+                    { title: 'Receiver Address Info', subtext: 'Full overseas address & contact number' }
                   ].map((doc, idx) => (
                     <div 
                       key={idx} 
-                      className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm flex items-center justify-between gap-3 hover:border-blue-100 transition-all cursor-pointer"
+                      className="bg-white border border-slate-200/80 p-3 sm:p-3.5 rounded-xl shadow-2xs flex items-center justify-between gap-3 hover:border-blue-200 transition-all cursor-pointer"
                       onClick={() => {
                         setSelectedDocIndex(idx);
                         setShowRequirementsModal(true);
                       }}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                          <ShieldCheck size={16} className="stroke-[2.5]" />
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
+                          <ShieldCheck size={18} className="stroke-[2.5]" />
                         </div>
                         <div>
-                          <p className="text-[10px] font-black text-[#0A142F]">{doc.title}</p>
-                          <p className="text-[8px] text-slate-400 font-bold leading-tight mt-0.5">{doc.subtext}</p>
+                          <p className="text-xs sm:text-[13px] font-black text-[#0A142F]">{doc.title}</p>
+                          <p className="text-[10px] sm:text-xs text-slate-500 font-medium leading-tight mt-0.5">{doc.subtext}</p>
                         </div>
                       </div>
                       <span className="text-slate-300 font-bold text-xs select-none mr-1">&gt;</span>
@@ -1177,45 +1126,45 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                     setSelectedDocIndex(null);
                     setShowRequirementsModal(true);
                   }}
-                  className="inline-flex items-center gap-1 text-[9px] font-black text-blue-600 hover:underline tracking-wider uppercase pt-1 cursor-pointer"
+                  className="inline-flex items-center gap-1 text-[10px] font-black text-blue-600 hover:underline tracking-wider uppercase pt-0.5 cursor-pointer"
                 >
                   View all requirements &gt;
                 </button>
               </div>
 
               {/* Right Column: PROHIBITED ITEMS */}
-              <div className="space-y-3 text-left">
+              <div className="space-y-2.5 text-left">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded bg-red-100 text-red-600 flex items-center justify-center shrink-0">
                     <svg className="w-3.5 h-3.5 fill-current text-red-600" viewBox="0 0 24 24">
                       <path d="M12 2L1 21h22L12 2zm1 14h-2v2h2v-2zm0-6h-2v4h2v-4z"/>
                     </svg>
                   </div>
-                  <h3 className="text-[11px] font-black uppercase text-red-800 tracking-wider">PROHIBITED ITEMS</h3>
+                  <h3 className="text-xs font-black uppercase text-red-800 tracking-wider">PROHIBITED ITEMS</h3>
                 </div>
 
                 <div className="space-y-2">
                   {[
                     { title: 'Aerosols & Perfumes', subtext: 'Body sprays, deodorants, or inflammable liquids' },
                     { title: 'Cash & Jewellery', subtext: 'Currency notes, solid raw gold, silver bullion' },
-                    { title: 'Perishables', subtext: 'Open/homemade liquid curries, raw dairy products' },
+                    { title: 'Perishables & Liquids', subtext: 'Open/homemade liquid curries, raw dairy products' },
                     { title: 'Hazardous Materials', subtext: 'Ammunition, loose lithium batteries, explosive' }
                   ].map((item, idx) => (
                     <div 
                       key={idx} 
-                      className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm flex items-center justify-between gap-3 hover:border-red-100 transition-all cursor-pointer"
+                      className="bg-white border border-slate-200/80 p-3 sm:p-3.5 rounded-xl shadow-2xs flex items-center justify-between gap-3 hover:border-red-200 transition-all cursor-pointer"
                       onClick={() => {
                         setSelectedProhibitedIndex(idx);
                         setShowProhibitedModal(true);
                       }}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-lg bg-red-50 text-red-500 flex items-center justify-center shrink-0">
-                          <span className="text-[10px] font-extrabold font-mono">X</span>
+                        <div className="w-8 h-8 rounded-lg bg-red-50 text-red-500 flex items-center justify-center shrink-0 border border-red-100">
+                          <span className="text-xs font-extrabold font-mono">✕</span>
                         </div>
                         <div>
-                          <p className="text-[10px] font-black text-[#0A142F]">{item.title}</p>
-                          <p className="text-[8px] text-slate-400 font-bold leading-tight mt-0.5">{item.subtext}</p>
+                          <p className="text-xs sm:text-[13px] font-black text-[#0A142F]">{item.title}</p>
+                          <p className="text-[10px] sm:text-xs text-slate-500 font-medium leading-tight mt-0.5">{item.subtext}</p>
                         </div>
                       </div>
                       <span className="text-slate-300 font-bold text-xs select-none mr-1">&gt;</span>
@@ -1227,113 +1176,15 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                     setSelectedProhibitedIndex(null);
                     setShowProhibitedModal(true);
                   }}
-                  className="inline-flex items-center gap-1 text-[9px] font-black text-red-600 hover:underline tracking-wider uppercase pt-1 cursor-pointer"
+                  className="inline-flex items-center gap-1 text-[10px] font-black text-red-600 hover:underline tracking-wider uppercase pt-0.5 cursor-pointer"
                 >
                   View all prohibited items &gt;
                 </button>
               </div>
             </div>
 
-            {/* Shop Indian Products Co-Shipping Section */}
-            <div className="bg-[#f0f9ff] border border-sky-100 p-4 rounded-2xl text-left space-y-3 shadow-sm relative overflow-hidden">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[8px] font-black text-white bg-emerald-600 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                    CO-SHIPPING ACTIVE
-                  </span>
-                  <span className="text-[8px] font-black text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                    ZERO BASE FEES
-                  </span>
-                </div>
-                <button 
-                  onClick={() => {
-                    navigateTo('store');
-                    window.scrollTo(0, 0);
-                  }}
-                  className="inline-flex items-center gap-1 text-[8px] font-black text-white bg-emerald-600 px-2 py-1 rounded-lg uppercase hover:bg-emerald-700 transition cursor-pointer"
-                >
-                  <ShoppingBag size={10} />
-                  <span>See All</span>
-                </button>
-              </div>
-
-              <div>
-                <h3 className="text-xs font-black text-[#091535]">Shop Indian Products</h3>
-                <p className="text-[10px] text-slate-500 font-semibold leading-normal mt-0.5">
-                  Delivered inside your same pickup box with no extra courier base fees.
-                </p>
-              </div>
-
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x -mx-1 px-1">
-                {[
-                  {
-                    id: 'p1',
-                    tag: 'POOJA',
-                    title: 'Ganesh Idol (Eco-friendly)',
-                    price: '$15.00',
-                    weight: '0.4 kg',
-                    bgColor: 'from-amber-100 to-orange-100',
-                    emoji: '🪔'
-                  },
-                  {
-                    id: 'p2',
-                    tag: 'POOJA',
-                    title: 'Brass Diya Set',
-                    price: '$25.00',
-                    weight: '0.5 kg',
-                    bgColor: 'from-yellow-100 to-amber-200',
-                    emoji: '🕯️'
-                  },
-                  {
-                    id: 'p3',
-                    tag: 'POOJA',
-                    title: 'Sandalwood Incense Sticks',
-                    price: '$10.00',
-                    weight: '0.2 kg',
-                    bgColor: 'from-orange-100 to-amber-100',
-                    emoji: '🪵'
-                  },
-                  {
-                    id: 'p4',
-                    tag: 'DECOR',
-                    title: 'Decor Elephant',
-                    price: '$35.00',
-                    weight: '0.8 kg',
-                    bgColor: 'from-blue-100 to-slate-100',
-                    emoji: '🐘'
-                  }
-                ].map((product) => (
-                  <div 
-                    key={product.id} 
-                    className="flex-shrink-0 w-[130px] bg-white border border-slate-100 p-2 rounded-xl shadow-sm snap-start flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className={`w-full h-20 rounded-lg bg-gradient-to-br ${product.bgColor} flex items-center justify-center relative mb-1.5`}>
-                        <span className="text-3xl select-none">{product.emoji}</span>
-                        <span className="absolute top-1 left-1 text-[7px] font-extrabold text-emerald-800 bg-emerald-50 px-1 py-0.2 rounded">
-                          {product.tag}
-                        </span>
-                      </div>
-                      <h4 className="text-[10px] font-black text-slate-800 truncate leading-tight">{product.title}</h4>
-                      <p className="text-[8px] text-slate-400 font-bold mt-0.5">{product.weight}</p>
-                    </div>
-
-                    <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between gap-1">
-                      <div>
-                        <p className="text-[10px] font-black text-slate-900 leading-none">{product.price}</p>
-                        <p className="text-[7px] text-slate-400 font-medium mt-0.5 italic">Consolidated</p>
-                      </div>
-                      <button 
-                        onClick={() => toast.success(`"${product.title}" consolidated in your pickup box!`)}
-                        className="px-1.5 py-0.5 text-[8px] font-black text-emerald-600 border border-emerald-500/30 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition shrink-0 cursor-pointer"
-                      >
-                        + Add
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Shop Indian Products Co-Shipping Section with 5 visible items and scroll arrows */}
+            <ShopIndianProductsCarousel navigateTo={navigateTo} />
 
             {/* Back to Bookings CTA */}
             <button

@@ -29,6 +29,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { COUNTRIES, PICKUP_SLOTS } from '../constants';
+import { RateBand } from '../types';
+import { calculateShippingCost } from '../utils/shipping';
 
 interface SinglePagePickupFormProps {
   pickupItemType: string;
@@ -66,6 +68,7 @@ interface SinglePagePickupFormProps {
   handleSchedulePickup: () => void;
   currentUser: any;
   shippingRates: Record<string, number>;
+  shippingRateBands?: Record<string, RateBand[]>;
   shippingDiscounts: Record<string, number>;
   savePickupProfileToDb?: () => void;
   navigateTo?: (tab: string) => void;
@@ -107,6 +110,7 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
   handleSchedulePickup,
   currentUser,
   shippingRates,
+  shippingRateBands,
   shippingDiscounts,
   savePickupProfileToDb,
   navigateTo
@@ -197,18 +201,27 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
   }
 
   const targetCountry = pickupDestination.country || COUNTRIES[0];
-  const rawRate = shippingRates[targetCountry] || 12;
-  const rate = rawRate < 100 ? rawRate * 60 : rawRate;
-  const discountPercent = shippingDiscounts[targetCountry] || 0;
+  
+  const minCalc = calculateShippingCost({
+    country: targetCountry,
+    weightKg: minWeight,
+    method: 'Express',
+    rates: shippingRates,
+    rateBands: shippingRateBands,
+    discounts: shippingDiscounts
+  });
 
-  const rawMinQuote = minWeight * rate;
-  const rawMaxQuote = maxWeight * rate;
+  const maxCalc = calculateShippingCost({
+    country: targetCountry,
+    weightKg: maxWeight,
+    method: 'Express',
+    rates: shippingRates,
+    rateBands: shippingRateBands,
+    discounts: shippingDiscounts
+  });
 
-  const minDiscount = rawMinQuote * (discountPercent / 100);
-  const maxDiscount = rawMaxQuote * (discountPercent / 100);
-
-  const finalMin = Math.max(0, rawMinQuote - minDiscount);
-  const finalMax = Math.max(0, rawMaxQuote - maxDiscount);
+  const finalMin = minCalc.finalPriceInr;
+  const finalMax = maxCalc.finalPriceInr;
 
   // Form completion validation helper
   const isPickupAddressComplete = Boolean(
@@ -235,9 +248,7 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
     )
   );
 
-  const isStoreOptionSelected = Boolean(pickupConsolidationOption !== null && pickupConsolidationOption !== undefined);
-
-  const isFormComplete = isPickupAddressComplete && isScheduleComplete && isDestinationComplete && isStoreOptionSelected;
+  const isFormComplete = isPickupAddressComplete && isScheduleComplete && isDestinationComplete;
 
   // Comprehensive Form Validation and Submission
   const validateAndProceedToReview = () => {
@@ -300,11 +311,6 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
         toast.error('Please enter destination ZIP / postal code.');
         return;
       }
-    }
-
-    if (!pickupConsolidationOption) {
-      toast.error('Please select whether you want to buy items from store or pick up from home.');
-      return;
     }
 
     if (savePickupToProfile && currentUser && savePickupProfileToDb) {
@@ -448,6 +454,91 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
             </div>
           </div>
 
+          {/* Section 5: Store Items Option Card */}
+          <div className="p-5 md:p-6 rounded-2xl border bg-gradient-to-br from-amber-50/80 via-orange-50/40 to-white border-amber-200/90 shadow-sm space-y-3">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-900 text-[10px] font-black uppercase tracking-wider border border-amber-500/30">
+                <Store size={13} className="text-amber-700" /> Jiffex Store Option *
+              </div>
+              <h4 className="text-sm md:text-base font-black text-[#0A142F] leading-snug">
+                Would you like to add items from the Jiffex Store to your shipment?
+              </h4>
+              <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                You can add return gifts, sweets, snacks, and other store items, and we'll ship them together with the items we collect from your home.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {/* Option 1 */}
+              <div
+                onClick={() => {
+                  if (setPickupConsolidationOption) {
+                    setPickupConsolidationOption('shop_and_ship');
+                  }
+                  toast.success("Selected: Yes, shop from Jiffex Store");
+                }}
+                className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between space-y-2 ${
+                  pickupConsolidationOption === 'shop_and_ship'
+                    ? 'bg-amber-50/90 border-amber-500 shadow-sm ring-2 ring-amber-500/20'
+                    : 'bg-white border-slate-200 hover:border-amber-300'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      pickupConsolidationOption === 'shop_and_ship' ? 'border-amber-600 bg-amber-500' : 'border-slate-300 bg-white'
+                    }`}>
+                      {pickupConsolidationOption === 'shop_and_ship' && <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
+                    </div>
+                    <span className="font-extrabold text-xs text-[#0A142F]">
+                      Yes, I'd like to shop from Jiffex Store 🛒
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                  I'll choose items from the store to add to my shipment.
+                </p>
+              </div>
+
+              {/* Option 2 */}
+              <div
+                onClick={() => {
+                  if (setPickupConsolidationOption) {
+                    setPickupConsolidationOption('pickup_only');
+                  }
+                  toast.info("Selected: No, home pickup only");
+                }}
+                className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between space-y-2 ${
+                  pickupConsolidationOption === 'pickup_only'
+                    ? 'bg-amber-50/90 border-amber-500 shadow-md ring-2 ring-amber-500/20'
+                    : 'bg-white border-slate-200 hover:border-amber-300'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      pickupConsolidationOption === 'pickup_only' ? 'border-amber-600 bg-amber-500' : 'border-slate-300 bg-white'
+                    }`}>
+                      {pickupConsolidationOption === 'pickup_only' && <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
+                    </div>
+                    <span className="font-extrabold text-xs text-[#0A142F]">
+                      No, just pick up my items 🏠
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                  I'll only be shipping the items collected from my home.
+                </p>
+              </div>
+            </div>
+
+            {!pickupConsolidationOption && (
+              <div className="p-2.5 bg-amber-100/80 border border-amber-300 rounded-xl text-center text-amber-950 text-xs font-bold animate-pulse">
+                ⚠️ Selection required: Please select "Yes" or "No" above to enable "Confirm & Schedule Pickup".
+              </div>
+            )}
+          </div>
+
           {/* Action Buttons: Edit Details / Confirm & Schedule */}
           <div className="pt-2 flex items-center justify-between gap-3">
             <button
@@ -464,10 +555,19 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
 
             <button
               type="button"
+              disabled={!pickupConsolidationOption}
               onClick={() => {
+                if (!pickupConsolidationOption) {
+                  toast.warning("Please choose whether you'd like to add store items or pick up items only.");
+                  return;
+                }
                 handleSchedulePickup();
               }}
-              className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-black text-xs sm:text-sm shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+              className={`flex-1 py-3.5 rounded-xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
+                pickupConsolidationOption
+                  ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20 cursor-pointer active:scale-95'
+                  : 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-75'
+              }`}
             >
               <CheckCircle2 size={18} />
               Confirm & Schedule Pickup
@@ -989,89 +1089,6 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                   </select>
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Store Items Selection Card - Required to enable schedule home pickup */}
-          <div className="p-6 md:p-8 rounded-[2.5rem] border bg-gradient-to-br from-amber-50/70 via-orange-50/30 to-white border-amber-200/80 shadow-sm space-y-4">
-            <div className="space-y-1 text-center md:text-left">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-900 text-[11px] font-black uppercase tracking-wider mb-1 border border-amber-500/30">
-                <Store size={14} className="text-amber-700" /> Store Items Option *
-              </div>
-              <h3 className="text-base md:text-lg font-black text-[#0A142F] leading-snug">
-                Would you like to add items from the Jiffex Store to your shipment?
-              </h3>
-              <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                You can add return gifts and other store items, and we'll ship them together with the items we collect from your home.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-2">
-              {/* Option 1 */}
-              <div
-                onClick={() => {
-                  if (setPickupConsolidationOption) {
-                    setPickupConsolidationOption('shop_and_ship');
-                  }
-                }}
-                className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
-                  pickupConsolidationOption === 'shop_and_ship'
-                    ? 'bg-amber-50/90 border-amber-500 shadow-md ring-2 ring-amber-500/20'
-                    : 'bg-white border-slate-200 hover:border-amber-300'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                      pickupConsolidationOption === 'shop_and_ship' ? 'border-amber-600 bg-amber-500' : 'border-slate-300 bg-white'
-                    }`}>
-                      {pickupConsolidationOption === 'shop_and_ship' && <div className="w-2 h-2 rounded-full bg-slate-950" />}
-                    </div>
-                    <span className="font-black text-sm text-[#0A142F]">
-                      Yes, I'd like to shop from Jiffex Store 🛒
-                    </span>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                  I'll choose items from the store to add to my shipment.
-                </p>
-              </div>
-
-              {/* Option 2 */}
-              <div
-                onClick={() => {
-                  if (setPickupConsolidationOption) {
-                    setPickupConsolidationOption('pickup_only');
-                  }
-                }}
-                className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
-                  pickupConsolidationOption === 'pickup_only'
-                    ? 'bg-amber-50/90 border-amber-500 shadow-md ring-2 ring-amber-500/20'
-                    : 'bg-white border-slate-200 hover:border-amber-300'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                      pickupConsolidationOption === 'pickup_only' ? 'border-amber-600 bg-amber-500' : 'border-slate-300 bg-white'
-                    }`}>
-                      {pickupConsolidationOption === 'pickup_only' && <div className="w-2 h-2 rounded-full bg-slate-950" />}
-                    </div>
-                    <span className="font-black text-sm text-[#0A142F]">
-                      No, just pick up my items 🏠
-                    </span>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                  I'll only be shipping the items collected from my home.
-                </p>
-              </div>
-            </div>
-
-            {!pickupConsolidationOption && (
-              <p className="text-xs text-amber-800 font-semibold text-center pt-1 animate-pulse">
-                ⚠️ Selection required: Please choose "Yes" or "No" above to enable schedule home pickup.
-              </p>
             )}
           </div>
 
