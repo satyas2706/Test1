@@ -19,7 +19,8 @@ import {
   AlertTriangle,
   Home,
   Store,
-  Warehouse
+  Warehouse,
+  MapPin
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SinglePagePickupForm } from './SinglePagePickupForm';
@@ -51,8 +52,10 @@ interface MobilePickupFlowProps {
   setProvideDestinationLater?: (val: boolean) => void;
   pickupConsolidationOption: 'shop_and_ship' | 'pickup_only' | null;
   setPickupConsolidationOption: (opt: 'shop_and_ship' | 'pickup_only' | null) => void;
-  shopItemsShippingDestination?: 'home' | 'warehouse';
-  setShopItemsShippingDestination?: (dest: 'home' | 'warehouse') => void;
+  shopConsolidationOption?: 'pickup' | 'warehouse' | 'store_only' | null;
+  setShopConsolidationOption?: (option: 'pickup' | 'warehouse' | 'store_only' | null) => void;
+  shopItemsShippingDestination?: 'home' | 'custom' | 'warehouse';
+  setShopItemsShippingDestination?: (dest: 'home' | 'custom' | 'warehouse') => void;
   hasShopItems?: boolean;
   handleSchedulePickup: () => void;
   currentUser: any;
@@ -98,6 +101,8 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
   setProvideDestinationLater,
   pickupConsolidationOption,
   setPickupConsolidationOption,
+  shopConsolidationOption,
+  setShopConsolidationOption,
   shopItemsShippingDestination = 'home',
   setShopItemsShippingDestination,
   hasShopItems = false,
@@ -247,6 +252,7 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
         setProvideDestinationLater={setProvideDestinationLater || (() => {})}
         pickupConsolidationOption={pickupConsolidationOption}
         setPickupConsolidationOption={setPickupConsolidationOption}
+        setShopConsolidationOption={setShopConsolidationOption}
         shopItemsShippingDestination={shopItemsShippingDestination}
         setShopItemsShippingDestination={setShopItemsShippingDestination || (() => {})}
         hasShopItems={hasShopItems}
@@ -852,87 +858,6 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
               </div>
             </div>
 
-            {/* Shop Items Shipping Destination Option */}
-            {(pickupConsolidationOption === 'shop_and_ship' || hasShopItems) && (
-              <div className="p-3.5 rounded-xl border-2 border-indigo-200 bg-indigo-50/40 text-left space-y-2.5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <ShoppingBag className="text-indigo-600" size={15} />
-                    <span className="text-[10px] font-black uppercase text-[#091535] tracking-wider">Shop Items Shipping Destination</span>
-                  </div>
-                  <span className="text-[8px] font-black uppercase bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md">
-                    Schedule Connected
-                  </span>
-                </div>
-                
-                <p className="text-[9.5px] text-slate-500 font-medium leading-relaxed">
-                  Choose where to deliver your selected Shop items (Destination Address & Shipping Date are managed through your Home Pickup Schedule):
-                </p>
-
-                <div className="grid grid-cols-1 gap-2 pt-0.5">
-                  {/* Option 1: Ship to my home */}
-                  <div 
-                    onClick={() => {
-                      if (setShopItemsShippingDestination) setShopItemsShippingDestination('home');
-                      toast.success('Shop items set to ship to your Home Destination Address!');
-                    }}
-                    className={`p-3 rounded-xl border-2 transition-all cursor-pointer ${
-                      shopItemsShippingDestination === 'home'
-                        ? 'border-indigo-600 bg-white shadow-sm ring-1 ring-indigo-600/20'
-                        : 'border-slate-200 bg-white/70 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${shopItemsShippingDestination === 'home' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                        <Home size={14} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-black text-slate-900">Ship to my home</span>
-                          <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${shopItemsShippingDestination === 'home' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>
-                            {shopItemsShippingDestination === 'home' && <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />}
-                          </div>
-                        </div>
-                        <p className="text-[9.5px] text-slate-500 font-medium leading-normal mt-0.5">
-                          Deliver directly to destination address ({pickupDestination.fullName || 'Receiver'} - {pickupDestination.city || 'City'}, {pickupDestination.country || 'Country'}) on {new Date(selectedPickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Option 2: Ship to Jiffex warehouse */}
-                  <div 
-                    onClick={() => {
-                      if (setShopItemsShippingDestination) setShopItemsShippingDestination('warehouse');
-                      toast.success('Shop items set to ship to Jiffex Warehouse!');
-                    }}
-                    className={`p-3 rounded-xl border-2 transition-all cursor-pointer ${
-                      shopItemsShippingDestination === 'warehouse'
-                        ? 'border-indigo-600 bg-white shadow-sm ring-1 ring-indigo-600/20'
-                        : 'border-slate-200 bg-white/70 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${shopItemsShippingDestination === 'warehouse' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                        <Warehouse size={14} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-black text-slate-900">Ship to Jiffex warehouse</span>
-                          <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${shopItemsShippingDestination === 'warehouse' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>
-                            {shopItemsShippingDestination === 'warehouse' && <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />}
-                          </div>
-                        </div>
-                        <p className="text-[9.5px] text-slate-500 font-medium leading-normal mt-0.5">
-                          Deliver to Jiffex Warehouse hub for holding, inspection, or separate processing.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
             <div className="flex gap-3 pt-3">
               <button 
                 onClick={() => setActivePickupStep(3)}
@@ -996,30 +921,6 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                 </button>
               </div>
             </div>
-
-            {/* Store Shopping Callout for Shop & Ship Customers */}
-            {pickupConsolidationOption === 'shop_and_ship' && (
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-orange-400 text-slate-950 shadow-md border border-amber-300 space-y-2 text-left">
-                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-950 text-amber-400 text-[9px] font-black uppercase tracking-wider">
-                  <Store size={11} className="text-amber-400" /> Jiffex Store Option Selected
-                </div>
-                <h4 className="text-xs font-black text-slate-950 leading-tight">
-                  Complete Your Order by Shopping from Jiffex Store 🛒
-                </h4>
-                <p className="text-[10.5px] text-slate-900 font-semibold leading-relaxed">
-                  You opted to shop from Jiffex Store! Browse our store to select return gifts, sweets, snacks, or other items to ship with your home pickup.
-                </p>
-                <button
-                  onClick={() => {
-                    if (navigateTo) navigateTo('store');
-                    window.scrollTo(0, 0);
-                  }}
-                  className="w-full py-2.5 bg-[#0A142F] hover:bg-slate-800 text-amber-400 font-extrabold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-amber-400/30"
-                >
-                  Shop Jiffex Store Now <ArrowRight size={14} className="text-amber-400" />
-                </button>
-              </div>
-            )}
 
             {/* WHAT TO EXPECT Timeline */}
             <div className="space-y-3">
@@ -1182,9 +1083,6 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                 </button>
               </div>
             </div>
-
-            {/* Shop Indian Products Co-Shipping Section with 5 visible items and scroll arrows */}
-            <ShopIndianProductsCarousel navigateTo={navigateTo} />
 
             {/* Back to Bookings CTA */}
             <button

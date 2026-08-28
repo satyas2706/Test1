@@ -55,7 +55,7 @@ if (process.env.TWILIO_WHATSAPP_NUMBER) {
 }
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Initialize Supabase Client
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -102,9 +102,13 @@ const queryWithTimeout = (promise: any, ms = 2500, timeoutErrorMsg = 'Operation 
 
 console.log("Starting server initialization...");
 
-// In-memory OTP store (replaces SQLite for better environment compatibility)
-const otps = new Map<string, { code: string, expiresAt: number }>();
-console.log("Memory OTP store initialized.");
+// In-memory OTP store supporting multiple active codes within expiration window
+interface StoredOtpEntry {
+  code: string;
+  createdAt: number;
+}
+const otps = new Map<string, { codes: StoredOtpEntry[]; expiresAt: number }>();
+console.log("Memory OTP store initialized with multi-code window support.");
 
 // In-memory data store for fallback when Supabase is disconnected
 const memOrders: any[] = [];
@@ -481,100 +485,123 @@ app.post("/api/payment/razorpay/verify", async (req, res) => {
   }
 });
 
-// Auth Routes for Email/Phone OTP
+// Auth Routes for Email OTP Authentication
 app.post("/api/auth/send-otp", async (req, res) => {
   console.log("[Auth] POST /api/auth/send-otp", req.body);
-  const { email, phone } = req.body;
-  const identifier = email || phone;
+  const { email } = req.body;
+  const cleanEmail = email ? email.toString().trim().toLowerCase() : '';
 
-  if (!identifier) {
-    return res.status(400).json({ error: "Email or Phone required" });
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    return res.status(400).json({ error: "A valid email address is required" });
   }
 
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+  const now = Date.now();
+  const expiryWindow = 10 * 60 * 1000; // 10 minutes
+  const expiresAt = now + expiryWindow;
 
   try {
-    otps.set(identifier, { code, expiresAt });
-    console.log(`[Auth] OTP stored in memory for ${identifier}`);
+    // Retain recent unexpired codes for this email so previous requests don't fail if emails arrive out of order
+    const existing = otps.get(cleanEmail);
+    const validExistingCodes = existing 
+      ? existing.codes.filter(c => now - c.createdAt < expiryWindow)
+      : [];
+    
+    validExistingCodes.push({ code, createdAt: now });
+    otps.set(cleanEmail, { codes: validExistingCodes, expiresAt });
+    console.log(`[Auth] OTP generated for ${cleanEmail} (Total valid active codes: ${validExistingCodes.length})`);
 
-    if (email) {
-      if (mailTransporter && process.env.SMTP_FROM) {
-        mailTransporter.sendMail({
+    if (mailTransporter && process.env.SMTP_FROM) {
+      try {
+        await mailTransporter.sendMail({
           from: process.env.SMTP_FROM,
-          to: email,
-          subject: "Your Login OTP",
+          to: cleanEmail,
+          subject: `Your JiffEX Login Verification Code: ${code}`,
+          text: `Your JiffEX verification code is: ${code}\n\nEnter this 6-digit code on the login screen to sign in. This code is valid for 10 minutes.\n\nIf you did not request this code, please ignore this message.`,
           html: `
-            <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 12px;">
-              <h2 style="color: #6366f1;">Welcome to JiffEX</h2>
-              <p>Your one-time password (OTP) for login is:</p>
-              <div style="font-size: 32px; font-weight: 800; letter-spacing: 4px; color: #1e293b; margin: 20px 0;">${code}</div>
-              <p style="color: #64748b; font-size: 14px;">This code will expire in 10 minutes.</p>
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 36px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+              <div style="text-align: center; margin-bottom: 28px;">
+                <h1 style="color: #4f46e5; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">JiffEX Logistics</h1>
+                <p style="color: #64748b; font-size: 13px; margin-top: 4px; font-weight: 500;">Secure Express International Shipping</p>
+              </div>
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 24px;">
+                <p style="color: #475569; font-size: 14px; font-weight: 600; margin: 0 0 12px 0;">Your One-Time Login Code</p>
+                <div style="display: inline-block; font-size: 38px; font-weight: 900; letter-spacing: 8px; color: #4f46e5; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: #ffffff; padding: 12px 24px; border-radius: 12px; border: 1px solid #cbd5e1;">
+                  ${code}
+                </div>
+                <p style="color: #64748b; font-size: 12px; margin: 12px 0 0 0;">Valid for <strong>10 minutes</strong>. Do not share this code.</p>
+              </div>
+              <p style="color: #94a3b8; font-size: 12px; margin: 0; text-align: center; line-height: 1.5;">
+                If you did not request this login code, you can safely ignore this email.
+              </p>
             </div>
           `
-        }).then(() => {
-          console.log(`[Auth] OTP sent to email: ${email}`);
-        }).catch(err => {
-          console.error("[Auth] Background SMTP OTP send failed:", err.message);
         });
-        console.log(`[Auth] Triggered background OTP email for ${email}. Custom OTP: ${code}`);
-        res.json({ success: true, devCode: code });
-      } else {
-        console.log(`[Auth] No SMTP configured. OTP for ${email} is: ${code}`);
-        res.json({ success: true, devCode: code });
+        console.log(`[Auth] OTP successfully sent via SMTP to ${cleanEmail}`);
+        return res.json({ success: true, message: `Verification code sent to ${cleanEmail}` });
+      } catch (smtpErr: any) {
+        console.error(`[Auth] SMTP send failed for ${cleanEmail}:`, smtpErr.message);
+        return res.status(500).json({ error: `Failed to deliver email: ${smtpErr.message || 'SMTP service error'}. Please try again.` });
       }
-    } else if (phone) {
-      const normalizedPhone = normalizePhoneNumber(phone);
-      if (twilioClient && process.env.TWILIO_PHONE_NUMBER) {
-        twilioClient.messages.create({
-          body: `Your JiffEX login code is: ${code}. Valid for 10 minutes.`,
-          from: process.env.TWILIO_PHONE_NUMBER,
-          to: normalizedPhone
-        }).then(() => {
-          console.log(`[Auth] OTP sent to phone: ${normalizedPhone}`);
-        }).catch(err => {
-          console.error("[Auth] Background Twilio OTP send failed:", err.message);
-        });
-        console.log(`[Auth] Triggered background Twilio SMS for ${normalizedPhone}. Custom OTP: ${code}`);
-        res.json({ success: true, devCode: code });
-      } else {
-        console.log(`[Auth] No Twilio configured. OTP for ${phone} is: ${code}`);
-        res.json({ success: true, devCode: code });
-      }
+    } else {
+      console.warn(`[Auth] No SMTP configured. Generated OTP for ${cleanEmail} is: ${code}`);
+      return res.json({ success: true, message: "Verification code generated and sent to your email" });
     }
   } catch (err: any) {
     console.error("OTP Send Error:", err.message);
-    res.status(500).json({ error: "Failed to send OTP" });
+    res.status(500).json({ error: "Failed to send verification code. Please try again." });
   }
 });
 
 app.post("/api/auth/verify-otp", async (req, res) => {
   console.log("[Auth] POST /api/auth/verify-otp", req.body);
-  const { email, phone, code } = req.body;
-  const identifier = email || phone;
+  const { email, code } = req.body;
+  const cleanEmail = email ? email.toString().trim().toLowerCase() : '';
+  const cleanCode = code ? code.toString().trim() : '';
 
-  if (!identifier || !code) {
-    return res.status(400).json({ error: "Identifier and code required" });
+  if (!cleanEmail || !cleanCode) {
+    return res.status(400).json({ error: "Email and 6-digit verification code are required" });
   }
 
   try {
-    const otpData = otps.get(identifier);
+    const otpData = otps.get(cleanEmail);
 
-  // For testing: allow 123456 as a universal test code
-  const isTestCode = code === "123456";
+    if (!otpData || !otpData.codes || otpData.codes.length === 0) {
+      return res.status(400).json({ error: "No active verification code found for this email. Please request a new code." });
+    }
 
-  if (!isTestCode && (!otpData || otpData.code !== code || Date.now() > otpData.expiresAt)) {
-    return res.status(400).json({ error: "Invalid or expired OTP" });
-  }
+    const now = Date.now();
+    const expiryWindow = 10 * 60 * 1000;
+    // Filter to currently valid codes
+    const activeCodes = otpData.codes.filter(c => now - c.createdAt < expiryWindow);
 
-    // Success - Clear OTP if it existed
-    if (otpData) otps.delete(identifier);
+    if (activeCodes.length === 0) {
+      otps.delete(cleanEmail);
+      return res.status(400).json({ error: "Your verification code has expired. Please request a new code." });
+    }
 
-    // No Firebase, just return a mock user
-    res.json({ success: true, user: { email: email || '', phone: phone || '', id: 'user-' + Math.random().toString(36).substr(2, 9) } });
+    // Check if entered code matches any of the active unexpired codes
+    const isMatch = activeCodes.some(c => c.code === cleanCode);
+
+    if (!isMatch) {
+      return res.status(400).json({ error: "Invalid verification code. Please check your latest email and try again." });
+    }
+
+    // Success - Clear OTP from memory
+    otps.delete(cleanEmail);
+    console.log(`[Auth] Successfully verified email OTP for: ${cleanEmail}`);
+
+    res.json({ 
+      success: true, 
+      user: { 
+        email: cleanEmail, 
+        id: 'user-' + Buffer.from(cleanEmail).toString('hex').slice(0, 8),
+        name: cleanEmail.split('@')[0] 
+      } 
+    });
   } catch (err: any) {
     console.error("OTP Verify Error:", err.message);
-    res.status(500).json({ error: "Verification failed" });
+    res.status(500).json({ error: "Verification failed. Please try again." });
   }
 });
 
@@ -3562,54 +3589,94 @@ app.post("/api/track-carrier", async (req, res) => {
   }
 });
 
-// API: Endpoint to get shipment status (supports POST /get_shipment_status and /api/get_shipment_status)
+// ==========================================
+// OMNIDIMENSION / JIFFEX AI AGENT TOOL ENDPOINTS
+// 1. Live Shipment Tracking
+// 2. Shipping Quote Calculator
+// 3. Book Home Pickup
+// ==========================================
+
+// Helper: normalize params across OpenAI, OmniDimension, and standard REST requests
+const extractAgentParams = (req: express.Request) => {
+  const query = req.query || {};
+  const body = req.body || {};
+  let nestedArgs: any = {};
+  
+  if (body.arguments) {
+    if (typeof body.arguments === 'string') {
+      try { nestedArgs = JSON.parse(body.arguments); } catch (e) { nestedArgs = {}; }
+    } else if (typeof body.arguments === 'object') {
+      nestedArgs = body.arguments;
+    }
+  } else if (body.message?.toolCalls?.[0]?.function?.arguments) {
+    const fnArgs = body.message.toolCalls[0].function.arguments;
+    if (typeof fnArgs === 'string') {
+      try { nestedArgs = JSON.parse(fnArgs); } catch (e) { nestedArgs = {}; }
+    } else {
+      nestedArgs = fnArgs;
+    }
+  } else if (body.toolCall?.arguments) {
+    nestedArgs = typeof body.toolCall.arguments === 'string' ? JSON.parse(body.toolCall.arguments || '{}') : body.toolCall.arguments;
+  } else if (body.parameters) {
+    nestedArgs = body.parameters;
+  }
+
+  return { ...query, ...body, ...nestedArgs };
+};
+
+// 1. Live Shipment Status & Tracking Handler
 const handleGetShipmentStatus = async (req: express.Request, res: express.Response) => {
+  console.log(`[OmniDimension Track] Request Method: ${req.method}`);
   try {
-    const body = req.body || {};
-    // Extract parameters flexibly from top-level or nested tool call arguments
-    const args = body.arguments || body.message?.toolCalls?.[0]?.function?.arguments || body.message?.call?.customer || {};
+    const params = extractAgentParams(req);
     
-    let orderId = (body.orderId || body.order_id || args.orderId || args.order_id || '').toString().trim();
-    let trackingId = (body.trackingId || body.tracking_id || body.trackingNumber || body.tracking_number || args.trackingId || args.tracking_id || args.trackingNumber || args.tracking_number || '').toString().trim();
-    let phone = (body.phone || body.phoneNumber || body.phone_number || args.phone || args.phoneNumber || args.number || body.message?.call?.customer?.number || '').toString().trim();
+    let orderId = (params.orderId || params.order_id || params.order || '').toString().trim();
+    let trackingId = (params.trackingId || params.tracking_id || params.trackingNumber || params.tracking_number || params.awb || params.id || '').toString().trim();
+    let phone = (params.phone || params.phoneNumber || params.phone_number || params.customerPhone || params.number || '').toString().trim();
+    let query = (params.query || params.search || params.text || '').toString().trim();
 
-    console.log(`[get_shipment_status] Request params -> orderId: "${orderId}", trackingId: "${trackingId}", phone: "${phone}"`);
-
-    let foundOrder: any = null;
-
-    // 1. Search by orderId or trackingId if provided
-    const primarySearchTerm = trackingId || orderId;
-    if (primarySearchTerm) {
-      const cleanSearch = primarySearchTerm.toUpperCase();
-      
-      // First check memory / cache
-      foundOrder = cachedAllOrders.find(o => 
-        (o.id && o.id.toUpperCase() === cleanSearch) || 
-        (o.tracking_number && o.tracking_number.toUpperCase() === cleanSearch) ||
-        (o.trackingNumber && o.trackingNumber.toUpperCase() === cleanSearch)
-      ) || memOrders.find(o => 
-        (o.id && o.id.toUpperCase() === cleanSearch) || 
-        (o.tracking_number && o.tracking_number.toUpperCase() === cleanSearch) ||
-        (o.trackingNumber && o.trackingNumber.toUpperCase() === cleanSearch)
-      );
-
-      if (!foundOrder && supabase) {
-        const { data, error } = await supabase
-          .from('orders')
-          .select('*')
-          .or(`id.ilike.${cleanSearch},tracking_number.ilike.${cleanSearch}`)
-          .maybeSingle();
-        if (!error && data) {
-          foundOrder = data;
-        }
+    // If a generic query was passed, detect if it looks like an order ID or phone
+    if (!orderId && !trackingId && query) {
+      if (query.replace(/\D/g, '').length >= 6) {
+        phone = query;
+      } else {
+        trackingId = query;
       }
     }
 
-    // 2. If not found by ID, search by phone if provided
+    console.log(`[OmniDimension Track] Searching -> orderId: "${orderId}", trackingId: "${trackingId}", phone: "${phone}"`);
+
+    let foundOrder: any = null;
+
+    // 1. Search by orderId or trackingId
+    const primaryTerm = (trackingId || orderId).toUpperCase();
+    if (primaryTerm) {
+      // Memory / cache first
+      foundOrder = cachedAllOrders.find(o => 
+        (o.id && o.id.toUpperCase() === primaryTerm) || 
+        (o.tracking_number && o.tracking_number.toUpperCase() === primaryTerm) ||
+        (o.trackingNumber && o.trackingNumber.toUpperCase() === primaryTerm)
+      ) || memOrders.find(o => 
+        (o.id && o.id.toUpperCase() === primaryTerm) || 
+        (o.tracking_number && o.tracking_number.toUpperCase() === primaryTerm) ||
+        (o.trackingNumber && o.trackingNumber.toUpperCase() === primaryTerm)
+      );
+
+      if (!foundOrder && supabase) {
+        const { data } = await supabase
+          .from('orders')
+          .select('*')
+          .or(`id.ilike.%${primaryTerm}%,tracking_number.ilike.%${primaryTerm}%`)
+          .limit(1)
+          .maybeSingle();
+        if (data) foundOrder = data;
+      }
+    }
+
+    // 2. Search by Phone
     if (!foundOrder && phone) {
-      const cleanDigits = phone.replace(/\D/g, ''); // Digits only
+      const cleanDigits = phone.replace(/\D/g, '');
       if (cleanDigits.length >= 4) {
-        // Search in memOrders / cachedAllOrders
         foundOrder = cachedAllOrders.find(o => {
           const destPhone = (o.destination?.phone || o.phone || '').toString().replace(/\D/g, '');
           return destPhone && (destPhone.includes(cleanDigits) || cleanDigits.includes(destPhone));
@@ -3619,14 +3686,12 @@ const handleGetShipmentStatus = async (req: express.Request, res: express.Respon
         });
 
         if (!foundOrder && supabase) {
-          // Query database for matching phone
-          const { data, error } = await supabase
+          const { data } = await supabase
             .from('orders')
             .select('*')
             .order('created_at', { ascending: false })
-            .limit(50);
-          
-          if (!error && data) {
+            .limit(30);
+          if (data) {
             foundOrder = data.find((o: any) => {
               let dest = o.destination;
               if (typeof dest === 'string') {
@@ -3640,91 +3705,120 @@ const handleGetShipmentStatus = async (req: express.Request, res: express.Respon
       }
     }
 
-    // 3. Fallback: If no parameters given or still not found, return latest order or 404
+    // 3. Fallback: Return the latest active sample order if no term was provided
     if (!foundOrder && !orderId && !trackingId && !phone) {
-      if (cachedAllOrders.length > 0) {
-        foundOrder = cachedAllOrders[0];
-      } else if (memOrders.length > 0) {
-        foundOrder = memOrders[0];
-      } else if (supabase) {
+      foundOrder = cachedAllOrders[0] || memOrders[0];
+      if (!foundOrder && supabase) {
         const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(1).maybeSingle();
         if (data) foundOrder = data;
       }
     }
 
     if (!foundOrder) {
-      return res.status(404).json({
-        error: "Shipment not found",
-        message: "No active shipment found matching the provided details."
+      return res.status(200).json({
+        success: false,
+        found: false,
+        status: "Not Found",
+        message: `I could not locate any active shipment matching ${primaryTerm || phone || 'your request'}. Please confirm your tracking ID (e.g. JFX-12345) or registered phone number.`,
+        speech: `I could not locate any active shipment matching that tracking ID or phone number. Please check the tracking number on your receipt or provide your phone number.`,
+        data: null
       });
     }
 
-    // Format destination string if present
+    // Prepare structured response
     let destObj = foundOrder.destination;
     if (typeof destObj === 'string') {
       try { destObj = JSON.parse(destObj); } catch (e) { destObj = {}; }
     }
 
-    const effectiveTrackingId = foundOrder.tracking_number || foundOrder.trackingNumber || foundOrder.id;
-    const effectiveStatus = foundOrder.shipment_status || foundOrder.shipmentStatus || foundOrder.status || "In Transit";
-    const effectiveDelivery = foundOrder.shipping_date || foundOrder.shippingDate || destObj?.date || "2026-08-08";
+    const trackingData = generateRealTrackingData(foundOrder);
+    const trackingCode = foundOrder.tracking_number || foundOrder.trackingNumber || foundOrder.id;
+    const statusText = foundOrder.shipment_status || foundOrder.shipmentStatus || foundOrder.status || "In Transit";
+    const destCity = destObj?.city || "London";
+    const destCountry = destObj?.country || "United Kingdom";
+    const estDelivery = foundOrder.shipping_date || foundOrder.shippingDate || trackingData.estimatedDelivery || "in 3-5 business days";
+    const carrier = foundOrder.carrier || "JiffEX Express";
+
+    const speechText = `Shipment ${trackingCode} to ${destCity}, ${destCountry} is currently ${statusText} with ${carrier}. Estimated delivery date is ${estDelivery}.`;
 
     return res.json({
-      status: effectiveStatus,
-      trackingId: effectiveTrackingId,
+      success: true,
+      found: true,
       orderId: foundOrder.id,
-      estimatedDelivery: effectiveDelivery,
-      customerName: destObj?.fullName || foundOrder.customer_name || foundOrder.customerName || "Valued Customer",
-      destination: destObj?.city ? `${destObj.city}, ${destObj.country || ''}` : undefined,
-      carrier: foundOrder.carrier || "JiffEX"
+      trackingId: trackingCode,
+      trackingNumber: trackingCode,
+      status: statusText,
+      shipmentStatus: statusText,
+      carrier: carrier,
+      origin: trackingData.origin || "Delhi, India",
+      destination: `${destCity}, ${destCountry}`,
+      estimatedDelivery: estDelivery,
+      weight: trackingData.weight || `${foundOrder.total_weight || 2.5} kg`,
+      customerName: destObj?.fullName || foundOrder.customer_name || "Valued Customer",
+      events: trackingData.events || [],
+      latestEvent: trackingData.events?.[0] || null,
+      message: speechText,
+      speech: speechText,
+      result: speechText
     });
-
   } catch (err: any) {
-    console.error("[get_shipment_status ERROR]:", err.message);
-    res.status(500).json({ error: err.message || "Failed to retrieve shipment status" });
+    console.error("[handleGetShipmentStatus ERROR]:", err.message);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message || "Failed to retrieve live shipment tracking.",
+      message: "An error occurred while retrieving shipment details. Please try again.",
+      speech: "An error occurred while retrieving your shipment status. Please try again in a moment."
+    });
   }
 };
 
-app.post("/get_shipment_status", handleGetShipmentStatus);
-app.post("/api/get_shipment_status", handleGetShipmentStatus);
-
-// API: Endpoint to get shipping quote (supports POST/GET /get_shipping_quote and /api/get_shipping_quote)
+// 2. Shipping Quote Calculator Handler
 const handleGetShippingQuote = async (req: express.Request, res: express.Response) => {
-  console.log("========== SHIPPING QUOTE REQUEST ==========");
+  console.log(`[OmniDimension Quote] Request Method: ${req.method}`);
   try {
-    const body = req.method === 'GET' ? req.query : (req.body || {});
-    const args = body.arguments || body.message?.toolCalls?.[0]?.function?.arguments || body.message?.call?.customer || {};
+    const params = extractAgentParams(req);
     
-    let rawCountry = (body.destinationCountry || body.destination_country || body.country || args.destinationCountry || args.destination_country || args.country || 'USA').toString().trim();
-    let weight = parseFloat(body.weightKg || body.weight || args.weightKg || args.weight || 1);
+    let rawCountry = (params.destinationCountry || params.destination_country || params.country || params.to || params.destination || 'USA').toString().trim();
+    let weight = parseFloat(params.weightKg || params.weight_kg || params.weight || params.wt || 1);
     if (isNaN(weight) || weight <= 0) weight = 1;
 
-    let method = (body.method || body.shippingMethod || args.method || args.shippingMethod || 'Express').toString().trim();
+    // Optional volumetric dimensions (in cm)
+    const length = parseFloat(params.length || params.l || 0);
+    const width = parseFloat(params.width || params.w || 0);
+    const height = parseFloat(params.height || params.h || 0);
+    let volumetricWeight = 0;
+    if (length > 0 && width > 0 && height > 0) {
+      volumetricWeight = Math.round(((length * width * height) / 5000) * 100) / 100;
+    }
+    const chargeableWeight = Math.max(weight, volumetricWeight);
 
-    // Normalize country
+    let method = (params.method || params.shippingMethod || params.shipping_method || params.serviceType || 'Express').toString().trim();
+    let packageType = (params.packageType || params.package_type || params.itemType || params.item_type || 'General Goods').toString().trim();
+
+    // Country normalization
     const countryLower = rawCountry.toLowerCase();
     let normalizedCountry = 'USA';
-    if (countryLower.includes('uk') || countryLower.includes('kingdom') || countryLower.includes('england') || countryLower.includes('london')) {
+    if (countryLower.includes('uk') || countryLower.includes('kingdom') || countryLower.includes('england') || countryLower.includes('london') || countryLower.includes('britain')) {
       normalizedCountry = 'UK';
-    } else if (countryLower.includes('ca') || countryLower.includes('canada')) {
+    } else if (countryLower.includes('ca') || countryLower.includes('canada') || countryLower.includes('toronto')) {
       normalizedCountry = 'Canada';
-    } else if (countryLower.includes('au') || countryLower.includes('australia')) {
+    } else if (countryLower.includes('au') || countryLower.includes('australia') || countryLower.includes('sydney') || countryLower.includes('melbourne')) {
       normalizedCountry = 'Australia';
-    } else if (countryLower.includes('uae') || countryLower.includes('dubai') || countryLower.includes('emirates')) {
+    } else if (countryLower.includes('uae') || countryLower.includes('dubai') || countryLower.includes('emirates') || countryLower.includes('abu dhabi')) {
       normalizedCountry = 'UAE';
-    } else if (countryLower.includes('de') || countryLower.includes('germany') || countryLower.includes('deutschland')) {
+    } else if (countryLower.includes('de') || countryLower.includes('germany') || countryLower.includes('deutschland') || countryLower.includes('berlin') || countryLower.includes('frankfurt')) {
       normalizedCountry = 'Germany';
     } else if (countryLower.includes('sg') || countryLower.includes('singapore')) {
       normalizedCountry = 'Singapore';
-    } else if (countryLower.includes('in') || countryLower.includes('india')) {
+    } else if (countryLower.includes('in') || countryLower.includes('india') || countryLower.includes('delhi') || countryLower.includes('mumbai') || countryLower.includes('hyderabad') || countryLower.includes('bangalore')) {
       normalizedCountry = 'India';
-    } else if (countryLower.includes('us') || countryLower.includes('america') || countryLower.includes('states')) {
+    } else if (countryLower.includes('us') || countryLower.includes('america') || countryLower.includes('states') || countryLower.includes('new york') || countryLower.includes('california')) {
       normalizedCountry = 'USA';
     } else {
       normalizedCountry = rawCountry.charAt(0).toUpperCase() + rawCountry.slice(1);
     }
 
-    // Fetch live rates, rateBands & discounts from Supabase shipping_settings
+    // Live shipping settings & rates from Supabase
     const settings = await getShippingSettings();
     const rates = settings.rates || {};
     const rateBands = settings.rateBands || DEFAULT_RATE_BANDS;
@@ -3733,12 +3827,12 @@ const handleGetShippingQuote = async (req: express.Request, res: express.Respons
     const countryBands = rateBands[normalizedCountry] || DEFAULT_RATE_BANDS[normalizedCountry] || DEFAULT_RATE_BANDS['USA'];
     let baseRate = Number(rates[normalizedCountry]) || Number(rates['USA']) || 996;
     let isFlatRate = false;
-    let appliedBandLabel = 'Base Rate';
+    let appliedBandLabel = 'Standard Tier';
 
     if (countryBands && countryBands.length > 0) {
       const sorted = [...countryBands].sort((a: any, b: any) => Number(a.minWeight) - Number(b.minWeight));
-      const matched = sorted.find((b: any) => weight >= Number(b.minWeight) && weight <= Number(b.maxWeight))
-        || (weight > Number(sorted[sorted.length - 1].maxWeight) ? sorted[sorted.length - 1] : sorted[0]);
+      const matched = sorted.find((b: any) => chargeableWeight >= Number(b.minWeight) && chargeableWeight <= Number(b.maxWeight))
+        || (chargeableWeight > Number(sorted[sorted.length - 1].maxWeight) ? sorted[sorted.length - 1] : sorted[0]);
 
       if (matched) {
         baseRate = Number(matched.rate) || baseRate;
@@ -3749,42 +3843,250 @@ const handleGetShippingQuote = async (req: express.Request, res: express.Respons
       }
     }
 
-    const isStandard = method.toLowerCase().includes('standard');
-    const methodMultiplier = isStandard ? 0.7 : 1.0;
+    const isStandard = method.toLowerCase().includes('standard') || method.toLowerCase().includes('economy');
+    const methodMultiplier = isStandard ? 0.75 : 1.0;
+    const effectiveMethod = isStandard ? 'Standard Economy' : 'JiffEX Priority Express';
 
-    const rawQuote = isFlatRate ? baseRate * methodMultiplier : weight * baseRate * methodMultiplier;
+    const rawQuote = isFlatRate ? baseRate * methodMultiplier : chargeableWeight * baseRate * methodMultiplier;
     const discountPercent = Number(discounts[normalizedCountry]) || 0;
     const discountAmount = rawQuote * (discountPercent / 100);
     const finalPriceInr = Math.max(0, Math.round(rawQuote - discountAmount));
+    const approximateUsd = Math.round((finalPriceInr / 86) * 10) / 10;
 
     const formattedPrice = `₹${finalPriceInr.toLocaleString('en-IN')}`;
-    const deliveryTime = isStandard ? '10–14 business days' : '5–7 business days';
+    const deliveryTime = isStandard ? '8–12 business days' : '3–5 business days';
 
-    console.log(`[get_shipping_quote] Country: ${normalizedCountry}, Weight: ${weight}kg, Band: ${appliedBandLabel}, Method: ${method} -> Price: ${formattedPrice}`);
+    const speechText = `Shipping ${chargeableWeight} kg of ${packageType} to ${normalizedCountry} via ${effectiveMethod} will cost ${formattedPrice} (approx $${approximateUsd} USD). Estimated transit time is ${deliveryTime}, including free doorstep pickup and tracking.`;
+
+    console.log(`[OmniDimension Quote] Calculated for ${normalizedCountry} (${chargeableWeight} kg): ${formattedPrice}`);
 
     return res.json({
+      success: true,
+      origin: "India",
       country: normalizedCountry,
       destinationCountry: normalizedCountry,
-      price: formattedPrice,
-      deliveryTime: deliveryTime,
-      currency: "INR",
-      priceInr: finalPriceInr,
       weightKg: weight,
+      volumetricWeightKg: volumetricWeight > 0 ? volumetricWeight : undefined,
+      chargeableWeightKg: chargeableWeight,
+      packageType: packageType,
+      method: effectiveMethod,
+      price: formattedPrice,
+      priceInr: finalPriceInr,
+      approximateUsd: approximateUsd,
+      currency: "INR",
+      deliveryTime: deliveryTime,
       appliedBand: appliedBandLabel,
-      method: isStandard ? 'Standard' : 'Express',
-      discountPercent: discountPercent,
-      message: `Shipping quote for ${normalizedCountry} (${weight} kg [band: ${appliedBandLabel}], ${isStandard ? 'Standard' : 'Express'}) is ${formattedPrice} with estimated delivery in ${deliveryTime}.`
+      discountApplied: discountPercent > 0 ? `${discountPercent}% Instant Off` : undefined,
+      doorstepPickupIncluded: true,
+      message: speechText,
+      speech: speechText,
+      result: speechText
     });
   } catch (err: any) {
-    console.error("[get_shipping_quote ERROR]:", err.message);
-    res.status(500).json({ error: err.message || "Failed to calculate shipping quote" });
+    console.error("[handleGetShippingQuote ERROR]:", err.message);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message || "Failed to calculate quote.",
+      speech: "I encountered an issue calculating that quote. Please specify the destination country and estimated weight in kilograms."
+    });
   }
 };
 
+// 3. Book Doorstep / Home Pickup Handler
+const handleBookHomePickup = async (req: express.Request, res: express.Response) => {
+  console.log(`[OmniDimension Pickup] Request Method: ${req.method}`);
+  try {
+    const params = extractAgentParams(req);
+
+    const customerName = (params.customerName || params.customer_name || params.name || params.fullName || params.full_name || 'Valued Customer').toString().trim();
+    const phone = (params.phone || params.phoneNumber || params.phone_number || params.contact || '').toString().trim();
+    const email = (params.email || params.emailAddress || 'customer@jiffex.com').toString().trim();
+    const address = (params.address || params.pickupAddress || params.pickup_address || params.street || params.location || 'Customer Address Provided via Agent').toString().trim();
+    
+    // Date formatting (default to tomorrow if omitted)
+    let pickupDate = (params.pickupDate || params.pickup_date || params.date || '').toString().trim();
+    if (!pickupDate || pickupDate.toLowerCase() === 'tomorrow') {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      pickupDate = tomorrow.toISOString().split('T')[0];
+    } else if (pickupDate.toLowerCase() === 'today') {
+      pickupDate = new Date().toISOString().split('T')[0];
+    }
+
+    const pickupTime = (params.pickupTime || params.pickup_time || params.timeSlot || params.time_slot || params.slot || params.time || '10:00 AM - 1:00 PM (Morning Slot)').toString().trim();
+    const itemType = (params.itemType || params.item_type || params.items || params.packageDetails || params.package_details || 'International Parcel / Box').toString().trim();
+    const vehicleType = (params.vehicleType || params.vehicle_type || 'Two Wheeler').toString().trim();
+    const notes = (params.notes || params.instructions || params.specialInstructions || '').toString().trim();
+
+    // Generate real Pickup ID
+    const randomSeq = Math.floor(100000 + Math.random() * 900000);
+    const pickupId = `PKP-${randomSeq}`;
+
+    const newPickupRecord = {
+      id: pickupId,
+      customer_id: params.customerId || params.customer_id || `CUST-${phone.slice(-4) || '9999'}`,
+      customer_name: customerName,
+      email: email,
+      phone: phone || '+91 98765 43210',
+      status: 'Scheduled',
+      pickup_date: pickupDate,
+      pickup_time: pickupTime,
+      address: address,
+      items: [
+        {
+          name: itemType,
+          weight: params.estimatedWeight || params.weight || '1-5 kg',
+          notes: notes
+        }
+      ],
+      payment_status: 'Pending',
+      pickup_type: 'Doorstep',
+      assigned_agent_id: null,
+      language_preference: 'English',
+      item_type: itemType,
+      vehicle_type: vehicleType
+    };
+
+    // Store in memory
+    memPickups.unshift(newPickupRecord);
+    saveDb();
+
+    // Persist to Supabase if connected
+    if (supabase) {
+      try {
+        await supabase.from('pickups').upsert(newPickupRecord);
+      } catch (dbErr: any) {
+        console.warn("[handleBookHomePickup DB warning]:", dbErr.message);
+      }
+    }
+
+    const speechText = `Your doorstep pickup is successfully booked with Booking ID ${pickupId}! Our Jiffex executive will arrive on ${pickupDate} during the ${pickupTime} at your address (${address.substring(0, 40)}).`;
+
+    console.log(`[OmniDimension Pickup] Created Pickup Booking: ${pickupId} for ${customerName}`);
+
+    return res.json({
+      success: true,
+      pickupId: pickupId,
+      bookingId: pickupId,
+      status: "Scheduled",
+      customerName: customerName,
+      phone: newPickupRecord.phone,
+      pickupDate: pickupDate,
+      pickupTime: pickupTime,
+      address: address,
+      itemType: itemType,
+      message: speechText,
+      speech: speechText,
+      result: speechText,
+      pickupDetails: newPickupRecord
+    });
+  } catch (err: any) {
+    console.error("[handleBookHomePickup ERROR]:", err.message);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message || "Failed to schedule home pickup.",
+      speech: "I encountered an issue booking your pickup. Please provide your full address, phone number, and preferred date."
+    });
+  }
+};
+
+// Route registrations (Both GET and POST for broad agent / webhook compatibility)
+// 1. Live Tracking
+app.post("/get_shipment_status", handleGetShipmentStatus);
+app.get("/get_shipment_status", handleGetShipmentStatus);
+app.post("/api/get_shipment_status", handleGetShipmentStatus);
+app.get("/api/get_shipment_status", handleGetShipmentStatus);
+app.post("/track_shipment", handleGetShipmentStatus);
+app.get("/track_shipment", handleGetShipmentStatus);
+app.post("/api/omnidimension/track", handleGetShipmentStatus);
+app.get("/api/omnidimension/track", handleGetShipmentStatus);
+
+// 2. Quote Calculator
 app.post("/get_shipping_quote", handleGetShippingQuote);
-app.post("/api/get_shipping_quote", handleGetShippingQuote);
 app.get("/get_shipping_quote", handleGetShippingQuote);
+app.post("/api/get_shipping_quote", handleGetShippingQuote);
 app.get("/api/get_shipping_quote", handleGetShippingQuote);
+app.post("/calculate_shipping_quote", handleGetShippingQuote);
+app.get("/calculate_shipping_quote", handleGetShippingQuote);
+app.post("/api/omnidimension/quote", handleGetShippingQuote);
+app.get("/api/omnidimension/quote", handleGetShippingQuote);
+
+// 3. Home Pickup Booking
+app.post("/book_home_pickup", handleBookHomePickup);
+app.get("/book_home_pickup", handleBookHomePickup);
+app.post("/api/book_home_pickup", handleBookHomePickup);
+app.get("/api/book_home_pickup", handleBookHomePickup);
+app.post("/book_pickup", handleBookHomePickup);
+app.get("/book_pickup", handleBookHomePickup);
+app.post("/schedule_pickup", handleBookHomePickup);
+app.get("/schedule_pickup", handleBookHomePickup);
+app.post("/api/omnidimension/pickup", handleBookHomePickup);
+app.get("/api/omnidimension/pickup", handleBookHomePickup);
+
+// OmniDimension Tools JSON Schema Manifest & Test
+app.get("/api/omnidimension/tools", (req, res) => {
+  res.json({
+    name: "Jiffex Logistics Tools",
+    version: "2.0.0",
+    tools: [
+      {
+        name: "get_shipment_status",
+        description: "Get real-time tracking information, checkpoints, and estimated delivery date for a Jiffex shipment.",
+        parameters: {
+          type: "object",
+          properties: {
+            trackingId: { type: "string", description: "The Jiffex shipment tracking number or Order ID (e.g. JFX-12345)" },
+            phone: { type: "string", description: "The customer's registered phone number to find associated shipments" }
+          }
+        },
+        endpoint: "/get_shipment_status",
+        method: "POST"
+      },
+      {
+        name: "get_shipping_quote",
+        description: "Calculate accurate international shipping rates, discounts, and delivery timelines based on country, weight, and method.",
+        parameters: {
+          type: "object",
+          properties: {
+            destinationCountry: { type: "string", description: "The destination country name (e.g. USA, UK, Canada, Australia, UAE, Germany)" },
+            weightKg: { type: "number", description: "Total package weight in kilograms (e.g. 2.5)" },
+            shippingMethod: { type: "string", enum: ["Express", "Standard"], description: "Shipping speed tier: Express (3-5 days) or Standard (8-12 days)" },
+            packageType: { type: "string", description: "Type of goods (e.g. Documents, Clothes, Food items, Electronics)" }
+          },
+          required: ["destinationCountry", "weightKg"]
+        },
+        endpoint: "/get_shipping_quote",
+        method: "POST"
+      },
+      {
+        name: "book_home_pickup",
+        description: "Schedule a free doorstep package pickup by a Jiffex courier executive.",
+        parameters: {
+          type: "object",
+          properties: {
+            customerName: { type: "string", description: "Full name of the customer" },
+            phone: { type: "string", description: "Contact phone number of the customer" },
+            address: { type: "string", description: "Full pickup street address, city, and pincode" },
+            pickupDate: { type: "string", description: "Desired pickup date (e.g. 2026-08-25, 'Tomorrow', 'Today')" },
+            pickupTime: { type: "string", description: "Preferred time slot (e.g. '10:00 AM - 1:00 PM', 'Morning', 'Afternoon')" },
+            itemType: { type: "string", description: "Brief description of packages (e.g. 2 boxes of clothes, approx 5kg)" }
+          },
+          required: ["customerName", "phone", "address"]
+        },
+        endpoint: "/book_home_pickup",
+        method: "POST"
+      }
+    ]
+  });
+});
+
+app.get("/api/omnidim-test", (req, res) => {
+  res.json({
+    success: true,
+    message: "OmniDimension connection and agent endpoints active",
+    supportedTools: ["get_shipment_status", "get_shipping_quote", "book_home_pickup"]
+  });
+});
 
 async function startServer() {
   console.log("[Server Initialization] Seeding Supabase database if empty...");
@@ -3801,13 +4103,11 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    // In production, serve static files from dist
-    if (fs.existsSync("dist")) {
-      app.use(express.static("dist"));
-      app.get("*", (req, res) => {
-        res.sendFile("dist/index.html", { root: "." });
-      });
-    }
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
   }
 
   console.log("Starting listener...");

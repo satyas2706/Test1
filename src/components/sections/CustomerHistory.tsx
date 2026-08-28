@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Logo } from '../Logo';
-import { Truck, Package, Clock, ChevronRight, XCircle, Printer, Share, Mail, MessageCircle, Loader2 } from 'lucide-react';
+import { Truck, Package, Clock, ChevronRight, XCircle, Printer, Share, Mail, MessageCircle, Loader2, ArrowLeft } from 'lucide-react';
 import { User, Order } from '../../types';
 import { WAREHOUSE_ADDRESS, COMPANY_DETAILS } from '../../constants';
 import { api } from '../../services/api';
@@ -34,7 +34,16 @@ const CustomerHistory = ({
   return (
     <div className="space-y-8">
       <StaticShipmentTracker />
-      <h2 className="text-3xl font-black text-slate-900">My Orders & History</h2>
+      <div className="flex items-center gap-4">
+        <button 
+          onClick={() => navigateTo('home')}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 font-bold transition-all shadow-sm group cursor-pointer"
+        >
+          <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform text-slate-500 group-hover:text-indigo-600" />
+          <span>Back</span>
+        </button>
+        <h2 className="text-3xl font-black text-slate-900">My Orders & History</h2>
+      </div>
       
       <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
         <h3 className="text-xl font-bold mb-6 flex items-center gap-2">

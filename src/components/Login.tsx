@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
-import { Mail, Phone, ArrowRight, Loader2, CheckCircle2, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, ArrowRight, Loader2, CheckCircle2, ShieldCheck, RefreshCw, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
 interface LoginProps {
-  onSuccess: (identifier: string, name?: string) => void;
+  onSuccess: (email: string, name?: string) => void;
   initialEmail?: string;
   initialPhone?: string;
-  initialMethod?: 'email' | 'phone';
+  initialMethod?: string;
 }
 
 interface AgentProfile {
@@ -19,13 +19,25 @@ interface AgentProfile {
   vehicleNumber?: string;
 }
 
-export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '', initialPhone = '', initialMethod = 'email' }) => {
-  const [method, setMethod] = useState<'email' | 'phone'>(initialMethod);
+export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '' }) => {
   const [step, setStep] = useState<'input' | 'otp'>('input');
   const [email, setEmail] = useState(initialEmail);
-  const [phone, setPhone] = useState(initialPhone);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Timer countdown for resending OTP
+  useEffect(() => {
+    let interval: any = null;
+    if (resendCooldown > 0) {
+      interval = setInterval(() => {
+        setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [resendCooldown]);
 
   // Helper to validate agent work email against agent management list
   const checkAgentEmailValidity = (enteredEmail: string): { isValid: boolean; error?: string } => {
@@ -40,7 +52,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '', init
     let agents: AgentProfile[] = [
       { id: '10001', name: 'Rahul Sharma', phone: '+91 98765 43210', email: '10001.agent@jiffex.com', status: 'Active', vehicleNumber: 'KA-01-AB-1234' },
       { id: '10002', name: 'Priya Patel', phone: '+91 87654 32109', email: '10002.agent@jiffex.com', status: 'Active', vehicleNumber: 'MH-02-CD-5678' },
-      { id: '12345', name: 'Test Agent (You)', phone: '+91 00000 00000', email: '12345.agent@jiffex.com', status: 'Active', vehicleNumber: 'TEST-001' },
+      { id: '12345', name: 'Field Agent', phone: '+91 00000 00000', email: '12345.agent@jiffex.com', status: 'Active', vehicleNumber: 'TEST-001' },
     ];
 
     // Load from localStorage if present
@@ -70,292 +82,282 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '', init
     };
   };
 
-  const handleSendOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("[Login] Sending OTP request for method:", method);
-    setIsLoading(true);
-    
-    if (method === 'email') {
-      if (!email || !email.includes('@')) {
-        toast.error('Please enter a valid email address');
-        setIsLoading(false);
-        return;
-      }
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-      // Check agent email validation
-      const agentCheck = checkAgentEmailValidity(email);
-      if (!agentCheck.isValid) {
-        toast.error(agentCheck.error || 'Access Denied');
-        setIsLoading(false);
-        return;
-      }
-    } else {
-      if (!phone || phone.replace(/\D/g, '').length < 10) {
-        toast.error('Please enter a valid 10-digit mobile number');
-        setIsLoading(false);
-        return;
-      }
+  const handleSendOTP = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setErrorMessage(null);
+    
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      toast.error('Please enter a valid email address');
+      return;
     }
 
+    // Check agent email validation if applicable
+    const agentCheck = checkAgentEmailValidity(cleanEmail);
+    if (!agentCheck.isValid) {
+      toast.error(agentCheck.error || 'Access Denied');
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      const payload = method === 'email' ? { email: email.trim().toLowerCase() } : { phone: phone.trim() };
-      let data: any;
+      const response = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail })
+      });
+      
+      const data = await response.json();
 
-      try {
-        const response = await fetch('/api/auth/send-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        
-        const contentType = response.headers.get('content-type');
-        if (response.ok && contentType && contentType.includes('application/json')) {
-          data = await response.json();
-        } else {
-          // If HTML response or 404, we support safe custom client-side fallback for static Vercel hosts
-          console.warn("[Login] Server returned non-JSON or error. Falling back to local demo OTP simulator.");
-          data = { success: true, devCode: "123456", isFallback: true };
-        }
-      } catch (fetchErr) {
-        console.warn("[Login] Network/route failed. Falling back to local demo OTP simulator:", fetchErr);
-        data = { success: true, devCode: "123456", isFallback: true };
-      }
-
-      console.log("[Login] Send OTP Response:", data);
-      if (data.success) {
+      if (response.ok && data.success) {
         setStep('otp');
-        toast.success(`OTP sent to your ${method}`);
-        if (data.devCode) {
-          console.log(`DEV MODE: ${method} OTP is`, data.devCode);
-          // Auto-fill OTP for easier testing
-          setOtp(data.devCode.split(''));
-          toast.info(`DEV MODE: Auto-filling code ${data.devCode}`, {
-            duration: 8000,
-            description: data.isFallback 
-              ? "Resilient client-side fallback mode is ACTIVE (No active backend found). Use code " + data.devCode
-              : "In production, this would be sent to your " + method
-          });
-        }
+        setOtp(['', '', '', '', '', '']);
+        setErrorMessage(null);
+        setResendCooldown(45); // 45 seconds cooldown before resend
+        toast.success(`Verification code sent to ${cleanEmail}`);
+        // Focus first OTP field after state transition
+        setTimeout(() => {
+          document.getElementById('otp-0')?.focus();
+        }, 150);
       } else {
-        throw new Error(data.error || 'Failed to send OTP');
+        throw new Error(data.error || 'Failed to send verification code. Please try again.');
       }
     } catch (err: any) {
-      console.error("Login Error:", err);
-      toast.error(err.message || 'Failed to send OTP');
+      console.error("[Login] Send OTP Error:", err);
+      const msg = err.message || 'Failed to send verification code. Please check your connection.';
+      setErrorMessage(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    const otpCode = otp.join('');
-    
-    if (method === 'email') {
-      const agentCheck = checkAgentEmailValidity(email);
-      if (!agentCheck.isValid) {
-        toast.error(agentCheck.error || 'Access Denied');
-        setIsLoading(false);
-        return;
-      }
+  const triggerVerification = async (enteredOtp: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    const otpCode = enteredOtp.trim();
+
+    if (otpCode.length !== 6) {
+      toast.error('Please enter the complete 6-digit verification code');
+      return;
     }
 
+    const agentCheck = checkAgentEmailValidity(cleanEmail);
+    if (!agentCheck.isValid) {
+      toast.error(agentCheck.error || 'Access Denied');
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage(null);
+
     try {
-      const payload = method === 'email' ? { email: email.trim().toLowerCase(), code: otpCode } : { phone: phone.trim(), code: otpCode };
-      let data: any;
+      const response = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: cleanEmail, 
+          code: otpCode 
+        })
+      });
+      
+      const data = await response.json();
 
-      try {
-        const response = await fetch('/api/auth/verify-otp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        
-        const contentType = response.headers.get('content-type');
-        if (response.ok && contentType && contentType.includes('application/json')) {
-          data = await response.json();
-        } else {
-          console.warn("[Login] Verification endpoint failed or returned HTML. Applying client-side fallback verify.");
-          if (otpCode === '123456' || otpCode === '10001' || otpCode === '10002' || otpCode === '12345') {
-            data = { success: true, user: { email: email || '', phone: phone || '', id: 'user-' + Math.random().toString(36).substr(2, 9) } };
-          } else {
-            data = { success: false, error: "Invalid OTP code. Try 123456." };
-          }
-        }
-      } catch (fetchErr) {
-        console.warn("[Login] Network failure on verification. Applying client-side fallback verify:", fetchErr);
-        if (otpCode === '123456' || otpCode === '10001' || otpCode === '10002' || otpCode === '12345') {
-          data = { success: true, user: { email: email || '', phone: phone || '', id: 'user-' + Math.random().toString(36).substr(2, 9) } };
-        } else {
-          data = { success: false, error: "Invalid OTP code. Try 123456." };
-        }
-      }
-
-      if (data.success) {
-        toast.success('Login successful!');
-        onSuccess(method === 'email' ? email : phone);
+      if (response.ok && data.success) {
+        toast.success('Authentication successful! Welcome to JiffEX.');
+        onSuccess(cleanEmail, data.user?.name);
       } else {
-        throw new Error(data.error || 'Invalid OTP');
+        const errorMsg = data.error || 'Invalid verification code. Please check your email and try again.';
+        setErrorMessage(errorMsg);
+        toast.error(errorMsg);
+        // Highlight inputs and select first
+        setTimeout(() => {
+          document.getElementById('otp-0')?.focus();
+        }, 100);
       }
     } catch (err: any) {
-      console.error("Verification Error:", err);
-      toast.error(err.message || 'Verification failed');
+      console.error("[Login] Verification Error:", err);
+      const msg = err.message || 'Verification failed. Please check the code.';
+      setErrorMessage(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleVerifyOTP = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    await triggerVerification(otp.join(''));
   };
 
   const handleOtpChange = (index: number, value: string) => {
-    if (value.length > 1) value = value[0];
+    setErrorMessage(null);
+    // Handle pasting a full 6-digit code
+    if (value.length > 1) {
+      const digitsOnly = value.replace(/\D/g, '').slice(0, 6);
+      if (digitsOnly.length > 0) {
+        const newOtp = [...otp];
+        for (let i = 0; i < 6; i++) {
+          newOtp[i] = digitsOnly[i] || '';
+        }
+        setOtp(newOtp);
+        if (digitsOnly.length === 6) {
+          triggerVerification(digitsOnly);
+        } else {
+          const nextFocusIndex = Math.min(digitsOnly.length, 5);
+          document.getElementById(`otp-${nextFocusIndex}`)?.focus();
+        }
+        return;
+      }
+    }
+
     if (!/^\d*$/.test(value)) return;
 
+    const singleDigit = value.slice(-1);
     const newOtp = [...otp];
-    newOtp[index] = value;
+    newOtp[index] = singleDigit;
     setOtp(newOtp);
 
-    // Auto-focus next input
-    if (value && index < 5) {
+    // Auto-focus next input or auto-submit on complete 6 digits
+    if (singleDigit && index < 5) {
       const nextInput = document.getElementById(`otp-${index + 1}`);
       nextInput?.focus();
+    } else if (singleDigit && index === 5) {
+      const fullCode = newOtp.join('');
+      if (fullCode.length === 6) {
+        triggerVerification(fullCode);
+      }
     }
   };
 
-  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      const prevInput = document.getElementById(`otp-${index - 1}`);
-      prevInput?.focus();
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      if (!otp[index] && index > 0) {
+        const prevInput = document.getElementById(`otp-${index - 1}`);
+        prevInput?.focus();
+      }
+    } else if (e.key === 'ArrowLeft' && index > 0) {
+      document.getElementById(`otp-${index - 1}`)?.focus();
+    } else if (e.key === 'ArrowRight' && index < 5) {
+      document.getElementById(`otp-${index + 1}`)?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pastedData.length > 0) {
+      const newOtp = [...otp];
+      for (let i = 0; i < 6; i++) {
+        newOtp[i] = pastedData[i] || '';
+      }
+      setOtp(newOtp);
+      if (pastedData.length === 6) {
+        triggerVerification(pastedData);
+      } else {
+        const targetIndex = Math.min(pastedData.length, 5);
+        document.getElementById(`otp-${targetIndex}`)?.focus();
+      }
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Testing Mode Banner */}
-      <div className="bg-indigo-600 border border-indigo-700 rounded-2xl md:rounded-3xl p-4 md:p-6 flex flex-col gap-3 md:gap-4 shadow-xl shadow-indigo-100 relative overflow-hidden">
-        <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
-        <div className="flex items-center gap-3 relative z-10">
-          <div className="w-10 h-10 md:w-12 md:h-12 bg-white/20 text-white rounded-xl md:rounded-2xl flex items-center justify-center shrink-0 border border-white/20 backdrop-blur-md">
-            <ShieldCheck size={22} className="md:w-7 md:h-7" />
-          </div>
-          <div>
-            <p className="text-xs md:text-sm font-black text-white tracking-tight">System in Testing Mode</p>
-            <p className="text-[10px] md:text-[11px] text-indigo-100 font-bold uppercase tracking-wider opacity-80">Demo SMS/Email auto-fills</p>
-          </div>
-        </div>
-        <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 md:p-4 border border-white/10 relative z-10">
-          <p className="text-[11px] md:text-xs text-indigo-50 font-medium leading-relaxed">
-            Use any <span className="text-white font-black underline decoration-indigo-400 underline-offset-4 decoration-2">6 digits (e.g. 123456)</span> to verify. 
-            We'll also auto-fill the code for you after you click "Send OTP".
-          </p>
-        </div>
-      </div>
-
       {step === 'input' ? (
-        <>
-          {/* Tabs */}
-          <div className="flex p-1 bg-slate-100 rounded-2xl">
-            <button
-              onClick={() => setMethod('email')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
-                method === 'email' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <Mail size={16} /> Email
-            </button>
-            <button
-              onClick={() => setMethod('phone')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${
-                method === 'phone' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <Phone size={16} /> Phone
-            </button>
-          </div>
-
+        <div className="space-y-6">
           <form onSubmit={handleSendOTP} className="space-y-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                {method === 'email' ? 'Email Address' : 'Phone Number'}
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                <span>Email Address</span>
+                <span className="text-[10px] font-bold text-indigo-600 lowercase tracking-normal">passwordless sign-in</span>
               </label>
               <div className="relative">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                  {method === 'email' ? <Mail size={18} /> : <Phone size={18} />}
+                  <Mail size={18} />
                 </div>
                 <input
-                  type={method === 'email' ? 'email' : 'tel'}
+                  type="email"
                   required
-                  placeholder={method === 'email' ? 'name@example.com' : '10-digit mobile number'}
-                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium"
-                  value={method === 'email' ? email : phone}
-                  onChange={(e) => method === 'email' ? setEmail(e.target.value) : setPhone(e.target.value)}
+                  autoFocus
+                  placeholder="name@example.com"
+                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all font-medium text-slate-800 placeholder:text-slate-400 shadow-sm"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
             </div>
 
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              disabled={isLoading || !email.trim()}
+              className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 active:scale-[0.99] transition-all shadow-xl shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             >
               {isLoading ? (
-                <Loader2 size={20} className="animate-spin" />
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  <span>Sending Verification Code...</span>
+                </>
               ) : (
-                <>Send OTP <ArrowRight size={20} /></>
+                <>
+                  <span>Send One-Time Password</span>
+                  <ArrowRight size={18} />
+                </>
               )}
             </button>
           </form>
 
-          <div className="flex items-center gap-4 py-2">
-            <div className="h-px flex-1 bg-slate-100" />
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Secure Login</span>
-            <div className="h-px flex-1 bg-slate-100" />
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-              <ShieldCheck size={20} className="text-emerald-600 shrink-0" />
-              <p className="text-[11px] text-emerald-700 font-medium leading-relaxed">
-                We'll send a one-time password to verify your account. No password required.
+          <div className="space-y-3 pt-1">
+            <div className="flex items-center gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80">
+              <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                <ShieldCheck size={18} />
+              </div>
+              <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                We will send a secure 6-digit one-time password (OTP) to your email to verify your session.
               </p>
             </div>
-            {method === 'email' && (
-              <div className="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100/40 text-left">
-                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                  <span className="font-bold text-indigo-600">Field Agent Login:</span> Use your unique 5-digit ID to log in, e.g., <span className="font-bold font-mono text-indigo-700">12345.agent@jiffex.com</span>.
-                </p>
-              </div>
-            )}
+
+            <div className="p-3.5 bg-indigo-50/50 rounded-2xl border border-indigo-100/60 text-left">
+              <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                <strong className="text-indigo-900 font-bold">Field Agent Sign In:</strong> Use your assigned agent email, e.g. <span className="font-mono font-bold text-indigo-700">12345.agent@jiffex.com</span>.
+              </p>
+            </div>
           </div>
-        </>
+        </div>
       ) : (
         <motion.div
-           initial={{ opacity: 0, x: 20 }}
-           animate={{ opacity: 1, x: 0 }}
-           className="space-y-6"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
         >
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 size={24} />
+            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-indigo-100 shadow-sm">
+              <KeyRound size={24} />
             </div>
-            <h3 className="text-xl font-black text-slate-900">Verify Identity</h3>
-            <p className="text-sm text-slate-500">
-              Enter the 6-digit code sent to <span className="font-bold text-slate-900">{method === 'email' ? email : phone}</span>
+            <h3 className="text-xl font-black text-slate-900">Check Your Email</h3>
+            <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto leading-relaxed">
+              We sent a 6-digit verification code to <span className="font-bold text-slate-900 block sm:inline">{email}</span>
             </p>
-            <div className="mt-2 p-2 bg-indigo-50 rounded-lg text-[10px] font-bold text-indigo-600 uppercase tracking-widest inline-block">
-              Testing Mode: Use any 6 digits (e.g. 123456)
-            </div>
           </div>
 
           <form onSubmit={handleVerifyOTP} className="space-y-6">
-            <div className="flex justify-between gap-2">
+            <div className="flex justify-center gap-2 sm:gap-3" onPaste={handlePaste}>
               {otp.map((digit, i) => (
                 <input
                   key={i}
                   id={`otp-${i}`}
                   type="text"
                   inputMode="numeric"
+                  pattern="[0-9]*"
                   maxLength={1}
-                  className="w-12 h-14 text-center text-xl font-black bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  autoComplete="one-time-code"
+                  className={`w-11 sm:w-12 h-14 text-center text-2xl font-black rounded-xl focus:ring-2 outline-none transition-all shadow-sm ${
+                    errorMessage
+                      ? 'bg-rose-50 border-2 border-rose-300 text-rose-900 focus:ring-rose-400'
+                      : 'bg-slate-50 border border-slate-200 text-slate-900 focus:ring-indigo-500 focus:bg-white'
+                  }`}
                   value={digit}
                   onChange={(e) => handleOtpChange(i, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(i, e)}
@@ -363,25 +365,57 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '', init
               ))}
             </div>
 
+            {errorMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-center text-xs font-semibold text-rose-700"
+              >
+                {errorMessage}
+              </motion.div>
+            )}
+
             <div className="space-y-3">
               <button
                 type="submit"
-                disabled={isLoading}
-                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                disabled={isLoading || otp.join('').length !== 6}
+                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 active:scale-[0.99] transition-all shadow-xl shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
               >
                 {isLoading ? (
-                  <Loader2 size={20} className="animate-spin" />
+                  <>
+                    <Loader2 size={20} className="animate-spin" />
+                    <span>Verifying Code...</span>
+                  </>
                 ) : (
-                  'Verify & Continue'
+                  <>
+                    <CheckCircle2 size={18} />
+                    <span>Verify & Continue</span>
+                  </>
                 )}
               </button>
-              <button
-                type="button"
-                onClick={() => setStep('input')}
-                className="w-full py-2 text-sm font-bold text-slate-400 hover:text-indigo-600 transition-colors"
-              >
-                Change {method === 'email' ? 'email' : 'phone number'}
-              </button>
+
+              <div className="flex items-center justify-between pt-2 px-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('input');
+                    setOtp(['', '', '', '', '', '']);
+                  }}
+                  className="text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors"
+                >
+                  ← Change Email
+                </button>
+
+                <button
+                  type="button"
+                  disabled={resendCooldown > 0 || isLoading}
+                  onClick={() => handleSendOTP()}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 disabled:text-slate-400 transition-colors flex items-center gap-1.5"
+                >
+                  <RefreshCw size={13} className={isLoading ? "animate-spin" : ""} />
+                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
+                </button>
+              </div>
             </div>
           </form>
         </motion.div>

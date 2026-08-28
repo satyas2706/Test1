@@ -32,6 +32,7 @@ interface MobileCartSectionProps {
   navigateTo: (tab: any) => void;
   storeProducts: any[];
   orderedItemIds: Set<string>;
+  pickupConsolidationOption?: 'shop_and_ship' | 'pickup_only' | null;
   shopConsolidationOption: 'pickup' | 'warehouse' | 'store_only' | null;
   setShopConsolidationOption: (option: 'pickup' | 'warehouse' | 'store_only' | null) => void;
   showConsolidationError: boolean;
@@ -56,6 +57,7 @@ export const MobileCartSection: React.FC<MobileCartSectionProps> = ({
   navigateTo,
   storeProducts,
   orderedItemIds,
+  pickupConsolidationOption,
   shopConsolidationOption,
   setShopConsolidationOption,
   showConsolidationError,
@@ -289,148 +291,6 @@ export const MobileCartSection: React.FC<MobileCartSectionProps> = ({
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* 4. "Consolidation Preference" Card */}
-        {storeItems.length > 0 && (
-          <div id="consolidation-prompt-section" className={`p-4 bg-[#F5F6FF] rounded-2xl space-y-3 transition-all duration-300 ${
-            showConsolidationError ? 'ring-2 ring-rose-500 shadow-md shadow-rose-100' : ''
-          }`}>
-            <div className="flex flex-col gap-2">
-              {/* Badge */}
-              <span className="px-3 py-1 bg-[#EEF2FF] rounded-full text-[9px] font-black text-[#4F46E5] uppercase tracking-wider w-fit">
-                CONSOLIDATION PREFERENCE
-              </span>
-              
-              {/* Question */}
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 flex items-center justify-center rounded-full bg-[#4F46E5] text-white text-[10px] font-black shrink-0">
-                  ?
-                </div>
-                <h4 className="text-xs font-extrabold text-[#0B1528] leading-tight">
-                  Do you want to send other items along with these?
-                </h4>
-              </div>
-            </div>
-
-            {/* Error Message */}
-            {showConsolidationError && (
-              <div className="p-2.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-600 text-[10px] font-bold flex items-center gap-2">
-                <AlertTriangle size={13} className="shrink-0" />
-                <span>Please select a consolidation option.</span>
-              </div>
-            )}
-
-            {/* Stacked Option Cards */}
-            <div className="space-y-2">
-              {/* Option 1: Home Pickup */}
-              <div 
-                onClick={() => {
-                  setShopConsolidationOption('pickup');
-                  setShowConsolidationError(false);
-                }}
-                className={`p-2.5 bg-white rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between gap-3 ${
-                  shopConsolidationOption === 'pickup' ? 'border-[#4E36F5] shadow-sm' : 'border-slate-100 hover:border-slate-200'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="p-1.5 bg-[#EEF2FF] text-[#4E36F5] rounded-lg shrink-0">
-                    <Truck size={15} />
-                  </div>
-                  <h5 className="text-xs font-bold text-slate-900">Yes, schedule Home Pickup</h5>
-                </div>
-                
-                {/* Radio Circle */}
-                <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
-                  shopConsolidationOption === 'pickup' ? 'border-[#4E36F5]' : 'border-slate-200'
-                }`}>
-                  {shopConsolidationOption === 'pickup' && (
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#4E36F5]" />
-                  )}
-                </div>
-              </div>
-
-              {/* Option 2: Warehouse Freight */}
-              <div 
-                onClick={() => {
-                  setShopConsolidationOption('warehouse');
-                  setShowConsolidationError(false);
-                }}
-                className={`p-2.5 bg-white rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between gap-3 ${
-                  shopConsolidationOption === 'warehouse' ? 'border-[#4E36F5] shadow-sm' : 'border-slate-100 hover:border-slate-200'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="p-1.5 bg-[#EEF2FF] text-[#4E36F5] rounded-lg shrink-0">
-                    <Building2 size={15} />
-                  </div>
-                  <h5 className="text-xs font-bold text-slate-900">Yes, send to JiffEX Warehouse</h5>
-                </div>
-                
-                {/* Radio Circle */}
-                <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
-                  shopConsolidationOption === 'warehouse' ? 'border-[#4E36F5]' : 'border-slate-200'
-                }`}>
-                  {shopConsolidationOption === 'warehouse' && (
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#4E36F5]" />
-                  )}
-                </div>
-              </div>
-
-              {/* Option 3: Direct Shipping */}
-              <div 
-                onClick={() => {
-                  setShopConsolidationOption('store_only');
-                  setShowConsolidationError(false);
-                }}
-                className={`p-2.5 bg-white rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between gap-3 ${
-                  shopConsolidationOption === 'store_only' ? 'border-[#4E36F5] shadow-sm' : 'border-slate-100 hover:border-slate-200'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="p-1.5 bg-[#EEF2FF] text-[#4E36F5] rounded-lg shrink-0">
-                    <ShoppingBag size={15} />
-                  </div>
-                  <h5 className="text-xs font-bold text-slate-900">No, send only shop items</h5>
-                </div>
-                
-                {/* Radio Circle */}
-                <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
-                  shopConsolidationOption === 'store_only' ? 'border-[#4E36F5]' : 'border-slate-200'
-                }`}>
-                  {shopConsolidationOption === 'store_only' && (
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#4E36F5]" />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Nice feedback info helper card */}
-            {shopConsolidationOption && (
-              <div className="mt-4 p-3 bg-white border border-[#E5E7EB] rounded-xl text-[11px] text-slate-600 flex items-start gap-2.5">
-                <div className="text-emerald-500 mt-0.5 shrink-0">
-                  <CheckCircle2 size={14} />
-                </div>
-                <div>
-                  <p className="font-extrabold text-slate-900">
-                    {shopConsolidationOption === 'pickup' 
-                      ? 'Home Pickup Confirmed!' 
-                      : shopConsolidationOption === 'warehouse' 
-                        ? 'Warehouse forwarding option recorded!' 
-                        : 'Direct express shipment selected!'}
-                  </p>
-                  <p className="text-[10px] text-slate-500 mt-0.5 leading-snug font-medium">
-                    {shopConsolidationOption === 'pickup' 
-                      ? "After checking out, we will smoothly guide you to schedule our courier booking agent slot for your other items."
-                      : shopConsolidationOption === 'warehouse'
-                        ? "Perfect! We'll generate a dedicated JiffEX warehouse shipping address so you can self-forward packages from Amazon, eBay, etc."
-                        : "We will handle packaging and dispatch of your shop items immediately without any extra consolidation steps."
-                    }
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
         )}
 

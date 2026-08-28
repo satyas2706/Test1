@@ -97,6 +97,9 @@ import {
   ShieldAlert,
   BatteryCharging,
   FlaskConical,
+  Mic,
+  Bot,
+  Radio,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -1021,6 +1024,40 @@ const SupportSection = ({ currentUser, orders, tickets, setTickets, refundReques
         <div className="space-y-3.5">
           <h2 className="text-sm font-black text-[#0A142F] tracking-tight">How can we help you today?</h2>
           
+          {/* Jiffex Agent Card */}
+          <div 
+            onClick={() => {
+              try {
+                const omniEl = document.querySelector('#omnidimension-web-widget, [id*="omnidim"], [class*="omnidim"], button[aria-label*="chat"], button[aria-label*="bot"], iframe[id*="omnidim"]') as HTMLElement | null;
+                if (omniEl) omniEl.click();
+                else toast.success('Jiffex Agent is active in the bottom-right corner.');
+              } catch (e) {
+                toast.success('Jiffex Agent is active.');
+              }
+            }}
+            className="flex items-center justify-between p-3.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl shadow-md border border-indigo-500/30 cursor-pointer active:scale-[0.99] transition relative overflow-hidden"
+          >
+            <div className="flex items-center space-x-3 relative z-10">
+              <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/40 shrink-0">
+                <Bot className="w-5 h-5 text-white" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-xs font-black text-white">Jiffex AI Agent</h3>
+                  <span className="text-[8px] bg-indigo-500/40 text-indigo-200 px-1.5 py-0.5 rounded-full font-bold">Online</span>
+                </div>
+                <p className="text-[9px] text-blue-200/90 font-medium leading-tight max-w-[170px]">Instant 24/7 AI logistics support & rate inquiries.</p>
+              </div>
+            </div>
+            <button 
+              type="button"
+              className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-[9px] font-extrabold rounded-full flex items-center space-x-1 shadow-md shadow-indigo-500/30 shrink-0 relative z-10"
+            >
+              <span>Chat Now</span>
+              <ChevronRight className="w-2.5 h-2.5" />
+            </button>
+          </div>
+
           {/* Live Chat Card */}
           <div className="flex items-center justify-between p-3.5 bg-[#F5F3FF] border border-[#E0DBFF] rounded-2xl shadow-sm">
             <div className="flex items-center space-x-3">
@@ -1033,7 +1070,15 @@ const SupportSection = ({ currentUser, orders, tickets, setTickets, refundReques
               </div>
             </div>
             <button 
-              onClick={() => toast.success('Connecting to Live Chat...')}
+              onClick={() => {
+                try {
+                  const omniEl = document.querySelector('#omnidimension-web-widget, [id*="omnidim"], [class*="omnidim"], button[aria-label*="chat"], button[aria-label*="bot"], iframe[id*="omnidim"]') as HTMLElement | null;
+                  if (omniEl) omniEl.click();
+                  else toast.success('Connecting to Live Support...');
+                } catch (e) {
+                  toast.success('Connecting to Live Support...');
+                }
+              }}
               className="px-3 py-1.5 bg-[#4F2EF7] text-white text-[9px] font-extrabold rounded-full flex items-center space-x-1 hover:bg-[#3F22D6] active:scale-95 transition shadow-md shadow-indigo-200 shrink-0"
             >
               <span>Chat Now</span>
@@ -1168,22 +1213,71 @@ const SupportSection = ({ currentUser, orders, tickets, setTickets, refundReques
         </div>
       </div>
 
-      {/* 2. LAPTOP/DESKTOP VIEW (Completely untouched, matches original layout exactly) */}
+      {/* 2. LAPTOP/DESKTOP VIEW */}
       <div className="hidden md:block space-y-12 pb-24">
         <div className="text-center space-y-4">
           <h3 className="text-4xl font-black text-slate-900 tracking-tight">Need Help?</h3>
-          <p className="text-slate-500 max-w-2xl mx-auto">Our support team is here to ensure your shipping experience is flawless.</p>
+          <p className="text-slate-500 max-w-2xl mx-auto">Our support team and 24/7 Jiffex Agent are here to ensure your shipping experience is flawless.</p>
         </div>
+
+        {/* Featured Jiffex Agent Banner */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-[2.5rem] p-8 md:p-10 shadow-2xl border border-indigo-500/30 relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-8"
+        >
+          <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="space-y-3 max-w-xl text-left relative z-10">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-black uppercase tracking-wider">
+              <Sparkles size={14} className="text-indigo-400 animate-spin" />
+              <span>Jiffex AI Support Agent</span>
+            </div>
+            <h4 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+              Instant Jiffex Logistics Support
+            </h4>
+            <p className="text-sm text-slate-300 leading-relaxed font-medium">
+              Have questions about shipping rates, scheduling doorstep pickup, shop & ship consolidation, or tracking? Use our 24/7 Jiffex assistant for instant resolution.
+            </p>
+          </div>
+
+          <button
+            onClick={() => {
+              try {
+                const omniEl = document.querySelector('#omnidimension-web-widget, [id*="omnidim"], [class*="omnidim"], button[aria-label*="chat"], button[aria-label*="bot"], iframe[id*="omnidim"]') as HTMLElement | null;
+                if (omniEl) omniEl.click();
+                else toast.success('Jiffex Agent is active in the bottom-right corner.');
+              } catch (e) {
+                toast.success('Jiffex Agent is active.');
+              }
+            }}
+            className="relative z-10 shrink-0 px-8 py-5 bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-black text-base rounded-2xl shadow-xl shadow-indigo-500/30 flex items-center gap-3 transition-all active:scale-95 cursor-pointer group"
+          >
+            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Bot size={20} className="text-white" />
+            </div>
+            <span>Open Jiffex Agent</span>
+          </button>
+        </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {[
             { 
-              icon: MessageSquare, 
-              title: "Live Chat", 
-              desc: "Chat with our logistics experts for immediate assistance with your shipment.",
-              action: "Start Chat",
+              icon: Bot, 
+              title: "Jiffex Agent", 
+              desc: "Instant 24/7 AI assistance for rate calculations, tracking, and logistics guidance.",
+              action: "Open Jiffex Agent",
               color: "text-indigo-600",
-              bg: "bg-indigo-50"
+              bg: "bg-indigo-50",
+              onClick: () => {
+                try {
+                  const omniEl = document.querySelector('#omnidimension-web-widget, [id*="omnidim"], [class*="omnidim"], button[aria-label*="chat"], button[aria-label*="bot"], iframe[id*="omnidim"]') as HTMLElement | null;
+                  if (omniEl) omniEl.click();
+                  else toast.success('Jiffex Agent is active in the bottom-right corner.');
+                } catch (e) {
+                  toast.success('Jiffex Agent is active.');
+                }
+              }
             },
             { 
               icon: Mail, 
@@ -1191,7 +1285,8 @@ const SupportSection = ({ currentUser, orders, tickets, setTickets, refundReques
               desc: "Send us your queries and we'll get back to you within 24 hours.",
               action: "support@jiffex.com",
               color: "text-emerald-600",
-              bg: "bg-emerald-50"
+              bg: "bg-emerald-50",
+              onClick: () => { window.location.href = 'mailto:support@jiffex.com'; }
             },
             { 
               icon: HelpCircle, 
@@ -1199,7 +1294,8 @@ const SupportSection = ({ currentUser, orders, tickets, setTickets, refundReques
               desc: "Browse our extensive library of FAQs and shipping guides.",
               action: "Visit FAQ",
               color: "text-amber-600",
-              bg: "bg-amber-50"
+              bg: "bg-amber-50",
+              onClick: undefined
             }
           ].map((item, i) => (
             <motion.div
@@ -1214,7 +1310,10 @@ const SupportSection = ({ currentUser, orders, tickets, setTickets, refundReques
               </div>
               <h4 className="text-xl font-black text-slate-900 mb-2">{item.title}</h4>
               <p className="text-sm text-slate-500 mb-6 leading-relaxed">{item.desc}</p>
-              <button className={`text-sm font-bold ${item.color} flex items-center gap-2 hover:underline`}>
+              <button 
+                onClick={item.onClick}
+                className={`text-sm font-bold ${item.color} flex items-center gap-2 hover:underline cursor-pointer`}
+              >
                 {item.action} <ArrowRight size={16} />
               </button>
             </motion.div>
@@ -4705,9 +4804,6 @@ export default function App() {
         setActivePickupStep(1);
         setLastBookingRef(null);
         setIsSchedulingNewPickup(true);
-      } else if (userAppointments.some(a => a.status === 'Scheduled') && !isSchedulingNewPickup) {
-        setShowPickupInProgressModal(true);
-        return;
       }
     }
     if (tab !== activeTab) {
@@ -4926,17 +5022,14 @@ export default function App() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginTriggerSource, setLoginTriggerSource] = useState<'default' | 'checkout' | 'pickup'>('default');
   const [showPickupConfirmModal, setShowPickupConfirmModal] = useState(false);
-  const [showPickupInProgressModal, setShowPickupInProgressModal] = useState(false);
   const [activePickupStep, setActivePickupStep] = useState(1);
   const [activeCheckoutStep, setActiveCheckoutStep] = useState(1);
   const [shopConsolidationOption, setShopConsolidationOption] = useState<'pickup' | 'warehouse' | 'store_only' | null>(null);
   const [showConsolidationError, setShowConsolidationError] = useState(false);
   const [pickupConsolidationOption, setPickupConsolidationOption] = useState<'shop_and_ship' | 'pickup_only' | null>(null);
-  const [shopItemsShippingDestination, setShopItemsShippingDestination] = useState<'home' | 'warehouse'>('home');
+  const [shopItemsShippingDestination, setShopItemsShippingDestination] = useState<'home' | 'custom' | 'warehouse'>('home');
   const [showPickupConsolidationError, setShowPickupConsolidationError] = useState(false);
   const [showPaymentTroubleModal, setShowPaymentTroubleModal] = useState(false);
-  const [showPendingPickupAlertModal, setShowPendingPickupAlertModal] = useState(false);
-  const hasShownPendingAlertThisSessionRef = useRef(false);
   const [paymentTroublePendingOrderSave, setPaymentTroublePendingOrderSave] = useState<(() => Promise<void>) | null>(null);
 
   // Sync / Read store items from database only
@@ -5047,53 +5140,14 @@ export default function App() {
     });
   }, [appointments, currentUser, lastBookingRef, session]);
 
-  // Reset session alert ref when currentUser changes (login / logout)
+  // Automatically link store consolidation preference when shop_and_ship is selected in home pickup
   useEffect(() => {
-    hasShownPendingAlertThisSessionRef.current = false;
-  }, [currentUser?.id, currentUser?.email]);
-
-  // Check if logged-in user has pending Home Pickup for Shop & Ship and trigger alert
-  useEffect(() => {
-    if (!currentUser) {
-      setShowPendingPickupAlertModal(false);
-      return;
+    if (pickupConsolidationOption === 'shop_and_ship' && (activeTab === 'pickup' || userAppointments.some(a => a.status === 'Scheduled' || a.status === 'Picked Up'))) {
+      setShopConsolidationOption('pickup');
+      setShowConsolidationError(false);
     }
+  }, [pickupConsolidationOption, activeTab, userAppointments]);
 
-    const isHomePickupPending = !userAppointments.some(a => a.status === 'Scheduled' || a.status === 'Picked Up');
-
-    if (!isHomePickupPending) {
-      localStorage.removeItem(`jiffex_pending_home_pickup_${currentUser.id}`);
-      if (currentUser.email) {
-        localStorage.removeItem(`jiffex_pending_home_pickup_${currentUser.email.toLowerCase()}`);
-      }
-      return;
-    }
-
-    const userOrders = orders.filter(o => 
-      (currentUser.id && o.customerId === currentUser.id) || 
-      (currentUser.email && (o.destination?.email || (o as any).email)?.toLowerCase() === currentUser.email.toLowerCase()) ||
-      (currentUser.phone && (o.destination?.phone || (o as any).phone) === currentUser.phone)
-    );
-
-    const hasShopAndShipOrder = userOrders.some(o => 
-      (o.id && o.id.startsWith('SH-')) || 
-      (o.items && o.items.some((i: any) => i.source === 'Store' || i.source === 'shop')) || 
-      (o as any).shopConsolidationOption === 'pickup' || 
-      (o as any).pickupConsolidationOption === 'shop_and_ship' ||
-      (o as any).pickupType === 'AllAgent'
-    );
-
-    const hasStoredFlag = 
-      localStorage.getItem(`jiffex_pending_home_pickup_${currentUser.id}`) === 'true' ||
-      (currentUser.email && localStorage.getItem(`jiffex_pending_home_pickup_${currentUser.email.toLowerCase()}`) === 'true');
-
-    if ((hasShopAndShipOrder || hasStoredFlag) && isHomePickupPending) {
-      if (!hasShownPendingAlertThisSessionRef.current) {
-        hasShownPendingAlertThisSessionRef.current = true;
-        setShowPendingPickupAlertModal(true);
-      }
-    }
-  }, [currentUser, orders, userAppointments]);
   const [categories, setCategories] = useState(['Pooja', 'Return Gifts', 'Decorative', 'Sweets & Snacks', 'Spices & Gourmet']);
   const [tickets, setTickets] = useState<Ticket[]>([
     {
@@ -5618,16 +5672,12 @@ export default function App() {
     }
 
     if (currentUser) {
-      localStorage.removeItem(`jiffex_pending_home_pickup_${currentUser.id}`);
       if (currentUser.email) {
-        localStorage.removeItem(`jiffex_pending_home_pickup_${currentUser.email.toLowerCase()}`);
       }
     }
     if (resolvedCustomerId) {
-      localStorage.removeItem(`jiffex_pending_home_pickup_${resolvedCustomerId}`);
     }
     if (resolvedEmail) {
-      localStorage.removeItem(`jiffex_pending_home_pickup_${resolvedEmail.toLowerCase()}`);
     }
 
     setLastBookingRef(newOrder.id);
@@ -7015,7 +7065,7 @@ export default function App() {
     const isWarehouseCheckout = cartItems.some(i => i.source === 'Warehouse');
     const paymentStatus = isWarehouseCheckout ? 'Pending' : isPayAtHome ? 'Pay at Home' : 'Paid';
 
-    const hasHomePickupActive = (hasScheduledPickup || !!selectedPickupDate || pickupConsolidationOption === 'shop_and_ship') && cartItems.some(i => i.source === 'Store');
+    const hasHomePickupActive = (shopConsolidationOption === 'pickup' && (pickupConsolidationOption === 'shop_and_ship' || userAppointments.some(a => a.status === 'Scheduled' || a.status === 'Picked Up'))) && cartItems.some(i => i.source === 'Store');
 
     let finalDestination = { ...address };
 
@@ -7030,6 +7080,18 @@ export default function App() {
         zipCode: WAREHOUSE_ADDRESS.zip || '00000',
         country: WAREHOUSE_ADDRESS.country || 'USA'
       };
+    } else if (shopItemsShippingDestination === 'custom') {
+      // Use the custom address entered by the user
+      finalDestination = {
+        fullName: address.fullName || currentUser?.name || '',
+        email: address.email || currentUser?.email || '',
+        phone: address.phone || currentUser?.phone || '',
+        addressLine1: address.addressLine1 || '',
+        city: address.city || '',
+        state: address.state || '',
+        zipCode: address.zipCode || '',
+        country: address.country || 'USA'
+      };
     } else if (hasHomePickupActive || (!address.fullName || !address.addressLine1)) {
       finalDestination = {
         fullName: address.fullName || pickupDestination.fullName || pickupName || currentUser?.name || 'Customer',
@@ -7043,11 +7105,13 @@ export default function App() {
       };
     }
 
-    // Validate checkout details (skipped if Home Pickup or Warehouse is active since details are synced/preset)
-    if (shippingPreference !== 'LocalPickup' && shopItemsShippingDestination !== 'warehouse' && !hasHomePickupActive) {
-      if (!finalDestination.fullName || !finalDestination.phone || !finalDestination.addressLine1 || !finalDestination.city || !finalDestination.zipCode) {
-        toast.error('Please complete your shipping address details including your contact phone number.');
-        return;
+    // Validate checkout details (required if custom address or normal international checkout is selected)
+    if (shippingPreference !== 'LocalPickup' && shopItemsShippingDestination !== 'warehouse') {
+      if (shopItemsShippingDestination === 'custom' || !hasHomePickupActive) {
+        if (!finalDestination.fullName || !finalDestination.phone || !finalDestination.addressLine1 || !finalDestination.city || !finalDestination.zipCode) {
+          toast.error('Please complete your shipping address details including your contact phone number.');
+          return;
+        }
       }
     }
 
@@ -7099,25 +7163,13 @@ export default function App() {
       setOrders([...orders, orderToSave]);
       setIsPaid(true);
 
-      const isHomePickupPending = !userAppointments.some(a => a.status === 'Scheduled');
+      const isHomePickupPending = !userAppointments.some(a => a.status === 'Scheduled' || a.status === 'Picked Up');
       const hasShopItemsInOrder = (orderToSave.id && orderToSave.id.startsWith('SH-')) || 
                                   (orderToSave.items && orderToSave.items.some(i => i.source === 'Store' || (i.source as any) === 'shop')) || 
                                   cartItems.some(i => i.source === 'Store' || (i.source as any) === 'shop') ||
                                   (activeTab as any) === 'shop' || (activeTab as any) === 'Shop';
-      const chosenHomePickup = shopConsolidationOption === 'pickup' || pickupConsolidationOption === 'shop_and_ship' || shopItemsShippingDestination === 'home' || shippingPreference === 'LocalPickup' || shopConsolidationOption === null || shopConsolidationOption === 'store_only';
+      const chosenHomePickup = shopConsolidationOption === 'pickup';
 
-      if (hasShopItemsInOrder && chosenHomePickup && isHomePickupPending && shopConsolidationOption !== 'warehouse') {
-        setShowPendingPickupAlertModal(true);
-        hasShownPendingAlertThisSessionRef.current = true;
-        if (currentUser) {
-          localStorage.setItem(`jiffex_pending_home_pickup_${currentUser.id}`, 'true');
-          if (currentUser.email) {
-            localStorage.setItem(`jiffex_pending_home_pickup_${currentUser.email.toLowerCase()}`, 'true');
-          }
-        }
-      }
-      
-      // Delete the checked out items from the active cart in the database
       for (const item of cartItems) {
         const idsToDelete = item.ids && item.ids.length > 0 ? item.ids : [item.id];
         for (const dId of idsToDelete) {
@@ -7525,24 +7577,13 @@ export default function App() {
   };
 
   const handleCheckout = async () => {
-    // Check if shop items exist and option is selected - mandatory before signing in or checkout
-    const storeItemsCheck = items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Store');
-    if (storeItemsCheck.length > 0 && !shopConsolidationOption) {
-      setShowConsolidationError(true);
-      toast.warning("Please choose a consolidation preference first: Do you want to ship other items with this order?");
-      const element = document.getElementById("consolidation-prompt-section");
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      return;
-    }
+    const hasScheduledPickup = userAppointments.some(a => a.status === 'Scheduled' || a.status === 'Picked Up');
 
     // Reset coupon code inputs
     setAppliedCoupon(null);
     setCouponCodeInput('');
 
     // Determine primary source and generate the correct order ID first so it is preserved even across login
-    const hasScheduledPickup = userAppointments.some(a => a.status === 'Scheduled');
     const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
 
     let source: 'Store' | 'Warehouse' | 'Pickup' = 'Store';
@@ -9624,7 +9665,14 @@ export default function App() {
       if (isMobile) {
         return (
           <div className="space-y-4 px-1 pb-16 bg-slate-50/50">
-            <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <div className="flex items-center gap-3 px-4 pt-4 pb-2">
+              <button 
+                onClick={goBack}
+                className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm active:scale-95 cursor-pointer"
+                aria-label="Back"
+              >
+                <ArrowLeft size={18} />
+              </button>
               <h2 className="text-2xl font-extrabold text-slate-900">My Orders</h2>
             </div>
             <div className="text-center py-12 text-slate-400 bg-white border border-slate-100 rounded-2xl p-6 shadow-sm mx-4">
@@ -9636,7 +9684,7 @@ export default function App() {
                   setLoginTriggerSource('default');
                   setShowLoginModal(true);
                 }} 
-                className="mt-5 w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors text-sm shadow-md shadow-indigo-100 active:scale-95"
+                className="mt-5 w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors text-sm shadow-md shadow-indigo-100 active:scale-95 cursor-pointer"
               >
                 Sign In
               </button>
@@ -9644,7 +9692,34 @@ export default function App() {
           </div>
         );
       }
-      return null;
+      return (
+        <div className="space-y-8">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={goBack}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 font-bold transition-all shadow-sm group cursor-pointer"
+            >
+              <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform text-slate-500 group-hover:text-indigo-600" />
+              <span>Back</span>
+            </button>
+            <h2 className="text-3xl font-black text-slate-900">My Orders</h2>
+          </div>
+          <div className="text-center py-16 text-slate-400 bg-white border border-slate-100 rounded-3xl p-8 shadow-sm max-w-md mx-auto">
+            <Package size={56} className="mx-auto mb-4 opacity-20 text-indigo-600" />
+            <p className="text-lg font-bold text-slate-700">You are not logged in</p>
+            <p className="text-sm text-slate-500 mt-2 leading-relaxed">Sign in to your JiffEX account to view, track, and manage all your shipments.</p>
+            <button 
+              onClick={() => {
+                setLoginTriggerSource('default');
+                setShowLoginModal(true);
+              }} 
+              className="mt-6 px-8 bg-indigo-600 text-white font-bold py-3.5 rounded-xl hover:bg-indigo-700 transition-all text-sm shadow-lg shadow-indigo-100 active:scale-95 cursor-pointer"
+            >
+              Sign In
+            </button>
+          </div>
+        </div>
+      );
     }
     
     // Merge orders and appointments for a complete view
@@ -9717,26 +9792,15 @@ export default function App() {
     if (isMobile) {
       return (
         <div className="space-y-4 px-1 pb-16 bg-slate-50/50">
-          <div className="flex items-center justify-between px-4 pt-4 pb-2">
-            <h2 className="text-2xl font-extrabold text-slate-900">My Orders</h2>
+          <div className="flex items-center gap-3 px-4 pt-4 pb-2">
             <button 
-              onClick={async () => {
-                if (window.confirm("Are you sure you want to clear ALL orders and items? This cannot be undone.")) {
-                  try {
-                    await api.clearAllOrders();
-                    toast.success("All orders cleared successfully.");
-                    setOrders([]);
-                    setItems([]);
-                  } catch (err) {
-                    toast.error("Failed to clear orders.");
-                  }
-                }
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50/50 border border-rose-100 rounded-lg hover:bg-rose-100/50 transition"
+              onClick={goBack}
+              className="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm active:scale-95 cursor-pointer"
+              aria-label="Back"
             >
-              <Trash2 className="text-rose-600 w-4 h-4" />
-              <span className="text-rose-600 text-xs font-bold">Clear All</span>
+              <ArrowLeft size={18} />
             </button>
+            <h2 className="text-2xl font-extrabold text-slate-900">My Orders</h2>
           </div>
 
           <div className="space-y-4">
@@ -10050,9297 +10114,313 @@ export default function App() {
                               </div>
                               <p className="text-sm font-bold text-slate-800">No items picked or billed yet</p>
                               <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
-                                This is a scheduled pickup from home. The item list will be finalized and updated once our agent collects and measures your items at our hub.
-                              </p>
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              {selectedOrderForInvoice.items.map((item, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                                      {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
-                                    </div>
-                                    <div>
-                                      <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
-                                        <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
-                                        <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
-                                        <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
-                                        <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="text-sm font-bold text-slate-900">
-                                    {item.price ? `‚Çπ${item.price}` : '-'}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="bg-slate-900 rounded-2xl p-6 text-white mb-4">
-                          {isPendingInvoice ? (
-                            <div className="text-center py-4 font-sans">
-                              <span className="text-indigo-400 text-[10px] font-black uppercase tracking-widest block mb-1">Invoice Notification</span>
-                              <div className="text-sm font-bold text-slate-200 max-w-md mx-auto leading-relaxed">
-                                Invoice will be displayed once the items are picked and billed.
-                              </div>
-                              <span className="inline-block mt-3.5 px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[9px] font-bold uppercase tracking-widest">
-                                Awaiting Pick & Bill
-                              </span>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
-                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Weight</span>
-                                <span className="font-bold">{getSafeOrderTotalWeight(selectedOrderForInvoice)} kg</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <div>
-                                  <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Grand Total</span>
-                                  <div className="text-3xl font-black">‚Çπ{Math.round(Number(selectedOrderForInvoice.totalCost || selectedOrderForInvoice.total_cost || 0))}</div>
-                                </div>
-                                <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
-                                  {selectedOrderForInvoice.paymentStatus}
-                                </div>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </>
-                    );
-                  })()}
-
-                  <div className="mt-8 flex gap-4">
-                    <button className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer">
-                      <Printer size={18} /> Print
-                    </button>
-                    <button className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer">
-                      <Share size={18} /> Share
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
-
-          {/* Details Modal (when Clicking Order ID) */}
-          <AnimatePresence>
-            {selectedOrderForDetails && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                  className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
-                >
-                  <div className="flex justify-between items-start mb-8">
-                    <div>
-                      <h2 className="text-2xl font-black text-slate-900">Order Details</h2>
-                      <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {selectedOrderForDetails.id}</p>
-                    </div>
-                    <button 
-                      onClick={() => setSelectedOrderForDetails(null)}
-                      className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-                    >
-                      <XCircle size={24} className="text-slate-400" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-8 mb-8">
-                    <div>
-                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
-                      <div className="text-sm font-bold text-slate-900">
-                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
-                          ? ((selectedOrderForDetails as any).pickupAddress?.fullName || selectedOrderForDetails.customerName || 'Customer Residence')
-                          : 'JiffEX Warehouse'
-                        }
-                      </div>
-                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType ? (
-                          <>
-                            {((selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || '').split(',').slice(0, 2).join(',')}<br />
-                            {((selectedOrderForDetails as any).pickupAddress?.city || selectedOrderForDetails.destination?.city || '')} {((selectedOrderForDetails as any).pickupAddress?.state || selectedOrderForDetails.destination?.state || '')}<br />
-                            {((selectedOrderForDetails as any).pickupAddress?.zipCode || (selectedOrderForDetails as any).pickupAddress?.zip || selectedOrderForDetails.destination?.zipCode || '')} India
-                          </>
-                        ) : (
-                          <>
-                            {WAREHOUSE_ADDRESS.street}<br />
-                            {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
-                            {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
-                      <div className="text-sm font-bold text-slate-900">
-                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
-                          ? (selectedOrderForDetails.destination?.fullName || 'Receiver Location')
-                          : (selectedOrderForDetails.destination?.fullName || currentUser?.name || 'Receiver Location')
-                        }
-                      </div>
-                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                        {selectedOrderForDetails.destination?.addressLine1 || 'N/A'}<br />
-                        {selectedOrderForDetails.destination?.city || ''} {selectedOrderForDetails.destination?.state || ''}<br />
-                        {selectedOrderForDetails.destination?.zipCode || ''} {selectedOrderForDetails.destination?.country || ''}
-                      </div>
-                    </div>
-                  </div>
-
-                  {(selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType) && (
-                    <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 mb-6 text-slate-700">
-                      <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-3 flex items-center gap-1.5 pb-2 border-b border-indigo-100/60">
-                        <Calendar size={14} className="text-indigo-600" /> Home Pickup Scheduled Details
-                      </h4>
-                      <div className="grid grid-cols-2 gap-4 text-xs font-sans">
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pickup Date</div>
-                          <div className="font-bold text-slate-800">{selectedOrderForDetails.shippingDate || (selectedOrderForDetails as any).shipping_date || 'N/A'}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Preferred Time</div>
-                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).time || (selectedOrderForDetails as any).destination?.time || 'General Slot'}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Assigned Agent</div>
-                          <div className="font-bold text-slate-800">
-                            {selectedOrderForDetails.assignedAgent?.name || (selectedOrderForDetails as any).assignedAgent?.name || (selectedOrderForDetails as any).destination?.assignedAgent?.name || 'Assigning soon...'}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Language Preference</div>
-                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).languagePreference || (selectedOrderForDetails as any).destination?.languagePreference || 'English'}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Item Category</div>
-                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).itemType || (selectedOrderForDetails as any).destination?.itemType || 'General Cargo'}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Vehicle Type</div>
-                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).vehicleType || (selectedOrderForDetails as any).destination?.vehicleType || 'Two-Wheeler'}</div>
-                        </div>
-                        <div className="col-span-2">
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Full Pickup Address (From)</div>
-                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || 'N/A'}</div>
-                        </div>
-                        <div className="col-span-2">
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Destination Delivery Address (To)</div>
-                          <div className="font-bold text-slate-800">
-                            {selectedOrderForDetails.destination?.addressLine1}, {selectedOrderForDetails.destination?.city}, {selectedOrderForDetails.destination?.state} - {selectedOrderForDetails.destination?.zipCode}, {selectedOrderForDetails.destination?.country}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="border-t border-slate-100 pt-6 mb-6">
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
-                    <div className="space-y-3">
-                      {(selectedOrderForDetails.items || []).map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                              {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
-                            </div>
-                            <div>
-                              <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium font-sans">
-                                <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
-                                <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
-                                <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
-                                <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-sm font-bold text-slate-900">
-                              {item.price ? `‚Çπ${item.price}` : '-'}
-                            </div>
-                            <div className="mt-1.5">
-                              <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[9px] font-extrabold rounded-md uppercase tracking-wider">
-                                {item.status || selectedOrderForDetails.status}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="border-t border-slate-200 pt-5 space-y-3">
-                    <div className="flex justify-between items-center text-sm font-semibold text-slate-600">
-                      <span>Total Weight:</span>
-                      <span className="text-slate-900 font-extrabold text-base">{getSafeOrderTotalWeight(selectedOrderForDetails)} kg</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm font-semibold text-slate-600 border-t border-slate-100 pt-3">
-                      <div>
-                        <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">Grand Total</span>
-                        <div className="text-2xl font-black text-slate-950 mt-1">‚Çπ{Math.round(Number(selectedOrderForDetails.totalCost || selectedOrderForDetails.total_cost || 0))}</div>
-                      </div>
-                      <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold rounded-xl text-xs uppercase tracking-widest">
-                        {selectedOrderForDetails.paymentStatus || selectedOrderForDetails.payment_status || 'Paid'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-8 flex justify-end pt-2">
-                    <button 
-                      onClick={() => setSelectedOrderForDetails(null)}
-                      className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-all text-sm shadow-sm cursor-pointer"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-8">
-        <div className="flex justify-between items-center">
-          <h2 className="text-3xl font-black text-slate-900">My Orders</h2>
-          <button 
-            onClick={async () => {
-              if (window.confirm("Are you sure you want to clear ALL orders and items? This cannot be undone.")) {
-                try {
-                  await api.clearAllOrders();
-                  toast.success("All orders cleared successfully.");
-                  setOrders([]);
-                  setItems([]);
-                } catch (err) {
-                  toast.error("Failed to clear orders.");
-                }
-              }
-            }}
-            className="px-4 py-2 bg-red-100 text-red-600 rounded-xl text-sm font-bold hover:bg-red-200 transition-colors flex items-center gap-2"
-          >
-            <Trash2 size={16} /> Debug: Clear All
-          </button>
-        </div>
-        
-        {(() => {
-          const completedOrdersList = unifiedHistory.filter(o => o.status === 'Delivered' && o.items && o.items.length > 0);
-          if (completedOrdersList.length === 0) return null;
-          
-          const allCompletedActive = unifiedHistory.filter(o => o.status !== 'Cancelled').every(o => o.status === 'Delivered');
-          
-          return (
-            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border border-indigo-100 rounded-3xl p-6 shadow-sm relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
-                <FileText size={120} className="text-indigo-600" />
-              </div>
-              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="p-1.5 bg-indigo-600 text-white rounded-lg flex items-center justify-center">
-                      <FileText size={16} />
-                    </span>
-                    <span className="text-xs font-black text-indigo-700 uppercase tracking-widest">CONSOLIDATED TAX INVOICE</span>
-                  </div>
-                  <h4 className="text-lg font-black text-slate-900">
-                    {allCompletedActive 
-                      ? 'All Shipments Completed!' 
-                      : `${completedOrdersList.length} of ${unifiedHistory.filter(o => o.status !== 'Cancelled').length} Shipments Completed`}
-                  </h4>
-                  <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
-                    To keep your billing clean and reduce duplicate files, JiffEX generates a single consolidated invoice grouping all completed orders.
-                  </p>
-                </div>
-                
-                <div className="flex gap-3 shrink-0">
-                  <button 
-                    onClick={() => setSelectedOrdersForConsolidatedInvoice(completedOrdersList)}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3 px-5 rounded-xl transition shadow-md shadow-indigo-100 flex items-center gap-1.5 cursor-pointer border-0"
-                  >
-                    <Search size={16} />
-                    <span>View Consolidated Invoice</span>
-                  </button>
-                  
-                  <button 
-                    onClick={async () => {
-                      const promise = api.sendConsolidatedInvoicePDF(currentUser.email, completedOrdersList, COMPANY_DETAILS);
-                      toast.promise(promise, {
-                        loading: 'Sending consolidated invoice...',
-                        success: 'Single consolidated invoice sent to your email!',
-                        error: 'Could not send consolidated invoice via Email.'
-                      });
-                    }}
-                    className="bg-white hover:bg-indigo-50 text-indigo-600 border border-indigo-200 text-xs font-bold py-3 px-5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Share size={16} />
-                    <span>Email Invoice</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-          <div className="grid grid-cols-1 gap-6">
-            {unifiedHistory.length === 0 ? (
-              <div className="col-span-full text-center py-12 text-slate-400">
-                <Package size={48} className="mx-auto mb-4 opacity-20" />
-                <p>You have no active shipments.</p>
-                <button onClick={() => navigateTo('home')} className="mt-4 text-indigo-600 font-bold hover:underline">Start a shipment</button>
-              </div>
-            ) : (
-              unifiedHistory.map(order => (
-                <div key={order.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-200 hover:border-indigo-300 transition-all group">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex-1 min-w-0">
-                      <button 
-                        onClick={() => setSelectedOrderForDetails(order)}
-                        className="text-left group-hover:text-indigo-600 transition-colors w-full"
-                      >
-                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Order ID</div>
-                        <div className="text-lg font-black flex items-center flex-wrap gap-2 text-slate-900 group-hover:text-indigo-600 transition-colors">
-                          {order.id}
-                          {(order.id.startsWith('PH-') || (order as any).pickupType) && (
-                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] font-black uppercase tracking-wider rounded-md">
-                              Home Pickup Scheduled
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                      {(order.id.startsWith('PH-') || (order as any).pickupType) && (
-                        <div className="mt-2.5 text-xs bg-indigo-50/50 border border-indigo-100/60 rounded-xl p-3 text-slate-700 font-sans space-y-1 font-medium transition-all group-hover:bg-indigo-50 max-w-2xl">
-                          <div className="font-extrabold flex items-center gap-1.5 text-slate-900 text-xs pb-1.5 mb-1.5 border-b border-indigo-100/40">
-                            <Calendar size={13} className="text-indigo-600 font-bold" /> Scheduled Pickup Details
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-                            <div><span className="text-slate-400">Date:</span> <strong className="text-slate-800">{order.shippingDate || (order as any).shipping_date || 'N/A'}</strong></div>
-                            <div><span className="text-slate-400">Time:</span> <strong className="text-slate-800">{(order as any).time || (order as any).destination?.time || 'General Slot'}</strong></div>
-                            <div><span className="text-slate-400">Address:</span> <strong className="text-slate-800">{order.destination?.addressLine1 || (order as any).destination?.addressLine1 || 'N/A'}</strong></div>
-                            <div><span className="text-slate-400">Weight Est:</span> <strong className="text-slate-800">{order.totalWeight || (order as any).total_weight || 0} kg</strong></div>
-                            <div><span className="text-slate-400">Assigned Agent:</span> <strong className="text-slate-800">{order.assignedAgent?.name || (order as any).assignedAgent?.name || (order as any).destination?.assignedAgent?.name || 'Assigning soon...'}</strong></div>
-                            <div><span className="text-slate-400">Item Type:</span> <strong className="text-slate-800">{(order as any).itemType || (order as any).destination?.itemType || 'General Store Goods'}</strong></div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                      order.status === 'Picked Up' || order.status === 'Order Picked Up'
-                        ? 'bg-emerald-100 text-emerald-700' 
-                        : 'bg-indigo-100 text-indigo-700'
-                    }`}>
-                      {order.status === 'Picked Up' || order.status === 'Order Picked Up' ? 'Order Picked Up' : order.status}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4 bg-white p-4 rounded-xl border border-slate-100">
-                    <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Source Country</div>
-                      <div className="text-sm font-bold flex items-center gap-1.5">
-                        <span className="text-base leading-none">üáÆüá≥</span>
-                        <span>India</span>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Destination</div>
-                      <div className="text-sm font-bold text-slate-800">{order.destination?.country || 'N/A'}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Items Shipped</div>
-                      <div className="text-sm font-bold text-slate-800">{order.items?.length || 0} items</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Weight</div>
-                      <div className="text-sm font-bold text-slate-800">{getSafeOrderTotalWeight(order)} kg</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Paid</div>
-                      <div className="text-sm font-bold text-indigo-600">‚Çπ{order.totalCost || order.total_cost || 0}</div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-slate-100 pt-4">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-slate-200 w-fit">
-                      <Clock size={14} className="text-indigo-600" />
-                      <div className="text-xs text-slate-600 font-medium">
-                        <span className="text-slate-400 mr-1.5 uppercase tracking-widest text-[9px] font-black">Placed:</span>
-                        {new Date(order.createdAt || order.created_at || Date.now()).toLocaleString(undefined, {
-                          dateStyle: 'medium',
-                          timeStyle: 'short'
-                        })}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button 
-                        onClick={() => {
-                          setTrackingId(order.id);
-                          setActiveTab('track');
-                        }}
-                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 border border-indigo-100"
-                      >
-                        <Search size={12} /> Track Shipment
-                      </button>
-                      
-                      <button 
-                        onClick={async () => {
-                          const promise = api.shareInvoice(order);
-                          toast.promise(promise, {
-                            loading: 'Sending invoice...',
-                            success: 'Invoice sent to your email!',
-                            error: 'Could not send invoice via Email.'
-                          });
-
-                          const summary = `JiffEX Invoice\nOrder ID: ${order.id}\nDestination: ${order.destination.fullName || ''}, ${order.destination.country}\nTotal Weight: ${order.totalWeight || order.total_weight || 0} kg\nTotal Cost: ‚Çπ${order.totalCost || order.total_cost || 0}`;
-                          if (navigator.share) {
-                            try {
-                              await navigator.share({
-                                title: `JiffEX Invoice - ${order.id}`,
-                                text: summary,
-                              });
-                            } catch (e) {
-                              console.warn('Native share dismissed or failed', e);
-                            }
-                          } else {
-                            try {
-                              await navigator.clipboard.writeText(summary);
-                              toast.success('Invoice summary copied to clipboard!');
-                            } catch (e) {
-                              toast.error('Could not copy to clipboard.');
-                            }
-                          }
-                        }}
-                        className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 border border-emerald-100"
-                      >
-                        <Share size={12} /> Share Invoice
-                      </button>
-
-                      {order.status !== 'Delivered' && order.status !== 'Cancelled' && (
-                        <button 
-                          onClick={() => cancelPickup(order.id)}
-                          className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 border border-red-100"
-                        >
-                          <Trash2 size={12} /> Cancel
-                        </button>
-                      )}
-                      
-                      {order.status === 'Received at Warehouse' && (
-                        <button 
-                          onClick={() => simulateNotification('Shipment dispatched', `Your shipment ${order.id} has been dispatched to ${order.destination.country}.`)}
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors"
-                        >
-                          Dispatch
-                        </button>
-                      )}
-
-                      <button 
-                        onClick={() => setSelectedOrderForInvoice(order)}
-                        className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 hover:underline"
-                      >
-                        View Invoice <ChevronRight size={14} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Invoice Modal */}
-        <AnimatePresence>
-          {selectedOrderForInvoice && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
-              >
-                <div className="flex justify-between items-start mb-8">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Logo iconSize={18} />
-                    </div>
-                    <h2 className="text-2xl font-black text-slate-900">Tax Invoice</h2>
-                    <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {selectedOrderForInvoice.id}</p>
-                  </div>
-                  <button 
-                    onClick={() => setSelectedOrderForInvoice(null)}
-                    className="p-2 hover:bg-slate-100 rounded-full transition-colors"
-                  >
-                    <XCircle size={24} className="text-slate-400" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-8 mb-8">
-                  <div>
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
-                    <div className="text-sm font-bold text-slate-900">JiffEX Warehouse</div>
-                    <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                      {WAREHOUSE_ADDRESS.street}<br />
-                      {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
-                      {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
-                    <div className="text-sm font-bold text-slate-900">{selectedOrderForInvoice.destination.fullName}</div>
-                    <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                      {selectedOrderForInvoice.destination.addressLine1}<br />
-                      {selectedOrderForInvoice.destination.city}, {selectedOrderForInvoice.destination.state}<br />
-                      {selectedOrderForInvoice.destination.zipCode}, {selectedOrderForInvoice.destination.country}
-                    </div>
-                  </div>
-                </div>
-
-                {(() => {
-                  const isPendingInvoice = (selectedOrderForInvoice.status === 'Scheduled' || selectedOrderForInvoice.status === 'Pending Pickup') && (!selectedOrderForInvoice.items || selectedOrderForInvoice.items.length === 0);
-                  return (
-                    <>
-                      <div className="border-t border-slate-100 pt-6 mb-8">
-                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
-                        {isPendingInvoice ? (
-                          <div className="bg-indigo-50/50 border border-indigo-100/60 text-indigo-900 rounded-2xl p-6 text-center">
-                            <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                              <Clock size={20} />
-                            </div>
-                            <p className="text-sm font-bold text-slate-800">No items picked or billed yet</p>
-                            <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
-                              This is a scheduled pickup from home. The item list will be finalized and updated once our agent collects and measures your items at our hub.
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            {selectedOrderForInvoice.items.map((item, idx) => (
-                              <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                                    {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
-                                  </div>
-                                  <div>
-                                    <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
-                                      <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
-                                      <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
-                                      <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
-                                      <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="text-sm font-bold text-slate-900">
-                                  {item.price ? `‚Çπ${item.price}` : '-'}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="bg-slate-900 rounded-2xl p-6 text-white mb-4">
-                        {isPendingInvoice ? (
-                          <div className="text-center py-4 font-sans">
-                            <span className="text-indigo-400 text-[10px] font-black uppercase tracking-widest block mb-1">Invoice Notification</span>
-                            <div className="text-sm font-bold text-slate-200 max-w-md mx-auto leading-relaxed">
-                              Invoice will be displayed once the items are picked and billed.
-                            </div>
-                            <span className="inline-block mt-3.5 px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[9px] font-bold uppercase tracking-widest">
-                              Awaiting Pick & Bill
-                            </span>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
-                              <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Weight</span>
-                              <span className="font-bold">{getSafeOrderTotalWeight(selectedOrderForInvoice)} kg</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Grand Total</span>
-                                <div className="text-3xl font-black">‚Çπ{selectedOrderForInvoice.totalCost}</div>
-                              </div>
-                              <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
-                                {selectedOrderForInvoice.paymentStatus}
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </>
-                  );
-                })()}
-
-                <div className="mt-8 flex gap-4">
-                  <button className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
-                    <Printer size={18} /> Print
-                  </button>
-                  <button className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
-                    <Share size={18} /> Share
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
-
-          {/* Details Modal (when Clicking Order ID) */}
-          <AnimatePresence>
-            {selectedOrderForDetails && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                  className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
-                >
-                  <div className="flex justify-between items-start mb-8">
-                    <div>
-                      <h2 className="text-2xl font-black text-slate-900">Order Details</h2>
-                      <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {selectedOrderForDetails.id}</p>
-                    </div>
-                    <button 
-                      onClick={() => setSelectedOrderForDetails(null)}
-                      className="p-2 hover:bg-slate-100 rounded-full transition-colors"
-                    >
-                      <XCircle size={24} className="text-slate-400" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-8 mb-8">
-                    <div>
-                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
-                      <div className="text-sm font-bold text-slate-900">
-                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
-                          ? ((selectedOrderForDetails as any).pickupAddress?.fullName || selectedOrderForDetails.customerName || 'Customer Residence')
-                          : 'JiffEX Warehouse'
-                        }
-                      </div>
-                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType ? (
-                          <>
-                            {((selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || '').split(',').slice(0, 2).join(',')}<br />
-                            {((selectedOrderForDetails as any).pickupAddress?.city || selectedOrderForDetails.destination?.city || '')} {((selectedOrderForDetails as any).pickupAddress?.state || selectedOrderForDetails.destination?.state || '')}<br />
-                            {((selectedOrderForDetails as any).pickupAddress?.zipCode || (selectedOrderForDetails as any).pickupAddress?.zip || selectedOrderForDetails.destination?.zipCode || '')} India
-                          </>
-                        ) : (
-                          <>
-                            {WAREHOUSE_ADDRESS.street}<br />
-                            {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
-                            {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
-                      <div className="text-sm font-bold text-slate-900">
-                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
-                          ? (selectedOrderForDetails.destination?.fullName || 'Receiver Location')
-                          : (selectedOrderForDetails.destination?.fullName || currentUser?.name || 'Receiver Location')
-                        }
-                      </div>
-                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                        {selectedOrderForDetails.destination?.addressLine1 || 'N/A'}<br />
-                        {selectedOrderForDetails.destination?.city || ''} {selectedOrderForDetails.destination?.state || ''}<br />
-                        {selectedOrderForDetails.destination?.zipCode || ''} {selectedOrderForDetails.destination?.country || ''}
-                      </div>
-                    </div>
-                  </div>
-
-                  {(selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType) && (
-                    <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 mb-6 text-slate-700">
-                      <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-3 flex items-center gap-1.5 pb-2 border-b border-indigo-100/60">
-                        <Calendar size={14} className="text-indigo-600" /> Home Pickup Scheduled Details
-                      </h4>
-                      <div className="grid grid-cols-2 gap-4 text-xs font-sans">
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pickup Date</div>
-                          <div className="font-bold text-slate-800">{selectedOrderForDetails.shippingDate || (selectedOrderForDetails as any).shipping_date || 'N/A'}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Preferred Time</div>
-                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).time || (selectedOrderForDetails as any).destination?.time || 'General Slot'}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Assigned Agent</div>
-                          <div className="font-bold text-slate-800">
-                            {selectedOrderForDetails.assignedAgent?.name || (selectedOrderForDetails as any).assignedAgent?.name || (selectedOrderForDetails as any).destination?.assignedAgent?.name || 'Assigning soon...'}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Language Preference</div>
-                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).languagePreference || (selectedOrderForDetails as any).destination?.languagePreference || 'English'}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Item Category</div>
-                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).itemType || (selectedOrderForDetails as any).destination?.itemType || 'General Cargo'}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Vehicle Type</div>
-                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).vehicleType || (selectedOrderForDetails as any).destination?.vehicleType || 'Two-Wheeler'}</div>
-                        </div>
-                        <div className="col-span-2">
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Full Pickup Address (From)</div>
-                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || 'N/A'}</div>
-                        </div>
-                        <div className="col-span-2">
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Destination Delivery Address (To)</div>
-                          <div className="font-bold text-slate-800">
-                            {selectedOrderForDetails.destination?.addressLine1}, {selectedOrderForDetails.destination?.city}, {selectedOrderForDetails.destination?.state} - {selectedOrderForDetails.destination?.zipCode}, {selectedOrderForDetails.destination?.country}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="border-t border-slate-100 pt-6 mb-6">
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
-                    <div className="space-y-3">
-                      {(selectedOrderForDetails.items || []).map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                              {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
-                            </div>
-                            <div>
-                              <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium font-sans">
-                                <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
-                                <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
-                                <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
-                                <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-sm font-bold text-slate-900">
-                              {item.price ? `‚Çπ${item.price}` : '-'}
-                            </div>
-                            <div className="mt-1.5">
-                              <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[9px] font-extrabold rounded-md uppercase tracking-wider">
-                                {item.status || selectedOrderForDetails.status}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Total weight and grand total in TEXT format (No black box) */}
-                  <div className="border-t border-slate-200 pt-5 space-y-3">
-                    <div className="flex justify-between items-center text-sm font-semibold text-slate-600">
-                      <span>Total Weight:</span>
-                      <span className="text-slate-900 font-extrabold text-base">{getSafeOrderTotalWeight(selectedOrderForDetails)} kg</span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm font-semibold text-slate-600 border-t border-slate-100 pt-3">
-                      <div>
-                        <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">Grand Total</span>
-                        <div className="text-2xl font-black text-slate-950 mt-1">‚Çπ{selectedOrderForDetails.totalCost || selectedOrderForDetails.total_cost || 0}</div>
-                      </div>
-                      <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold rounded-xl text-xs uppercase tracking-widest">
-                        {selectedOrderForDetails.paymentStatus || selectedOrderForDetails.payment_status || 'Paid'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-8 flex justify-end pt-2">
-                    <button 
-                      onClick={() => setSelectedOrderForDetails(null)}
-                      className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-all text-sm shadow-sm"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
-
-          {/* Consolidated Invoice Modal */}
-          <AnimatePresence>
-            {selectedOrdersForConsolidatedInvoice && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                  className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
-                >
-                  <div className="flex justify-between items-start mb-8">
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Logo iconSize={18} />
-                      </div>
-                      <h2 className="text-2xl font-black text-slate-900">Consolidated Tax Invoice</h2>
-                      <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">
-                        Invoice ID: CONSOL-{currentUser.name?.slice(0, 3).toUpperCase() || 'USR'}-{new Date().getTime().toString().slice(-4)}
-                      </p>
-                    </div>
-                    <button 
-                      onClick={() => setSelectedOrdersForConsolidatedInvoice(null)}
-                      className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-                    >
-                      <XCircle size={24} className="text-slate-400" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-8 mb-8">
-                    <div>
-                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
-                      <div className="text-sm font-bold text-slate-900">JiffEX Warehouse</div>
-                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                        {WAREHOUSE_ADDRESS.street}<br />
-                        {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
-                        {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
-                      <div className="text-sm font-bold text-slate-900">{selectedOrdersForConsolidatedInvoice[0]?.destination?.fullName}</div>
-                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                        {selectedOrdersForConsolidatedInvoice[0]?.destination?.addressLine1}<br />
-                        {selectedOrdersForConsolidatedInvoice[0]?.destination?.city}, {selectedOrdersForConsolidatedInvoice[0]?.destination?.state}<br />
-                        {selectedOrdersForConsolidatedInvoice[0]?.destination?.zipCode}, {selectedOrdersForConsolidatedInvoice[0]?.destination?.country}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-slate-100 pt-6 mb-8">
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Consolidated Item Details</h4>
-                    <div className="space-y-3">
-                      {selectedOrdersForConsolidatedInvoice.flatMap(order => 
-                        (order.items || []).map((item, idx) => ({ ...item, orderId: order.id }))
-                      ).map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                              {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
-                            </div>
-                            <div>
-                              <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
-                                <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
-                                <span className="text-indigo-600 font-bold text-[9px]">Order: {item.orderId}</span>
-                                <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
-                                <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-sm font-bold text-slate-900">
-                            {item.price ? `‚Çπ${item.price}` : '-'}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-900 rounded-2xl p-6 text-white mb-4">
-                    <div className="flex justify-between items-center mb-3 pb-3 border-b border-white/10">
-                      <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Completed Orders Included</span>
-                      <span className="font-bold text-xs text-indigo-400">{selectedOrdersForConsolidatedInvoice.map(o => o.id).join(', ')}</span>
-                    </div>
-                    <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
-                      <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Consolidated Total Weight</span>
-                      <span className="font-bold">
-                        {selectedOrdersForConsolidatedInvoice.reduce((sum, o) => sum + getSafeOrderTotalWeight(o), 0).toFixed(2)} kg
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Consolidated Grand Total</span>
-                        <div className="text-3xl font-black">
-                          ‚Çπ{Math.round(selectedOrdersForConsolidatedInvoice.reduce((sum, o) => sum + Number(o.totalCost || o.total_cost || 0), 0))}
-                        </div>
-                      </div>
-                      <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
-                        PAID
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-8 flex gap-4">
-                    <button 
-                      onClick={() => window.print()}
-                      className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer border-0"
-                    >
-                      <Printer size={18} /> Print
-                    </button>
-                    <button 
-                      onClick={async () => {
-                        const promise = api.sendConsolidatedInvoicePDF(currentUser.email, selectedOrdersForConsolidatedInvoice, COMPANY_DETAILS);
-                        toast.promise(promise, {
-                          loading: 'Sending consolidated invoice...',
-                          success: 'Single consolidated invoice sent to your email!',
-                          error: 'Could not send consolidated invoice via Email.'
-                        });
-                      }}
-                      className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer border-0"
-                    >
-                      <Share size={18} /> Share to Email
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
-        </div>
-      );
-    }, [orders, appointments, currentUser, setActiveTab, selectedOrderForInvoice, selectedOrderForDetails, selectedOrdersForConsolidatedInvoice, isMobile]);
-
-
-  const WorkOrderSection = useMemo(() => {
-    if (!currentUser) return null;
-    if (!activeWorkOrder) return null;
-
-    const woTotalWeight = woItems.reduce((s, i) => s + (i.weight * (i.quantity || 1)), 0);
-    const woRate = shippingRates[woAddress.country] || 10;
-    const woRawShippingCost = woTotalWeight * woRate;
-    const woDiscountPercent = shippingDiscounts[woAddress.country] || 0;
-    const woDiscountAmount = woRawShippingCost * (woDiscountPercent / 100);
-    const woTotalCost = Math.max(0, woRawShippingCost - woDiscountAmount);
-
-    if (isWOPaid) {
-      return (
-        <div className="max-w-3xl mx-auto space-y-6">
-          <div className="bg-emerald-600 text-white p-8 rounded-3xl shadow-xl text-center space-y-4">
-            <div className="w-16 h-16 bg-white/20 backdrop-blur rounded-full flex items-center justify-center mx-auto">
-              <CheckCircle2 size={32} />
-            </div>
-            <div>
-              <h2 className="text-3xl font-black">Payment Successful!</h2>
-              <p className="opacity-80">Work Order {activeWorkOrder.id} has been processed and paid.</p>
-            </div>
-          </div>
-
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
-              <div>
-                <h3 className="text-xl font-black text-slate-900">Invoice Summary</h3>
-                <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {woOrderId}</p>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button 
-                  onClick={() => {
-                    const message = `*JiffEX Work Order Invoice*\n\nOrder ID: ${woOrderId}\nCustomer: ${woAddress.fullName}\nTotal Amount: ‚Çπ${woTotalCost.toFixed(2)}\nDestination: ${woAddress.country}\nStatus: Processed & Paid\n\nThank you for choosing JiffEX!`;
-                    sendWhatsApp(woAddress.phone, message);
-                  }}
-                  className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors flex items-center gap-1.5 text-xs font-bold font-sans"
-                  title="WhatsApp Invoice"
-                >
-                  <MessageCircle size={18} />
-                  <span>WhatsApp Invoice</span>
-                </button>
-                <button 
-                  onClick={() => {
-                    const summary = `JiffEX Invoice\nOrder ID: ${woOrderId}\nDestination: ${woAddress.fullName}, ${woAddress.country}\nTotal Weight: ${woTotalWeight.toFixed(1)} kg\nTotal: ‚Çπ${woTotalCost.toFixed(2)}`;
-                    if (navigator.share) {
-                      navigator.share({
-                        title: 'JiffEX Invoice',
-                        text: summary,
-                      }).catch(console.error);
-                    } else {
-                      navigator.clipboard.writeText(summary);
-                      toast.success('Invoice Summary copied to clipboard!');
-                    }
-                  }}
-                  className="p-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 transition-colors rounded-xl flex items-center gap-1.5 text-xs font-bold font-sans"
-                  title="Share Summary"
-                >
-                  <Share size={18} />
-                  <span>Share Summary</span>
-                </button>
-                <button 
-                  onClick={() => window.print()}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors rounded-xl"
-                  title="Print Invoice"
-                >
-                  <Printer size={18} />
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <MapPin size={12} className="text-red-500" /> Destination Address
-                  </h4>
-                  <div className="text-sm font-bold text-slate-900">{woAddress.fullName}</div>
-                  <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                    {woAddress.addressLine1}, {woAddress.city}<br />
-                    {woAddress.country}<br />
-                    <span className="font-medium">Email: {woAddress.email}</span><br />
-                    <span className="font-medium">Phone: {woAddress.phone}</span>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <Calendar size={12} className="text-indigo-600" /> Shipment Details
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-[9px] text-slate-400 font-bold uppercase">Shipping Date</div>
-                      <div className="text-xs font-bold text-slate-900">{woShippingDate}</div>
-                    </div>
-                    <div>
-                      <div className="text-[9px] text-slate-400 font-bold uppercase">Payment Method</div>
-                      <div className="text-xs font-bold text-slate-900 uppercase">{woPaymentMethod}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <Package size={12} className="text-indigo-600" /> Items List
-                  </h4>
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                    {woItems.map(item => (
-                      <div key={item.id} className="flex justify-between items-center text-xs">
-                        <span className="text-slate-600 font-medium">{item.name} <span className="text-[10px] text-slate-400 font-bold ml-1">x{item.quantity || 1}</span></span>
-                        <span className="text-slate-400">{(item.weight * (item.quantity || 1)).toFixed(1)} kg</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="h-px bg-slate-200 my-3" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-900">Total Weight</span>
-                    <span className="text-sm font-black text-slate-900">{woItems.reduce((s, i) => s + (i.weight * (i.quantity || 1)), 0).toFixed(1)} kg</span>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-slate-900 text-white rounded-2xl space-y-2">
-                  <div className="flex justify-between items-center text-xs text-slate-400">
-                    <span>Base Shipping Cost</span>
-                    <span>‚Çπ{woRawShippingCost.toFixed(2)}</span>
-                  </div>
-                  {woDiscountPercent > 0 && (
-                    <div className="flex justify-between items-center text-xs text-rose-400">
-                      <span>Shipping Discount ({woDiscountPercent}%)</span>
-                      <span>-‚Çπ{woDiscountAmount.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="h-px bg-slate-800 my-1" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-bold">Total Amount Paid</span>
-                    <span className="text-2xl font-black text-indigo-400">‚Çπ{woTotalCost.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4 max-w-lg mx-auto w-full">
-              <button 
-                onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
-                className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black transition-all text-sm shadow-md cursor-pointer text-center"
-              >
-                Process New Order
-              </button>
-              <button 
-                onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
-                className="flex-1 py-4 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl font-black transition-all text-sm shadow-xs cursor-pointer text-center"
-              >
-                Go Home
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="max-w-4xl mx-auto space-y-6 text-slate-800">
-        {/* Header Block with Back Button & Steps Tracker */}
-        <div className="bg-white p-3.5 sm:p-8 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100">
-          <div className="flex items-center justify-between mb-4 sm:mb-6 pb-2.5 sm:pb-4 border-b border-slate-100">
-            <button 
-              type="button"
-              onClick={() => setActiveWorkOrder(null)}
-              className="text-slate-400 hover:text-slate-900 flex items-center gap-1 text-xs sm:text-sm font-bold transition-all cursor-pointer"
-            >
-              <ChevronRight size={14} className="rotate-180 sm:w-4 sm:h-4" /> Exit
-            </button>
-            <div className="text-right">
-              <h2 className="text-sm sm:text-lg font-black text-slate-900 leading-tight">Order: {activeWorkOrder.id}</h2>
-              <p className="hidden sm:block text-[10px] text-slate-500 uppercase font-black tracking-widest mt-0.5">Pickup & Shipping Wizard</p>
-              {/* Customer Name on mobile view only to save space */}
-              <p className="block sm:hidden text-[10px] text-slate-600 font-extrabold mt-0.5 uppercase tracking-tight">
-                Cust: {activeWorkOrder.customerName || 'Walk-in'}
-              </p>
-            </div>
-          </div>
- 
-          {/* Context Banner - Only shown on Desktop / larger screens as requested */}
-          <div className="hidden sm:flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 p-2.5 sm:p-4 mb-4 sm:mb-6 bg-indigo-50/40 border border-indigo-100/50 rounded-xl sm:rounded-2xl">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[7px] sm:text-[8px] font-black uppercase text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 tracking-wider shrink-0">Active Pickup</span>
-                <h4 className="text-xs font-black text-slate-800 truncate">Customer: {activeWorkOrder.customerName || 'Walk-in'}</h4>
-              </div>
-              <p className="text-[10px] text-slate-500 truncate mt-1">üìç {activeWorkOrder.address}</p>
-            </div>
-            <div className="text-[10px] font-black text-slate-600 shrink-0 bg-white px-3 py-1.5 rounded-xl border border-slate-100 flex items-center gap-1">
-              <span>üìû {activeWorkOrder.phone}</span>
-            </div>
-          </div>
- 
-          {/* Stepper Progress Bar (Line-based, like home pickup style, clickable) */}
-          <div className="mb-4 sm:mb-8 select-none">
-            <div className="flex items-center gap-1.5 sm:gap-3 w-full">
-              {[
-                { step: 1, label: 'Cargo', desc: 'Add items' },
-                { step: 2, label: 'KYC Docs', desc: 'Verify ID' },
-                { step: 3, label: 'Destination', desc: 'Recipient' },
-                { step: 4, label: 'Payment', desc: 'Settle cost' }
-              ].map((s) => (
-                <button
-                  key={s.step}
-                  type="button"
-                  onClick={() => {
-                    if (s.step < woStep || woItems.length > 0) {
-                      setWoStep(s.step);
-                    }
-                  }}
-                  className="flex-1 flex flex-col gap-2 text-left focus:outline-none cursor-pointer group"
-                >
-                  <div 
-                    className={`h-1.5 rounded-full transition-all duration-500 w-full ${
-                      woStep === s.step 
-                        ? 'bg-indigo-600 shadow-sm shadow-indigo-200/50' 
-                        : s.step < woStep 
-                          ? 'bg-emerald-500 shadow-xs' 
-                          : 'bg-slate-200'
-                    }`}
-                  />
-                  <div className="flex flex-col min-w-0">
-                    <span className={`text-[10px] uppercase font-black tracking-tight transition-colors truncate ${
-                      woStep === s.step 
-                        ? 'text-indigo-600 font-black' 
-                        : s.step < woStep 
-                          ? 'text-emerald-500 font-extrabold' 
-                          : 'text-slate-400 group-hover:text-slate-600'
-                    }`}>
-                      {s.label}
-                    </span>
-                    <span className={`text-[8px] sm:text-[9px] font-bold text-slate-400 truncate mt-0.5 transition-colors ${
-                      woStep === s.step ? 'text-slate-600' : 'text-slate-400/80'
-                    }`}>
-                      {s.desc}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* STEP 1: CARGO COLLECTION */}
-          {woStep === 1 && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Package className="text-indigo-600 animate-pulse" size={20} /> 1. Cargo Collection
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">Specify items, quantity, weights and snap real-world condition photos.</p>
-              </div>
-
-              {/* Hidden universal file camera input */}
-              <input 
-                type="file" 
-                id="universal-wo-camera" 
-                accept="image/*" 
-                capture="environment" 
-                className="hidden" 
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      const imgData = reader.result as string;
-                      if (capturingItemId === 'new') {
-                        setWoItemImage(imgData);
-                        toast.success("Photo captured for new item!");
-                      } else if (capturingItemId) {
-                        setWoItems(prev => prev.map(item => item.id === capturingItemId ? { ...item, image: imgData } : item));
-                        toast.success("Photo updated in the item list!");
-                      }
-                      setCapturingItemId(null);
-                    };
-                    reader.readAsDataURL(file);
-                  }
-                }}
-              />
-
-              {/* Item input box */}
-              <div className="bg-slate-50 border border-slate-200/50 p-3 sm:p-5 rounded-2xl space-y-3">
-                <div className="space-y-3">
-                  {/* Row 1: Item Name */}
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Cargo Item Name</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g., File bundle, Parcel box, Clothes..."
-                      className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-xs font-semibold placeholder:text-slate-350"
-                      value={woItemName}
-                      onChange={(e) => setWoItemName(e.target.value)}
-                    />
-                  </div>
-                  
-                  {/* Row 2: Weight, Quantity, Snap in a single line */}
-                  <div className="grid grid-cols-3 gap-2 sm:gap-4 items-end">
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 truncate">Weight (kg)</label>
-                      <input 
-                        type="number" 
-                        placeholder="e.g., 2.5"
-                        step="any"
-                        className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-xs font-semibold text-center"
-                        value={woItemWeight || ''}
-                        onChange={(e) => {
-                          const val = e.target.value === '' ? 0 : Number(e.target.value);
-                          setWoItemWeight(val);
-                        }}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 truncate text-center">Quantity</label>
-                      <div className="flex items-center bg-white border border-slate-200 rounded-xl px-1 sm:px-1.5 h-[38px] justify-between">
-                        <button
-                          type="button"
-                          onClick={() => setWoItemQuantity(q => Math.max(1, q - 1))}
-                          className="w-6 h-6 sm:w-7 sm:h-7 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700 cursor-pointer active:scale-95 transition-transform"
-                        >
-                          -
-                        </button>
-                        <input 
-                          type="number" 
-                          placeholder="Qty"
-                          className="w-10 sm:w-12 text-center bg-transparent border-0 font-bold text-sm sm:text-base p-0 focus:ring-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          value={woItemQuantity || ''}
-                          onChange={(e) => {
-                            const val = e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value, 10));
-                            setWoItemQuantity(val === '' ? 1 : val);
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setWoItemQuantity(q => q + 1)}
-                          className="w-6 h-6 sm:w-7 sm:h-7 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700 cursor-pointer active:scale-95 transition-transform"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] text-center font-black text-slate-400 uppercase tracking-widest mb-1 truncate">Snap Photo</label>
-                      <div className="flex gap-1.5 items-center justify-center w-full">
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setCapturingItemId('new');
-                            document.getElementById('universal-wo-camera')?.click();
-                          }}
-                          className={`flex-1 h-[38px] rounded-xl flex items-center justify-center border transition-all cursor-pointer relative ${
-                            woItemImage 
-                              ? 'bg-emerald-50 border-emerald-200 text-emerald-600 ring-2 ring-emerald-100' 
-                              : 'bg-white border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-300'
-                          }`}
-                        >
-                          <Camera size={14} className={!woItemImage ? "text-indigo-600" : ""} />
-                          {woItemImage && (
-                            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border border-white flex items-center justify-center text-[8px] text-white">‚úì</span>
-                          )}
-                        </button>
-                        {woItemImage && (
-                          <button 
-                            type="button"
-                            onClick={() => {
-                              setWoItemImage('');
-                              toast.info("Cleared item photo!");
-                            }}
-                            className="w-8 h-8 bg-rose-50 hover:bg-rose-100 border border-rose-100 text-rose-500 rounded-xl flex items-center justify-center transition-colors cursor-pointer shrink-0"
-                          >
-                            <X size={12} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center pt-2.5 border-t border-slate-150">
-                  <span className="text-[10px] font-bold text-slate-400">Add collected items representing cargo.</span>
-                  <button 
-                    type="button"
-                    onClick={addWOItem}
-                    disabled={!woItemName}
-                    className={`px-6 py-2 rounded-xl font-bold transition-all text-xs cursor-pointer shadow-xs ${
-                      woItemName 
-                        ? 'bg-slate-900 text-white hover:bg-black hover:shadow-sm' 
-                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                    }`}
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-
-              {/* Total Summary of Cargo: Items Count, Total Weight, Shipping Rate */}
-              {(() => {
-                const totalWoItemsCount = woItems.reduce((acc, item) => acc + (item.quantity || 1), 0);
-                const totalWoWeightCalculated = woItems.reduce((acc, item) => acc + (item.weight * (item.quantity || 1)), 0);
-                const woRate = shippingRates[woAddress.country] || 10;
-                return (
-                  <div className="grid grid-cols-3 gap-3 p-4 bg-indigo-50/45 border border-indigo-100/70 rounded-2xl">
-                    <div className="text-center">
-                      <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">Total Qty</span>
-                      <span className="text-sm sm:text-base font-black text-indigo-950 mt-0.5 block">{totalWoItemsCount} {totalWoItemsCount === 1 ? 'item' : 'items'}</span>
-                    </div>
-                    <div className="text-center border-x border-indigo-100/80 font-sans">
-                      <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">Total Weight</span>
-                      <span className="text-sm sm:text-base font-black text-indigo-950 mt-0.5 block">{totalWoWeightCalculated.toFixed(1)} kg</span>
-                    </div>
-                    <div className="text-center">
-                      <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">Shipping Rate</span>
-                      <span className="text-sm sm:text-base font-black text-emerald-600 mt-0.5 block">‚Çπ{woRate.toFixed(2)}/kg</span>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Collected List items list */}
-              <div className="mt-5 space-y-2">
-                <div className="flex items-center justify-between pb-1">
-                  <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest flex items-center gap-1.5">
-                    <Boxes size={12} className="text-indigo-600/70" /> Collected Items List
-                  </span>
-                  {woItems.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setWoIsEditingItems(!woIsEditingItems)}
-                      className={`px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 text-[10px] font-extrabold cursor-pointer h-7 ${
-                        woIsEditingItems 
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' 
-                          : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
-                      }`}
-                      id="wo-edit-list-btn"
-                    >
-                      <Pencil size={10} />
-                      <span>{woIsEditingItems ? 'Done' : 'Edit'}</span>
-                    </button>
-                  )}
-                </div>
-
-                {woItems.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400 font-medium text-xs bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
-                    No items added yet. Enter items details above to start collecting.
-                  </div>
-                ) : (
-                  woItems.map(item => (
-                    <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white rounded-2xl border border-slate-150 shadow-xs hover:border-slate-350 transition-all gap-3">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div 
-                          onClick={() => {
-                            if (woIsEditingItems) {
-                              setCapturingItemId(item.id);
-                              document.getElementById('universal-wo-camera')?.click();
-                            }
-                          }}
-                          className={`w-10 h-10 rounded-xl bg-slate-50 border overflow-hidden shrink-0 flex items-center justify-center transition-all ${
-                            woIsEditingItems 
-                              ? 'border-dashed border-slate-250 cursor-pointer hover:border-indigo-400 group relative' 
-                              : 'border-slate-150'
-                          }`}
-                        >
-                          {item.image ? (
-                            <>
-                              <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                              {woIsEditingItems && (
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                  <Camera size={14} className="text-white" />
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center text-slate-400">
-                              {woIsEditingItems ? (
-                                <>
-                                  <Camera size={14} className="text-indigo-500 animate-pulse" />
-                                  <span className="text-[6px] text-slate-400 font-extrabold tracking-tighter uppercase mt-0.5">SNAP</span>
-                                </>
-                              ) : (
-                                <Package size={16} className="text-slate-300" />
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex flex-row flex-wrap md:flex-nowrap items-center gap-y-2 gap-x-4 flex-1 min-w-0">
-                          {/* Item Name */}
-                          <div className="text-xs sm:text-sm font-bold text-slate-900 truncate flex-1 min-w-[100px] sm:min-w-[140px]" title={item.name}>
-                            {item.name}
-                          </div>
-                          
-                          {/* Item Values/Controls in single line */}
-                          <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-xs font-semibold text-slate-600 shrink-0">
-                            {/* Quantity Control */}
-                            {woIsEditingItems ? (
-                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
-                                <span className="text-[9px] font-black uppercase text-slate-400">Qty</span>
-                                <input
-                                  type="number"
-                                  value={item.quantity || 1}
-                                  onChange={(e) => {
-                                    const val = Math.max(1, parseInt(e.target.value, 10) || 1);
-                                    setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: val } : i));
-                                  }}
-                                  className="w-10 text-center bg-white border border-slate-200 rounded font-bold text-xs p-0.5 focus:ring-1 focus:ring-indigo-500 outline-none"
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 bg-slate-50/70 border border-slate-150 rounded-lg px-2 py-0.5 text-xs">
-                                <span className="text-[8px] font-extrabold uppercase text-slate-450">Qty:</span>
-                                <span className="font-bold text-slate-800">{item.quantity || 1}</span>
-                              </div>
-                            )}
-
-                            {/* Weight Control */}
-                            {woIsEditingItems ? (
-                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
-                                <span className="text-[9px] font-black uppercase text-slate-400">Wt</span>
-                                <input
-                                  type="number"
-                                  step="any"
-                                  value={item.weight}
-                                  onChange={(e) => {
-                                    const val = Math.max(0, parseFloat(e.target.value) || 0);
-                                    setWoItems(woItems.map(i => i.id === item.id ? { ...i, weight: val } : i));
-                                  }}
-                                  className="w-14 text-center bg-white border border-slate-200 rounded font-bold text-xs p-0.5 focus:ring-1 focus:ring-indigo-500 outline-none"
-                                />
-                                <span className="text-[9px] font-bold text-slate-400">kg</span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 bg-slate-50/70 border border-slate-150 rounded-lg px-2 py-0.5 text-xs">
-                                <span className="text-[8px] font-extrabold uppercase text-slate-450">Wt:</span>
-                                <span className="font-bold text-slate-800">{item.weight} kg</span>
-                              </div>
-                            )}
-
-                            {/* Total calculated field */}
-                            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100/30 whitespace-nowrap">
-                              Total: {(item.weight * (item.quantity || 1)).toFixed(1)} kg
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-2 justify-end shrink-0">
-                        {woIsEditingItems ? (
-                          <>
-                            <button 
-                              type="button"
-                              onClick={() => {
-                                setCapturingItemId(item.id);
-                                document.getElementById('universal-wo-camera')?.click();
-                              }}
-                              className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-all cursor-pointer"
-                              title="Snap Photo"
-                            >
-                              <Camera size={14} />
-                            </button>
-                            
-                            <button 
-                              type="button"
-                              onClick={() => setWoItems(woItems.filter(i => i.id !== item.id))}
-                              className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 flex items-center justify-center transition-all cursor-pointer"
-                              title="Delete Item"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))
-                )}
-                {woItems.length > 0 && (
-                  <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-100">
-                    <span className="text-[10px] text-slate-400 font-bold">Keep cargo list synchronized with servers.</span>
-                    <button
-                      type="button"
-                      onClick={handleWOSaveDetails}
-                      className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer animate-pulse hover:animate-none"
-                    >
-                      <Save size={14} /> Save Collected Cargo List
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2: KYC VERIFICATION DOCUMENTS */}
-          {woStep === 2 && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
-                    <ShieldCheck className="text-indigo-600" size={20} /> 2. KYC Verification Proof
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">Collect customer identity verification scans or bill copies for outbound clearances.</p>
-                </div>
-                <span className="px-2 py-0.5 bg-amber-50 text-amber-700 text-[8px] font-black rounded border border-amber-100 uppercase tracking-widest leading-none shrink-0">
-                  KYC MANDATORY
-                </span>
-              </div>
-
-              {/* Document Camera/File Selector */}
-              <input 
-                type="file" 
-                id="universal-wo-doc-camera" 
-                accept="image/*" 
-                capture="environment" 
-                className="hidden" 
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      const imgData = reader.result as string;
-                      setWoDocImage(imgData);
-                      toast.success("Document photo loaded successfully!");
-                    };
-                    reader.readAsDataURL(file);
-                  }
-                }}
-              />
-
-              {/* Upload Panel */}
-              <div className="bg-slate-50 border border-slate-205 p-4 sm:p-5 rounded-2xl space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                  <div className="sm:col-span-4 border-none">
-                    <label className="block text-[10px] font-black text-slate-505 uppercase tracking-widest mb-1.5">Document Type</label>
-                    <select
-                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold"
-                      value={woDocType}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setWoDocType(val);
-                        // Set default names
-                        if (val === 'Aadhar Card') setWoDocName('Customer Aadhar Card');
-                        else if (val === 'Passport') setWoDocName('Customer Passport');
-                        else if (val === 'PAN Card') setWoDocName('Customer PAN Card');
-                        else if (val === 'Customs Declaration') setWoDocName('Signed Customs Declaration');
-                        else if (val === 'Invoice Copy') setWoDocName('Commercial Invoice / Bill');
-                        else setWoDocName('');
-                      }}
-                    >
-                      <option value="Aadhar Card">Aadhar Card</option>
-                      <option value="Passport">Passport Copy</option>
-                      <option value="PAN Card">PAN Card</option>
-                      <option value="Customs Declaration">Customs Declaration form</option>
-                      <option value="Invoice Copy">Commercial Invoice / Invoice copy</option>
-                      <option value="Other">Other Document Copy</option>
-                    </select>
-                  </div>
-                  
-                  <div className="sm:col-span-5">
-                    <label className="block text-[10px] font-black text-slate-505 uppercase tracking-widest mb-1.5">Document Description/Name</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g., Aadhar card number or custom label"
-                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-xs font-semibold placeholder:text-slate-350"
-                      value={woDocName}
-                      onChange={(e) => setWoDocName(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="sm:col-span-3">
-                    <button
-                      type="button"
-                      onClick={() => document.getElementById('universal-wo-doc-camera')?.click()}
-                      className={`w-full py-2.5 px-3 rounded-xl border-2 border-dashed font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        woDocImage 
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
-                          : 'border-indigo-200 hover:border-indigo-400 bg-white text-indigo-700'
-                      }`}
-                    >
-                      <Camera size={14} />
-                      {woDocImage ? 'Change Photo' : 'Take Picture'}
-                    </button>
-                  </div>
-                </div>
-
-                {woDocImage && (
-                  <div className="flex flex-col items-center justify-center py-2">
-                    <div className="relative w-full max-w-[200px] h-32 bg-slate-100 rounded-xl overflow-hidden border border-slate-200">
-                      <img 
-                        src={woDocImage} 
-                        alt="Document Preview" 
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setWoDocImage('')}
-                        className="absolute top-1 right-1 w-6 h-6 rounded-full bg-slate-900/60 hover:bg-slate-900 text-white flex items-center justify-center transition-colors"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const finalName = woDocName || `${woDocType} Copy`;
-                      if (!woDocImage) {
-                        toast.error('Please snap or upload a copy of the document first.');
-                        return;
-                      }
-                      const newDoc = {
-                        id: 'doc_' + Date.now(),
-                        name: finalName,
-                        type: woDocType,
-                        image: woDocImage,
-                        uploadedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      };
-                      setWoDocuments([...woDocuments, newDoc]);
-                      setWoDocName('');
-                      setWoDocImage('');
-                      toast.success(`${woDocType} added to intermediate collected checklist!`);
-                    }}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl cursor-pointer flex items-center gap-1 shadow-sm"
-                  >
-                    <Plus size={14} /> Add Document
-                  </button>
-                </div>
-              </div>
-
-              {/* Added Documents list */}
-              <div className="space-y-3">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Collected Documents Database</h4>
-                {woDocuments.length === 0 ? (
-                  <div className="p-6 text-center border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
-                    <FileText className="mx-auto text-slate-350 mb-2" size={32} />
-                    <p className="text-xs text-slate-400 font-medium">No documents captured yet.</p>
-                    <p className="text-[10px] text-slate-400 mt-1">Ask customer for ID copy, choose type and tap "Take Picture" to log copy.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {woDocuments.map(doc => (
-                      <div key={doc.id} className="p-4 bg-slate-50 hover:bg-slate-100/75 transition-all border border-slate-200/60 rounded-2xl flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-12 h-12 bg-white rounded-xl border border-slate-200 overflow-hidden shrink-0">
-                            <img 
-                              src={doc.image} 
-                              alt={doc.name} 
-                              className="w-full h-full object-cover cursor-zoom-in"
-                              onClick={() => {
-                                const w = window.open();
-                                if (w) {
-                                  w.document.write(`<img src="${doc.image}" style="max-width:100%; height:auto;" />`);
-                                } else {
-                                  toast.info("Check screen for document preview.");
-                                }
-                              }}
-                              referrerPolicy="no-referrer"
-                            />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-xs font-black text-slate-900 truncate">{doc.name}</div>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-[8px] font-bold rounded border border-indigo-100">
-                                {doc.type}
-                              </span>
-                              <span className="text-[9px] text-slate-400 font-medium">{doc.uploadedAt}</span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setWoDocuments(woDocuments.filter(d => d.id !== doc.id));
-                            toast.info(`${doc.name} removed.`);
-                          }}
-                          className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 flex items-center justify-center cursor-pointer hover:scale-110 transition-all"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-100 mt-4">
-                <span className="text-[10px] text-slate-400 font-bold">Keep KYC documents synchronized with servers.</span>
-                <button
-                  type="button"
-                  onClick={handleWOSaveDetails}
-                  className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer"
-                >
-                  <Save size={14} /> Save KYC Progress
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 3: DESTINATION ADDRESS */}
-          {woStep === 3 && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
-                  <MapPin className="text-red-500 animate-bounce" size={20} /> 3. Destination Address Details
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">Provide strict destination parameters for duty computation of custom layers.</p>
-              </div>
-
-              <div className="space-y-4 max-w-xl">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Recipient Full Name</label>
-                  <input 
-                    type="text" 
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
-                    value={woAddress.fullName}
-                    onChange={e => setWoAddress({...woAddress, fullName: e.target.value})}
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Email ID</label>
-                    <input 
-                      type="email" 
-                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
-                      value={woAddress.email}
-                      onChange={e => setWoAddress({...woAddress, email: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Recipient Phone</label>
-                    <input 
-                      type="tel" 
-                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
-                      value={woAddress.phone}
-                      onChange={e => setWoAddress({...woAddress, phone: e.target.value})}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Address Line 1</label>
-                  <input 
-                    type="text" 
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
-                    value={woAddress.addressLine1}
-                    onChange={e => setWoAddress({...woAddress, addressLine1: e.target.value})}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">City</label>
-                    <input 
-                      type="text" 
-                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
-                      value={woAddress.city}
-                      onChange={e => setWoAddress({...woAddress, city: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Zip Code</label>
-                    <input 
-                      type="text" 
-                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
-                      value={woAddress.zipCode}
-                      onChange={e => setWoAddress({...woAddress, zipCode: e.target.value})}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Destination Country</label>
-                  <select 
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
-                    value={woAddress.country}
-                    onChange={e => setWoAddress({...woAddress, country: e.target.value})}
-                  >
-                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-100 mt-6 max-w-xl">
-                <span className="text-[10px] text-slate-400 font-bold">Keep destination parameters synchronized with servers.</span>
-                <button
-                  type="button"
-                  onClick={handleWOSaveDetails}
-                  className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer"
-                >
-                  <Save size={14} /> Save Destination Details
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 4: SCHEDULE & PAY */}
-          {woStep === 4 && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-sans relative">
-              <div className="lg:col-span-7 space-y-6">
-                <div>
-                  <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
-                    <Calendar className="text-indigo-600" size={20} /> 4. Shipping Schedule & Status
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">Review the designated ship dates, apply localized status rules and configure payment gateway channels.</p>
-                </div>
-
-                <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Calendar size={12} className="text-indigo-600" /> Select Shipping Date</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    {SHIPPING_DATES.map(date => (
-                      <button 
-                        type="button"
-                        key={date}
-                        onClick={() => setWoShippingDate(date)}
-                        className={`p-3 rounded-xl border-2 transition-all text-center cursor-pointer ${woShippingDate === date ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}
-                      >
-                        <div className="text-[8px] font-bold uppercase opacity-60 mb-1">March</div>
-                        <div className="text-base font-black">{date.split('-')[2]}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* üîí CUSTOMER AUTHORIZATION (OTP via WhatsApp) */}
-                <div className="p-5 rounded-2xl border border-emerald-150 bg-emerald-50/10 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <MessageCircle size={18} className="text-emerald-600 shrink-0" /> WhatsApp Cargo Authorization
-                      </h4>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Send the collected items list and secure authorization OTP directly as a text message to the customer's WhatsApp in one click.
-                      </p>
-                    </div>
-                    {woOtpVerified ? (
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 flex items-center gap-1 shrink-0">
-                        <Check size={12} strokeWidth={3} /> Authorized
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 animate-pulse shrink-0">
-                        Pending OTP
-                      </span>
-                    )}
-                  </div>
-
-                  {/* One-Click Send WhatsApp Action */}
-                  <div className="space-y-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const code = Math.floor(100000 + Math.random() * 900000).toString();
-                        setWoOtpCode(code);
-                        setWoOtpSent(true);
-                        setWoOtpVerified(false);
-                        setWoOtpInput('');
-                        
-                        // Build plain text items list
-                        const itemsListText = woItems.map((item, index) => 
-                          `‚Ä¢ ${item.name} (${item.quantity || 1}x) - ${(item.weight * (item.quantity || 1)).toFixed(1)} kg`
-                        ).join('\n');
-
-                        const customerPhoneNumber = (woAddress.phone || activeWorkOrder?.phone || '').replace(/\D/g, '');
-                        
-                        const whatsappMsg = `üìå *CARGO COLLECTION AUTHORIZATION*\n\n` +
-                          `*Work Order:* ${activeWorkOrder?.id || 'NEW'}\n` +
-                          `*Customer Name:* ${woAddress.fullName}\n\n` +
-                          `*Collected Items:*\n${itemsListText}\n\n` +
-                          `--------------------------------\n` +
-                          `*Total Weight:* ${woTotalWeight.toFixed(1)} kg\n` +
-                          `*Estimated Cost:* ‚Çπ${woTotalCost.toFixed(2)}\n` +
-                          `--------------------------------\n\n` +
-                          `üîë *SECURE AUTHORIZATION OTP PIN:* *${code}*\n\n` +
-                          `Please tell this 6-digit PIN code to our field agent to authorize the cargo collection. Thank you!`;
-
-                        const whatsappUrl = `https://api.whatsapp.com/send?phone=${encodeURIComponent(customerPhoneNumber)}&text=${encodeURIComponent(whatsappMsg)}`;
-                        
-                        // Instantly open the WhatsApp API URL to send
-                        window.open(whatsappUrl, '_blank');
-                        
-                        toast.success(`OTP [${code}] generated! Opening WhatsApp chat for: ${woAddress.fullName || 'Customer'}`);
-                      }}
-                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer transition-all border border-emerald-500"
-                    >
-                      <MessageCircle size={14} /> Send Items List + OTP to Customer WhatsApp (1-Click)
-                    </button>
-                  </div>
-
-                  {woOtpSent && (
-                    <div className="space-y-3 pt-3 border-t border-slate-150">
-                      <div className="text-xs font-bold text-slate-700 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-                        <span className="flex items-center gap-1.5"><Lock size={12} className="text-indigo-600" /> Enter Customer Authorization OTP:</span>
-                        <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded w-max">Simulated Code: {woOtpCode}</span>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          type="text"
-                          maxLength={6}
-                          placeholder="Enter 6-digit OTP code"
-                          value={woOtpInput}
-                          onChange={(e) => setWoOtpInput(e.target.value.replace(/\D/g, ''))}
-                          disabled={woOtpVerified}
-                          className="w-full sm:flex-1 px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-center font-bold tracking-widest outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-emerald-750 disabled:border-emerald-300 text-sm"
-                        />
-                        <button
-                          type="button"
-                          disabled={woOtpVerified || !woOtpInput}
-                          onClick={() => {
-                            if (woOtpInput === woOtpCode) {
-                              setWoOtpVerified(true);
-                              toast.success("Customer cargo authorization verified successfully!");
-                              confetti({ particleCount: 30, spread: 50 });
-                            } else {
-                              toast.error("Invalid secure OTP code. Please retry or get a new OTP.");
-                            }
-                          }}
-                          className={`w-full sm:w-auto px-6 py-2.5 font-black rounded-xl text-xs cursor-pointer transition-all shrink-0 ${
-                            woOtpVerified 
-                              ? 'bg-emerald-600 text-white' 
-                              : 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50'
-                          }`}
-                        >
-                          {woOtpVerified ? 'Verified ‚úì' : 'Verify'}
-                        </button>
-                      </div>
-                      
-                      {!woOtpVerified && (
-                        <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
-                          Ask your customer for the 6-digit PIN that was sent to their WhatsApp. Verify to confirm authorized collection.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Shipping cost payment setup */}
-                <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><CreditCard size={11} className="text-emerald-600" /> Payment Method</h4>
-                  
-                  {!woOtpVerified ? (
-                    <div className="p-6 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50 flex flex-col items-center justify-center text-center py-8">
-                      <Lock size={20} className="text-slate-400 mb-1.5 animate-bounce" />
-                      <div className="text-xs font-bold text-slate-700">Payment Unlocked via Customer OTP</div>
-                      <p className="text-[10px] text-slate-400 max-w-xs mt-1">Please complete customer WhatsApp verification above to configure the localized payment gateway channel.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div 
-                        onClick={() => setWoPaymentMethod('cash')}
-                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
-                        id="wo-payment-cash"
-                      >
-                        <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center text-white shrink-0">
-                          <Banknote size={18} />
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-sm font-bold">Cash On Delivery (Cash)</div>
-                          <div className="text-[10px] text-slate-500">Pay cash at doorstep</div>
-                        </div>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                          {woPaymentMethod === 'cash' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                        </div>
-                      </div>
-
-                      <div 
-                        onClick={() => setWoPaymentMethod('upi')}
-                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
-                      >
-                        <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0">UPI</div>
-                        <div className="flex-1">
-                          <div className="text-sm font-bold">UPI</div>
-                          <div className="text-[10px] text-slate-500">Pay via UPI QR / ID</div>
-                        </div>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                          {woPaymentMethod === 'upi' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                        </div>
-                      </div>
-
-                      <div 
-                        onClick={() => setWoPaymentMethod('card')}
-                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
-                      >
-                        <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center text-white shrink-0"><CreditCard size={18} /></div>
-                        <div className="flex-1">
-                          <div className="text-sm font-bold">Credit / Debit Card</div>
-                          <div className="text-[10px] text-slate-500">Visa, Mastercard</div>
-                        </div>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                          {woPaymentMethod === 'card' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Price list sidebar inside Step 4 */}
-              <div className="lg:col-span-5 bg-slate-900 text-white rounded-3xl p-5 space-y-4 shadow-xl">
-                <span className="text-[8px] font-black uppercase text-indigo-400 bg-slate-850 border border-slate-700/60 rounded px-2 py-0.5 tracking-wider inline-block font-mono">Consolidated Pricing</span>
-                
-                <div className="space-y-2 pt-2 text-xs">
-                  <div className="flex justify-between items-center text-[11px] text-slate-400">
-                    <span>Total Weight</span>
-                    <span className="text-white font-bold">{woTotalWeight.toFixed(1)} kg</span>
-                  </div>
-                  <div className="flex justify-between items-center text-[11px] text-slate-400">
-                    <span>Shipping Rate</span>
-                    <span className="text-white font-bold">‚Çπ{woRate}/kg</span>
-                  </div>
-                  {woDiscountPercent > 0 && (
-                    <div className="flex justify-between items-center text-[11px] text-rose-400 font-bold">
-                      <span>Discount ({woDiscountPercent}%)</span>
-                      <span>-‚Çπ{woDiscountAmount.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="h-px bg-slate-800 my-2" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-black">Total Cost</span>
-                    <span className="text-base sm:text-lg font-black text-indigo-400">‚Çπ{woTotalCost.toFixed(2)}</span>
-                  </div>
-                </div>
-
-                {/* Interactive Simulated Smartphone - WhatsApp Customer View */}
-                {showSimulatedWhatsapp && woOtpCode && (
-                  <div className="border border-slate-800 bg-slate-950 rounded-2xl overflow-hidden mt-6 text-slate-900 shadow-2xl transition-all duration-300 transform scale-100">
-                    <div className="bg-emerald-600 text-white p-3 flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-ping shrink-0" />
-                        <div className="leading-tight">
-                          <div className="text-[8px] font-bold uppercase tracking-wider text-emerald-100 opacity-90">Simulation View</div>
-                          <div className="text-xs font-black">Customer's WhatsApp Phone</div>
-                        </div>
-                      </div>
-                      <button 
-                        type="button" 
-                        onClick={() => setShowSimulatedWhatsapp(false)} 
-                        className="text-[9px] uppercase font-bold tracking-wider text-emerald-100 hover:text-white bg-emerald-700/60 px-2 py-0.5 rounded cursor-pointer"
-                      >
-                        Hide Screen
-                      </button>
-                    </div>
-
-                    <div className="p-3.5 bg-[#efeae2] h-64 overflow-y-auto space-y-3 custom-scrollbar flex flex-col justify-end">
-                      {/* Document Attachment Message Card */}
-                      <div className="bg-white rounded-lg p-2 max-w-[85%] self-start shadow-xs text-[11px] space-y-1.5 border border-slate-200">
-                        <div className="flex items-center gap-2 bg-emerald-50 p-2 rounded-md border border-emerald-100">
-                          <FileText size={16} className="text-rose-500 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-[10px] font-bold text-slate-800 truncate">Cargo_Manifest_{activeWorkOrder?.id || 'NEW'}.pdf</p>
-                            <p className="text-[8px] text-slate-550 font-bold">PDF Document ‚Ä¢ {(woItems.length * 0.12).toFixed(2)} MB</p>
-                          </div>
-                          <div className="w-6 h-6 bg-emerald-600 rounded-full flex items-center justify-center text-white ml-auto shrink-0 shadow-xs cursor-pointer hover:bg-emerald-700">
-                            <Download size={10} />
-                          </div>
-                        </div>
-                        <div className="text-[9px] text-slate-400 flex items-center justify-between">
-                          <span>Manifest Attachment list</span>
-                          <span className="text-[8px]">05:36 PM ‚úì‚úì</span>
-                        </div>
-                      </div>
-
-                      {/* Text Dialog with OTP block */}
-                      <div className="bg-white rounded-lg p-2.5 max-w-[85%] self-start shadow-xs text-[11px] space-y-2 border border-slate-200">
-                        <div className="text-[10px] leading-relaxed text-slate-800 space-y-1">
-                          <p className="font-extrabold text-indigo-700">üìå Cargo Picked Up Manifest</p>
-                          <p className="text-[9px] text-slate-600 font-mono">ID: {activeWorkOrder?.id}</p>
-                          <div className="border-t border-dashed my-1 border-slate-200" />
-                          <p className="font-bold underline text-slate-700">Items Shipped:</p>
-                          <ul className="list-disc list-inside space-y-0.5 text-[8px] text-slate-600 font-mono">
-                            {woItems.map(item => (
-                              <li key={item.id} className="truncate">
-                                {item.name} ({item.quantity || 1}x, {item.weight} kg)
-                              </li>
-                            ))}
-                          </ul>
-                          <div className="border-t border-dashed my-1 border-slate-200" />
-                          <p className="text-[9px] text-slate-700">Total weight: <b>{woTotalWeight.toFixed(1)} kg</b></p>
-                          <p className="text-[9px] text-slate-750">Estimated Bill: <b>‚Çπ{woTotalCost.toFixed(2)}</b></p>
-                          <div className="bg-amber-50 p-1.5 rounded-md border border-amber-250 mt-2 text-center text-slate-800">
-                            <p className="text-[7px] font-black text-slate-500 uppercase tracking-wider">YOUR SECURE OTP PIN</p>
-                            <p className="text-sm font-black tracking-widest text-indigo-950 my-0.5 select-all">{woOtpCode}</p>
-                            <p className="text-[7px] text-slate-400 font-medium">Share with agent to confirm cargo collection</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between mt-1 text-[8px] text-slate-400">
-                          <button 
-                            type="button"
-                            onClick={() => {
-                              setWoOtpInput(woOtpCode);
-                              toast.info("OTP Pin filled in Agent input box!");
-                            }}
-                            className="text-[9px] text-indigo-650 font-black hover:underline cursor-pointer bg-slate-50 px-1.5 py-0.5 rounded border border-indigo-100"
-                          >
-                            ‚ö° Autofill PIN
-                          </button>
-                          <span>05:36 PM ‚úì‚úì</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Stepper Navigation Buttons */}
-          <div className="mt-8 pt-6 border-t border-slate-150 flex items-center justify-between gap-4 select-none">
-            {woStep > 1 ? (
-              <button
-                type="button"
-                onClick={() => setWoStep(prev => prev - 1)}
-                className="px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
-              >
-                ‚Üê Previous Step
-              </button>
-            ) : (
-              <button 
-                type="button"
-                onClick={() => setActiveWorkOrder(null)}
-                className="px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl border border-slate-200 text-slate-450 hover:text-red-700 hover:border-red-150 font-bold hover:bg-slate-50 transition-all text-xs flex items-center gap-1.5 cursor-pointer"
-              >
-                Cancel & Exit
-              </button>
-            )}
-
-            {woStep < 3 ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (woStep === 1 && woItems.length === 0) {
-                    toast.error("Please add at least 1 collected item to the cargo list first.");
-                    return;
-                  }
-                  setWoStep(prev => prev + 1);
-                }}
-                className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all text-xs flex items-center gap-1.5 cursor-pointer shadow-sm shadow-indigo-100"
-              >
-                Next Step ‚Üí
-              </button>
-            ) : woStep === 3 ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!woAddress.fullName.trim()) {
-                    toast.error("Please specify Recipient Full Name.");
-                    return;
-                  }
-                  if (!woAddress.addressLine1.trim()) {
-                    toast.error("Please specify Address Line 1.");
-                    return;
-                  }
-                  setWoStep(4);
-                }}
-                className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all text-xs flex items-center gap-1.5 cursor-pointer shadow-sm shadow-indigo-100"
-              >
-                Next Step ‚Üí
-              </button>
-            ) : (
-              <button 
-                type="button"
-                onClick={handleWOComplete}
-                disabled={woItems.length === 0 || !woAddress.email || !woAddress.fullName || !woOtpVerified}
-                className="px-5 py-2.5 sm:px-6 sm:py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-250 cursor-pointer flex items-center justify-center gap-2"
-              >
-                <CheckCircle2 size={15} className="shrink-0" /> {!woOtpVerified ? 'Awaiting Customer OTP Verification...' : 'Collect Payment & Complete'}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, woAddress, address, currentUser, handleWOSaveDetails, woStatusInput, setWoStatusInput, woStep, setWoStep, woIsEditingItems, setWoIsEditingItems, woOtpCode, woOtpSent, woOtpVerified, woOtpInput, showSimulatedWhatsapp]);
-
-  const AgentSection = useMemo(() => {
-    if (!currentUser) return null;
-    
-    const agentId = currentUser.id.toUpperCase();
-    const scheduledApts = appointments.filter(a => a.status === 'Scheduled' || a.status === 'Pending Pickup');
-    const completedApts = appointments.filter(a => a.status === 'Completed' || a.status === 'Picked Up');
-    const canceledApts = appointments.filter(a => a.status === 'Cancelled');
-
-    const displayedApts = 
-      agentActiveTab === 'Scheduled' ? scheduledApts : 
-      agentActiveTab === 'Completed' ? completedApts : 
-      agentActiveTab === 'Canceled' ? canceledApts : [];
-
-    // Real dynamic stats calculation
-    const agentOrders = orders;
-
-    const totalWeightCollected = agentOrders.reduce((sum, o) => {
-      if (['Picked Up', 'Delivered', 'Received at Warehouse', 'In Warehouse', 'Ready to Ship', 'In Transit', 'Out for Delivery'].includes(o.status)) {
-        return sum + (o.totalWeight || o.total_weight || 0);
-      }
-      return sum;
-    }, 0);
-
-    const totalRevenuePaid = agentOrders.reduce((sum, o) => {
-      if (['Delivered', 'Received at Warehouse', 'In Warehouse', 'Ready to Ship', 'In Transit', 'Out for Delivery'].includes(o.status) && o.paymentStatus === 'Paid') {
-        return sum + (o.totalCost || o.total_cost || 0);
-      }
-      return sum;
-    }, 0);
-
-    const totalTasksCount = scheduledApts.length + completedApts.length + canceledApts.length;
-    const productivityRate = totalTasksCount > 0 
-      ? Math.round((completedApts.length / totalTasksCount) * 100) 
-      : 100;
-
-    // Daily historical collection logic for AreaChart
-    const dateWeightMap: Record<string, number> = {};
-    const dateCountMap: Record<string, number> = {};
-
-    completedApts.forEach(apt => {
-      const matchingOrder = orders.find(o => o.id === apt.id);
-      const weight = matchingOrder?.totalWeight || 0;
-      const dateStr = apt.date; // has YYYY-MM-DD
-      dateWeightMap[dateStr] = (dateWeightMap[dateStr] || 0) + weight;
-      dateCountMap[dateStr] = (dateCountMap[dateStr] || 0) + 1;
-    });
-
-    const chartData = [];
-    const today = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(today.getDate() - i);
-      const dStr = d.toISOString().split('T')[0];
-      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      chartData.push({
-        date: dStr,
-        label,
-        weight: dateWeightMap[dStr] || 0,
-        pickups: dateCountMap[dStr] || 0,
-      });
-    }
-
-    // Agent dynamic activities list
-    const agentActivities: any[] = [];
-    scheduledApts.forEach(apt => {
-      agentActivities.push({
-        id: `act-sched-${apt.id}`,
-        type: 'scheduled',
-        title: `Scheduled Pickup Request`,
-        desc: `Assigned for ${apt.customerName} [${apt.time}]`,
-        details: apt.address,
-        timeLabel: 'Scheduled',
-        style: 'text-indigo-600 bg-indigo-50 border-indigo-100'
-      });
-    });
-
-    completedApts.forEach(apt => {
-      const matchingOrder = orders.find(o => o.id === apt.id);
-      const weightStr = matchingOrder ? `${matchingOrder.totalWeight || 0} kg` : 'N/A';
-      const revStr = matchingOrder ? `‚Çπ${(matchingOrder.totalCost || 0).toFixed(2)}` : 'N/A';
-      agentActivities.push({
-        id: `act-comp-${apt.id}`,
-        type: 'completed',
-        title: `Completed Pickup`,
-        desc: `Collected ${weightStr} from ${apt.customerName} (${revStr})`,
-        details: apt.address,
-        timeLabel: apt.date,
-        style: 'text-emerald-600 bg-emerald-50 border-emerald-100'
-      });
-    });
-
-    canceledApts.forEach(apt => {
-      agentActivities.push({
-        id: `act-cand-${apt.id}`,
-        type: 'cancelled',
-        title: `Cancelled Pickup`,
-        desc: `Pickup canceled for ${apt.customerName}`,
-        details: apt.address,
-        timeLabel: apt.date,
-        style: 'text-rose-600 bg-rose-50 border-rose-100'
-      });
-    });
-
-    // Sort: put latest first or keep structured
-    agentActivities.sort((a, b) => b.timeLabel.localeCompare(a.timeLabel));
-
-    if (activeWorkOrder) {
-      return WorkOrderSection;
-    }
-
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900">Agent Portal</h2>
-            <p className="text-xs sm:text-sm text-slate-500 max-w-xs sm:max-w-none">Manage & process home pickups.</p>
-          </div>
-          <div className="px-3 py-1.5 sm:px-4 sm:py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs sm:text-sm font-bold shrink-0 animate-pulse">
-            {scheduledApts.length} Pending
-          </div>
-        </div>
-
-        {/* Mobile View: 2-Level Navigation tabs */}
-        <div className="md:hidden space-y-4">
-          {/* Level 1: Main Tabs */}
-          <div className="flex border-b border-slate-100 p-0.5">
-            <button
-              onClick={() => {
-                setAgentMainTab('Summary');
-                setAgentActiveTab('Summary');
-              }}
-              className={`flex-1 flex items-center justify-center gap-2 pb-3 border-b-2 font-black text-xs sm:text-sm transition-all relative ${
-                agentMainTab === 'Summary' && agentActiveTab === 'Summary'
-                  ? 'border-indigo-600 text-indigo-600'
-                  : 'border-transparent text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              <BarChart3 size={15} />
-              <span>Summary</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setAgentMainTab('Home Pickup');
-                if (agentActiveTab === 'Summary') {
-                  setAgentActiveTab('Scheduled');
-                }
-              }}
-              className={`flex-1 flex items-center justify-center gap-2 pb-3 border-b-2 font-black text-xs sm:text-sm transition-all relative ${
-                agentMainTab === 'Home Pickup' || agentActiveTab !== 'Summary'
-                  ? 'border-indigo-600 text-indigo-600'
-                  : 'border-transparent text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              <Truck size={15} />
-              <span>Home Pickup</span>
-            </button>
-          </div>
-
-          {/* Level 2 Sub-Tabs (only when Home Pickup or active pickup lists is selected) */}
-          {(agentMainTab === 'Home Pickup' || agentActiveTab !== 'Summary') && (
-            <div className="flex bg-slate-100 p-1 rounded-xl gap-1 select-none animate-fadeIn">
-              <button
-                onClick={() => {
-                  setAgentActiveTab('Scheduled');
-                  setAgentMainTab('Home Pickup');
-                }}
-                className={`flex-1 py-1.5 text-[11px] font-black text-center rounded-lg transition-all ${
-                  agentActiveTab === 'Scheduled'
-                    ? 'bg-white text-slate-900 shadow-sm font-extrabold'
-                    : 'text-slate-500'
-                }`}
-              >
-                Scheduled ({scheduledApts.length})
-              </button>
-              <button
-                onClick={() => {
-                  setAgentActiveTab('Completed');
-                  setAgentMainTab('Home Pickup');
-                }}
-                className={`flex-1 py-1.5 text-[11px] font-black text-center rounded-lg transition-all ${
-                  agentActiveTab === 'Completed'
-                    ? 'bg-white text-emerald-600 shadow-sm font-extrabold'
-                    : 'text-slate-500'
-                }`}
-              >
-                Completed ({completedApts.length})
-              </button>
-              <button
-                onClick={() => {
-                  setAgentActiveTab('Canceled');
-                  setAgentMainTab('Home Pickup');
-                }}
-                className={`flex-1 py-1.5 text-[11px] font-black text-center rounded-lg transition-all ${
-                  agentActiveTab === 'Canceled'
-                    ? 'bg-white text-rose-600 shadow-sm font-extrabold'
-                    : 'text-slate-500'
-                }`}
-              >
-                Canceled ({canceledApts.length})
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Desktop View Tabs Bar */}
-        <div className="hidden md:flex border-b border-slate-100 gap-6 overflow-x-auto">
-          <button
-            onClick={() => {
-              setAgentActiveTab('Summary');
-              setAgentMainTab('Summary');
-            }}
-            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
-              agentActiveTab === 'Summary'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            <BarChart3 size={16} />
-            <span>Activity Summary</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setAgentActiveTab('Scheduled');
-              setAgentMainTab('Home Pickup');
-            }}
-            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
-              agentActiveTab === 'Scheduled'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            <Clock size={16} />
-            <span>Scheduled</span>
-            <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
-              agentActiveTab === 'Scheduled' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'
-            }`}>
-              {scheduledApts.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => {
-              setAgentActiveTab('Completed');
-              setAgentMainTab('Home Pickup');
-            }}
-            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
-              agentActiveTab === 'Completed'
-                ? 'border-emerald-600 text-emerald-600'
-                : 'border-transparent text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            <CheckCircle2 size={16} />
-            <span>Completed</span>
-            <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
-              agentActiveTab === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-            }`}>
-              {completedApts.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => {
-              setAgentActiveTab('Canceled');
-              setAgentMainTab('Home Pickup');
-            }}
-            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
-              agentActiveTab === 'Canceled'
-                ? 'border-rose-600 text-rose-600'
-                : 'border-transparent text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            <XCircle size={16} />
-            <span>Canceled</span>
-            <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
-              agentActiveTab === 'Canceled' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'
-            }`}>
-              {canceledApts.length}
-            </span>
-          </button>
-        </div>
-
-        {agentActiveTab === 'Summary' ? (
-          <div className="space-y-6">
-            {/* Quick Metrics Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
-                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shrink-0">
-                  <TrendingUp size={24} />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Completed Jobs</div>
-                  <div className="text-2xl font-black text-slate-900 mt-1">{completedApts.length}</div>
-                  <div className="text-[10px] text-emerald-500 font-bold mt-0.5">{(completedApts.length / Math.max(1, totalTasksCount) * 100).toFixed(0)}% completion</div>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
-                <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shrink-0">
-                  <Box size={24} />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Weight Handled</div>
-                  <div className="text-2xl font-black text-slate-900 mt-1">{totalWeightCollected.toFixed(1)} kg</div>
-                  <div className="text-[10px] text-indigo-500 font-bold mt-0.5">Average {(totalWeightCollected / Math.max(1, completedApts.length)).toFixed(1)} kg / job</div>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
-                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0">
-                  <CreditCard size={24} />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Revenue Managed</div>
-                  <div className="text-2xl font-black text-slate-900 mt-1">‚Çπ{totalRevenuePaid.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
-                  <div className="text-[10px] text-slate-500 font-bold mt-0.5">Processed & fully paid</div>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
-                <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center shrink-0">
-                  <Clock size={24} />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest font-sans">Productivity Index</div>
-                  <div className="text-2xl font-black text-slate-900 mt-1">{productivityRate}%</div>
-                  <div className="text-[10px] text-slate-500 font-bold mt-0.5">{scheduledApts.length} pending operations</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900">Weekly Weight Analytics</h3>
-                    <p className="text-xs text-slate-400">Total volume of physical weight collected in pickups over the week.</p>
-                  </div>
-                </div>
-                <div className="h-[280px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.15}/>
-                          <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.01}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="label" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                      <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} unit="kg" />
-                      <Tooltip 
-                        contentStyle={{ background: '#0f172a', borderRadius: '16px', border: 'none', color: '#fff' }}
-                        labelStyle={{ fontWeight: 'bold', color: '#38bdf8' }}
-                      />
-                      <Area type="monotone" dataKey="weight" name="Weight (kg)" stroke="#4f46e5" strokeWidth={2} fillOpacity={1} fill="url(#colorWeight)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Status Pie Metrics */}
-              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
-                <div>
-                  <h3 className="text-lg font-black text-slate-900">Job Status Mix</h3>
-                  <p className="text-xs text-slate-400">Distribution of assigned work orders.</p>
-                </div>
-                
-                <div className="h-[200px] flex items-center justify-center relative">
-                  {totalTasksCount === 0 ? (
-                    <div className="text-sm text-slate-400 font-bold">No jobs assigned yet</div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={[
-                            { name: 'Scheduled', value: scheduledApts.length, color: '#4f46e5' },
-                            { name: 'Completed', value: completedApts.length, color: '#10b981' },
-                            { name: 'Canceled', value: canceledApts.length, color: '#f43f5e' }
-                          ].filter(x => x.value > 0)}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {[
-                            { color: '#4f46e5' },
-                            { color: '#10b981' },
-                            { color: '#f43f5e' }
-                          ].map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  )}
-                  {totalTasksCount > 0 && (
-                    <div className="absolute flex flex-col items-center justify-center">
-                      <span className="text-2xl font-black text-slate-800">{totalTasksCount}</span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Jobs</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2 pt-4 border-t border-slate-50">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-600 font-sans">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
-                      <span>Scheduled Pickup Tasks</span>
-                    </div>
-                    <span>{scheduledApts.length}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-600 font-sans">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                      <span>Completed / Picked Up</span>
-                    </div>
-                    <span>{completedApts.length}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-600 font-sans">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                      <span>Canceled Tasks</span>
-                    </div>
-                    <span>{canceledApts.length}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Activities Timeline Log */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2 font-sans">
-                <History className="text-indigo-600" size={20} />
-                Recent Operations and Activity Log
-              </h3>
-              
-              {agentActivities.length === 0 ? (
-                <div className="text-center py-12 text-slate-400 font-bold">
-                  No registered activities found for this agent.
-                </div>
-              ) : (
-                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-                  {agentActivities.map((act) => (
-                    <div key={act.id} className="flex gap-4 p-4 hover:bg-slate-50 rounded-2xl border border-transparent hover:border-slate-100 transition-all">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${act.style}`}>
-                        {act.type === 'scheduled' ? <Clock size={20} /> : act.type === 'completed' ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-sm font-black text-slate-950 truncate font-sans">{act.title}</h4>
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{act.timeLabel}</span>
-                        </div>
-                        <p className="text-slate-600 text-xs mt-0.5 font-medium leading-relaxed font-sans">{act.desc}</p>
-                        <p className="text-[10px] text-slate-400 mt-1 font-semibold flex items-center gap-1">
-                          <MapPin size={10} /> {act.details}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {displayedApts.length === 0 ? (
-              <div className="col-span-full text-center py-16 bg-white rounded-3xl border border-slate-100">
-                <CheckCircle2 size={64} className="mx-auto mb-4 text-slate-300 opacity-40" />
-                <h3 className="text-xl font-bold text-slate-900">No pickups found</h3>
-                <p className="text-slate-500">There are no {agentActiveTab.toLowerCase()} pickups assigned.</p>
-              </div>
-            ) : (
-              displayedApts.map(apt => (
-                <motion.div 
-                  key={apt.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center">
-                      <Truck size={24} />
-                    </div>
-                    <div className="text-right">
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work Order</div>
-                      <div className="text-sm font-black text-slate-900">{apt.id}</div>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-3 mb-6">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar size={14} className="text-slate-400" />
-                      <span className="font-bold text-slate-700">{apt.date}</span>
-                      <span className="text-slate-400">‚Ä¢</span>
-                      <span className="text-slate-500">{apt.time}</span>
-                    </div>
-                    <div className="flex items-start gap-2 text-sm">
-                      <MapPin size={14} className="text-slate-400 mt-1" />
-                      <span className="text-slate-600 leading-tight">{apt.address}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <UserIcon size={14} className="text-slate-400" />
-                      <span className="font-bold text-indigo-600">{apt.phone}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-slate-500">
-                      <Truck size={14} className="text-slate-400" />
-                      <span>Agent: <strong className="text-slate-700">{apt.assignedAgent?.name || 'Unassigned / Any Agent'}</strong></span>
-                    </div>
-                  </div>
-
-                  {apt.status === 'Completed' ? (
-                    <div className="w-full py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-emerald-100">
-                      <CheckCircle2 size={16} /> Completed & Processed
-                    </div>
-                  ) : apt.status === 'Picked Up' ? (
-                    <div className="w-full py-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-indigo-100">
-                      <CheckCircle2 size={16} /> Picked Up
-                    </div>
-                  ) : apt.status === 'Cancelled' ? (
-                    <div className="w-full py-3 bg-rose-50 text-rose-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-rose-100">
-                      <XCircle size={16} /> Pickup Canceled
-                    </div>
-                  ) : (
-                    <button 
-                      onClick={() => setActiveWorkOrder(apt)}
-                      className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2"
-                    >
-                      Process Pickup <ArrowRight size={18} />
-                    </button>
-                  )}
-                </motion.div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser, agentActiveTab, setAgentActiveTab, agentMainTab, setAgentMainTab, orders]);
-  const renderWarehouseManagementSection = () => {
-    const warehouseItems = items.filter(i => !orderedItemIds.has(i.id) && (i.source === 'Warehouse' || i.source === 'Pickup')).map(i => ({ ...i, orderId: null as string | null }));
-    const orderWarehouseItems = orders.flatMap(o => 
-      o.items.filter(i => (i.source === 'Warehouse' || i.source === 'Pickup') && o.status !== 'Delivered' && o.status !== 'Cancelled')
-        .map(i => ({ ...i, orderId: o.id }))
-    );
-    
-    const allItems = [...warehouseItems, ...orderWarehouseItems];
-    const pendingItems = allItems.filter(i => i.status !== 'Received at Warehouse');
-    const receivedItems = allItems.filter(i => i.status === 'Received at Warehouse');
-    
-    // Group received items by customer for consolidation
-    const itemsByCustomer = receivedItems.reduce((acc, item) => {
-      // In a real app, we'd have customer info on the item. 
-      // For this demo, we'll use a mock customer name or ID.
-      const customerId = 'CUST-' + (item.id.charCodeAt(0) % 5 + 1);
-      if (!acc[customerId]) acc[customerId] = [];
-      acc[customerId].push(item);
-      return acc;
-    }, {} as Record<string, ShippingItem[]>);
-
-    return (
-      <div className="space-y-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-black text-slate-900">Warehouse Operations</h2>
-            <p className="text-slate-500 mt-1">Operational control for receiving, consolidation, and processing.</p>
-          </div>
-          <div className="flex gap-3">
-            <button className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2">
-              <Printer size={16} /> Print Manifest
-            </button>
-            <button className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center gap-2">
-              <RefreshCw size={16} /> Sync Inventory
-            </button>
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {[
-            { label: 'Total Inventory', value: warehouseItems.length, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50' },
-            { label: 'Pending Receiving', value: pendingItems.length, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
-            { label: 'Ready for Consolidation', value: Object.keys(itemsByCustomer).length, icon: ArrowUpDown, color: 'text-purple-600', bg: 'bg-purple-50' },
-            { label: 'Dispatched Today', value: orders.filter(o => o.status === 'Delivered').length, icon: Truck, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-          ].map((stat, i) => {
-            const StatIcon = stat.icon;
-            return (
-              <div key={i} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`w-12 h-12 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center`}>
-                    <StatIcon size={24} />
-                  </div>
-                  <span className="text-2xl font-black text-slate-900">{stat.value}</span>
-                </div>
-                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">{stat.label}</h4>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Operations Area */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Receiving Queue */}
-            <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-              <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
-                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <ArrowUpDown size={20} className="text-indigo-600" /> Receiving Queue
-                </h3>
-                <div className="flex gap-2">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <input 
-                      type="text" 
-                      placeholder="Search items..." 
-                      className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 w-48"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/50">
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Item Details</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Reference</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Source</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Weight</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {pendingItems.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="px-8 py-12 text-center">
-                          <div className="flex flex-col items-center gap-3 text-slate-400">
-                            <Package size={48} className="opacity-20" />
-                            <p className="font-bold">No pending items to receive.</p>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      pendingItems.map(item => (
-                        <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
-                          <td className="px-8 py-5">
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-white transition-colors">
-                                {item.image ? <img src={item.image} className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" /> : <ImageIcon size={20} />}
-                              </div>
-                              <div>
-                                <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                                <div className="text-[10px] text-slate-500 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">ID: {item.id}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-8 py-5">
-                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                              {item.orderId ? `Order: ${item.orderId.slice(0, 8)}` : 'Cart/Stock'}
-                            </div>
-                          </td>
-                          <td className="px-8 py-5">
-                            <span className={`text-[10px] font-black px-2 py-1 rounded-lg border ${
-                              item.source === 'Pickup' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'
-                            }`}>
-                              {item.source.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="px-8 py-5">
-                            <div className="flex flex-col gap-2">
-                              <div className="flex items-center gap-1">
-                                <input 
-                                  type="number" 
-                                  className="w-16 p-1 text-xs border border-slate-200 rounded outline-none focus:ring-1 focus:ring-indigo-500"
-                                  defaultValue={item.weight}
-                                  onBlur={(e) => {
-                                    const val = parseFloat(e.target.value);
-                                    if (!isNaN(val) && val !== item.weight) {
-                                      if (item.orderId) {
-                                        updateOrderItemWeight(item.orderId, item.id, val);
-                                      } else {
-                                        // Update weight for items not in an order yet
-                                        setItems(prev => prev.map(i => i.id === item.id ? { ...i, weight: val } : i));
-                                        if (dbStatus.connected) {
-                                          api.updateItemWeight(item.id, val).catch(err => console.error('Failed to update item weight:', err));
-                                        }
-                                      }
-                                    }
-                                  }}
-                                />
-                                <span className="text-[10px] font-bold text-slate-400">kg</span>
-                              </div>
-                              <div className="text-[8px] text-amber-600 font-bold max-w-[80px] leading-tight">Official weight update after arrival</div>
-                            </div>
-                          </td>
-                          <td className="px-8 py-5">
-                            <div className="flex flex-col gap-2">
-                              <select 
-                                className="p-1 px-2 text-[10px] bg-white border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
-                                value={item.status}
-                                onChange={(e) => item.orderId ? updateOrderItemStatus(item.orderId, item.id, e.target.value as ShippingStatus) : updateItemStatus(item.id, e.target.value as ShippingStatus)}
-                              >
-                                <option value="Pending">Pending</option>
-                                <option value="Awaiting Warehouse Arrival">Awaiting Arrival</option>
-                                <option value="Received at Warehouse">Received at Warehouse</option>
-                                <option value="Processing Order">Processing</option>
-                                <option value="Consolidating items">Consolidating</option>
-                                <option value="Packed">Packed</option>
-                                <option value="Ready to Ship">Ready to Ship</option>
-                                <option value="In Transit">In Transit</option>
-                                <option value="Delivered">Delivered</option>
-                              </select>
-                              <button 
-                                onClick={() => item.orderId ? updateOrderItemStatus(item.orderId, item.id, 'Received at Warehouse') : updateItemStatus(item.id, 'Received at Warehouse')}
-                                className="px-4 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100"
-                              >
-                                {item.status === 'Received at Warehouse' ? 'Received' : 'Receive Now'}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Consolidation Hub */}
-            <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-              <div className="p-8 border-b border-slate-50 bg-slate-50/50">
-                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <BarChart3 size={20} className="text-purple-600" /> Consolidation Hub
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 font-medium italic">Grouped by customer for international dispatch.</p>
-              </div>
-              <div className="p-8 space-y-6">
-                {Object.entries(itemsByCustomer).length === 0 ? (
-                  <div className="text-center py-12 text-slate-400">
-                    <Package size={48} className="mx-auto mb-4 opacity-20" />
-                    <p className="font-bold">No items ready for consolidation.</p>
-                  </div>
-                ) : (
-                  (Object.entries(itemsByCustomer) as [string, ShippingItem[]][]).map(([customerId, customerItems]) => (
-                    <div key={customerId} className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 hover:border-purple-200 transition-all">
-                      <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-purple-600 shadow-sm">
-                            <UserIcon size={20} />
-                          </div>
-                          <div>
-                            <div className="text-sm font-black text-slate-900">Customer: {customerId}</div>
-                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{customerItems.length} Items Ready</div>
-                          </div>
-                        </div>
-                        <button className="px-4 py-2 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-purple-700 transition-all shadow-lg shadow-purple-100">
-                          Create Shipment
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                        {customerItems.map(item => (
-                          <div key={item.id} className="px-3 py-2 bg-white rounded-xl border border-slate-200 flex items-center gap-2 text-[11px] font-bold text-slate-600">
-                            <span className="w-2 h-2 bg-emerald-500 rounded-full" />
-                            {item.name} ({item.weight}kg)
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Sidebar Operations */}
-          <div className="space-y-6">
-            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4 opacity-10">
-                <Warehouse size={120} />
-              </div>
-              <h3 className="text-lg font-black mb-6 relative z-10">Warehouse Layout</h3>
-              <div className="grid grid-cols-4 gap-3 relative z-10">
-                {['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4'].map(zone => (
-                  <div key={zone} className="aspect-square bg-white/10 rounded-xl border border-white/10 flex items-center justify-center hover:bg-white/20 transition-all cursor-pointer group">
-                    <span className="text-[10px] font-black text-white/40 group-hover:text-white transition-colors">{zone}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-8 pt-6 border-t border-white/10 flex items-center justify-between text-[10px] font-bold text-white/60">
-                <span>Capacity: 64% Full</span>
-                <div className="w-24 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="w-[64%] h-full bg-emerald-500 rounded-full" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm space-y-6">
-              <h3 className="text-lg font-black text-slate-900">Operational Tools</h3>
-              <div className="space-y-3">
-                {[
-                  { label: 'Scan Barcode', icon: Search, color: 'bg-blue-50 text-blue-600' },
-                  { label: 'Generate Manifest', icon: FileText, color: 'bg-purple-50 text-purple-600' },
-                  { label: 'Update Weights', icon: Calculator, color: 'bg-amber-50 text-amber-600' },
-                  { label: 'Export Inventory', icon: Share, color: 'bg-emerald-50 text-emerald-600' },
-                  { label: 'Security Logs', icon: Lock, color: 'bg-slate-50 text-slate-600' },
-                ].map((action, i) => {
-                  const ActionIcon = action.icon;
-                  return (
-                    <button key={i} className="w-full p-4 rounded-2xl border border-slate-50 hover:border-indigo-100 hover:bg-indigo-50/30 transition-all flex items-center gap-4 group">
-                      <div className={`w-10 h-10 ${action.color} rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                        <ActionIcon size={18} />
-                      </div>
-                      <span className="text-sm font-bold text-slate-700">{action.label}</span>
-                      <ChevronRight size={16} className="ml-auto text-slate-300" />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="bg-indigo-600 rounded-[2.5rem] p-8 text-white shadow-xl shadow-indigo-200">
-              <h3 className="text-lg font-black mb-2">Warehouse Support</h3>
-              <p className="text-xs text-indigo-100 mb-6 leading-relaxed">Need help with inventory or logistics? Contact your regional manager.</p>
-              <button className="w-full py-3 bg-white text-indigo-600 rounded-xl font-bold text-sm hover:bg-indigo-50 transition-all flex items-center justify-center gap-2">
-                <Phone size={16} /> Call Manager
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderShopSidebar = () => {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xl font-black text-slate-900">
-            From our <span className="bg-gradient-to-r from-deep-blue to-indigo-600 bg-clip-text text-transparent">Shop</span>
-          </h4>
-          <button 
-            onClick={() => navigateTo('store')}
-            className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
-          >
-            View All <ArrowRight size={12} />
-          </button>
-        </div>
-        <div className="grid grid-cols-1 gap-4">
-          {storeProducts.slice(0, 3).map(product => {
-            const cartItem = items.find(i => i.name === product.name && i.source === 'Store' && !orderedItemIds.has(i.id));
-            const itemCount = cartItem?.quantity || 0;
-            return (
-              <div key={product.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex gap-4 relative">
-                <AnimatePresence>
-                  {itemCount > 0 && (
-                    <motion.div 
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      className="absolute -top-1 -left-1 z-10 w-6 h-6 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg border-2 border-white"
-                    >
-                      {itemCount}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0">
-                  <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
-                </div>
-                <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
-                  <div>
-                    <h5 className="text-sm font-bold text-slate-900 truncate">{product.name}</h5>
-                    <p className="text-[10px] text-slate-500">‚Çπ{product.price} ‚Ä¢ {product.weight} kg</p>
-                  </div>
-                  <div className="flex justify-center mt-2">
-                    <motion.button 
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => addItem({ 
-                        name: product.name, 
-                        weight: product.weight, 
-                        price: product.price, 
-                        image: product.image,
-                        estimatedDelivery: product.estimatedDelivery 
-                      }, 'Store')}
-                      className="w-8 h-8 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-md shadow-deep-blue/10"
-                    >
-                      <Plus size={14} />
-                    </motion.button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="p-6 bg-indigo-600 rounded-[2rem] text-white shadow-xl shadow-indigo-200/50 relative overflow-hidden">
-          <div className="absolute -right-4 -bottom-4 opacity-10">
-            <ShoppingBag size={80} />
-          </div>
-          <div className="relative z-10 space-y-3">
-            <h5 className="font-black text-lg">Consolidate & Save</h5>
-            <p className="text-xs text-indigo-100 leading-relaxed">
-              Add items from our shop to your pickup or warehouse shipment. We'll pack everything together to save you on global shipping!
-            </p>
-            <button 
-              onClick={() => navigateTo('store')}
-              className="px-4 py-2 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-all"
-            >
-              Start Shopping
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderUnifiedCartSection = (mode?: 'Pickup' | 'Warehouse') => {
-    // States are now in App to prevent focus loss
-
-    const handleAdd = () => {
-      if (!cartItemName) return;
-      const unitWeight = typeof cartItemWeight === 'number' ? cartItemWeight : 0;
-      addItem({ 
-        name: cartItemName, 
-        weight: unitWeight * cartItemQuantity,
-        quantity: cartItemQuantity,
-        fragile: cartItemFragile,
-        invoiceNumber: cartItemInvoiceNumber,
-        remarks: cartItemRemarks,
-        purchaseSource: cartItemPurchaseSource,
-        image: cartItemImageUrl
-      }, mode || cartItemSource);
-      setCartItemName('');
-      setCartItemWeight('');
-      setCartItemQuantity(1);
-      setCartItemFragile(false);
-      setCartItemInvoiceNumber('');
-      setNavbarTrackingId('');
-      setCartItemRemarks('');
-      setCartItemImageUrl('');
-      
-      // Scroll to items list after adding
-      if (mode === 'Warehouse') {
-        toast.success(`"${cartItemName}" added to your shipment! Scroll down to review and click "Submit Order" to finalize.`);
-        setTimeout(() => {
-          warehouseItemsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
-      } else {
-        toast.success(`"${cartItemName}" added to your pickup list!`);
-      }
-    };
-
-    const handleCopyAddress = () => {
-      const addressText = `${WAREHOUSE_ADDRESS.name}\nAttn: ${customerWarehouseId}\n${WAREHOUSE_ADDRESS.street}\n${WAREHOUSE_ADDRESS.city}, ${WAREHOUSE_ADDRESS.state} ${WAREHOUSE_ADDRESS.zip}\n${WAREHOUSE_ADDRESS.country}\nTel: ${WAREHOUSE_ADDRESS.phone}`;
-      navigator.clipboard.writeText(addressText);
-      toast.success('Warehouse address copied to clipboard!');
-    };
-
-    const hasActivePickup = userAppointments.some(a => a.status === 'Scheduled');
-    const activePickup = userAppointments.find(a => a.status === 'Scheduled');
-    const hasCompletedPickup = userAppointments.some(a => a.status === 'Completed');
-
-    const isCartEmpty = mode === 'Warehouse' 
-      ? items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Warehouse' && !i.submitted).length === 0
-      : mode === 'Pickup'
-        ? items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Pickup' && !i.submitted).length === 0 && (isSchedulingNewPickup ? true : !hasActivePickup)
-        : items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true).length === 0 && !hasActivePickup;
-
-    const displayItems = mode 
-      ? (mode === 'Warehouse' 
-          ? items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Warehouse' && !i.submitted)
-          : items.filter(i => !orderedItemIds.has(i.id) && i.source === mode))
-      : items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
-
-    const displayWeight = displayItems.reduce((sum, item) => sum + (item.weight || 0), 0);
-    const hasTBDWeight = displayItems.some(i => i.weight === 0);
-
-    return (
-      <div className="space-y-6">
-        {activeTab === 'warehouse' ? (
-          <>
-            {/* MOBILE ONLY VIEW FOR DROP OFF PACKAGE (WAREHOUSE) */}
-            <div className="block md:hidden animate-fade-in">
-              <MobileDropOffFlow
-                customerWarehouseId={customerWarehouseId}
-                items={items}
-                addItem={addItem}
-                removeItem={removeItem}
-                setItems={setItems}
-                setActiveTab={setActiveTab}
-                currentUser={currentUser}
-                dbStatus={dbStatus}
-                api={api}
-                navigateTo={navigateTo}
-                cartItemName={cartItemName}
-                setCartItemName={setCartItemName}
-                cartItemWeight={cartItemWeight}
-                setCartItemWeight={setCartItemWeight}
-                cartItemQuantity={cartItemQuantity}
-                setCartItemQuantity={setCartItemQuantity}
-                cartItemFragile={cartItemFragile}
-                setCartItemFragile={setCartItemFragile}
-                cartItemInvoiceNumber={cartItemInvoiceNumber}
-                setCartItemInvoiceNumber={setCartItemInvoiceNumber}
-                cartItemRemarks={cartItemRemarks}
-                setCartItemRemarks={setCartItemRemarks}
-                cartItemPurchaseSource={cartItemPurchaseSource}
-                setCartItemPurchaseSource={setCartItemPurchaseSource}
-                cartItemImageUrl={cartItemImageUrl}
-                setCartItemImageUrl={setCartItemImageUrl}
-              />
-            </div>
-
-            {/* LAPTOP ONLY VIEW FOR DROP OFF PACKAGE (WAREHOUSE) */}
-            <div className="hidden md:block space-y-8">
-              {/* Value Prop Banner */}
-            <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-8 md:p-12 rounded-[2.5rem] shadow-xl relative overflow-hidden">
-               <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
-               <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-                 <div className="space-y-6">
-                   <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full backdrop-blur-md border border-white/10 text-xs font-black uppercase tracking-widest text-indigo-200">
-                     <Globe size={14} /> Global Shipping Solutions
-                   </div>
-                   <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
-                     Ship from <span className="text-indigo-400">Anywhere</span>,<br />
-                     Deliver to the <span className="text-indigo-400">USA</span>.
-                   </h2>
-                   <p className="text-slate-300 font-medium text-lg leading-relaxed max-w-md">
-                     Use our secure warehouse as your domestic shipping hub. We'll receive, verify, and forward your items globally.
-                   </p>
-                 </div>
-                 <div className="hidden lg:grid grid-cols-2 gap-4">
-                   {[
-                     { icon: ShoppingBag, label: 'Shop Online', desc: 'Amazon, eBay, Flipkart' },
-                     { icon: Box, label: 'Offline Goods', desc: 'Sent via local couriers' },
-                     { icon: ShieldCheck, label: 'Secure Storage', desc: 'Climate controlled' },
-                     { icon: Plane, label: 'Swift Forwarding', desc: 'Direct to your door' }
-                   ].map((item, i) => (
-                     <div key={i} className="p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors">
-                       <item.icon size={20} className="mb-2 text-indigo-400" />
-                       <h4 className="text-sm font-black">{item.label}</h4>
-                       <p className="text-[10px] text-slate-400">{item.desc}</p>
-                     </div>
-                   ))}
-                 </div>
-               </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              {/* Left Column: Address & Registration */}
-              <div className="lg:col-span-12 space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {/* Step 1: Warehouse Address Card */}
-                  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
-                    <div className="flex items-center gap-4">
-                       <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
-                         <MapPin size={24} />
-                       </div>
-                       <div>
-                         <h3 className="text-xl font-black text-slate-900 leading-tight">Step 1: Use Our Address</h3>
-                         <p className="text-xs text-slate-500 font-medium">Use this at checkout or hand to your courier</p>
-                       </div>
-                    </div>
-                    
-                    <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-200 relative group">
-                      <button 
-                        onClick={handleCopyAddress}
-                        className="absolute top-4 right-4 p-3 bg-white hover:bg-indigo-600 hover:text-white rounded-xl shadow-sm transition-all border border-slate-200"
-                        title="Copy Address"
-                      >
-                        <Copy size={16} />
-                      </button>
-                      <div className="space-y-4">
-                        <div>
-                          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Recipient Name / ID</p>
-                          <p className="text-lg font-black text-slate-900">{WAREHOUSE_ADDRESS.name} - {customerWarehouseId}</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Street Address</p>
-                            <p className="text-sm font-bold text-slate-700">{WAREHOUSE_ADDRESS.street}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">City/State/Zip</p>
-                            <p className="text-sm font-bold text-slate-700">{WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state} {WAREHOUSE_ADDRESS.zip}</p>
-                          </div>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Country</p>
-                          <p className="text-sm font-bold text-slate-700">{WAREHOUSE_ADDRESS.country}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-3 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 text-emerald-700">
-                      <Info size={18} className="shrink-0 mt-0.5" />
-                      <p className="text-xs leading-relaxed font-medium">
-                        <span className="font-bold">Pro Tip:</span> Always include your ID (<span className="font-bold">{customerWarehouseId}</span>) in the "Building/Suite" line to avoid processing delays.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Step 2: Register Incoming Package */}
-                  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
-                    <div className="flex items-center gap-4">
-                       <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-slate-200">
-                         <PackagePlus size={24} />
-                       </div>
-                       <div>
-                         <h3 className="text-xl font-black text-slate-900 leading-tight">Step 2: Register Package</h3>
-                         <p className="text-xs text-slate-500 font-medium">Pre-alert us about your shipment for faster sorting</p>
-                       </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Item Description</label>
-                        <input 
-                          type="text" 
-                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-medium"
-                          placeholder="e.g. 5x Cotton T-Shirts, Laptop..."
-                          value={cartItemName}
-                          onChange={(e) => setCartItemName(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Source</label>
-                          <select 
-                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-medium appearance-none"
-                            value={cartItemPurchaseSource}
-                            onChange={(e) => setCartItemPurchaseSource(e.target.value)}
-                          >
-                            <option value="Amazon">Amazon</option>
-                            <option value="Flipkart">Flipkart</option>
-                            <option value="Myntra">Myntra</option>
-                            <option value="Ajio">Ajio</option>
-                            <option value="Nykaa">Nykaa</option>
-                            <option value="FirstCry">FirstCry</option>
-                            <option value="Meesho">Meesho</option>
-                            <option value="Other">Other</option>
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Item Image (URL Optional)</label>
-                          <input 
-                            type="text" 
-                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-medium"
-                            placeholder="https://..."
-                            value={cartItemImageUrl}
-                            onChange={(e) => setCartItemImageUrl(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tracking ID (if available)</label>
-                          <input 
-                            type="text" 
-                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-mono text-sm"
-                            placeholder="Courier tracking #"
-                            value={cartItemInvoiceNumber}
-                            onChange={(e) => setCartItemInvoiceNumber(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Quantity</label>
-                          <div className="flex items-center bg-slate-50 rounded-2xl border border-slate-200 p-1">
-                            <button 
-                              onClick={() => setCartItemQuantity(Math.max(1, cartItemQuantity - 1))}
-                              className="p-3 hover:bg-white rounded-xl transition-colors"
-                            >
-                              <Minus size={14} />
-                            </button>
-                            <input 
-                              type="number" 
-                              className="w-full bg-transparent text-center font-black outline-none"
-                              value={cartItemQuantity}
-                              onChange={(e) => setCartItemQuantity(Number(e.target.value))}
-                            />
-                            <button 
-                              onClick={() => setCartItemQuantity(cartItemQuantity + 1)}
-                              className="p-3 hover:bg-white rounded-xl transition-colors"
-                            >
-                              <Plus size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-start gap-3">
-                        <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
-                          <Info size={16} />
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs font-bold text-amber-900">Payment Notice</p>
-                          <p className="text-[10px] text-amber-700 leading-relaxed">
-                            Please ensure payment for all items is completed before they arrive at our warehouse. 
-                            Unpaid items may experience delays in processing and forwarding.
-                          </p>
-                          <div className="pt-2 border-t border-amber-200 mt-2">
-                             <p className="text-[10px] text-amber-700 leading-relaxed font-bold italic">
-                               Note: The weight of each item will be officially updated by our team after it is physically received and weighed at the warehouse.
-                             </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <button 
-                        onClick={handleAdd}
-                        disabled={!cartItemName}
-                        className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all ${
-                          cartItemName 
-                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-200' 
-                            : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                        }`}
-                      >
-                        <Plus size={20} /> Register Item
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step 3: Summary & Finalize */}
-                <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm space-y-8" ref={warehouseItemsRef}>
-                  <div className="flex items-center justify-between border-b border-slate-50 pb-6">
-                    <div className="flex items-center gap-4">
-                       <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-100">
-                         <CheckCircle2 size={24} />
-                       </div>
-                       <div>
-                         <h3 className="text-xl font-black text-slate-900 leading-tight">Step 3: Review & Finalize</h3>
-                         <p className="text-xs text-slate-500 font-medium">Confirm expected items for tracking</p>
-                       </div>
-                    </div>
-                    <div className="px-6 py-3 bg-indigo-50 rounded-2xl text-xs font-black text-indigo-600 border border-indigo-100">
-                      {displayItems.reduce((acc, item) => acc + (item.quantity || 1), 0)} Registered Items
-                    </div>
-                  </div>
-
-                  {displayItems.length === 0 ? (
-                    <div className="py-20 flex flex-col items-center justify-center text-slate-400 space-y-4">
-                      <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center border-2 border-dashed border-slate-200">
-                        <Package size={40} strokeWidth={1} />
-                      </div>
-                      <div className="text-center">
-                        <p className="font-bold text-slate-900">No items registered yet</p>
-                        <p className="text-sm max-w-[250px]">Items added in Step 2 will appear here for final confirmation.</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {displayItems.map((item) => (
-                          <motion.div 
-                            layout
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            key={item.id}
-                            className="bg-slate-50 p-6 rounded-3xl border border-slate-100 hover:border-indigo-200 transition-all group relative"
-                          >
-                            <button 
-                              onClick={() => removeItem(item.id)}
-                              className="absolute top-4 right-4 p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                            <div className="flex items-start gap-4">
-                              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0 overflow-hidden">
-                                {item.image ? (
-                                  <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                ) : (
-                                  <Package size={24} />
-                                )}
-                              </div>
-                              <div className="space-y-1">
-                                <h4 className="font-black text-slate-900 line-clamp-1">{item.name}</h4>
-                                <div className="flex flex-wrap gap-2">
-                                  <span className="px-2 py-0.5 bg-white rounded-lg text-[10px] font-bold text-slate-500 border border-slate-100">
-                                    {item.quantity} Qty
-                                  </span>
-                                  {item.purchaseSource && (
-                                    <span className="px-2 py-0.5 bg-indigo-50 rounded-lg text-[10px] font-bold text-indigo-600 border border-indigo-100 uppercase tracking-tight">
-                                      {item.purchaseSource}
-                                    </span>
-                                  )}
-                                  {item.invoiceNumber && (
-                                    <span className="px-2 py-0.5 bg-indigo-50 rounded-lg text-[10px] font-bold text-indigo-600 border border-indigo-100">
-                                      Track: {item.invoiceNumber}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-
-                      <div className="bg-indigo-600 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl shadow-indigo-200">
-                         <div className="space-y-2 text-center md:text-left">
-                           <h4 className="text-2xl font-black text-white leading-tight">Ready to send?</h4>
-                           <p className="text-indigo-100 text-sm font-medium">Confirming this pre-alert helps us identify your package instantly on arrival.</p>
-                         </div>
-                         <button 
-                           onClick={async () => {
-                             const unsubmittedWarehouseItems = items.filter(i => i.source === 'Warehouse' && !i.submitted);
-                             
-                             setItems(prev => prev.map(i => 
-                               i.source === 'Warehouse' && !i.submitted 
-                                 ? { ...i, submitted: true } 
-                                 : i
-                             ));
-                             
-                             setActiveTab('cart');
-                             toast.success('Pre-alert submitted successfully!');
-
-                             if (dbStatus.checked && currentUser) {
-                               for (const item of unsubmittedWarehouseItems) {
-                                 const ids = item.ids && item.ids.length > 0 ? item.ids : [item.id];
-                                 for (const itemId of ids) {
-                                   try {
-                                     await api.updateItemSubmitted(itemId, true);
-                                   } catch (err: any) {
-                                     console.error(`Failed to update item ${itemId} to submitted:`, err.message);
-                                   }
-                                 }
-                               }
-                             }
-                           }}
-                           className="px-10 py-5 bg-white text-indigo-600 rounded-2xl font-black shadow-lg hover:bg-slate-50 transition-all flex items-center gap-3 active:scale-95"
-                         >
-                           <Send size={24} /> Finalize Shipment
-                         </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-          </>
-        ) : (
-          <>
-            {!mode && hasActivePickup && !displayItems.some(i => i.source === 'Warehouse') && (
-              <motion.div 
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-indigo-50 border border-indigo-100 p-6 rounded-[2rem] flex items-start gap-4 shadow-sm mb-6"
-              >
-                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
-                  <Truck size={24} />
-                </div>
-                <div className="space-y-1">
-                  <h4 className="text-lg font-black text-slate-900">Home Pickup Scheduled</h4>
-                  <p className="text-sm text-slate-600 font-medium leading-relaxed">
-                    Your pickup is confirmed for <span className="text-indigo-600 font-bold">{activePickup?.date}</span> at <span className="text-indigo-600 font-bold">{activePickup?.time}</span>. 
-                    Since you have opted for Home Pickup, item collection, weighing, and payment processing will be handled by our agent at your doorstep. <span className="font-bold">Final billing will be done at your home during pickup.</span> Once processed at our warehouse, you can track the full details in <span className="text-indigo-600 font-bold">My Orders</span>.
-                  </p>
-                </div>
-              </motion.div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className={`${mode ? 'lg:col-span-3' : 'lg:col-span-2'} space-y-6`}>
-                {mode === 'Warehouse' ? (
-                  <div className="bg-white p-12 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center space-y-6">
-                    <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center text-indigo-600">
-                      <Package size={40} className="animate-pulse" />
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-black text-slate-900">Warehouse Redesign in Progress</h3>
-                      <p className="text-slate-500 mt-2">New interface for shipments is being developed based on updated requirements.</p>
-                    </div>
-                  </div>
-                ) : mode === 'Pickup' ? (
-                  <>
-                    {/* SCHEDULE PICKUP - ONE PAGE FORM FOR ALL DEVICES */}
-                    <div>
-                      <MobilePickupFlow
-                        activePickupStep={activePickupStep}
-                        setActivePickupStep={setActivePickupStep}
-                        pickupItemType={pickupItemType}
-                        setPickupItemType={setPickupItemType}
-                        pickupEstimatedWeight={pickupEstimatedWeight}
-                        setPickupEstimatedWeight={setPickupEstimatedWeight}
-                        selectedPickupDate={selectedPickupDate}
-                        setSelectedPickupDate={setSelectedPickupDate}
-                        selectedPickupTime={selectedPickupTime}
-                        setSelectedPickupTime={setSelectedPickupTime}
-                        filteredPickupSlots={filteredPickupSlots}
-                        pickupDetailsTab={pickupDetailsTab}
-                        setPickupDetailsTab={setPickupDetailsTab}
-                        pickupName={pickupName}
-                        setPickupName={setPickupName}
-                        pickupPhone={pickupPhone}
-                        setPickupPhone={setPickupPhone}
-                        pickupAddress={pickupAddress}
-                        setPickupAddress={setPickupAddress}
-                        pickupDestination={pickupDestination}
-                        setPickupDestination={setPickupDestination}
-                        provideDestinationLater={provideDestinationLater}
-                        setProvideDestinationLater={setProvideDestinationLater}
-                        pickupConsolidationOption={pickupConsolidationOption}
-                        setPickupConsolidationOption={setPickupConsolidationOption}
-                        shopItemsShippingDestination={shopItemsShippingDestination}
-                        setShopItemsShippingDestination={setShopItemsShippingDestination}
-                        hasShopItems={items.some(i => i.source === 'Store')}
-                        handleSchedulePickup={handleSchedulePickup}
-                        currentUser={currentUser}
-                        activePickup={activePickup}
-                        lastBookingRef={lastBookingRef}
-                        navigateTo={navigateTo}
-                        shippingRates={shippingRates}
-                        shippingRateBands={shippingRateBands}
-                        shippingDiscounts={shippingDiscounts}
-                        pickupVehicleType={pickupVehicleType}
-                        setPickupVehicleType={setPickupVehicleType}
-                        pickupEmail={pickupEmail}
-                        setPickupEmail={setPickupEmail}
-                        pickupSpecialInstructions={pickupSpecialInstructions}
-                        setPickupSpecialInstructions={setPickupSpecialInstructions}
-                        savePickupToProfile={savePickupToProfile}
-                        setSavePickupToProfile={setSavePickupToProfile}
-                        savePickupProfileToDb={savePickupProfileToDb}
-                      />
-                    </div>
-
-                    {/* DESKTOP VIEW DISABLED IN FAVOR OF SINGLE PAGE FORM */}
-                    <div className="hidden">
-                  {mode === 'Pickup' && activePickupStep !== 5 && (
-                    <>
-                      {/* Header Section with Progress for Pickup */}
-                      <div 
-                        ref={pickupHeaderRef} 
-                        className="sticky top-[80px] z-30 bg-white pt-4 pb-3 border-b border-slate-100 -mx-8 px-8 flex flex-col md:flex-row md:items-center justify-between gap-6 scroll-mt-[100px]"
-                      >
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-2xl bg-deep-blue flex items-center justify-center text-jiffex-orange shadow-xl shadow-deep-blue/20">
-                        <Truck size={28} />
-                      </div>
-                      <div>
-                        <h2 className="text-2xl font-black text-deep-blue tracking-tight">Schedule a Home Pickup</h2>
-                        <p className="text-sm text-slate-500 font-medium">
-                          {activePickupStep === 5 ? 'Booking Confirmed' : (hasActivePickup && !isSchedulingNewPickup) ? 'Add items to your scheduled pickup' : "Tell us what you're shipping, when you'd like pickup, and where we should collect it."}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    {/* Progress Indicator for Pickup */}
-                    <div className="flex items-center gap-2 w-full md:w-[450px]">
-                      {[
-                        { step: 1, label: 'Items' },
-                        { step: 2, label: 'Schedule' },
-                        { step: 3, label: 'Address' },
-                        { step: 4, label: 'Review' },
-                        { step: 5, label: 'Done' }
-                      ].map((s, idx) => (
-                        <div key={s.step} className="flex-1 flex flex-col gap-2">
-                          <div 
-                            className={`h-1.5 rounded-full transition-all duration-500 ${
-                              activePickupStep === 5 && s.step === 5 ? 'bg-emerald-500 shadow-sm shadow-emerald-100' :
-                              activePickupStep === s.step ? 'bg-jiffex-orange shadow-sm shadow-jiffex-orange/20' :
-                              activePickupStep > s.step ? 'bg-deep-blue' : 'bg-slate-100'
-                            }`}
-                          />
-                          <span className={`text-[9px] font-black uppercase tracking-tighter text-center transition-colors duration-500 ${
-                            activePickupStep === s.step ? 'text-jiffex-orange' : 
-                            activePickupStep > s.step ? 'text-deep-blue' : 'text-slate-400'
-                          }`}>
-                            {s.label}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {(hasActivePickup && activePickupStep !== 5 && !isSchedulingNewPickup) ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                      {/* Left Column: Sticky Add Item Form */}
-                      <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
-                        <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-6">
-                          <div className="flex items-center gap-3 text-indigo-600">
-                            <PlusCircle size={24} />
-                            <h4 className="text-xl font-black">Add Items</h4>
-                          </div>
-                          <p className="text-sm text-slate-500 leading-relaxed">
-                            Add any items you want the agent to collect from your home.
-                          </p>
-                          <div className="space-y-4">
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Item Name</label>
-                              <input 
-                                type="text" 
-                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
-                                placeholder="e.g. Traditional Dress, Spices..."
-                                value={cartItemName}
-                                onChange={(e) => setCartItemName(e.target.value)}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Est. Weight (kg)</label>
-                              <input 
-                                type="number" 
-                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
-                                placeholder="1.0"
-                                value={cartItemWeight}
-                                onChange={(e) => setCartItemWeight(Number(e.target.value))}
-                              />
-                            </div>
-                            <button 
-                              onClick={handleAdd}
-                              disabled={!cartItemName}
-                              className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all ${
-                                cartItemName 
-                                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-200' 
-                                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                              }`}
-                            >
-                              <Plus size={20} /> Add to Pickup List
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Pickup Details Summary */}
-                        {mode === 'Pickup' && (
-                          <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3 text-indigo-600">
-                                <Clock size={24} />
-                                <h4 className="text-xl font-black">Pickup Details</h4>
-                              </div>
-                            </div>
-                            <div className="space-y-4">
-                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
-                                  <Calendar size={20} />
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Scheduled For</p>
-                                  <p className="text-sm font-black text-slate-900">
-                                    {activePickup?.date} at {activePickup?.time}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
-                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
-                                  <MapPin size={20} />
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Address</p>
-                                  <p className="text-sm font-black text-slate-900 truncate max-w-[200px]">
-                                    {activePickup?.address}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Middle Column: Pickup Status & Items */}
-                      <div className="lg:col-span-8 space-y-6">
-                        {mode === 'Pickup' && (
-                          <div className="p-10 bg-indigo-50 rounded-[3rem] border border-indigo-100 text-center space-y-6 flex flex-col items-center justify-center min-h-[300px]">
-                            <div className="w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center text-indigo-600 shadow-xl shadow-indigo-200/50">
-                              <Truck size={48} />
-                            </div>
-                            <div className="space-y-2">
-                              <h4 className="text-2xl font-black text-slate-900">Pickup Scheduled!</h4>
-                              <p className="text-slate-600 max-w-sm mx-auto">
-                                Your agent is assigned. Add all your items here, and they will be collected during your scheduled slot.
-                              </p>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Items List for Pickup */}
-                        <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm">
-                          <div className="flex items-center justify-between mb-8">
-                            <h4 className="text-xl font-black text-slate-900">Items in this Pickup</h4>
-                            <span className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-black text-indigo-600 border border-indigo-100">
-                              {displayItems.reduce((acc, item) => acc + (item.quantity || 1), 0)} Items
-                            </span>
-                          </div>
-                          
-                          {displayItems.length === 0 ? (
-                            <div className="py-12 flex flex-col items-center justify-center text-slate-400 space-y-4">
-                              <Package size={48} strokeWidth={1} />
-                              <p className="font-medium">No items added yet.</p>
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              {displayItems.map((item) => (
-                                <motion.div 
-                                  layout
-                                  initial={{ opacity: 0, x: 20 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  key={item.id}
-                                  className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group"
-                                >
-                                  <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
-                                      <Package size={20} />
-                                    </div>
-                                    <div>
-                                      <h5 className="text-sm font-bold text-slate-900">{item.name}</h5>
-                                      <p className="text-[10px] text-slate-500 font-medium">
-                                        {item.quantity} units ‚Ä¢ {item.weight} kg
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <button 
-                                    onClick={() => removeItem(item.id)}
-                                    className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                </motion.div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                      <div className="lg:col-span-12 space-y-6 min-h-[600px]">
-                        <AnimatePresence mode="wait">
-                        {/* Step 1: What type of items are you sending? */}
-                      {activePickupStep === 1 && (
-                        <motion.div 
-                          key="step1"
-                          initial={{ opacity: 0, x: 20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -20 }}
-                          transition={{ duration: 0.3 }}
-                          className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10">
-                                <Package size={24} />
-                              </div>
-                              <div>
-                                <h4 className="text-xl font-black text-deep-blue">What type of items are you sending?</h4>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="pt-8 space-y-8">
-                                  <div className="space-y-4">
-                                    <h5 className="text-sm font-black text-deep-blue uppercase tracking-wider">Select Item Type</h5>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                      {[
-                                        { id: 'Everyday Items', icon: <ShoppingBag size={20} /> },
-                                        { id: 'Large/Furniture', icon: <Box size={20} /> },
-                                        { id: 'Mixed Items', icon: <Boxes size={20} /> },
-                                        { id: 'Documents', icon: <FileText size={20} /> }
-                                      ].map(type => (
-                                        <motion.button
-                                          key={type.id}
-                                          whileHover={{ scale: 1.02, y: -2 }}
-                                          whileTap={{ scale: 0.98 }}
-                                          onClick={() => setPickupItemType(type.id)}
-                                          className={`p-6 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 text-center relative overflow-hidden ${
-                                            pickupItemType === type.id 
-                                              ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange shadow-[0_0_20px_rgba(249,115,22,0.15)]' 
-                                              : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
-                                          }`}
-                                        >
-                                          {pickupItemType === type.id && (
-                                            <motion.div 
-                                              layoutId="item-type-glow"
-                                              className="absolute inset-0 bg-jiffex-orange/5"
-                                              initial={{ opacity: 0 }}
-                                              animate={{ opacity: 1 }}
-                                              transition={{ duration: 0.2 }}
-                                            />
-                                          )}
-                                          <div className="relative z-10">
-                                            {type.icon}
-                                          </div>
-                                          <p className="text-[10px] font-black uppercase tracking-wider leading-tight relative z-10">{type.id}</p>
-                                        </motion.button>
-                                      ))}
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-4">
-                                    <h5 className="text-sm font-black text-deep-blue uppercase tracking-wider">Approximate Weight of Items</h5>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                      {[
-                                        { id: 'Less than 5 kg', label: 'Less than 5 kg', desc: 'Documents, small parcels, or light gift packs', icon: <Package size={22} /> },
-                                        { id: '5 to 20 kg', label: '5 to 20 kg', desc: 'Standard suitcases, medium boxes, or household items', icon: <Box size={22} /> },
-                                        { id: 'More than 20 kg', label: 'More than 20 kg', desc: 'Heavy cargo, large bulk luggage, or multiple packages', icon: <Truck size={22} /> }
-                                      ].map(v => (
-                                        <motion.button
-                                          key={v.id}
-                                          type="button"
-                                          whileHover={{ scale: 1.02, y: -2 }}
-                                          whileTap={{ scale: 0.98 }}
-                                          onClick={() => {
-                                            setPickupVehicleType(v.id);
-                                            setPickupEstimatedWeight(v.id);
-                                          }}
-                                          className={`p-5 rounded-3xl border-2 transition-all flex flex-col justify-between text-left relative overflow-hidden h-full min-h-[160px] ${
-                                            pickupVehicleType === v.id 
-                                              ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange shadow-[0_0_25px_rgba(249,115,22,0.1)]' 
-                                              : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
-                                          }`}
-                                        >
-                                          {pickupVehicleType === v.id && (
-                                            <motion.div 
-                                              layoutId="vehicle-type-glow"
-                                              className="absolute inset-0 bg-jiffex-orange/5"
-                                              initial={{ opacity: 0 }}
-                                              animate={{ opacity: 1 }}
-                                              transition={{ duration: 0.2 }}
-                                            />
-                                          )}
-                                          
-                                          {/* Header with Icon and Radio Dot */}
-                                          <div className="flex items-center justify-between w-full relative z-10 mb-4">
-                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-200 ${pickupVehicleType === v.id ? 'bg-jiffex-orange text-white shadow-lg shadow-jiffex-orange/20 scale-105' : 'bg-white text-slate-400 border border-slate-100'}`}>
-                                              {v.icon}
-                                            </div>
-                                            
-                                            {/* Visual Radio Button Dot */}
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                                              pickupVehicleType === v.id 
-                                                ? 'border-jiffex-orange bg-jiffex-orange' 
-                                                : 'border-slate-300 bg-white'
-                                            }`}>
-                                              {pickupVehicleType === v.id && (
-                                                <div className="w-2 h-2 rounded-full bg-white" />
-                                              )}
-                                            </div>
-                                          </div>
-
-                                          {/* Title and Description */}
-                                          <div className="relative z-10">
-                                            <p className="text-base font-black text-slate-900 leading-tight mb-1">{v.label}</p>
-                                            <p className="text-xs font-medium text-slate-500 leading-normal">{v.desc}</p>
-                                          </div>
-                                        </motion.button>
-                                      ))}
-                                    </div>
-                                  </div>
-
-                                  <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 space-y-3">
-                                    <div className="flex items-center gap-2 text-amber-700">
-                                      <Info size={18} />
-                                      <p className="text-sm font-black text-amber-900">You‚Äôll receive a price estimate before confirmation ‚Äî no payment required yet.</p>
-                                    </div>
-                                    <p className="text-xs text-amber-600 font-bold leading-relaxed">
-                                      Once your pickup is confirmed, our agent will contact you with a final price based on size, weight, and distance before collecting payment.
-                                    </p>
-                                  </div>
-
-                                  <button 
-                                    onClick={() => {
-                                      setActivePickupStep(2);
-                                    }}
-                                    className="w-full py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
-                                  >
-                                    Continue to Schedule <ArrowRight size={18} />
-                                  </button>
-                                </div>
-                        </motion.div>
-                      )}
-
-                      {/* Step 2: When should we arrive? */}
-                      {activePickupStep === 2 && (
-                        <motion.div 
-                          key="step2"
-                          initial={{ opacity: 0, x: 20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -20 }}
-                          transition={{ duration: 0.3 }}
-                          className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10">
-                                <Clock size={24} />
-                              </div>
-                              <div>
-                                <h4 className="text-xl font-black text-deep-blue">When should we arrive?</h4>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="pt-8 space-y-8">
-                                  <div className="space-y-4">
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Select Date</label>
-                                    <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
-                                      {filteredPickupSlots.map(slot => {
-                                        const d = new Date(slot.date);
-                                        const isSelected = selectedPickupDate === slot.date;
-                                        
-                                        // IST check for past dates
-                                        const getISTTime = () => {
-                                          const now = new Date();
-                                          const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-                                          return new Date(utc + (3600000 * 5.5));
-                                        };
-                                        const istNow = getISTTime();
-                                        const istDateStr = istNow.toISOString().split('T')[0];
-                                        
-                                        // A date is past if its last slot is past (last slot starts at 7 PM / 19:00)
-                                        const isDatePast = slot.date < istDateStr || (slot.date === istDateStr && istNow.getHours() >= 19);
-                                        
-                                        return (
-                                          <button
-                                            key={slot.date}
-                                            disabled={isDatePast}
-                                            onClick={() => setSelectedPickupDate(slot.date)}
-                                            className={`flex-shrink-0 w-20 h-24 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-1 ${
-                                              isDatePast ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-100 text-slate-300' :
-                                              isSelected ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange' : 
-                                              'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
-                                            }`}
-                                          >
-                                            <span className="text-[10px] font-black uppercase">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
-                                            <span className="text-xl font-black">{d.getDate()}</span>
-                                            <span className="text-[10px] font-bold">{d.toLocaleDateString('en-US', { month: 'short' })}</span>
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-4">
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Select Time Window</label>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                      {PICKUP_SLOTS.find(s => s.date === selectedPickupDate)?.times.map(time => {
-                                        const isSelected = selectedPickupTime === time;
-                                        
-                                        // IST check for past slots
-                                        const getISTTime = () => {
-                                          const now = new Date();
-                                          const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-                                          return new Date(utc + (3600000 * 5.5));
-                                        };
-                                        
-                                        const istNow = getISTTime();
-                                        const istDateStr = istNow.toISOString().split('T')[0];
-                                        
-                                        let isPast = false;
-                                        if (selectedPickupDate < istDateStr) {
-                                          isPast = true;
-                                        } else if (selectedPickupDate === istDateStr) {
-                                          const hourMap: Record<string, number> = {
-                                            '9‚Äì11 AM': 9,
-                                            '11‚Äì1 PM': 11,
-                                            '1‚Äì3 PM': 13,
-                                            '3‚Äì5 PM': 15,
-                                            '5‚Äì7 PM': 17,
-                                            '7‚Äì9 PM': 19
-                                          };
-                                          const startHour = hourMap[time];
-                                          if (istNow.getHours() >= startHour) {
-                                            isPast = true;
-                                          }
-                                        }
-
-                                        return (
-                                          <button
-                                            key={time}
-                                            disabled={isPast}
-                                            onClick={() => setSelectedPickupTime(time)}
-                                            className={`py-4 px-2 rounded-2xl border-2 transition-all text-center ${
-                                              isPast ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-100 text-slate-300' :
-                                              isSelected ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange' : 
-                                              'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
-                                            }`}
-                                          >
-                                            <span className="text-xs font-black">{time}</span>
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-
-                                  <div className="flex gap-4">
-                                    <button 
-                                      onClick={() => {
-                                        setActivePickupStep(1);
-                                      }}
-                                      className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-                                    >
-                                      <ArrowLeft size={18} /> Back
-                                    </button>
-                                    <button 
-                                      onClick={() => {
-                                        setActivePickupStep(3);
-                                      }}
-                                      className="flex-[2] py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
-                                    >
-                                      Continue to Address <ArrowRight size={18} />
-                                    </button>
-                                  </div>
-                                </div>
-                        </motion.div>
-                      )}
-
-                    {/* Step 3: Pickup details */}
-                    {activePickupStep === 3 && (
-                      <motion.div 
-                        ref={pickupDetailsRef}
-                        key="step3"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        transition={{ duration: 0.3 }}
-                        className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5 scroll-mt-24"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10">
-                              <MapPin size={24} />
-                            </div>
-                            <div>
-                              <h4 className="text-xl font-black text-deep-blue">Pickup & Destination Details</h4>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Tab Selector */}
-                        <div className="mt-6 flex bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
-                          <button
-                            type="button"
-                            onClick={() => setPickupDetailsTab('pickup')}
-                            className={`flex-1 py-3 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
-                              pickupDetailsTab === 'pickup' 
-                                ? 'bg-deep-blue text-white shadow-md shadow-deep-blue/20' 
-                                : 'text-slate-500 hover:text-slate-800'
-                            }`}
-                          >
-                            <MapPin size={14} /> 1. Pickup Address (From)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setPickupDetailsTab('destination')}
-                            className={`flex-1 py-3 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
-                              pickupDetailsTab === 'destination' 
-                                ? 'bg-deep-blue text-white shadow-md shadow-deep-blue/20' 
-                                : 'text-slate-500 hover:text-slate-800'
-                            }`}
-                          >
-                            <Globe size={14} /> 2. Destination Address (To)
-                          </button>
-                        </div>
-
-                        <div className="pt-6 space-y-6">
-                          {pickupDetailsTab === 'pickup' ? (
-                            <div className="space-y-6">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
-                                  <div className="relative">
-                                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                    <input 
-                                      type="text" 
-                                      className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                      placeholder="Enter your name"
-                                      value={pickupName}
-                                      onChange={(e) => setPickupName(e.target.value)}
-                                    />
-                                  </div>
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
-                                  <div className="relative">
-                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">+91</span>
-                                    <input 
-                                      type="tel" 
-                                      className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                      placeholder="10-digit mobile"
-                                      value={pickupPhone}
-                                      maxLength={10}
-                                      onChange={(e) => {
-                                        const val = e.target.value.replace(/\D/g, '');
-                                        if (val.length <= 10) setPickupPhone(val);
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="space-y-2">
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
-                                <div className="relative">
-                                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                  <input 
-                                    type="email" 
-                                    className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                    placeholder="Enter your email for confirmation"
-                                    value={pickupEmail}
-                                    onChange={(e) => setPickupEmail(e.target.value)}
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="space-y-2">
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Pick up address</label>
-                                <input 
-                                  type="text" 
-                                  className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                  placeholder="House No, Building, Street Name"
-                                  value={pickupAddress.street}
-                                  onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
-                                />
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <div className="space-y-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">City</label>
-                                  <input 
-                                    type="text" 
-                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                    placeholder="City"
-                                    value={pickupAddress.city}
-                                    onChange={(e) => setPickupAddress({...pickupAddress, city: e.target.value})}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">State</label>
-                                  <input 
-                                    type="text" 
-                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                    placeholder="State"
-                                    value={pickupAddress.state}
-                                    onChange={(e) => setPickupAddress({...pickupAddress, state: e.target.value})}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">PIN code</label>
-                                  <input 
-                                    type="text" 
-                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                    placeholder="PIN Code"
-                                    value={pickupAddress.zip}
-                                    onChange={(e) => setPickupAddress({...pickupAddress, zip: e.target.value})}
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="space-y-2">
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Special Instructions</label>
-                                <textarea 
-                                  className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium min-h-[100px] text-sm"
-                                  placeholder="Any specific instructions for our agent?"
-                                  value={pickupSpecialInstructions}
-                                  onChange={(e) => setPickupSpecialInstructions(e.target.value)}
-                                />
-                              </div>
-
-                              {currentUser && (
-                                <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50 flex items-start gap-3 mt-4 hover:bg-slate-50 transition-colors">
-                                  <input 
-                                    type="checkbox" 
-                                    id="save-pickup-to-profile"
-                                    className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 mt-0.5 cursor-pointer accent-indigo-600"
-                                    checked={savePickupToProfile}
-                                    onChange={(e) => setSavePickupToProfile(e.target.checked)}
-                                  />
-                                  <label htmlFor="save-pickup-to-profile" className="text-xs font-bold text-slate-700 leading-relaxed cursor-pointer select-none">
-                                    Save these details in my customer profile
-                                    <span className="block text-[10px] text-slate-400 font-medium normal-case mt-0.5">
-                                      These details will be securely stored and auto-filled next time when logged in with the same ID.
-                                    </span>
-                                  </label>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="space-y-6">
-                              {/* Option card to provide destination details later */}
-                              <div className="bg-amber-50/80 p-4 rounded-2xl border border-amber-200/90 flex items-center gap-3 transition-all">
-                                <input 
-                                  type="checkbox" 
-                                  id="provide-destination-later-desktop"
-                                  className="w-5 h-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500 cursor-pointer accent-amber-600"
-                                  checked={provideDestinationLater}
-                                  onChange={(e) => {
-                                    const isChecked = e.target.checked;
-                                    setProvideDestinationLater(isChecked);
-                                    if (isChecked) {
-                                      toast.info("You can provide the destination later. We'll contact you before shipping.");
-                                    }
-                                  }}
-                                />
-                                <label htmlFor="provide-destination-later-desktop" className="text-xs font-bold text-slate-800 cursor-pointer select-none">
-                                  I don't know the destination yet
-                                </label>
-                              </div>
-
-                              {provideDestinationLater ? (
-                                <div className="p-5 bg-amber-50/90 border border-amber-200/80 rounded-2xl space-y-3">
-                                  <div className="flex items-center gap-3 text-amber-900">
-                                    <Clock size={20} className="shrink-0 text-amber-600" />
-                                    <p className="text-xs font-bold leading-snug">
-                                      You can provide the destination later. We'll contact you before shipping.
-                                    </p>
-                                  </div>
-                                  
-                                  {/* Expected Destination Country (Optional) */}
-                                  <div className="pt-2 text-left space-y-2 max-w-sm mx-auto">
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Expected Destination Country (Optional)</label>
-                                    <div className="relative">
-                                      <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10" size={18} />
-                                      <select 
-                                        className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-white transition-all font-medium text-sm appearance-none cursor-pointer pr-10"
-                                        value={pickupDestination.country}
-                                        onChange={(e) => setPickupDestination({...pickupDestination, country: e.target.value})}
-                                      >
-                                        {COUNTRIES.map(c => (
-                                          <option key={c} value={c}>{c}</option>
-                                        ))}
-                                      </select>
-                                      <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-slate-400">
-                                        <ChevronDown size={18} />
-                                      </div>
-                                    </div>
-                                    <p className="text-[10px] text-slate-400 font-medium italic">Selecting country helps us estimate shipping rates for your review.</p>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-2">
-                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Name</label>
-                                      <div className="relative">
-                                        <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                        <input 
-                                          type="text" 
-                                          className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                          placeholder="Receiver full name"
-                                          value={pickupDestination.fullName}
-                                          onChange={(e) => setPickupDestination({...pickupDestination, fullName: e.target.value})}
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Phone</label>
-                                      <div className="relative">
-                                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                        <input 
-                                          type="tel" 
-                                          className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                          placeholder="Receiver contact phone"
-                                          value={pickupDestination.phone}
-                                          onChange={(e) => setPickupDestination({...pickupDestination, phone: e.target.value})}
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Email</label>
-                                    <div className="relative">
-                                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                      <input 
-                                        type="email" 
-                                        className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                        placeholder="Receiver email (optional)"
-                                        value={pickupDestination.email}
-                                        onChange={(e) => setPickupDestination({...pickupDestination, email: e.target.value})}
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination Address</label>
-                                    <input 
-                                      type="text" 
-                                      className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                      placeholder="Street Address, Block, Apartment Info"
-                                      value={pickupDestination.addressLine1}
-                                      onChange={(e) => setPickupDestination({...pickupDestination, addressLine1: e.target.value})}
-                                    />
-                                  </div>
-
-                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div className="space-y-2">
-                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination City</label>
-                                      <input 
-                                        type="text" 
-                                        className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                        placeholder="Destination City"
-                                        value={pickupDestination.city}
-                                        onChange={(e) => setPickupDestination({...pickupDestination, city: e.target.value})}
-                                      />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination State</label>
-                                      <input 
-                                        type="text" 
-                                        className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                        placeholder="Destination State"
-                                        value={pickupDestination.state}
-                                        onChange={(e) => setPickupDestination({...pickupDestination, state: e.target.value})}
-                                      />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">ZIP / Post Code</label>
-                                      <input 
-                                        type="text" 
-                                        className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
-                                        placeholder="ZIP or Postal Code"
-                                        value={pickupDestination.zipCode}
-                                        onChange={(e) => setPickupDestination({...pickupDestination, zipCode: e.target.value})}
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination Country</label>
-                                    <div className="relative">
-                                      <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10" size={18} />
-                                      <select 
-                                        className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm appearance-none cursor-pointer pr-10"
-                                        value={pickupDestination.country}
-                                        onChange={(e) => setPickupDestination({...pickupDestination, country: e.target.value})}
-                                      >
-                                        {COUNTRIES.map(c => (
-                                          <option key={c} value={c}>{c}</option>
-                                        ))}
-                                      </select>
-                                      <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-slate-400">
-                                        <ChevronDown size={18} />
-                                      </div>
-                                    </div>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          )}
-
-                          <div className="flex gap-4 pt-4 border-t border-slate-100">
-                            {pickupDetailsTab === 'pickup' ? (
-                              <>
-                                <button 
-                                  type="button"
-                                  onClick={() => {
-                                    setActivePickupStep(2);
-                                  }}
-                                  className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-                                >
-                                  <ArrowLeft size={18} /> Back
-                                </button>
-                                <button 
-                                  type="button"
-                                  onClick={() => {
-                                    // Local Validation before going to Destination Address Tab
-                                    if (!pickupName || !pickupPhone || !pickupAddress.street || !pickupAddress.city || !pickupAddress.state || !pickupAddress.zip) {
-                                      toast.error('Please fill in all required Pickup Address fields before proceeding.');
-                                      return;
-                                    }
-                                    if (pickupPhone.length !== 10) {
-                                      toast.error('Phone number must be exactly 10 digits');
-                                      return;
-                                    }
-                                    setPickupDetailsTab('destination');
-                                  }}
-                                  className="flex-[2] py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
-                                >
-                                  Continue to Destination <ArrowRight size={18} />
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button 
-                                  type="button"
-                                  onClick={() => {
-                                    setPickupDetailsTab('pickup');
-                                  }}
-                                  className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-                                >
-                                  <ArrowLeft size={18} /> Back
-                                </button>
-                                <button 
-                                  type="button"
-                                  onClick={() => {
-                                    if (!pickupName || !pickupPhone || !pickupAddress.street || !pickupAddress.city || !pickupAddress.state || !pickupAddress.zip) {
-                                      toast.error('Please fill in all required Pickup Address fields');
-                                      setPickupDetailsTab('pickup');
-                                      return;
-                                    }
-                                    if (pickupPhone.length !== 10) {
-                                      toast.error('Phone number must be 10 digits');
-                                      setPickupDetailsTab('pickup');
-                                      return;
-                                    }
-                                    if (!provideDestinationLater) {
-                                      if (!pickupDestination.fullName || !pickupDestination.phone || !pickupDestination.addressLine1 || !pickupDestination.city || !pickupDestination.state || !pickupDestination.zipCode) {
-                                        toast.error('Please fill in all required Destination fields or check "I will provide details later"');
-                                        return;
-                                      }
-                                    }
-                                    if (savePickupToProfile && currentUser) {
-                                      savePickupProfileToDb();
-                                    }
-                                    setActivePickupStep(4);
-                                  }}
-                                  className="flex-[2] py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
-                                >
-                                  Continue to Review <ArrowRight size={18} />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-
-                    {/* Step 4: Review your booking */}
-                    {activePickupStep === 4 && (
-                      <motion.div 
-                        key="step4"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        transition={{ duration: 0.3 }}
-                        className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10">
-                              <CheckCircle2 size={24} />
-                            </div>
-                            <div>
-                              <h4 className="text-xl font-black text-deep-blue">Review your booking</h4>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="pt-8 space-y-6">
-                                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
-                                  <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Items</p>
-                                      <p className="font-bold text-slate-900">{pickupItemType} ({pickupVehicleType})</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Slot</p>
-                                      <p className="font-bold text-slate-900">{new Date(selectedPickupDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at {selectedPickupTime}</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact</p>
-                                      <p className="font-bold text-slate-900">{pickupName} (+91 {pickupPhone})</p>
-                                    </div>
-                                    <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-250/20">
-                                      <div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Address (From)</p>
-                                        <p className="font-bold text-slate-900 text-xs mt-1 leading-relaxed">
-                                          {pickupAddress.street}<br />
-                                          {pickupAddress.city}, {pickupAddress.state} - {pickupAddress.zip}<br />
-                                          India
-                                        </p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Destination Address (To)</p>
-                                        {provideDestinationLater ? (
-                                          <div className="mt-1">
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-black border border-amber-200">
-                                              <Clock size={12} /> Provide Details Later
-                                            </span>
-                                            <p className="font-bold text-slate-700 text-xs mt-1.5 leading-relaxed">
-                                              Address will be collected before warehouse dispatch.
-                                              {pickupDestination.country && <span className="block text-[11px] text-slate-500 font-medium mt-0.5">Expected Country: {pickupDestination.country}</span>}
-                                            </p>
-                                          </div>
-                                        ) : (
-                                          <p className="font-bold text-slate-900 text-xs mt-1 leading-relaxed">
-                                            {pickupDestination.fullName} (+{pickupDestination.phone})<br />
-                                            {pickupDestination.addressLine1}<br />
-                                            {pickupDestination.city}, {pickupDestination.state} - {pickupDestination.zipCode}<br />
-                                            {pickupDestination.country}
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-                                    {pickupSpecialInstructions && (
-                                      <div className="col-span-2">
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instructions</p>
-                                        <p className="font-bold text-slate-900">{pickupSpecialInstructions}</p>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Approximate Price Estimate */}
-                                {(() => {
-                                  let minWeight = 1;
-                                  let maxWeight = 5;
-                                  let isMoreThan20 = false;
-
-                                  if (pickupEstimatedWeight) {
-                                    if (pickupEstimatedWeight.includes('Less than 5') || pickupEstimatedWeight.includes('1-5')) {
-                                      minWeight = 1;
-                                      maxWeight = 5;
-                                    } else if (pickupEstimatedWeight.includes('5 to 20') || pickupEstimatedWeight.includes('5-15') || pickupEstimatedWeight.includes('5-20') || pickupEstimatedWeight.includes('5 to 15')) {
-                                      minWeight = 5;
-                                      maxWeight = 20;
-                                    } else if (pickupEstimatedWeight.includes('More than 20') || pickupEstimatedWeight.includes('15-50') || pickupEstimatedWeight.includes('20+')) {
-                                      minWeight = 20;
-                                      maxWeight = 50;
-                                      isMoreThan20 = true;
-                                    } else {
-                                      const match = pickupEstimatedWeight.match(/(\d+)/);
-                                      if (match) {
-                                        const val = parseInt(match[0], 10);
-                                        minWeight = Math.max(1, val - 2);
-                                        maxWeight = val + 2;
-                                      }
-                                    }
-                                  }
-
-                                  const targetCountry = pickupDestination.country || COUNTRIES[0];
-                                  const rate = shippingRates[targetCountry] || 10;
-                                  const discountPercent = shippingDiscounts[targetCountry] || 0;
-
-                                  const rawMinQuote = minWeight * rate;
-                                  const rawMaxQuote = maxWeight * rate;
-
-                                  const minDiscount = rawMinQuote * (discountPercent / 100);
-                                  const maxDiscount = rawMaxQuote * (discountPercent / 100);
-
-                                  const finalMin = Math.max(0, rawMinQuote - minDiscount);
-                                  const finalMax = Math.max(0, rawMaxQuote - maxDiscount);
-
-                                  return (
-                                    <div className="p-6 bg-indigo-50/50 rounded-3xl border border-indigo-100 flex items-start gap-4">
-                                      <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-200">
-                                        <Globe size={20} />
-                                      </div>
-                                      <div className="flex-1">
-                                        <div className="flex items-center justify-between">
-                                          <h5 className="font-extrabold text-indigo-950 text-sm">Approximate Price Estimate</h5>
-                                          <span className="text-xs font-black bg-indigo-100/80 text-indigo-700 px-2.5 py-1 rounded-full uppercase tracking-widest">
-                                            {minWeight}-{maxWeight}{isMoreThan20 ? '+' : ''} kg
-                                          </span>
-                                        </div>
-                                        <div className="mt-2 flex items-baseline gap-2">
-                                          <span className="text-2xl font-black text-indigo-600">
-                                            ‚Çπ{finalMin.toFixed(2)} - ‚Çπ{finalMax.toFixed(2)}{isMoreThan20 ? '+' : ''}
-                                          </span>
-                                          <span className="text-xs font-medium text-slate-500">to {targetCountry}</span>
-                                        </div>
-                                        <div className="text-[11px] text-slate-500 mt-1.5 leading-relaxed font-sans">
-                                          Based on standard rate of <strong className="text-slate-700">‚Çπ{rate}/kg</strong> for {targetCountry} over the weight range limit of {minWeight} to {maxWeight} kg.
-                                          {discountPercent > 0 && (
-                                            <span className="text-emerald-600 font-bold block mt-1">
-                                              ‚ú® Special {discountPercent}% discount applied! Saved ‚Çπ{minDiscount.toFixed(2)} - ‚Çπ{maxDiscount.toFixed(2)}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-
-                                {/* Payment Info Section */}
-                                <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100 flex items-start gap-4">
-                                  <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center flex-shrink-0">
-                                    <CreditCard size={20} />
-                                  </div>
-                                  <div>
-                                    <h5 className="font-bold text-emerald-900 text-sm">Payment ‚Äî agent will quote on arrival</h5>
-                                    <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
-                                      No payment now. Your agent will share the quote when they arrive and collect after your approval.
-                                    </p>
-                                  </div>
-                                </div>
-
-                                {/* Consolidation Selection block for Home Pickup Booking */}
-                                <div 
-                                  id="pickup-consolidation-prompt-section"
-                                  className={`p-6 md:p-8 rounded-[2rem] border-2 transition-all duration-300 ${
-                                    showPickupConsolidationError 
-                                      ? 'bg-rose-50/60 border-rose-300 shadow-xl shadow-rose-100/40 animate-pulse' 
-                                      : 'bg-gradient-to-r from-slate-50 to-indigo-50/30 border-slate-100/80 shadow-sm'
-                                  }`}
-                                >
-                                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-dashed border-slate-200/60">
-                                    <div className="space-y-1.5 flex-1">
-                                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50/85 text-indigo-700 text-[10px] font-black uppercase tracking-wider rounded-full border border-indigo-100/65">
-                                        Consolidation Offer
-                                      </span>
-                                      <h4 className="text-lg font-black text-slate-900 flex items-center gap-2 mt-1">
-                                        <HelpCircle size={20} className="text-indigo-600 shrink-0" />
-                                        Do you want to shop Indian items from our store which will be shipped along with this?
-                                      </h4>
-                                      <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-2xl">
-                                        Multiply value with bundled shopping! Browse original Indian snacks, fashion, spices, or handicrafts and put them in this shipment box without incurring any added shipping base fee.
-                                      </p>
-                                    </div>
-                                    {showPickupConsolidationError && (
-                                      <span className="shrink-0 px-4 py-2 bg-rose-105 text-rose-700 text-xs font-black uppercase tracking-wider rounded-xl border border-rose-200 flex items-center gap-1.5 shadow-sm shadow-rose-200/20 animate-bounce">
-                                        Required
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-6">
-                                    {/* Option 1: Yes - Shop & Ship */}
-                                    <div 
-                                      onClick={() => {
-                                        setPickupConsolidationOption('shop_and_ship');
-                                        setShowPickupConsolidationError(false);
-                                        toast.success("Consolidation Option Selected: Yes - Shop & Ship");
-                                      }}
-                                      className={`cursor-pointer p-6 rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden ${
-                                        pickupConsolidationOption === 'shop_and_ship'
-                                          ? 'bg-gradient-to-br from-white to-indigo-50/10 border-indigo-600 shadow-xl shadow-indigo-100/50'
-                                          : 'bg-white border-slate-100 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-100'
-                                      }`}
-                                    >
-                                      {pickupConsolidationOption === 'shop_and_ship' && (
-                                        <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-600/5 rounded-bl-full flex items-center justify-center pointer-events-none">
-                                          <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full mr-2 mb-2" />
-                                        </div>
-                                      )}
-                                      <div className="space-y-4">
-                                        <div className={`p-3 rounded-2xl w-fit transition-colors duration-300 ${
-                                          pickupConsolidationOption === 'shop_and_ship' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-500 group-hover:bg-indigo-50 group-hover:text-indigo-600'
-                                        }`}>
-                                          <ShoppingBag size={22} />
-                                        </div>
-                                        <div>
-                                          <h5 className="font-extrabold text-slate-950 text-base leading-snug">
-                                            Yes - Shop & Ship
-                                          </h5>
-                                          <p className="text-slate-500 text-[11px] leading-relaxed mt-2 font-medium">
-                                            Enable consolidated shopping to buy food items, books, clothing from our store. Everything packs together with zero added delivery base charges.
-                                          </p>
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                                        <span className={`text-[10px] font-black tracking-wider uppercase ${
-                                          pickupConsolidationOption === 'shop_and_ship' ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-505'
-                                        }`}>Add Store Goods</span>
-                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                                          pickupConsolidationOption === 'shop_and_ship' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200'
-                                        }`}>
-                                          {pickupConsolidationOption === 'shop_and_ship' && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Option 2: No - Only ship my personal items */}
-                                    <div 
-                                      onClick={() => {
-                                        setPickupConsolidationOption('pickup_only');
-                                        setShowPickupConsolidationError(false);
-                                        toast.success("Consolidation Option Selected: No - Only ship my personal items");
-                                      }}
-                                      className={`cursor-pointer p-6 rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden ${
-                                        pickupConsolidationOption === 'pickup_only'
-                                          ? 'bg-gradient-to-br from-white to-slate-50/40 border-slate-700 shadow-xl shadow-slate-200/50'
-                                          : 'bg-white border-slate-100 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-100'
-                                      }`}
-                                    >
-                                      {pickupConsolidationOption === 'pickup_only' && (
-                                        <div className="absolute top-0 right-0 w-16 h-16 bg-slate-700/5 rounded-bl-full flex items-center justify-center pointer-events-none">
-                                          <div className="w-2.5 h-2.5 bg-slate-700 rounded-full mr-2 mb-2" />
-                                        </div>
-                                      )}
-                                      <div className="space-y-4">
-                                        <div className={`p-3 rounded-2xl w-fit transition-colors duration-300 ${
-                                          pickupConsolidationOption === 'pickup_only' ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-850'
-                                        }`}>
-                                          <Truck size={22} />
-                                        </div>
-                                        <div>
-                                          <h5 className="font-extrabold text-slate-950 text-base leading-snug">
-                                            No - Only ship my personal items
-                                          </h5>
-                                          <p className="text-slate-500 text-[11px] leading-relaxed mt-2 font-medium">
-                                            Proceed with standard pickup. Only the specific items collected from my home will be forwarded. No digital store goods.
-                                          </p>
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                                        <span className={`text-[10px] font-black tracking-wider uppercase ${
-                                          pickupConsolidationOption === 'pickup_only' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-505'
-                                        }`}>Doorstep Courier Only</span>
-                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                                          pickupConsolidationOption === 'pickup_only' ? 'border-slate-800 bg-slate-50' : 'border-slate-200'
-                                        }`}>
-                                          {pickupConsolidationOption === 'pickup_only' && <div className="w-2 h-2 rounded-full bg-slate-800" />}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {/* Helper visual description card */}
-                                  {pickupConsolidationOption && (
-                                    <div 
-                                      className="mt-6 p-4 rounded-2xl bg-white border border-slate-150 shadow-sm text-xs text-slate-700 font-bold flex items-start gap-3"
-                                    >
-                                      <div className="p-1 rounded-full bg-emerald-50 text-emerald-600 mt-0.5 shrink-0">
-                                        <CheckCircle2 size={16} />
-                                      </div>
-                                      <div>
-                                        <p className="font-extrabold text-slate-900">
-                                          {pickupConsolidationOption === 'shop_and_ship' 
-                                            ? 'Shop & Ship Integration Connected!' 
-                                            : 'Direct Courier Shipment Confirmed'}
-                                        </p>
-                                        <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-0.5">
-                                          {pickupConsolidationOption === 'shop_and_ship' 
-                                            ? "Upon confirming your booking, we will prompt and support addition of genuine premium products from our Indian market in your confirmation screen."
-                                            : "We'll dispatch only your home-collected packages. Standard weights, volumes, and custom declarations will apply."
-                                          }
-                                        </p>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Shop Items Shipping Destination Selection Card */}
-                                  {(pickupConsolidationOption === 'shop_and_ship' || items.some(i => i.source === 'Store')) && (
-                                    <div className="mt-6 p-6 rounded-3xl bg-indigo-50/40 border-2 border-indigo-200 shadow-sm space-y-4 text-left">
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                          <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-md shadow-indigo-200">
-                                            <ShoppingBag size={20} />
-                                          </div>
-                                          <div>
-                                            <h5 className="font-extrabold text-slate-900 text-sm">Shop Items Shipping Destination</h5>
-                                            <p className="text-xs text-slate-500 font-medium">
-                                              Where would you like your selected Shop items delivered?
-                                            </p>
-                                          </div>
-                                        </div>
-                                        <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full">
-                                          Home Pickup Schedule Linked
-                                        </span>
-                                      </div>
-
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                                        {/* Option 1: Ship to my home */}
-                                        <div 
-                                          onClick={() => {
-                                            setShopItemsShippingDestination('home');
-                                            toast.success("Shop items set to ship to your Home Destination Address!");
-                                          }}
-                                          className={`cursor-pointer p-5 rounded-2xl border-2 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden ${
-                                            shopItemsShippingDestination === 'home'
-                                              ? 'bg-white border-indigo-600 shadow-lg shadow-indigo-100 ring-2 ring-indigo-600/20'
-                                              : 'bg-white/80 border-slate-200 hover:border-slate-300'
-                                          }`}
-                                        >
-                                          <div className="space-y-3">
-                                            <div className="flex items-center justify-between">
-                                              <div className={`p-2.5 rounded-xl ${shopItemsShippingDestination === 'home' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                                                <Home size={18} />
-                                              </div>
-                                              {shopItemsShippingDestination === 'home' && (
-                                                <span className="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
-                                                  Selected
-                                                </span>
-                                              )}
-                                            </div>
-                                            <div>
-                                              <h6 className="font-black text-slate-900 text-sm">Ship to my home</h6>
-                                              <p className="text-slate-500 text-[11px] leading-relaxed mt-1 font-medium">
-                                                Deliver shop items directly to your destination address on your scheduled shipping date.
-                                              </p>
-                                            </div>
-
-                                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-[11px] space-y-1">
-                                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Schedule & Address Details</p>
-                                              <p className="font-bold text-slate-800">üìÖ Shipping Date: <span className="text-indigo-600">{new Date(selectedPickupDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span></p>
-                                              <p className="font-bold text-slate-800 truncate">üìç Destination: <span className="text-slate-600">{pickupDestination.fullName || 'Receiver'}, {pickupDestination.city || 'City'}, {pickupDestination.country || 'USA'}</span></p>
-                                            </div>
-                                          </div>
-
-                                          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                                            <span className={`text-[10px] font-black uppercase tracking-wider ${shopItemsShippingDestination === 'home' ? 'text-indigo-600' : 'text-slate-400'}`}>
-                                              Home Destination Delivery
-                                            </span>
-                                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${shopItemsShippingDestination === 'home' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>
-                                              {shopItemsShippingDestination === 'home' && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
-                                            </div>
-                                          </div>
-                                        </div>
-
-                                        {/* Option 2: Ship to Jiffex warehouse */}
-                                        <div 
-                                          onClick={() => {
-                                            setShopItemsShippingDestination('warehouse');
-                                            toast.success("Shop items set to ship to Jiffex Warehouse Hub!");
-                                          }}
-                                          className={`cursor-pointer p-5 rounded-2xl border-2 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden ${
-                                            shopItemsShippingDestination === 'warehouse'
-                                              ? 'bg-white border-indigo-600 shadow-lg shadow-indigo-100 ring-2 ring-indigo-600/20'
-                                              : 'bg-white/80 border-slate-200 hover:border-slate-300'
-                                          }`}
-                                        >
-                                          <div className="space-y-3">
-                                            <div className="flex items-center justify-between">
-                                              <div className={`p-2.5 rounded-xl ${shopItemsShippingDestination === 'warehouse' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                                                <Warehouse size={18} />
-                                              </div>
-                                              {shopItemsShippingDestination === 'warehouse' && (
-                                                <span className="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
-                                                  Selected
-                                                </span>
-                                              )}
-                                            </div>
-                                            <div>
-                                              <h6 className="font-black text-slate-900 text-sm">Ship to Jiffex warehouse</h6>
-                                              <p className="text-slate-500 text-[11px] leading-relaxed mt-1 font-medium">
-                                                Deliver shop items to Jiffex Warehouse for holding, inspection, or separate processing.
-                                              </p>
-                                            </div>
-
-                                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-[11px] space-y-1">
-                                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Warehouse Hub Details</p>
-                                              <p className="font-bold text-slate-800">üè¨ Hub: <span className="text-emerald-700">{WAREHOUSE_ADDRESS.name}</span></p>
-                                              <p className="font-bold text-slate-800 truncate">üìç Address: <span className="text-slate-600">{WAREHOUSE_ADDRESS.street}, {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state} {WAREHOUSE_ADDRESS.zipCode}</span></p>
-                                            </div>
-                                          </div>
-
-                                          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                                            <span className={`text-[10px] font-black uppercase tracking-wider ${shopItemsShippingDestination === 'warehouse' ? 'text-indigo-600' : 'text-slate-400'}`}>
-                                              Jiffex Hub Holding
-                                            </span>
-                                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${shopItemsShippingDestination === 'warehouse' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>
-                                              {shopItemsShippingDestination === 'warehouse' && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {!currentUser && (
-                                  <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center gap-3">
-                                    <div className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center shrink-0">
-                                      <LogIn size={16} />
-                                    </div>
-                                    <p className="text-xs font-bold text-indigo-900">
-                                      Continue as a guest. We'll verify your number via OTP to secure your booking.
-                                    </p>
-                                  </div>
-                                )}
-
-                                <div className="flex gap-4">
-                                  <button 
-                                    onClick={() => {
-                                      setActivePickupStep(3);
-                                    }}
-                                    className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-                                  >
-                                    Edit Details
-                                  </button>
-                                  <button 
-                                    onClick={handleSchedulePickup}
-                                    className="flex-[2] py-5 bg-jiffex-orange text-white rounded-[2rem] text-lg font-black hover:bg-amber-600 transition-all shadow-2xl shadow-jiffex-orange/20 flex items-center justify-center gap-3"
-                                  >
-                                    {currentUser ? 'Confirm Booking' : 'Sign in (OTP-based)'}
-                                  </button>
-                                </div>
-                              </div>
-                        </motion.div>
-                      )}
-
-                      {/* Step 5: Booking confirmed */}
-                     {activePickupStep === 5 && (
-                       <motion.div 
-                         key="step5"
-                         initial={{ opacity: 0, scale: 0.95 }}
-                         animate={{ opacity: 1, scale: 1 }}
-                         exit={{ opacity: 0, scale: 0.95 }}
-                         transition={{ duration: 0.3 }}
-                         className="p-4 sm:p-5 md:p-6 rounded-[2rem] bg-gradient-to-b from-white via-slate-50/10 to-white border border-slate-150/70 shadow-xl text-left space-y-4 sm:space-y-5"
-                       >
-                        {/* Compact Header Alert */}
-                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b border-slate-100">
-                          <div className="flex items-center gap-4">
-                            <motion.div 
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-tr from-teal-500 via-emerald-500 to-emerald-400 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/25"
-                            >
-                              <CheckCircle2 size={32} />
-                            </motion.div>
-                            <div>
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 rounded-full text-[10px] uppercase font-black tracking-wider leading-none border border-emerald-200">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                Confirmed & Active
-                              </span>
-                              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1.5 leading-tight">
-                                Thanks, {activePickup?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 'there'}! üéâ
-                              </h2>
-                              <p className="text-sm text-slate-600 font-semibold mt-0.5">
-                                Your home pickup is scheduled. Our agent is on the way!
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-3 bg-gradient-to-br from-indigo-50/80 via-indigo-50/40 to-white p-3.5 rounded-2xl border border-indigo-200/60 shrink-0 self-stretch sm:self-auto justify-between md:justify-start shadow-xs">
-                            <div>
-                              <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest leading-none">Booking Reference</p>
-                              <p className="text-lg sm:text-xl font-black text-indigo-900 tracking-wider mt-1 font-mono">
-                                {lastBookingRef || activePickup?.id}
-                              </p>
-                            </div>
-                            <button 
-                              onClick={() => {
-                                const ref = lastBookingRef || activePickup?.id;
-                                if (ref) {
-                                  navigator.clipboard.writeText(ref);
-                                  toast.success('Reference ID copied to clipboard!');
-                                }
-                              }}
-                              className="p-2.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl transition-all shadow-sm cursor-pointer"
-                              title="Copy Reference"
-                            >
-                              <Copy size={14} />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Store Shopping Callout for Shop & Ship Customers */}
-                        {pickupConsolidationOption === 'shop_and_ship' && (
-                          <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-amber-500 via-amber-400 to-orange-400 text-slate-950 shadow-lg border border-amber-300 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
-                            <div className="space-y-1.5">
-                              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-950 text-amber-400 text-[10px] font-black uppercase tracking-wider">
-                                <Store size={12} className="text-amber-400" /> Jiffex Store Option Selected
-                              </div>
-                              <h3 className="text-base sm:text-lg font-black text-slate-950 leading-snug">
-                                Complete Your Order by Shopping from Jiffex Store üõí
-                              </h3>
-                              <p className="text-xs sm:text-sm text-slate-900 font-semibold max-w-xl leading-relaxed">
-                                You opted to shop from Jiffex Store! Browse our store to select return gifts, sweets, snacks, or other items. We'll pack and ship them together with the items collected from your home.
-                              </p>
-                            </div>
-                            <button
-                              onClick={() => {
-                                navigateTo('store');
-                                window.scrollTo(0, 0);
-                              }}
-                              className="px-6 py-3.5 bg-[#0A142F] hover:bg-slate-800 text-amber-400 font-extrabold text-xs sm:text-sm rounded-2xl shadow-md transition-all active:scale-95 shrink-0 flex items-center justify-center gap-2 cursor-pointer border border-amber-400/30 w-full md:w-auto"
-                            >
-                              Shop Jiffex Store Now <ArrowRight size={16} className="text-amber-400" />
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Two Column Grid */}
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                          
-                          {/* üìã GUIDES, EXPECTATIONS & DOCUMENTS (Left Column) */}
-                          <div className="lg:col-span-8 space-y-6">
-                            
-                            {/* What to Expect Timeline (Horizontal, evenly aligned with no trailing empty space) */}
-                            <div className="bg-gradient-to-b from-indigo-50/30 to-indigo-50/10 border border-indigo-100/30 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-9 h-9 bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-indigo-200">
-                                  <Clock size={18} />
-                                </div>
-                                <h4 className="text-sm sm:text-base font-black text-indigo-950 uppercase tracking-wider">What to Expect</h4>
-                              </div>
-                              
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3.5">
-                                {[
-                                  { step: "Step 1", title: "Agent Call", desc: "Agent calls 30m before arrival.", active: true },
-                                  { step: "Step 2", title: "Pickup & Weighing", desc: "Instant quote given on-site.", active: true },
-                                  { step: "Step 3", title: "Secure Sorting", desc: "Packed safely at warehouse.", active: false },
-                                  { step: "Step 4", title: "Global Delivery", desc: "Pay online to dispatch package.", active: false }
-                                ].map((item, i) => (
-                                  <div key={i} className="p-4 bg-white/95 border border-slate-200/80 rounded-2xl flex flex-col justify-between shadow-xs hover:border-indigo-200 hover:shadow-md transition-all">
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 font-mono bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100/50">
-                                          {item.step}
-                                        </span>
-                                        <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${
-                                          item.active 
-                                            ? 'bg-gradient-to-tr from-teal-400 to-emerald-500 border-teal-200 shadow-xs shadow-emerald-500/20' 
-                                            : 'bg-white border-slate-300'
-                                        }`} />
-                                      </div>
-                                      <p className="font-black text-sm text-slate-900 leading-snug">{item.title}</p>
-                                    </div>
-                                    <p className="text-xs text-slate-600 font-medium leading-relaxed mt-2">{item.desc}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* Documents Required & Prohibited Items Side-by-Side (Zoomed in items) */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                              
-                              {/* Documents Required */}
-                              <div className="bg-gradient-to-b from-sky-50/40 to-sky-50/10 border border-sky-100/40 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm flex flex-col justify-between">
-                                <div>
-                                  <div className="flex items-center gap-2.5 mb-4">
-                                    <div className="w-9 h-9 bg-gradient-to-tr from-sky-600 to-sky-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-sky-200">
-                                      <FileText size={18} />
-                                    </div>
-                                    <h4 className="text-sm sm:text-base font-black text-sky-950 uppercase tracking-wider">Documents Required</h4>
-                                  </div>
-                                  
-                                  <div className="space-y-3">
-                                    {[
-                                      { title: "ID Proof Copy", desc: "Aadhar, Passport or Driving License Copy" },
-                                      { title: "Itemized Declaration", desc: "Simple list of contents & quantities" },
-                                      { title: "Value Statement", desc: "Bills/Invoices for branded or valuable garments" },
-                                      { title: "Receiver Address Info", desc: "Full overseas address with zip code & contact number" }
-                                    ].map((doc, i) => (
-                                      <div key={i} className="flex items-start gap-3.5 p-3.5 sm:p-4 rounded-2xl bg-white/95 border border-slate-200/80 shadow-xs hover:border-sky-300 hover:shadow-md transition-all">
-                                        <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200/60 mt-0.5">
-                                          <ShieldCheck size={18} />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                          <p className="font-black text-sm sm:text-[15px] text-slate-900 leading-snug">{doc.title}</p>
-                                          <p className="text-xs sm:text-[13px] text-slate-600 mt-0.5 font-medium leading-relaxed">{doc.desc}</p>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Prohibited Items */}
-                              <div className="bg-gradient-to-b from-rose-50/30 to-rose-50/10 border border-rose-100/40 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm flex flex-col justify-between">
-                                <div>
-                                  <div className="flex items-center gap-2.5 mb-4">
-                                    <div className="w-9 h-9 bg-gradient-to-tr from-rose-600 to-rose-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-rose-200">
-                                      <AlertTriangle size={18} />
-                                    </div>
-                                    <h4 className="text-sm sm:text-base font-black text-rose-950 uppercase tracking-wider">Prohibited Items</h4>
-                                  </div>
-                                  
-                                  <div className="space-y-3">
-                                    {[
-                                      { title: "Aerosols & Perfumes", desc: "Body sprays, deodorants, or inflammable liquids" },
-                                      { title: "Cash & Jewellery", desc: "Currency notes, solid raw gold, silver bullion" },
-                                      { title: "Perishables & Liquids", desc: "Open/homemade liquid curries, raw dairy products" },
-                                      { title: "Hazardous Materials", desc: "Ammunition, loose lithium batteries, explosive fuel" }
-                                    ].map((item, i) => (
-                                      <div key={i} className="flex items-start gap-3.5 p-3.5 sm:p-4 bg-white/95 border border-slate-200/80 rounded-2xl shadow-xs hover:border-rose-300 hover:shadow-md transition-all">
-                                        <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 border border-rose-200/60 mt-0.5">
-                                          <XCircle size={18} />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                          <p className="font-black text-sm sm:text-[15px] text-rose-950 leading-snug">{item.title}</p>
-                                          <p className="text-xs sm:text-[13px] text-slate-600 mt-0.5 leading-relaxed font-medium">{item.desc}</p>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-
-                            </div>
-
-                            {/* Actions bar at bottom of info */}
-                            <div className="flex flex-col sm:flex-row gap-4 pt-2">
-                              <button 
-                                onClick={() => {
-                                  clearPickupInputs();
-                                  navigateTo('history');
-                                  setActivePickupStep(1);
-                                  setLastBookingRef(null);
-                                  setIsSchedulingNewPickup(false);
-                                  window.scrollTo(0, 0);
-                                }}
-                                className="flex-1 px-6 py-4 bg-indigo-50/60 hover:bg-indigo-100/80 text-indigo-700 border border-indigo-100/40 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-                              >
-                                <Package size={16} /> View My Orders
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  clearPickupInputs();
-                                  navigateTo('home');
-                                  setActivePickupStep(1);
-                                  setLastBookingRef(null);
-                                  setIsSchedulingNewPickup(false);
-                                  window.scrollTo(0, 0);
-                                }}
-                                className="flex-1 px-6 py-4 bg-gradient-to-r from-slate-900 to-indigo-950 hover:opacity-90 text-white rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-slate-950/10"
-                              >
-                                <ArrowLeft size={16} /> Back to Home
-                              </button>
-                            </div>
-                          </div>
-                          
-                          {/* üõçÔ∏è CONSOLIDATED JIFFEX STORE SHOPPING INTEGRATION (Right Column - Scrollable) */}
-                          <div className="lg:col-span-4 space-y-4">
-                            <div className="bg-gradient-to-br from-teal-50 via-teal-50/30 to-indigo-50/20 rounded-[2.5rem] border border-teal-500/15 p-5 sm:p-6 space-y-4 flex flex-col justify-between h-full min-h-[580px] max-h-[680px] shadow-xl relative overflow-hidden backdrop-blur-sm">
-                              
-                              <div className="space-y-3 flex-1 flex flex-col min-h-0">
-                                <div className="flex items-center justify-between gap-4 shrink-0">
-                                  <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="px-2.5 py-0.5 bg-teal-500 text-white rounded-full text-[8px] uppercase font-black tracking-widest leading-none shadow-sm">
-                                        Co-Shipping Active
-                                      </span>
-                                      <span className="px-2.5 py-0.5 bg-indigo-50/80 text-indigo-700 rounded-full text-[8px] uppercase font-bold leading-none border border-indigo-100/30">
-                                        Zero Base Fees
-                                      </span>
-                                    </div>
-                                    <h3 className="text-[17px] font-black text-slate-900 mt-1">
-                                      Shop Indian Products
-                                    </h3>
-                                  </div>
-                                  <button
-                                    onClick={() => {
-                                      navigateTo('store');
-                                      window.scrollTo(0, 0);
-                                    }}
-                                    className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-black rounded-lg flex items-center justify-center gap-1.5 shrink-0 cursor-pointer shadow transition-all border border-teal-500 whitespace-nowrap"
-                                  >
-                                    <ShoppingBag size={11} /> See All
-                                  </button>
-                                </div>
-                                <p className="text-xs text-slate-500 font-medium leading-relaxed shrink-0">
-                                  Delivered inside your same pickup box with <strong>no extra courier base fees</strong>.
-                                </p>
-
-                                {/* Scrollable Shop Items Grid with Infinite Auto-scrolling and Hover Pause */}
-                                <AutoScrollingShopProducts 
-                                  storeProducts={storeProducts}
-                                  items={items.filter(i => !orderedItemIds.has(i.id))}
-                                  addItem={addItem}
-                                  removeStoreItem={removeStoreItem}
-                                />
-                              </div>
-
-                              {/* Live Consolidated Cart Items Summary */}
-                              {items.filter(i => i.source === 'Store' && !orderedItemIds.has(i.id)).length > 0 && (
-                                <div className="p-3 bg-white border border-teal-500/12 rounded-2xl space-y-2 shrink-0 shadow-sm text-xs mt-2">
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-bold text-slate-700 flex items-center gap-1.5">
-                                      <span className="w-4 h-4 rounded-full bg-teal-500 text-white flex items-center justify-center text-[8px] font-black">‚úì</span>
-                                      Items in Consolidated Box:
-                                    </span>
-                                    <span className="font-bold text-teal-700 bg-teal-50 border border-teal-100/30 px-2 py-0.5 rounded text-[10px] font-mono">
-                                      {items.filter(i => i.source === 'Store' && !orderedItemIds.has(i.id)).reduce((acc, i) => acc + (i.quantity || 1), 0)} items
-                                    </span>
-                                  </div>
-                                  
-                                  <div className="divide-y divide-slate-100 max-h-[110px] overflow-y-auto pr-1">
-                                    {items.filter(i => i.source === 'Store' && !orderedItemIds.has(i.id)).map((storeIt) => (
-                                      <div key={storeIt.id} className="flex items-center justify-between py-1.5 text-[11px]">
-                                        <div className="flex items-center gap-1.5 min-w-0">
-                                          <span className="font-medium text-slate-900 truncate">{storeIt.name}</span>
-                                          <span className="text-[9px] text-slate-400 font-semibold shrink-0">x{storeIt.quantity}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 shrink-0">
-                                          <span className="font-mono text-slate-400">{(storeIt.weight * (storeIt.quantity || 1)).toFixed(2)} kg</span>
-                                          <span className="font-bold text-teal-650 font-mono">${(storeIt.price * (storeIt.quantity || 1)).toFixed(2)}</span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-
-                                  <div className="border-t border-slate-100 pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
-                                    <div>
-                                      <p className="text-[10px] text-slate-500 font-bold">
-                                        Consolidated Est. Weight: <span className="font-mono text-indigo-600 font-black">
-                                          {(items.filter(i => i.source === 'Store' && !orderedItemIds.has(i.id)).reduce((acc, i) => acc + (i.weight * (i.quantity || 1)), 0) + 3.0).toFixed(1)} kg
-                                        </span>
-                                      </p>
-                                    </div>
-                                    <button
-                                      onClick={() => {
-                                        navigateTo('cart');
-                                        window.scrollTo(0, 0);
-                                      }}
-                                      className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:opacity-95 text-white font-black rounded-xl text-[10px] flex items-center justify-center gap-1 shadow transition-all cursor-pointer border border-teal-500/20"
-                                    >
-                                      Checkout & Pay
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                            
-                          </div>
-                        </div>
-                       </motion.div>
-                     )}
-                    </AnimatePresence>
-
-                    {/* Info Card */}
-                    {activePickupStep !== 5 && (
-                      <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex items-start gap-6">
-                        <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-deep-blue shadow-sm flex-shrink-0">
-                          {activePickupStep === 2 ? <Clock size={28} /> : activePickupStep === 3 ? <Lock size={28} /> : <ShieldCheck size={28} />}
-                        </div>
-                        <div>
-                          <h5 className="font-black text-deep-blue text-lg">
-                            {activePickupStep === 2 ? 'Flexible Rescheduling Available' : 
-                             activePickupStep === 3 ? 'Your data is Secure & private' : 
-                             'Safe & Verified Agents'}
-                          </h5>
-                          <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-                            {activePickupStep === 2 ? 'Plans changed? No worries. You can reschedule your pickup window anytime up to 2 hours before our agent arrives.' : 
-                             activePickupStep === 3 ? 'Your privacy is our priority. We use end-to-end encryption to ensure your address and contact details remain strictly confidential.' : 
-                             'All our pickup agents are background-verified and follow strict safety protocols. They will call you 30 minutes before arrival.'}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          ) : null}
-
-        {/* Item List Card - Visible in all tabs, but specific parts are conditional */}
-        {!(mode === 'Pickup' && (isCartEmpty || activePickupStep === 5 || !hasActivePickup || isSchedulingNewPickup)) && (
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 min-h-[400px]">
-            {!mode && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-              <div>
-                <h3 className="text-2xl font-black text-slate-900">Your Shipment Items</h3>
-                <p className="text-sm text-slate-500">Manage items collected or received at our warehouse.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-bold text-indigo-600 border border-indigo-100">
-                  {displayItems.reduce((acc, item) => acc + (item.quantity || 1), 0)} Items
-                </div>
-                <div className="px-4 py-2 bg-emerald-50 rounded-2xl text-xs font-bold text-emerald-600 border border-emerald-100">
-                  {hasTBDWeight ? 'Est. ' : ''}{displayWeight.toFixed(2)} kg Total
-                </div>
-              </div>
-            </div>
-          )}
-            
-            {isCartEmpty ? (
-                <div className="flex flex-col items-center justify-center h-80 text-slate-400">
-                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                    <Package size={40} strokeWidth={1} />
-                  </div>
-                  <p className="font-medium">Your cart is empty.</p>
-                  {!mode && (
-                    <>
-                      <p className="text-sm mb-6">Add items from the store or schedule a pickup to get started.</p>
-                      <button 
-                        onClick={() => navigateTo('store')}
-                        className="btn-cta flex items-center gap-2"
-                      >
-                        <Store size={18} /> Visit Shop
-                      </button>
-                    </>
-                  )}
-                  {mode === 'Pickup' && (
-                    <p className="text-sm">Schedule a pickup to add items to your shipment.</p>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-10">
-                  {/* Order Completed Message */}
-                  {!mode && hasCompletedPickup && (
-                    <div className="p-8 bg-emerald-50 rounded-[2rem] border border-emerald-100 text-center space-y-4 mb-8">
-                      <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-emerald-600 mx-auto shadow-sm">
-                        <CheckCircle2 size={32} />
-                      </div>
-                      <div className="max-w-md mx-auto">
-                        <h4 className="text-lg font-black text-slate-900">Order Completed</h4>
-                        <p className="text-sm text-slate-600 mt-2">
-                          Your agent pickup order has been completed and paid. You can now see the summary of your items below. Your shipment is being processed at our warehouse.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Scheduled Pickups */}
-                  {(mode === 'Pickup') && userAppointments.some(a => a.status === 'Scheduled' || a.status === 'Picked Up') && activePickupStep !== 5 && !isSchedulingNewPickup && (
-                    <div className="space-y-4">
-                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-                        <Truck size={18} className="text-indigo-600" /> Scheduled Pickups
-                      </h4>
-                      {userAppointments.filter(a => a.status === 'Scheduled' || a.status === 'Picked Up').map((apt, idx) => (
-                        <motion.div 
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          key={`apt-${idx}`}
-                          className="overflow-hidden rounded-3xl border border-indigo-100 bg-white shadow-xl shadow-indigo-500/5"
-                        >
-                          <div className="bg-indigo-600 p-6 text-white flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
-                                <Truck size={24} />
-                              </div>
-                              <div>
-                                <div className="text-[10px] font-bold uppercase tracking-widest opacity-80">Appointment ID</div>
-                                <div className="text-lg font-black">{apt.id}</div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="px-3 py-1 bg-white/20 backdrop-blur rounded-full text-[10px] font-black uppercase tracking-widest">
-                                {apt.status}
-                              </div>
-                              <button 
-                                onClick={() => cancelPickup(apt.id)}
-                                className="p-2 hover:bg-white/20 rounded-xl transition-colors"
-                              >
-                                <Trash2 size={18} />
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="space-y-6">
-                              <div>
-                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Pickup Details</h4>
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-3 text-sm">
-                                    <UserIcon size={16} className="text-indigo-600" />
-                                    <span className="font-bold text-slate-900">{apt.customerName || 'Guest User'}</span>
-                                  </div>
-                                  <div className="flex items-center gap-3 text-sm">
-                                    <Calendar size={16} className="text-indigo-600" />
-                                    <span className="font-bold text-slate-700">{apt.date}</span>
-                                    <span className="text-slate-300">|</span>
-                                    <span className="text-slate-600">{apt.time}</span>
-                                  </div>
-                                  <div className="flex items-start gap-3 text-sm">
-                                    <MapPin size={16} className="text-indigo-600 mt-1" />
-                                    <span className="text-slate-600 leading-relaxed font-medium">{apt.address}</span>
-                                  </div>
-                                  <div className="flex items-center gap-3 text-sm">
-                                    <Phone size={16} className="text-indigo-600" />
-                                    <span className="font-bold text-slate-900">{apt.phone}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Assigned Agent</h4>
-                                {apt.assignedAgent ? (
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600">
-                                      <UserIcon size={20} />
-                                    </div>
-                                    <div>
-                                      <div className="text-sm font-bold text-slate-900">{apt.assignedAgent.name}</div>
-                                      <div className="text-[10px] text-slate-500">{apt.assignedAgent.vehicleNumber}</div>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2 text-amber-600 text-xs font-bold">
-                                    <Clock size={14} /> Assigning Agent...
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="space-y-6">
-                              <div>
-                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Next Steps Workflow</h4>
-                                <div className="relative pl-6 space-y-6 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
-                                  {[
-                                    { title: "Agent Arrival", desc: "Agent will arrive at your door during the selected slot.", icon: Truck },
-                                    { title: "On-site Weighing", desc: "Items are weighed using digital scales for accuracy.", icon: Calculator },
-                                    { title: "Digital Receipt", desc: "Receive instant confirmation of collected items.", icon: CheckCircle2 }
-                                  ].map((step, i) => (
-                                    <div key={i} className="relative">
-                                      <div className="absolute -left-[23px] top-1 w-4 h-4 rounded-full bg-white border-2 border-indigo-600 z-10" />
-                                      <h5 className="text-xs font-bold text-slate-900">{step.title}</h5>
-                                      <p className="text-[11px] text-slate-500 leading-relaxed">{step.desc}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Grouped Items by Source */}
-                  <div ref={warehouseItemsRef} className="space-y-8">
-                    {(mode ? [mode] : ['Store', 'Warehouse']).map(source => {
-                    const sourceItems = displayItems.filter(i => i.source === source);
-                    
-                    // Special case: If Pickup from home is scheduled, show message instead of item list for Pickup source
-                    if (mode === 'Pickup' && source === 'Pickup' && hasActivePickup && !isSchedulingNewPickup) {
-                      return (
-                        <div key={source} className="p-8 bg-indigo-50 rounded-[2rem] border border-indigo-100 text-center space-y-4">
-                          <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-indigo-600 mx-auto shadow-sm">
-                            <Truck size={32} />
-                          </div>
-                          <div className="max-w-md mx-auto">
-                            <h4 className="text-lg font-black text-slate-900">Pickup from home Scheduled</h4>
-                            <p className="text-sm text-slate-600 mt-2">
-                              Your agent pickup is currently scheduled. The items list here will be updated automatically once our agent completes the pickup and weighs your items on-site.
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    if (sourceItems.length === 0) return null;
-                    
-                    // Hide Store items if we are in Pickup or Warehouse mode
-                    if (mode && source === 'Store') return null;
-                    
-                    // Only show items matching the current mode (Pickup or Warehouse)
-                    if (mode && mode !== source) return null; 
-
-                    const SourceIcon = source === 'Store' ? Store : source === 'Pickup' ? Package : Database;
-                    const sourceColor = source === 'Store' ? 'text-emerald-600' : source === 'Pickup' ? 'text-indigo-600' : 'text-slate-600';
-                    const sourceLabel = source === 'Store' ? 'Shop Items' : source === 'Pickup' ? 'Items for Pickup from home' : 'Items sent to warehouse';
-
-                    return (
-                      <div key={source} className="space-y-4">
-                        <h4 className={`text-sm font-black ${sourceColor} uppercase tracking-widest flex items-center gap-2`}>
-                          <SourceIcon size={18} /> {sourceLabel}
-                        </h4>
-                        {source === 'Warehouse' && (
-                          <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 text-indigo-800 text-xs flex items-start gap-2.5">
-                            <Info size={16} className="text-indigo-600 shrink-0 mt-0.5" />
-                            <p className="leading-relaxed font-medium">
-                              The weights of the items will be updated once they are received at our warehouse. You can check the final verified details in <span className="font-bold">My Orders</span>.
-                            </p>
-                          </div>
-                        )}
-                        <div className="space-y-3">
-                          {sourceItems.map(item => (
-                            <motion.div 
-                              layout
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              key={item.id} 
-                              className="grid grid-cols-1 md:grid-cols-12 gap-6 p-5 rounded-2xl border border-slate-100 bg-white hover:shadow-xl hover:shadow-indigo-500/5 transition-all group items-center"
-                            >
-                              <div className={item.source === 'Store' ? "md:col-span-3" : item.source === 'Warehouse' ? "md:col-span-4" : "md:col-span-2"}>
-                                <h4 className="font-bold text-slate-900 truncate">{item.name}</h4>
-                                <div className="flex flex-wrap gap-2 mt-1">
-                                  {item.fragile && (
-                                    <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-600 text-[9px] font-black uppercase tracking-widest rounded-md border border-amber-100">
-                                      <AlertTriangle size={8} /> Fragile
-                                    </span>
-                                  )}
-                                  {item.invoiceNumber && (
-                                    <span className="flex items-center gap-1 px-2 py-0.5 bg-slate-50 text-slate-500 text-[9px] font-black uppercase tracking-widest rounded-md border border-slate-100">
-                                      <FileText size={8} /> {item.invoiceNumber}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {item.source === 'Warehouse' && (
-                                <div className="md:col-span-3">
-                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Source</div>
-                                  <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-xl border border-indigo-100/50 w-fit">
-                                    <ShoppingBag size={12} className="text-indigo-500" />
-                                    <span>{item.purchaseSource || 'Other'}</span>
-                                  </div>
-                                </div>
-                              )}
-
-                              {item.source !== 'Warehouse' && (
-                                <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-1"}>
-                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 whitespace-nowrap">Unit Price</div>
-                                  <div className="text-xs font-bold text-emerald-600">
-                                    {item.price ? (
-                                      <span>‚Çπ{(item.price / (item.quantity || 1)).toFixed(2)}</span>
-                                    ) : (
-                                      <span className="text-slate-400">N/A</span>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-
-                              <div className={item.source === 'Warehouse' ? "md:col-span-3" : item.source === 'Store' ? "md:col-span-2" : "md:col-span-2"}>
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-                                  {item.source === 'Store' ? 'Unit Weight' : 'Weight'}
-                                </div>
-                                <div className="text-xs font-bold text-indigo-600">
-                                  {item.weight > 0 ? (
-                                    <div className="flex flex-col">
-                                      <span>{(item.weight / (item.quantity || 1)).toFixed(2)} kg</span>
-                                      {item.source !== 'Store' && (item.quantity || 1) > 1 && (
-                                        <span className="text-[9px] text-slate-400 font-medium whitespace-nowrap">
-                                          Total: {item.weight.toFixed(2)} kg
-                                        </span>
-                                      )}
-                                    </div>
-                                  ) : 'TBD'}
-                                </div>
-                              </div>
-
-                              {item.source === 'Store' && (
-                                <div className="md:col-span-2">
-                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Weight</div>
-                                  <div className="text-xs font-bold text-indigo-600">
-                                    {item.weight > 0 ? (
-                                      <span>{item.weight.toFixed(2)} kg</span>
-                                    ) : 'TBD'}
-                                  </div>
-                                </div>
-                              )}
-
-                              <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-1"}>
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Qty</div>
-                                <div className="flex items-center gap-2">
-                                  {!mode && !hasCompletedPickup ? (
-                                    <>
-                                      <button 
-                                        onClick={() => updateItemQuantity(item.id, -1)}
-                                        className="w-6 h-6 bg-slate-100 text-slate-600 rounded-lg flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-colors"
-                                      >
-                                        <Minus size={12} />
-                                      </button>
-                                      <span className="text-xs font-black text-slate-900 min-w-[20px] text-center">{item.quantity || 1}</span>
-                                      <button 
-                                        onClick={() => updateItemQuantity(item.id, 1)}
-                                        className="w-6 h-6 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-colors"
-                                      >
-                                        <Plus size={12} />
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <span className="text-xs font-black text-slate-900 min-w-[20px] text-center">{item.quantity || 1}</span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {item.source !== 'Store' && item.source !== 'Warehouse' && (
-                                <div className="md:col-span-2">
-                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</div>
-                                  <div className="flex items-center gap-2">
-                                    {item.status === 'Received at Warehouse' ? (
-                                      <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 inline-block">
-                                        RECEIVED
-                                      </span>
-                                    ) : (
-                                      <button 
-                                        onClick={() => updateItemStatus(item.id, 'Received at Warehouse')}
-                                        className="text-[9px] bg-indigo-600 text-white px-2 py-1 rounded-lg font-black hover:bg-indigo-700 transition-colors shadow-sm"
-                                      >
-                                        MARK RECEIVED
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-
-                              {item.source !== 'Store' && item.source !== 'Warehouse' && (
-                                <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-3"}>
-                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 whitespace-nowrap">Total Amount</div>
-                                  <div className="text-xs font-black text-slate-900">
-                                    {item.price ? (
-                                      <span>‚Çπ{item.price.toFixed(2)}</span>
-                                    ) : (
-                                      <span className="text-slate-400">N/A</span>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-
-                              <div className="md:col-span-1 flex justify-end">
-                                {!mode && !hasCompletedPickup && (
-                                  <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors p-2">
-                                    <Trash2 size={18} />
-                                  </button>
-                                )}
-                              </div>
-                              
-                              {item.remarks && (
-                                <div className="md:col-span-12 mt-2 pt-2 border-t border-slate-50 text-[10px] text-slate-400 italic flex items-start gap-1">
-                                  <MessageSquare size={10} className="mt-0.5 shrink-0" /> {item.remarks}
-                                </div>
-                              )}
-                            </motion.div>
-                          ))}
-                        </div>
-
-                        {/* Consolidation Selection block for Shop Items */}
-                        {!mode && source === 'Store' && (
-                          <div 
-                            id="consolidation-prompt-section"
-                            className={`mt-10 p-8 rounded-[2rem] border-2 transition-all duration-300 ${
-                              showConsolidationError 
-                                ? 'bg-rose-50/60 border-rose-300 shadow-xl shadow-rose-100/40 animate-pulse' 
-                                : 'bg-gradient-to-r from-slate-50 to-indigo-50/30 border-slate-100/80 shadow-sm'
-                            }`}
-                          >
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-dashed border-slate-200/60">
-                              <div className="space-y-1.5">
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50/80 text-indigo-700 text-[10px] font-black uppercase tracking-wider rounded-full border border-indigo-100/65">
-                                  Consolidation Preference
-                                </span>
-                                <h4 className="text-xl font-black text-slate-900 flex items-center gap-2 mt-1">
-                                  <HelpCircle size={22} className="text-indigo-600 shrink-0" />
-                                  Do you want to send some items along with these items?
-                                </h4>
-                                <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-2xl">
-                                  We support combining your direct purchases with items retrieved from your home or forwarded from any external seller, saving you over 60% on international shipping.
-                                </p>
-                              </div>
-                              {showConsolidationError && (
-                                <span className="shrink-0 px-4 py-2 bg-rose-100 text-rose-700 text-xs font-black uppercase tracking-wider rounded-xl border border-rose-200 flex items-center gap-1.5 shadow-sm shadow-rose-200/20">
-                                  <AlertCircle size={14} className="animate-bounce" /> Selection Required
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-8">
-                              {/* Option 1: Yes - schedule pickup */}
-                              <div 
-                                onClick={() => {
-                                  setShopConsolidationOption('pickup');
-                                  setShowConsolidationError(false);
-                                  toast.success("Home Pickup selected! You'll schedule a pickup during checkout.");
-                                }}
-                                className={`cursor-pointer p-6 rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden ${
-                                  shopConsolidationOption === 'pickup'
-                                    ? 'bg-gradient-to-br from-white to-indigo-50/10 border-indigo-600 shadow-xl shadow-indigo-100/50'
-                                    : 'bg-white border-slate-100 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-100'
-                                }`}
-                              >
-                                {shopConsolidationOption === 'pickup' && (
-                                  <div className="absolute top-0 right-0 w-16 h-16 bg-indigo-600/5 rounded-bl-full flex items-center justify-center pointer-events-none">
-                                    <div className="w-2.5 h-2.5 bg-indigo-600 rounded-full mr-2 mb-2" />
-                                  </div>
-                                )}
-                                <div className="space-y-4">
-                                  <div className={`p-3 rounded-2xl w-fit transition-colors duration-300 ${
-                                    shopConsolidationOption === 'pickup' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-505 group-hover:bg-indigo-50 group-hover:text-indigo-600'
-                                  }`}>
-                                    <Truck size={22} />
-                                  </div>
-                                  <div>
-                                    <h5 className="font-extrabold text-slate-950 text-base leading-snug">
-                                      Yes - i will schedule Home Pickup
-                                    </h5>
-                                    <p className="text-slate-500 text-[11px] leading-relaxed mt-2 font-medium">
-                                      Ship extra items from your house. Our dedicated agent will arrive at your door to inspect, weigh, and collect them.
-                                    </p>
-                                  </div>
-                                </div>
-                                
-                                <div className="mt-6 pt-4 border-t border-slate-105 flex items-center justify-between">
-                                  <span className={`text-[10px] font-black tracking-wider uppercase ${
-                                    shopConsolidationOption === 'pickup' ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-500'
-                                  }`}>Home Pickup</span>
-                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                                    shopConsolidationOption === 'pickup' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200'
-                                  }`}>
-                                    {shopConsolidationOption === 'pickup' && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Option 2: Yes - warehouse */}
-                              <div 
-                                onClick={() => {
-                                  setShopConsolidationOption('warehouse');
-                                  setShowConsolidationError(false);
-                                  toast.success("Warehouse forward selected! We'll provide forwarding instructions.");
-                                }}
-                                className={`cursor-pointer p-6 rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden ${
-                                  shopConsolidationOption === 'warehouse'
-                                    ? 'bg-gradient-to-br from-white to-emerald-50/10 border-emerald-600 shadow-xl shadow-emerald-100/40'
-                                    : 'bg-white border-slate-100 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-100'
-                                }`}
-                              >
-                                {shopConsolidationOption === 'warehouse' && (
-                                  <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-600/5 rounded-bl-full flex items-center justify-center pointer-events-none">
-                                    <div className="w-2.5 h-2.5 bg-emerald-600 rounded-full mr-2 mb-2" />
-                                  </div>
-                                )}
-                                <div className="space-y-4">
-                                  <div className={`p-3 rounded-2xl w-fit transition-colors duration-300 ${
-                                    shopConsolidationOption === 'warehouse' ? 'bg-emerald-600 text-white' : 'bg-slate-50 text-slate-505 group-hover:bg-emerald-50 group-hover:text-emerald-600'
-                                  }`}>
-                                    <Warehouse size={22} />
-                                  </div>
-                                  <div>
-                                    <h5 className="font-extrabold text-slate-950 text-base leading-snug">
-                                      Yes - i will send items to your warehouse
-                                    </h5>
-                                    <p className="text-slate-500 text-[11px] leading-relaxed mt-2 font-medium">
-                                      Mail other packages directly to our hub. We will bundle them cleanly alongside these shop items before international departure.
-                                    </p>
-                                  </div>
-                                </div>
-                                
-                                <div className="mt-6 pt-4 border-t border-slate-105 flex items-center justify-between">
-                                  <span className={`text-[10px] font-black tracking-wider uppercase ${
-                                    shopConsolidationOption === 'warehouse' ? 'text-emerald-700' : 'text-slate-400 group-hover:text-slate-500'
-                                  }`}>Warehouse Freight</span>
-                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                                    shopConsolidationOption === 'warehouse' ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200'
-                                  }`}>
-                                    {shopConsolidationOption === 'warehouse' && <div className="w-2 h-2 rounded-full bg-emerald-600" />}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Option 3: No - store only */}
-                              <div 
-                                onClick={() => {
-                                  setShopConsolidationOption('store_only');
-                                  setShowConsolidationError(false);
-                                  toast.success("Only Shop items selected. Standard delivery only.");
-                                }}
-                                className={`cursor-pointer p-6 rounded-3xl border-2 transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden ${
-                                  shopConsolidationOption === 'store_only'
-                                    ? 'bg-gradient-to-br from-white to-slate-50/40 border-slate-700 shadow-xl shadow-slate-200/50'
-                                    : 'bg-white border-slate-100 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-100'
-                                }`}
-                              >
-                                {shopConsolidationOption === 'store_only' && (
-                                  <div className="absolute top-0 right-0 w-16 h-16 bg-slate-700/5 rounded-bl-full flex items-center justify-center pointer-events-none">
-                                    <div className="w-2.5 h-2.5 bg-slate-700 rounded-full mr-2 mb-2" />
-                                  </div>
-                                )}
-                                <div className="space-y-4">
-                                  <div className={`p-3 rounded-2xl w-fit transition-colors duration-300 ${
-                                    shopConsolidationOption === 'store_only' ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-505 group-hover:bg-slate-100 group-hover:text-slate-800'
-                                  }`}>
-                                    <ShoppingBag size={22} />
-                                  </div>
-                                  <div>
-                                    <h5 className="font-extrabold text-slate-950 text-base leading-snug">
-                                      No - I only need shop items
-                                    </h5>
-                                    <p className="text-slate-500 text-[11px] leading-relaxed mt-2 font-medium">
-                                      Proceed without consolidation. Send only the purchased items currently shown in your shop cart directly with standard delivery.
-                                    </p>
-                                  </div>
-                                </div>
-                                
-                                <div className="mt-6 pt-4 border-t border-slate-105 flex items-center justify-between">
-                                  <span className={`text-[10px] font-black tracking-wider uppercase ${
-                                    shopConsolidationOption === 'store_only' ? 'text-slate-800' : 'text-slate-400 group-hover:text-slate-505'
-                                  }`}>Direct Shipping</span>
-                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                                    shopConsolidationOption === 'store_only' ? 'border-slate-800 bg-slate-50' : 'border-slate-200'
-                                  }`}>
-                                    {shopConsolidationOption === 'store_only' && <div className="w-2 h-2 rounded-full bg-slate-800" />}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Beautiful visual check animation / info helper inside the box */}
-                            {shopConsolidationOption && (
-                              <div 
-                                className="mt-6 p-4 rounded-2xl bg-white border border-slate-200/50 shadow-sm text-xs text-slate-750 font-bold flex items-start gap-3"
-                              >
-                                <div className="p-1 rounded-full bg-emerald-50 text-emerald-600 mt-0.5 shrink-0">
-                                  <CheckCircle2 size={16} />
-                                </div>
-                                <div>
-                                  <p className="font-extrabold text-slate-900">
-                                    {shopConsolidationOption === 'pickup' 
-                                      ? 'Home Pickup Confirmed!' 
-                                      : shopConsolidationOption === 'warehouse' 
-                                        ? 'Warehouse forwarding option recorded!' 
-                                        : 'Direct express shipment selected!'}
-                                  </p>
-                                  <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-0.5">
-                                    {shopConsolidationOption === 'pickup' 
-                                      ? "After checking out, we will smoothly guide you to schedule our courier booking agent slot for your other items."
-                                      : shopConsolidationOption === 'warehouse'
-                                        ? "Perfect! We'll generate a dedicated JiffEX warehouse shipping address so you can self-forward packages from Amazon, eBay, etc."
-                                        : "We will handle packaging and dispatch of your shop items immediately without any extra consolidation steps."
-                                    }
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-              
-              {/* Action Buttons - Only show in My Cart tab (!mode) */}
-              {!mode && (displayItems.length > 0 || hasActivePickup) && !hasCompletedPickup && (
-                <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col gap-6">
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <button 
-                      onClick={handleCheckout}
-                      className={`flex-1 py-5 px-8 rounded-2xl font-bold transition-all shadow-2xl flex items-center justify-center gap-2 group ${
-                        hasActivePickup && displayItems.length === 0
-                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                          : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/20'
-                      }`}
-                    >
-                      {hasActivePickup 
-                        ? (displayItems.length > 0 ? 'Confirm Order' : 'Checkout')
-                        : (currentUser ? 'Checkout' : 'Sign in to Checkout')} 
-                      <ArrowRight size={20} className={hasActivePickup && displayItems.length === 0 ? '' : 'group-hover:translate-x-1 transition-transform'} />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-          {!mode && (
-            <div className="lg:col-span-1 space-y-6">
-              {/* Order Summary Card */}
-              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm sticky top-8">
-                <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
-                  <Package size={20} className="text-indigo-600" /> Order Summary
-                </h3>
-                <div className="space-y-4">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500 font-medium">Total Items</span>
-                    <span className="font-bold text-slate-900">{displayItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500 font-medium">Total Weight</span>
-                    <span className="font-bold text-slate-900">
-                      {hasTBDWeight ? 'Est. ' : ''}
-                      {displayWeight.toFixed(2)} kg
-                    </span>
-                  </div>
-                  <div className="pt-4 border-t border-slate-100">
-                    <div className="flex justify-between items-center">
-                      <span className="text-base font-bold text-slate-900">Estimated Total</span>
-                      <span className="text-xl font-black text-indigo-600">‚Çπ{displayItems.reduce((acc, item) => acc + (item.price || 0), 0).toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Apply Coupons Box */}
-                <div className="mt-8 pt-8 border-t border-slate-100">
-                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Apply Coupons</h4>
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      placeholder="Enter code" 
-                      className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold"
-                    />
-                    <button className="px-4 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-black transition-all">
-                      Apply
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          </div>
-        </>
-      )}
-    </div>
-    );
-  };
-
-  const StoreSection = useMemo(() => {
-    let filteredProducts = storeProducts.filter(p => {
-      const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
-      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesMinPrice = minPrice === '' || p.price >= minPrice;
-      const matchesMaxPrice = maxPrice === '' || p.price <= maxPrice;
-      return matchesCategory && matchesSearch && matchesMinPrice && matchesMaxPrice;
-    });
-
-    // Sorting logic
-    filteredProducts = [...filteredProducts].sort((a, b) => {
-      switch (sortBy) {
-        case 'price-low': return a.price - b.price;
-        case 'price-high': return b.price - a.price;
-        case 'name-asc': return a.name.localeCompare(b.name);
-        case 'name-desc': return b.name.localeCompare(a.name);
-        case 'weight-low': return a.weight - b.weight;
-        case 'weight-high': return b.weight - a.weight;
-        default: return 0;
-      }
-    });
-
-    const hasActivePickup = userAppointments.some(a => a.status === 'Scheduled');
-
-    if (isMobile) {
-      return (
-        <MobileStoreSection
-          storeProducts={storeProducts}
-          categories={categories}
-          selectedCategory={selectedCategory}
-          setSelectedCategory={setSelectedCategory}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          addItem={addItem}
-          removeStoreItem={removeStoreItem}
-          items={items}
-          showFilters={showFilters}
-          setShowFilters={setShowFilters}
-          minPrice={minPrice}
-          setMinPrice={setMinPrice}
-          maxPrice={maxPrice}
-          setMaxPrice={setMaxPrice}
-          sortBy={sortBy}
-          setSortBy={setSortBy}
-          showJiffySuggestion={showJiffySuggestion}
-          setShowJiffySuggestion={setShowJiffySuggestion}
-          navigateTo={navigateTo}
-          appointments={userAppointments}
-          orderedItemIds={orderedItemIds}
-          setIsMobileMenuOpen={setIsMobileMenuOpen}
-        />
-      );
-    }
-
-    const ShopHeroSlider = () => {
-      const [currentSlide, setCurrentSlide] = useState(0);
-      const slides = [
-        {
-          title: "Bring a Piece of India to Your Doorstep",
-          subtitle: "FESTIVE TRADITIONS",
-          desc: "Authentic sweets, pooja items, and gifts delivered worldwide. Experience the joy of Indian festivals wherever you are.",
-          image: "https://lh3.googleusercontent.com/d/1aAVjEX_ZdnuYP7hULa1_EsD9yO_xzPph",
-          accent: "text-amber-400",
-          bg: "from-slate-900 via-slate-900 to-amber-900/20",
-          glow: "bg-amber-500/20",
-          badge: "Festive Special",
-          fullImage: true
-        },
-        {
-          title: "Perfect Return Gifts for Every Celebration",
-          subtitle: "CURATED GIFTING",
-          desc: "Curated Indian gift packs for weddings, festivals & housewarmings. Make your special moments memorable with authentic Indian gifts.",
-          image: "https://lh3.googleusercontent.com/d/1dxLyoYCj5EPfQP5mp9TEVxxbHCvyw4jg",
-          accent: "text-rose-400",
-          bg: "from-slate-900 via-slate-900 to-rose-900/20",
-          glow: "bg-rose-500/20",
-          badge: "Celebration Ready",
-          fullImage: true
-        },
-        {
-          title: "Missing Indian Sweets?",
-          subtitle: "TASTE OF HOME",
-          desc: "Get fresh, authentic sweets shipped directly from India. From Moti choor laddoo to Kaju Katli, we bring your favorite treats to your doorstep.",
-          image: "https://lh3.googleusercontent.com/d/1UkJBaJFV91unv7jYqOXwEYY91r7ZOkvE",
-          accent: "text-amber-400",
-          bg: "from-slate-900 via-slate-900 to-amber-900/20",
-          glow: "bg-amber-500/20",
-          badge: "Fresh & Authentic",
-          fullImage: true
-        },
-        {
-          title: "All Your Pooja Essentials in One Place",
-          subtitle: "SPIRITUAL HERITAGE",
-          desc: "From diyas to idols‚Äîeverything you need for rituals abroad. Maintain your spiritual traditions with authentic pooja items.",
-          image: "https://lh3.googleusercontent.com/d/1gpGBNFhoBWpcTMg5nV2-OEdWRWfQGFEy",
-          accent: "text-teal-400",
-          bg: "from-slate-900 via-slate-900 to-teal-900/20",
-          glow: "bg-teal-500/20",
-          badge: "Spiritual Essentials",
-          fullImage: true
-        }
-      ];
-
-      useEffect(() => {
-        const timer = setInterval(() => {
-          setCurrentSlide((prev) => (prev + 1) % slides.length);
-        }, 7000);
-        
-        return () => {
-          clearInterval(timer);
-        };
-      }, [currentSlide]);
-
-      return (
-        <div className="relative overflow-hidden rounded-[3rem] bg-slate-900 text-white shadow-2xl mb-12 h-[500px] group">
-          <AnimatePresence>
-            <motion.div
-              key={currentSlide}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 1, ease: "easeInOut" }}
-              className="absolute inset-0"
-            >
-              {slides[currentSlide].fullImage ? (
-                <img 
-                  src={slides[currentSlide].image} 
-                  alt={slides[currentSlide].title}
-                  className="absolute inset-0 w-full h-full object-cover z-0"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <>
-                  <div 
-                    className={`absolute inset-0 bg-gradient-to-r ${slides[currentSlide].bg} z-10`}
-                  />
-                  <div className={`absolute top-1/2 right-0 -translate-y-1/2 w-[700px] h-[700px] ${slides[currentSlide].glow} rounded-full blur-[150px] z-0`} />
-                </>
-              )}
-              
-              {!slides[currentSlide].fullImage && (
-                <div className="relative z-20 h-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center px-10 md:px-24">
-                  <div className="space-y-8">
-                    <div className="space-y-4">
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className="flex items-center gap-3"
-                      >
-                        <div className={`px-4 py-1.5 bg-white/5 backdrop-blur-md border border-white/10 rounded-full ${slides[currentSlide].accent} text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 shadow-lg`}>
-                          <Sparkles size={12} /> {slides[currentSlide].subtitle}
-                        </div>
-                        <div className="px-4 py-1.5 bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 rounded-full text-emerald-400 text-[10px] font-black uppercase tracking-[0.2em]">
-                          {slides[currentSlide].badge}
-                        </div>
-                      </motion.div>
-                      <motion.h1 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
-                        className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9] drop-shadow-2xl"
-                      >
-                        {slides[currentSlide].title.split(',').map((part, i) => (
-                          <React.Fragment key={i}>
-                            {part}{i === 0 && slides[currentSlide].title.includes(',') && <br />}
-                          </React.Fragment>
-                        ))}
-                      </motion.h1 >
-                    </div>
-
-                    <motion.p 
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.4 }}
-                      className="text-xl text-slate-400 font-medium leading-relaxed max-w-xl"
-                    >
-                      {slides[currentSlide].desc}
-                    </motion.p>
-
-                    <motion.div 
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5 }}
-                      className="flex items-center gap-8"
-                    >
-                      <div className="flex -space-x-4">
-                        {[1, 2, 3, 4].map((i) => (
-                          <div key={i} className="w-12 h-12 rounded-full border-4 border-slate-900 bg-slate-800 flex items-center justify-center overflow-hidden shadow-xl">
-                            <img src={`https://i.pravatar.cc/150?img=${i + 20}`} alt="User" />
-                          </div>
-                        ))}
-                        <div className="w-12 h-12 rounded-full border-4 border-slate-900 bg-indigo-600 flex items-center justify-center text-xs font-black shadow-xl">
-                          +5k
-                        </div>
-                      </div>
-                      <div className="text-sm font-bold text-slate-400 leading-tight">
-                        <span className="text-white text-base">Trusted by thousands</span> <br /> of Indians living abroad
-                      </div>
-                    </motion.div>
-                  </div>
-
-                  <div className="hidden lg:block relative h-full py-16">
-                    <motion.div 
-                      initial={{ opacity: 0, scale: 0.9, x: 50 }}
-                      animate={{ opacity: 1, scale: 1, x: 0 }}
-                      transition={{ delay: 0.3, duration: 1, ease: "easeOut" }}
-                      className="relative z-10 h-full group/img"
-                    >
-                      <div className="absolute -inset-4 bg-gradient-to-br from-white/10 to-transparent rounded-[4rem] blur-3xl opacity-50 group-hover/img:opacity-100 transition-opacity duration-700" />
-                      <img 
-                        src={slides[currentSlide].image} 
-                        alt={slides[currentSlide].title} 
-                        className="relative z-10 rounded-[4rem] shadow-2xl border border-white/10 object-cover w-full h-full transform transition-transform duration-700 group-hover/img:scale-[1.02]"
-                        referrerPolicy="no-referrer"
-                      />
-                    </motion.div>
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
-
-          {/* Indicators */}
-          <div className="absolute bottom-10 left-10 md:left-24 z-30 flex items-center gap-4">
-            {slides.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  setCurrentSlide(i);
-                }}
-                className="group flex items-center gap-2"
-              >
-                <div className={`h-2 rounded-full transition-all duration-500 ${
-                  currentSlide === i ? 'w-12 bg-white' : 'w-2 bg-white/20 group-hover:bg-white/40'
-                }`} />
-                <span className={`text-[10px] font-black tracking-widest transition-opacity duration-500 ${currentSlide === i ? 'opacity-100' : 'opacity-0'}`}>
-                  0{i + 1}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      );
-    };
-
-    return (
-      <div className="space-y-8">
-        <ShopHeroSlider />
-        <div className="flex flex-col items-center justify-center gap-6">
-          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-4xl justify-center items-center">
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input 
-                type="text"
-                placeholder="Search products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
-              />
-            </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => setShowFilters(!showFilters)}
-                className={`px-4 py-2.5 rounded-2xl border transition-all flex items-center gap-2 font-bold text-sm ${
-                  showFilters || minPrice !== '' || maxPrice !== ''
-                    ? 'bg-jiffex-orange/10 border-jiffex-orange/30 text-jiffex-orange' 
-                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                <SlidersHorizontal size={18} />
-                <span>Filters</span>
-                {(minPrice !== '' || maxPrice !== '') && (
-                  <span className="w-2 h-2 bg-jiffex-orange rounded-full"></span>
-                )}
-              </button>
-              <div className="relative group">
-                <select 
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="appearance-none pl-4 pr-10 py-2.5 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-sm text-slate-600 cursor-pointer"
-                >
-                  <option value="featured">Featured</option>
-                  <option value="price-low">Price: Low to High</option>
-                  <option value="price-high">Price: High to Low</option>
-                  <option value="name-asc">Name: A-Z</option>
-                  <option value="name-desc">Name: Z-A</option>
-                  <option value="weight-low">Weight: Low to High</option>
-                  <option value="weight-high">Weight: High to Low</option>
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-6 flex flex-col items-center">
-          <div className="flex flex-wrap gap-2 justify-center">
-            {['All', ...categories].map(cat => (
-              <button 
-                key={cat} 
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-4 py-2 rounded-xl border transition-all text-xs font-bold uppercase tracking-widest ${
-                  selectedCategory === cat 
-                    ? 'bg-deep-blue border-deep-blue text-white shadow-lg shadow-deep-blue/20' 
-                    : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          <AnimatePresence>
-            {showFilters && (
-              <motion.div 
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Price Range (‚Çπ)</label>
-                    <div className="flex items-center gap-3">
-                      <input 
-                        type="number" 
-                        placeholder="Min"
-                        value={minPrice}
-                        onChange={(e) => setMinPrice(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                      <span className="text-slate-400">-</span>
-                      <input 
-                        type="number" 
-                        placeholder="Max"
-                        value={maxPrice}
-                        onChange={(e) => setMaxPrice(e.target.value === '' ? '' : Number(e.target.value))}
-                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-end">
-                    <button 
-                      onClick={() => { setMinPrice(''); setMaxPrice(''); setSortBy('featured'); setSelectedCategory('All'); setSearchQuery(''); }}
-                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-4"
-                    >
-                      Reset all filters
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredProducts.length > 0 ? filteredProducts.map(product => {
-            const cartItem = items.find(i => i.name === product.name && i.source === 'Store' && !orderedItemIds.has(i.id));
-            const itemCount = cartItem?.quantity || 0;
-            
-            return (
-              <motion.div 
-                layout
-                key={product.id} 
-                className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative flex flex-col"
-              >
-                <AnimatePresence>
-                  {itemCount > 0 && (
-                    <motion.div 
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      className="absolute top-4 right-4 z-10 w-8 h-8 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-xs font-bold shadow-lg border-2 border-white"
-                    >
-                      {itemCount}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                <div className="aspect-square overflow-hidden relative">
-                  <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
-                  <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-600">
-                    {product.category}
-                  </div>
-                </div>
-                <div className="p-5 flex-1 flex flex-col">
-                  <div className="flex justify-between items-start mb-1">
-                    <h3 className="font-bold text-deep-blue leading-tight truncate flex-1 mr-2">{product.name}</h3>
-                    <span className="text-jiffex-orange font-bold shrink-0">‚Çπ{product.price}</span>
-                  </div>
-                  <div className="flex flex-col gap-1 mb-4">
-                    <p className="text-[10px] text-slate-500">Weight: {product.weight} kg</p>
-                    {product.estimatedDelivery && (
-                      <div className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                        <Calendar size={10} /> Ready to ship by: {product.estimatedDelivery}
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-auto">
-                    <div className="flex justify-center">
-                      <motion.button 
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => {
-                          addItem({ 
-                            name: product.name, 
-                            weight: product.weight, 
-                            price: product.price, 
-                            image: product.image,
-                            estimatedDelivery: product.estimatedDelivery 
-                          }, 'Store');
-                          toast.success(`"${product.name}" added to your cart!`);
-                        }}
-                        className="w-12 h-12 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/20"
-                      >
-                        <Plus size={24} />
-                      </motion.button>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          }) : (
-            <div className="col-span-full py-20 text-center space-y-4">
-              <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
-                <Search size={40} />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">No products found</h3>
-              <p className="text-slate-500">Try adjusting your search or category filter.</p>
-              <button 
-                onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }}
-                className="text-indigo-600 font-bold hover:underline"
-              >
-                Clear all filters
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Action Buttons */}
-      </div>
-    );
-  }, [selectedCategory, searchQuery, sortBy, minPrice, maxPrice, showFilters, addItem, removeStoreItem, handleCheckout, items, storeProducts, currentUser, showJiffySuggestion, setActiveTab, appointments, lastBookingRef, isMobile, setIsMobileMenuOpen]);
-
-  const FinalizeSection = useMemo(() => {
-    if (!currentUser) {
-      return (
-        <div className="max-w-md mx-auto text-center space-y-6 bg-white p-10 rounded-[2.5rem] shadow-xl border border-slate-100 my-8">
-          <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto">
-            <Lock size={40} />
-          </div>
-          <h2 className="text-3xl font-black text-slate-900">Secure Checkout</h2>
-          <p className="text-slate-500 leading-relaxed">Please sign in to your account to securely complete your payment and finalize your shipment.</p>
-          <button 
-            onClick={() => { setLoginTriggerSource('checkout'); setShowLoginModal(true); }}
-            className="w-full btn-cta flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <UserIcon size={20} /> Sign In to Pay
-          </button>
-          <button 
-            onClick={() => navigateTo('cart')}
-            className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all cursor-pointer"
-          >
-            Back to Cart
-          </button>
-        </div>
-      );
-    }
-    const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
-    const isWarehouseCheckout = orderId ? orderId.startsWith('SW-') : cartItems.some(i => i.source === 'Warehouse');
-    const hasScheduledPickup = userAppointments.some(a => a.status === 'Scheduled');
-    const isPayAtHome = hasScheduledPickup && shippingPreference === 'International' && !cartItems.some(i => i.source === 'Store');
-
-    if (isPaid && !isMobile) {
-      
-      return (
-        <div className="max-w-2xl mx-auto text-center space-y-6 pb-12 pt-4">
-          <motion.div 
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto"
-          >
-            <CheckCircle2 size={64} />
-          </motion.div>
-          <div className="space-y-2">
-            <h2 className="text-4xl font-black text-slate-900">
-              {isWarehouseCheckout ? 'Shipment Request Confirmed!' : isPayAtHome ? 'Order Confirmed!' : 'Payment Successful!'}
-            </h2>
-            <p className="text-slate-500">
-              {isWarehouseCheckout 
-                ? `Your shipment request has been placed successfully. Order ID: ${orderId}` 
-                : `Your order ${orderId} has been placed successfully.`
-              }
-            </p>
-          </div>
-          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-4">
-              <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Status</span>
-              <span className="font-black text-indigo-600">{isWarehouseCheckout ? 'Awaiting Warehouse Arrival' : '12-15 Business Days'}</span>
-            </div>
-            <p className="text-sm text-slate-500 leading-relaxed font-semibold">
-              {isWarehouseCheckout 
-                ? "Your shipment request has been successfully registered. You can check the status of your order in My Orders."
-                : isPayAtHome 
-                  ? "Your order is confirmed. Our agent will collect your items and finalize the billing at your home during pickup. You'll receive a confirmation email shortly."
-                  : shippingPreference === 'LocalPickup'
-                    ? "Your payment is successful. Our agent will bring these items when they come for your scheduled home pickup. You'll receive a confirmation email shortly."
-                    : `We have received your payment. Our team will consolidate your items and ship them on ${selectedDate}. You can track your shipment in your history.`
-              }
-            </p>
-          </div>
-
-          {/* Custom consolidation guidance on payment success */}
-          {(((orderId && orderId.startsWith('SH-')) || shopConsolidationOption === 'pickup' || pickupConsolidationOption === 'shop_and_ship' || shopItemsShippingDestination === 'home' || shippingPreference === 'LocalPickup' || items.some(i => i.source === 'Store')) && !userAppointments.some(a => a.status === 'Scheduled') && shopConsolidationOption !== 'warehouse') && (
-            <div className="p-6 bg-amber-50 border border-amber-200/80 rounded-3xl text-left space-y-3 max-w-xl mx-auto shadow-sm">
-              <div className="flex items-center justify-between">
-                <h4 className="font-black text-amber-950 text-base flex items-center gap-2">
-                  <AlertCircle className="text-amber-600 animate-bounce" size={20} />
-                  Home Pickup is Pending!
-                </h4>
-                <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider bg-amber-100/80 px-2.5 py-1 rounded-full border border-amber-200">
-                  Action Required
-                </span>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-                Your Shop & Ship order is completed, but your Home Pickup schedule is pending. Would you like to complete your Home Pickup schedule now?
-              </p>
-              <button
-                onClick={() => {
-                  navigateTo('pickup');
-                  setIsPaid(false);
-                  setOrderId(null);
-                  setShopConsolidationOption(null);
-                }}
-                className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow shadow-indigo-200 cursor-pointer"
-              >
-                <Calendar size={16} /> Complete Home Pickup Now ‚Üí
-              </button>
-            </div>
-          )}
-
-          {shopConsolidationOption === 'warehouse' && (
-            <div className="p-6 bg-emerald-50 border border-emerald-100/65 rounded-3xl text-left space-y-3 max-w-xl mx-auto shadow-sm">
-              <h4 className="font-black text-emerald-950 text-base flex items-center gap-2">
-                <Warehouse className="text-emerald-700 animate-pulse" size={20} />
-                Next Step: Send items to our Warehouse
-              </h4>
-              <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-                You decided to mail more items directly to our forwarding hub. We've compiled your customized forwarding instructions. Click below to view them.
-              </p>
-              <button
-                onClick={() => {
-                  navigateTo('warehouse');
-                  setIsPaid(false);
-                  setOrderId(null);
-                  setShopConsolidationOption(null);
-                }}
-                className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow shadow-emerald-200"
-              >
-                Get Warehouse Mailing Address ‚Üí
-              </button>
-            </div>
-          )}
-
-          <div className="flex justify-center pt-2">
-            <button 
-              onClick={() => { 
-                navigateTo('history'); 
-                setIsPaid(false); 
-                setOrderId(null); 
-                setShopConsolidationOption(null);
-              }}
-              className="w-full md:w-2/3 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition-all"
-            >
-              {isWarehouseCheckout ? 'Go to My Orders' : 'View Order History'}
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    if (isMobile) {
-      const hasHomePickupActive = (userAppointments.some(a => a.status === 'Scheduled') || !!selectedPickupDate || pickupConsolidationOption === 'shop_and_ship') && cartItems.some(i => i.source === 'Store');
-      const currentStep = isPaid ? 5 : activeCheckoutStep;
-      return (
-        <div className="max-w-md mx-auto space-y-6 pb-12 pt-4">
-          {/* Header */}
-          <div className="flex items-center gap-3 mb-2 text-[#0A142F]">
-            {currentStep !== 5 && (
-              <button 
-                onClick={() => {
-                  if (currentStep > 1) {
-                    if (hasHomePickupActive && currentStep === 4) {
-                      setActiveCheckoutStep(1);
-                    } else {
-                      setActiveCheckoutStep(currentStep - 1);
-                    }
-                  } else {
-                    goBack();
-                  }
-                }}
-                className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all shrink-0 cursor-pointer"
-              >
-                <ArrowLeft size={16} />
-              </button>
-            )}
-            <div>
-              <h2 className="text-xl font-black text-slate-900 tracking-tight">Shop & Ship Checkout</h2>
-              {currentStep !== 5 && (
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                  {hasHomePickupActive 
-                    ? `Step ${currentStep === 4 ? 2 : currentStep === 5 ? 3 : 1} of 3`
-                    : `Step ${currentStep} of 5`
-                  }
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Stepper Progress Bar */}
-          {currentStep !== 5 && (
-            <div className={`grid ${hasHomePickupActive ? 'grid-cols-3' : 'grid-cols-5'} gap-1 items-center justify-between text-center py-3 border border-slate-100 bg-white rounded-xl shadow-sm`}>
-              {(hasHomePickupActive ? [
-                { step: 1, label: 'Items' },
-                { step: 4, label: 'Review & Pay' },
-                { step: 5, label: 'Done' }
-              ] : [
-                { step: 1, label: 'Items' },
-                { step: 2, label: 'Address' },
-                { step: 3, label: 'Schedule' },
-                { step: 4, label: 'Review' },
-                { step: 5, label: 'Done' }
-              ]).map((s) => {
-                const isActive = currentStep === s.step;
-                const isCompleted = currentStep > s.step;
-                return (
-                  <div key={s.step} className="flex flex-col items-center">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black transition-all ${
-                      isCompleted ? 'bg-indigo-600 text-white' :
-                      isActive ? 'bg-[#091535] text-white ring-4 ring-indigo-100' :
-                      'bg-slate-100 text-slate-400'
-                    }`}>
-                      {s.step === 4 && hasHomePickupActive ? 2 : s.step === 5 && hasHomePickupActive ? 3 : s.step}
-                    </div>
-                    <span className={`text-[9px] font-black tracking-tight mt-1 transition-colors ${
-                      isActive || isCompleted ? 'text-[#091535] font-black' : 'text-slate-400 font-bold'
-                    }`}>
-                      {s.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Steps Contents */}
-          <div className="min-h-[300px]">
-            {/* Step 1: Items Selector */}
-            {currentStep === 1 && (
-              <div className="space-y-6 text-left">
-                <div className="flex items-center gap-2 text-[#0A142F]">
-                  <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
-                  <h3 className="text-sm font-black uppercase tracking-wider">Step 1: Review Items</h3>
-                </div>
-                
-                {/* Display list of checkout items */}
-                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3">
-                  {cartItems.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0">
-                      <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center shrink-0 overflow-hidden border border-slate-100">
-                        {item.image ? (
-                          <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        ) : (
-                          <ShoppingBag size={18} className="text-slate-400" />
-                        )}
-                      </div>
-                      <div className="flex-grow min-w-0">
-                        <p className="text-xs font-bold text-slate-900 truncate">{item.name}</p>
-                        <p className="text-[10px] text-slate-400 font-medium">Qty: {item.quantity || 1} ‚Ä¢ {item.weight ? `${item.weight.toFixed(2)} kg` : 'TBD'}</p>
-                      </div>
-                      <div className="text-xs font-black text-slate-900 shrink-0">
-                        ‚Çπ{(item.price || 0).toFixed(2)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Shipping Preference Selection */}
-                {!isWarehouseCheckout && userAppointments.some(a => a.status === 'Scheduled') && cartItems.length > 0 && (
-                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-                    <h4 className="text-xs font-black text-[#0A142F] uppercase tracking-wider">How would you like to receive your items?</h4>
-                    <div className="grid grid-cols-1 gap-3">
-                      <div 
-                        onClick={() => {
-                          setShippingPreference('International');
-                          setAddress({
-                            fullName: pickupName || currentUser?.name || '',
-                            email: currentUser?.email || '',
-                            phone: pickupPhone || '',
-                            addressLine1: `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}`,
-                            city: pickupAddress.city,
-                            state: pickupAddress.state,
-                            zipCode: pickupAddress.zip,
-                            country: 'India'
-                          });
-                        }}
-                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${shippingPreference === 'International' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
-                      >
-                        <div className="flex items-center gap-2.5 mb-1.5">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${shippingPreference === 'International' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                            <Globe size={16} />
-                          </div>
-                          <div className="text-xs font-black text-slate-900">Ship to my home</div>
-                        </div>
-                        <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
-                          Consolidate with pickup items and ship to your home.
-                        </p>
-                      </div>
-
-                      <div 
-                        onClick={() => {
-                          setShippingPreference('LocalPickup');
-                          setAddress(WAREHOUSE_ADDRESS);
-                        }}
-                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${shippingPreference === 'LocalPickup' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
-                      >
-                        <div className="flex items-center gap-2.5 mb-1.5">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${shippingPreference === 'LocalPickup' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                            <Package size={16} />
-                          </div>
-                          <div className="text-xs font-black text-slate-900">Bring items during Home Pickup</div>
-                        </div>
-                        <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
-                          Our agent will bring these items during scheduled pickup.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Navigation Buttons */}
-                <div className="pt-4 flex gap-3">
-                  <button 
-                    onClick={goBack}
-                    className="flex-1 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
-                  >
-                    Back to Cart
-                  </button>
-                  <button 
-                    onClick={() => setActiveCheckoutStep(hasHomePickupActive ? 4 : 2)}
-                    className="flex-1 py-3.5 bg-[#091535] text-white font-black rounded-xl text-xs transition-all active:scale-[0.98] shadow-md shadow-indigo-100 cursor-pointer"
-                  >
-                    {hasHomePickupActive ? 'Next: Payment ‚Üí' : 'Next: Address ‚Üí'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 2: Address Details */}
-            {currentStep === 2 && (
-              <div className="space-y-6 text-left">
-                <div className="flex items-center gap-2 text-[#0A142F]">
-                  <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
-                  <h3 className="text-sm font-black uppercase tracking-wider">Step 2: Destination Address</h3>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Full Name</label>
-                    <input 
-                      type="text" 
-                      disabled={shippingPreference === 'LocalPickup'}
-                      className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
-                      value={address.fullName}
-                      onChange={e => setAddress({...address, fullName: e.target.value})}
-                      placeholder="Receiver's Full Name"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Email</label>
-                      <input 
-                        type="email" 
-                        disabled={shippingPreference === 'LocalPickup'}
-                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
-                        value={address.email}
-                        onChange={e => setAddress({...address, email: e.target.value})}
-                        placeholder="email@example.com"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Phone</label>
-                      <input 
-                        type="tel" 
-                        disabled={shippingPreference === 'LocalPickup'}
-                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
-                        value={address.phone}
-                        onChange={e => setAddress({...address, phone: e.target.value})}
-                        placeholder="Receiver's Contact Number"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Address Line 1</label>
-                    <input 
-                      type="text" 
-                      disabled={shippingPreference === 'LocalPickup'}
-                      className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
-                      value={address.addressLine1}
-                      onChange={e => setAddress({...address, addressLine1: e.target.value})}
-                      placeholder="Street, Building, Flat No."
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">City</label>
-                      <input 
-                        type="text" 
-                        disabled={shippingPreference === 'LocalPickup'}
-                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
-                        value={address.city}
-                        onChange={e => setAddress({...address, city: e.target.value})}
-                        placeholder="City"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">State</label>
-                      <input 
-                        type="text" 
-                        disabled={shippingPreference === 'LocalPickup'}
-                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
-                        value={address.state || ''}
-                        onChange={e => setAddress({...address, state: e.target.value})}
-                        placeholder="State"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Zip Code</label>
-                      <input 
-                        type="text" 
-                        disabled={shippingPreference === 'LocalPickup'}
-                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
-                        placeholder="e.g. 123456"
-                        value={address.zipCode}
-                        onChange={e => setAddress({...address, zipCode: e.target.value})}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Country</label>
-                      <select 
-                        disabled={shippingPreference === 'LocalPickup'}
-                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500 bg-white"
-                        value={address.country}
-                        onChange={e => setAddress({...address, country: e.target.value})}
-                      >
-                        {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Navigation Buttons */}
-                <div className="pt-4 flex gap-3">
-                  <button 
-                    onClick={() => setActiveCheckoutStep(1)}
-                    className="flex-1 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
-                  >
-                    ‚Üê Back
-                  </button>
-                  <button 
-                    onClick={() => {
-                      const isValid = address.fullName && address.email && address.phone && address.addressLine1 && address.city && address.state && address.zipCode;
-                      if (!isValid) {
-                        toast.error("Please fill out all destination address fields to proceed.");
-                        return;
-                      }
-                      setActiveCheckoutStep(3);
-                    }}
-                    className="flex-1 py-3.5 bg-[#091535] text-white font-black rounded-xl text-xs transition-all active:scale-[0.98] shadow-md shadow-indigo-100 cursor-pointer"
-                  >
-                    Next: Date ‚Üí
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Shipping Date Selection */}
-            {currentStep === 3 && (
-              <div className="space-y-6 text-left">
-                <div className="flex items-center gap-2 text-[#0A142F]">
-                  <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
-                  <h3 className="text-sm font-black uppercase tracking-wider">Step 3: Select Shipping Date</h3>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Available Dispatch Dates</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    {SHIPPING_DATES.map(date => {
-                      const dObj = new Date(date);
-                      return (
-                        <button 
-                          key={date}
-                          onClick={() => setSelectedDate(date)}
-                          className={`p-4 rounded-xl border-2 transition-all text-center flex flex-col items-center justify-center cursor-pointer ${
-                            selectedDate === date 
-                              ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
-                              : 'border-slate-100 hover:border-slate-200 text-slate-600'
-                          }`}
-                        >
-                          <div className="text-[9px] font-extrabold uppercase opacity-65 mb-1">
-                            {dObj.toLocaleString('default', { month: 'short' })}
-                          </div>
-                          <div className="text-lg font-black">{date.split('-')[2]}</div>
-                          <div className="text-[9px] font-semibold opacity-60 mt-0.5">
-                            {dObj.toLocaleString('default', { weekday: 'short' })}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Navigation Buttons */}
-                <div className="pt-4 flex gap-3">
-                  <button 
-                    onClick={() => setActiveCheckoutStep(2)}
-                    className="flex-1 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
-                  >
-                    ‚Üê Back
-                  </button>
-                  <button 
-                    onClick={() => setActiveCheckoutStep(4)}
-                    className="flex-1 py-3.5 bg-[#091535] text-white font-black rounded-xl text-xs transition-all active:scale-[0.98] shadow-md shadow-indigo-100 cursor-pointer"
-                  >
-                    Next: Pay ‚Üí
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 4: Review & Payment Details */}
-            {currentStep === 4 && (
-              <div className="space-y-6 text-left">
-                <div className="flex items-center gap-2 text-[#0A142F]">
-                  <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
-                  <h3 className="text-sm font-black uppercase tracking-wider">Step 4: Review & Pay</h3>
-                </div>
-
-                {/* Order Summary Card */}
-                <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-sm space-y-4">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Order Summary</h4>
-                  
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between text-slate-300">
-                      <span>Total Weight</span>
-                      <span className="font-bold text-white">{totalWeight.toFixed(2)} kg</span>
-                    </div>
-                    <div className="flex justify-between text-slate-300">
-                      <span>Shipping ({address.country})</span>
-                      <span className="font-bold text-white">‚Çπ{(totalWeight * (shippingRates[address.country] || 10)).toFixed(2)}</span>
-                    </div>
-
-                    {(() => {
-                      const discountPercent = shippingDiscounts[address.country] || 0;
-                      if (discountPercent > 0) {
-                        const baseShip = totalWeight * (shippingRates[address.country] || 10);
-                        const saved = baseShip * (discountPercent / 100);
-                        return (
-                          <div className="flex justify-between text-rose-400 font-semibold">
-                            <span>Shipping Discount ({discountPercent}%)</span>
-                            <span>-‚Çπ{saved.toFixed(2)}</span>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-
-                    <div className="flex justify-between text-slate-300">
-                      <span>Items Cost</span>
-                      <span className="font-bold text-white">‚Çπ{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
-                    </div>
-
-                    {userAppointments.some(a => a.status === 'Scheduled') && (
-                      <div className="flex justify-between text-slate-300">
-                        <span>Shop Item Delivery</span>
-                        <span className="text-emerald-400 font-bold">{shippingPreference === 'LocalPickup' ? 'During Home Pickup' : 'To my Home'}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Coupon Block */}
-                  <div className="py-2.5 border-t border-b border-slate-800/80 my-1">
-                    {!appliedCoupon ? (
-                      <div className="space-y-1.5">
-                        <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">Coupon Code</label>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            maxLength={5}
-                            value={couponCodeInput}
-                            onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                            className="bg-slate-800 text-white text-xs font-mono font-bold uppercase rounded-lg px-2.5 py-1.5 flex-grow outline-none border border-slate-700 placeholder-slate-500"
-                            placeholder="CODE5"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const codeClean = couponCodeInput.trim().toUpperCase();
-                              if (codeClean.length !== 5) {
-                                toast.error("Coupon code must be exactly 5 characters.");
-                                return;
-                              }
-                              const matched = coupons.find(c => c.code === codeClean);
-                              if (!matched) {
-                                toast.error(`Coupon code "${codeClean}" is invalid.`);
-                                return;
-                              }
-                              if (!matched.isEnabled) {
-                                toast.error(`Coupon code "${codeClean}" is inactive.`);
-                                return;
-                              }
-                              setAppliedCoupon({
-                                code: matched.code,
-                                discountPercent: matched.discountPercent
-                              });
-                              toast.success(`Coupon "${matched.code}" applied! Saved ${matched.discountPercent}% OFF.`);
-                            }}
-                            className="bg-indigo-600 text-white text-xs font-bold rounded-lg px-3 py-1.5 transition-all cursor-pointer"
-                          >
-                            Apply
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2">
-                        <span className="text-[10px] text-emerald-400 font-bold font-mono uppercase">{appliedCoupon.code} applied ({appliedCoupon.discountPercent}% OFF)</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAppliedCoupon(null);
-                            setCouponCodeInput('');
-                          }}
-                          className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded cursor-pointer"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-1 flex justify-between items-center">
-                    <span className="text-sm font-bold text-slate-300">Total Amount</span>
-                    <span className="text-xl font-black text-indigo-400">
-                      ‚Çπ{(appliedCoupon ? Math.max(0, totalCost - (totalCost * (appliedCoupon.discountPercent / 100))) : totalCost).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Payment Selection or Pay at Home */}
-                {!isWarehouseCheckout && (
-                  !isPayAtHome ? (
-                    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Payment Method</h4>
-                      <div className="space-y-2.5">
-                        <div 
-                          onClick={() => setPaymentMethod('upi')}
-                          className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${paymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
-                        >
-                          <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0">UPI</div>
-                          <div className="text-left">
-                            <p className="text-xs font-bold text-slate-900 leading-none">UPI / QR Code</p>
-                            <p className="text-[9px] text-slate-500 mt-1">Google Pay, PhonePe, Paytm, Any UPI App</p>
-                          </div>
-                          <div className={`ml-auto w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                            {paymentMethod === 'upi' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                          </div>
-                        </div>
-
-                        <div 
-                          onClick={() => setPaymentMethod('card')}
-                          className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
-                        >
-                          <div className="w-9 h-9 bg-slate-800 rounded-lg flex items-center justify-center text-white shrink-0"><CreditCard size={16} /></div>
-                          <div className="text-left">
-                            <p className="text-xs font-bold text-slate-900 leading-none">Credit / Debit Card</p>
-                            <p className="text-[9px] text-slate-500 mt-1">Visa, Mastercard, Amex</p>
-                          </div>
-                          <div className={`ml-auto w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                            {paymentMethod === 'card' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Razorpay Test Mode Helper Guide */}
-                      <div className="mt-4 p-3 bg-indigo-50/80 border border-indigo-100 rounded-xl text-left">
-                        <p className="text-[10px] font-black text-indigo-950 flex items-center gap-1">
-                          <Sparkles size={12} className="text-indigo-600 animate-pulse" /> Razorpay Test Mode Guide
-                        </p>
-                        <p className="text-[9px] text-indigo-900 mt-1.5 leading-normal font-semibold">
-                          To bypass international card limits in Razorpay's Test Mode, please select:
-                        </p>
-                        <ul className="list-disc pl-3 text-[9px] text-indigo-900/90 mt-1.5 space-y-1 leading-normal font-medium">
-                          <li><strong>UPI / QR Code:</strong> Choose <span className="font-bold">UPI</span>, enter <code className="bg-white/90 px-1 py-0.5 rounded border border-indigo-100 font-mono text-indigo-600">test@upi</code>, then click <span className="font-bold">Success</span> to simulate a completed transaction.</li>
-                          <li><strong>Netbanking:</strong> Select any bank (e.g. SBI) and click <span className="font-bold">Success</span> on the bank simulator.</li>
-                          <li><strong>Domestic Card:</strong> Use India test Visa <code className="bg-white/90 px-1 py-0.5 rounded border border-indigo-100 font-mono text-indigo-600">4111 1111 1111 1111</code> with CVV <span className="font-mono font-bold">123</span>.</li>
-                        </ul>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 space-y-2">
-                      <h4 className="text-xs font-black text-slate-900 flex items-center gap-2">
-                        <CheckCircle2 size={16} className="text-emerald-600" /> Pay at Home enabled
-                      </h4>
-                      <p className="text-[10px] text-slate-600 leading-relaxed font-semibold">
-                        Pay for your shop items along with your shipping charges during our home pickup visit.
-                      </p>
-                    </div>
-                  )
-                )}
-
-                {/* Terms Consent and Checkout Button */}
-                <div className="bg-slate-50 p-3.5 rounded-xl text-[10px] text-slate-500 leading-relaxed font-medium">
-                  By placing this order, you agree to the international shipping terms and conditions of Jiffex.
-                </div>
-
-                {/* Navigation Buttons */}
-                <div className="pt-4 flex gap-3">
-                  <button 
-                    onClick={() => setActiveCheckoutStep(hasHomePickupActive ? 1 : 3)}
-                    className="py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs px-5 transition-all active:scale-[0.98] cursor-pointer"
-                  >
-                    ‚Üê Back
-                  </button>
-                  <button 
-                    onClick={handleFinalPayment}
-                    className="flex-grow py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs transition-all active:scale-[0.98] shadow-lg shadow-emerald-100 cursor-pointer"
-                  >
-                    {isWarehouseCheckout 
-                      ? 'Confirm Shipment Request'
-                      : isPayAtHome 
-                        ? 'Place Order (Pay at Home) ‚Üí' 
-                        : `Pay & Place Order ‚Üí`
-                    }
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 5: Done (Confirmed) */}
-            {currentStep === 5 && (
-              <div className="space-y-6 text-left animate-fade-in font-sans">
-                {/* Confirmation Card */}
-                <div className="bg-emerald-50 border border-emerald-200/60 p-5 rounded-2xl flex flex-col gap-4 shadow-sm relative overflow-hidden">
-                  <div className="flex items-start gap-3 z-10">
-                    <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-200">
-                      <CheckCircle2 size={22} />
-                    </div>
-                    <div>
-                      <span className="inline-block text-[9px] font-extrabold text-emerald-700 tracking-wider bg-emerald-100 px-2 py-0.5 rounded-full mb-1">
-                        ORDER CONFIRMED
-                      </span>
-                      <h2 className="text-sm font-black text-slate-900 leading-tight">
-                        Thanks, {currentUser?.name?.split(' ')[0] || 'Customer'}!
-                      </h2>
-                      <p className="text-[10px] text-slate-500 font-semibold leading-normal mt-1">
-                        {isWarehouseCheckout 
-                          ? 'Your warehouse shipment request has been placed successfully.' 
-                          : 'Your shop order has been placed successfully.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white border border-slate-100 p-3 rounded-xl flex items-center justify-between gap-3 shrink-0 shadow-sm">
-                    <div>
-                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">ORDER REFERENCE ID</p>
-                      <p className="text-xs font-black text-[#091535] tracking-wide mt-1.5 font-mono">
-                        {orderId || 'SH-00214'}
-                      </p>
-                    </div>
-                    <button 
-                      onClick={() => {
-                        const ref = orderId || 'SH-00214';
-                        navigator.clipboard.writeText(ref);
-                        toast.success('Order Reference ID copied!');
-                      }}
-                      className="p-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-all shrink-0 cursor-pointer"
-                    >
-                      <Copy size={13} className="stroke-[2.5]" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-3 text-xs">
-                    <span className="font-bold text-slate-400 uppercase tracking-wider">Estimated Delivery</span>
-                    <span className="font-black text-indigo-600">{isWarehouseCheckout ? 'Awaiting Warehouse Arrival' : '12-15 Business Days'}</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
-                    {isWarehouseCheckout 
-                      ? "Your shipment request is registered. Once received at our hub, we will weigh and bill your order."
-                      : isPayAtHome 
-                        ? "Our agent will bring your order and finalize billing at your home during pickup."
-                        : shippingPreference === 'LocalPickup'
-                          ? "Payment received. Our agent will bring these items with them during scheduled home pickup."
-                          : `We have received your payment. Our team will consolidate your items and ship them on ${selectedDate}.`
-                    }
-                  </p>
-                </div>
-
-                {/* Consolidation Options Prompts */}
-                {(((orderId && orderId.startsWith('SH-')) || shopConsolidationOption === 'pickup' || pickupConsolidationOption === 'shop_and_ship' || shopItemsShippingDestination === 'home' || shippingPreference === 'LocalPickup' || items.some(i => i.source === 'Store')) && !userAppointments.some(a => a.status === 'Scheduled') && shopConsolidationOption !== 'warehouse') && (
-                  <div className="p-5 bg-amber-50 border border-amber-200/80 rounded-2xl text-left space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-black text-amber-950 text-xs flex items-center gap-1.5">
-                        <AlertCircle className="text-amber-600 animate-bounce" size={15} />
-                        Home Pickup is Pending!
-                      </h4>
-                      <span className="text-[9px] font-black text-amber-700 uppercase tracking-wider bg-amber-100/80 px-2 py-0.5 rounded-full border border-amber-200">
-                        Action Required
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-600 leading-relaxed font-semibold">
-                      Your Shop & Ship order is completed, but your Home Pickup schedule is pending. Would you like to complete it now?
-                    </p>
-                    <button
-                      onClick={() => {
-                        navigateTo('pickup');
-                        setIsPaid(false);
-                        setOrderId(null);
-                        setShopConsolidationOption(null);
-                      }}
-                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow shadow-indigo-200 cursor-pointer"
-                    >
-                      <Calendar size={14} /> Complete Home Pickup Now ‚Üí
-                    </button>
-                  </div>
-                )}
-
-                {shopConsolidationOption === 'warehouse' && (
-                  <div className="p-5 bg-emerald-50 border border-emerald-100 rounded-2xl text-left space-y-2.5">
-                    <h4 className="font-black text-emerald-950 text-xs flex items-center gap-1.5">
-                      <Warehouse className="text-emerald-700 animate-pulse" size={15} />
-                      Send items to our Warehouse
-                    </h4>
-                    <p className="text-[10px] text-slate-600 leading-relaxed font-semibold">
-                      We've compiled your customized forwarding instructions. Get your mailing address now.
-                    </p>
-                    <button
-                      onClick={() => {
-                        navigateTo('warehouse');
-                        setIsPaid(false);
-                        setOrderId(null);
-                        setShopConsolidationOption(null);
-                      }}
-                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow shadow-emerald-200 cursor-pointer"
-                    >
-                      Get Warehouse Address ‚Üí
-                    </button>
-                  </div>
-                )}
-
-                {/* Go to history */}
-                <button 
-                  onClick={() => { 
-                    navigateTo('history'); 
-                    setIsPaid(false); 
-                    setOrderId(null); 
-                    setShopConsolidationOption(null);
-                  }}
-                  className="w-full py-3.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-black transition-all cursor-pointer"
-                >
-                  {isWarehouseCheckout ? 'Go to My Orders' : 'View Order History'}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div id="finalize-checkout-grid" className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          {/* Back Action */}
-          <button 
-            id="btn-finalize-back"
-            onClick={goBack} 
-            className="flex items-center gap-2 text-slate-600 hover:text-indigo-600 font-bold transition-all group py-1 cursor-pointer"
-          >
-            <ArrowLeft className="group-hover:-translate-x-1 transition-transform text-slate-500 group-hover:text-indigo-600" size={20} />
-            <span>Back</span>
-          </button>
-
-          {/* Order ID Header */}
-          {orderId && !isWarehouseCheckout && (
-            <div id="finalize-order-header" className="bg-gradient-to-r from-indigo-600 to-violet-600 p-6 rounded-2xl text-white shadow-lg shadow-indigo-100 flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-widest opacity-80">Order Reference</div>
-                <div className="text-2xl font-black">{orderId}</div>
-              </div>
-              <div className="px-4 py-2 bg-white/20 backdrop-blur rounded-xl text-xs font-bold">
-                Awaiting Payment
-              </div>
-            </div>
-          )}
-          
-          {/* Shipping Preference Selection */}
-          {(!isWarehouseCheckout || cartItems.some(i => i.source === 'Store')) && (userAppointments.some(a => a.status === 'Scheduled') || selectedPickupDate) && cartItems.length > 0 && (
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold flex items-center gap-2 text-slate-900">
-                  <Truck className="text-indigo-600" /> Shop Items Shipping Destination
-                </h3>
-                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
-                  Linked with Home Pickup Schedule
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 font-medium">
-                Your shipping date ({selectedPickupDate ? new Date(selectedPickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Scheduled Date'}) and destination address details are synced from your Home Pickup schedule.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div 
-                  onClick={() => {
-                    setShopItemsShippingDestination('home');
-                    setShippingPreference('International');
-                    if (pickupDestination && pickupDestination.addressLine1) {
-                      setAddress({
-                        fullName: pickupDestination.fullName || pickupName || currentUser?.name || '',
-                        email: pickupDestination.email || currentUser?.email || '',
-                        phone: pickupDestination.phone || pickupPhone || '',
-                        addressLine1: pickupDestination.addressLine1,
-                        city: pickupDestination.city,
-                        state: pickupDestination.state,
-                        zipCode: pickupDestination.zipCode,
-                        country: pickupDestination.country || 'USA'
-                      });
-                    } else {
-                      setAddress({
-                        fullName: pickupName || currentUser?.name || '',
-                        email: currentUser?.email || '',
-                        phone: pickupPhone || '',
-                        addressLine1: `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}`,
-                        city: pickupAddress.city,
-                        state: pickupAddress.state,
-                        zipCode: pickupAddress.zip,
-                        country: 'India'
-                      });
-                    }
-                    toast.success('Shipping destination updated to Home Address!');
-                  }}
-                  className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${
-                    shopItemsShippingDestination === 'home' || shippingPreference === 'International' 
-                      ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-1 ring-indigo-600/20' 
-                      : 'border-slate-100 hover:border-slate-200 bg-white'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${shopItemsShippingDestination === 'home' || shippingPreference === 'International' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                        <Home size={20} />
-                      </div>
-                      <div>
-                        <div className="font-extrabold text-slate-900 text-sm">Ship to my home</div>
-                        <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider">Home Pickup Schedule Synced</span>
-                      </div>
-                    </div>
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${(shopItemsShippingDestination === 'home' || shippingPreference === 'International') ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>
-                      {(shopItemsShippingDestination === 'home' || shippingPreference === 'International') && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                    Shop items will be packaged and shipped directly to your home destination address alongside your home pickup shipment.
-                  </p>
-                  <div className="mt-3 pt-3 border-t border-slate-200/60 text-[11px] text-slate-500 space-y-1">
-                    <p>üìÖ <span className="font-bold text-slate-700">Shipping Date:</span> {selectedPickupDate ? new Date(selectedPickupDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Scheduled Pickup Date'}</p>
-                    <p className="truncate">üìç <span className="font-bold text-slate-700">Destination:</span> {pickupDestination.fullName || address.fullName || 'Receiver'}, {pickupDestination.city || address.city || 'City'}, {pickupDestination.country || address.country || 'USA'}</p>
-                  </div>
-                </div>
-
-                <div 
-                  onClick={() => {
-                    setShopItemsShippingDestination('warehouse');
-                    setShippingPreference('LocalPickup');
-                    setAddress(WAREHOUSE_ADDRESS);
-                    toast.success('Shipping destination updated to Jiffex Warehouse!');
-                  }}
-                  className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${
-                    shopItemsShippingDestination === 'warehouse' || shippingPreference === 'LocalPickup'
-                      ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-1 ring-indigo-600/20' 
-                      : 'border-slate-100 hover:border-slate-200 bg-white'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${shopItemsShippingDestination === 'warehouse' || shippingPreference === 'LocalPickup' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                        <Warehouse size={20} />
-                      </div>
-                      <div>
-                        <div className="font-extrabold text-slate-900 text-sm">Ship to Jiffex warehouse</div>
-                        <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Jiffex Hub Holding</span>
-                      </div>
-                    </div>
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${(shopItemsShippingDestination === 'warehouse' || shippingPreference === 'LocalPickup') ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>
-                      {(shopItemsShippingDestination === 'warehouse' || shippingPreference === 'LocalPickup') && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                    Shop items will be sent to the JiffEX Warehouse hub first for storage, inspection, or separate processing.
-                  </p>
-                  <div className="mt-3 pt-3 border-t border-slate-200/60 text-[11px] text-slate-500 space-y-1">
-                    <p>üè¨ <span className="font-bold text-slate-700">Hub:</span> {WAREHOUSE_ADDRESS.name}</p>
-                    <p className="truncate">üìç <span className="font-bold text-slate-700">Address:</span> {WAREHOUSE_ADDRESS.street}, {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Address Form & Shipping Date (Hidden when Home Pickup is selected as details are synced) */}
-          {((userAppointments.some(a => a.status === 'Scheduled') || selectedPickupDate || pickupConsolidationOption === 'shop_and_ship') && cartItems.some(i => i.source === 'Store')) ? (
-            <div className="bg-emerald-50 border border-emerald-200/80 p-5 rounded-2xl flex items-center justify-between text-emerald-900 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-sm">
-                  <Check size={20} />
-                </div>
-                <div>
-                  <p className="font-extrabold text-sm text-slate-900">Destination Address & Shipping Date Synced</p>
-                  <p className="text-xs text-slate-600 font-medium">
-                    Automatically managed through your Home Pickup schedule ({selectedPickupDate ? new Date(selectedPickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Scheduled Pickup Date'})
-                  </p>
-                </div>
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full border border-emerald-200">
-                Home Pickup Active
-              </span>
-            </div>
-          ) : (
-            <>
-              {/* Address Form */}
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <MapPin className="text-red-500" /> {shippingPreference === 'LocalPickup' ? 'Warehouse Destination' : 'Destination Address'}
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Full Name</label>
-                    <input 
-                      type="text" 
-                      disabled={shippingPreference === 'LocalPickup'}
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                      value={address.fullName}
-                      onChange={e => setAddress({...address, fullName: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Email</label>
-                    <input 
-                      type="email" 
-                      disabled={shippingPreference === 'LocalPickup'}
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                      value={address.email}
-                      onChange={e => setAddress({...address, email: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Phone</label>
-                    <input 
-                      type="tel" 
-                      disabled={shippingPreference === 'LocalPickup'}
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                      value={address.phone}
-                      onChange={e => setAddress({...address, phone: e.target.value})}
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Address Line 1</label>
-                    <input 
-                      type="text" 
-                      disabled={shippingPreference === 'LocalPickup'}
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                      value={address.addressLine1}
-                      onChange={e => setAddress({...address, addressLine1: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">City</label>
-                    <input 
-                      type="text" 
-                      disabled={shippingPreference === 'LocalPickup'}
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                      value={address.city}
-                      onChange={e => setAddress({...address, city: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Zip Code</label>
-                    <input 
-                      type="text" 
-                      disabled={shippingPreference === 'LocalPickup'}
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                      placeholder="e.g. 123456"
-                      value={address.zipCode}
-                      onChange={e => setAddress({...address, zipCode: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Country</label>
-                    <select 
-                      disabled={shippingPreference === 'LocalPickup'}
-                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
-                      value={address.country}
-                      onChange={e => setAddress({...address, country: e.target.value})}
-                    >
-                      {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                </div>
-                {shippingPreference && (
-                  <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-2 text-xs text-amber-700">
-                    <Info size={14} />
-                    <span>
-                      {shippingPreference === 'LocalPickup' 
-                        ? 'Warehouse address is used for local pickup items.' 
-                        : 'Address pre-filled from your pickup location. You can modify it if needed.'}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Shipping Date */}
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <Calendar className="text-indigo-600" /> Select Shipping Date
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {SHIPPING_DATES.map(date => (
-                    <button 
-                      key={date}
-                      onClick={() => setSelectedDate(date)}
-                      className={`p-4 rounded-xl border-2 transition-all text-center ${selectedDate === date ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}
-                    >
-                      <div className="text-xs font-bold uppercase opacity-60 mb-1">
-                        {new Date(date).toLocaleString('default', { month: 'long' })}
-                      </div>
-                      <div className="text-xl font-black">{date.split('-')[2]}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Payment */}
-          {!isWarehouseCheckout && (
-            !isPayAtHome ? (
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                  <CreditCard className="text-emerald-600" /> Payment Method
-                </h3>
-                <div className="space-y-4">
-                  <div 
-                    onClick={() => setPaymentMethod('upi')}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
-                  >
-                    <div className="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-black text-sm">UPI</div>
-                    <div>
-                      <div className="font-bold">UPI / QR Code</div>
-                      <div className="text-xs text-slate-500">Google Pay, PhonePe, Paytm, Any UPI App</div>
-                    </div>
-                    <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                      {paymentMethod === 'upi' && <div className="w-2 h-2 bg-white rounded-full" />}
-                    </div>
-                  </div>
-                  <div 
-                    onClick={() => setPaymentMethod('card')}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
-                  >
-                    <div className="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center text-white"><CreditCard size={24} /></div>
-                    <div>
-                      <div className="font-bold">Credit / Debit Card</div>
-                      <div className="text-xs text-slate-500">Visa, Mastercard, Amex</div>
-                    </div>
-                    <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                      {paymentMethod === 'card' && <div className="w-2 h-2 bg-white rounded-full" />}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-emerald-50 p-8 rounded-3xl border border-emerald-100 space-y-4">
-                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm">
-                  <Home size={32} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-black text-slate-900">Pay at Home enabled</h3>
-                  <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-                    Since you have a scheduled pickup and opted to ship to your home, you can pay for your shop items along with your shipping charges. 
-                    <span className="block mt-2 font-bold text-emerald-700">Final billing will be done at your home during pickup.</span>
-                  </p>
-                </div>
-              </div>
-            )
-          )}
-        </div>
-
-        {/* Summary Sidebar */}
-        <div className="lg:col-span-1">
-          <div className="bg-slate-900 text-white p-6 rounded-3xl sticky top-8">
-            {isWarehouseCheckout ? (
-              <div className="space-y-4 mb-8">
-                <h3 className="text-xl font-bold mb-2">Shipment Information</h3>
-                <p className="text-xs text-slate-400 leading-relaxed font-semibold">
-                  No payment is required right now. Final billing and invoice will be generated after all items are received at our warehouse. You can check the status of your order in <span className="font-bold text-indigo-400">My Orders</span>.
-                </p>
-                <div className="h-px bg-slate-800 my-4" />
-                <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-800">
-                  <div className="flex items-center justify-between text-slate-300 text-sm">
-                    <span className="font-medium">Total Items</span>
-                    <span className="font-black text-indigo-400 text-lg">{cartItems.length} Items</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <>
-                <h3 className="text-xl font-bold mb-6">Order Summary</h3>
-                <div className="space-y-4 mb-8">
-                  <div className="flex justify-between text-slate-400 text-sm">
-                    <span>Total Weight</span>
-                    <span className="text-white font-medium">{totalWeight.toFixed(2)} kg</span>
-                  </div>
-                  <div className="flex justify-between text-slate-400 text-sm">
-                    <span>Shipping ({address.country})</span>
-                    <span className="text-white font-medium">‚Çπ{(totalWeight * (shippingRates[address.country] || 10)).toFixed(2)}</span>
-                  </div>
-                  {(() => {
-                    const discountPercent = shippingDiscounts[address.country] || 0;
-                    if (discountPercent > 0) {
-                      const baseShip = totalWeight * (shippingRates[address.country] || 10);
-                      const saved = baseShip * (discountPercent / 100);
-                      return (
-                        <div className="flex justify-between text-rose-400 text-sm font-semibold">
-                          <span>Shipping Discount ({discountPercent}%)</span>
-                          <span>-‚Çπ{saved.toFixed(2)}</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
-                  <div className="flex justify-between text-slate-400 text-sm">
-                    <span>Items Cost</span>
-                    <span className="text-white font-medium">‚Çπ{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
-                  </div>
-                  {userAppointments.some(a => a.status === 'Scheduled') && (
-                    <div className="flex justify-between text-slate-400 text-sm">
-                      <span>Shop Item Delivery</span>
-                      <span className="text-emerald-400 font-medium">{shippingPreference === 'LocalPickup' ? 'During Home Pickup' : 'To my Home'}</span>
-                    </div>
-                  )}
-
-                  {/* Coupon Application Block */}
-                  <div className="py-3 border-t border-b border-slate-800/60 my-2">
-                    {!appliedCoupon ? (
-                      <div className="space-y-1.5">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Apply Coupon Code (5 Chars)</label>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            maxLength={5}
-                            value={couponCodeInput}
-                            onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                            className="bg-slate-800 text-white text-xs font-mono font-bold uppercase rounded-xl px-3 py-2 flex-grow outline-none border border-slate-700 focus:border-indigo-500 transition-colors placeholder-slate-500"
-                            placeholder="CODE5"
-                            id="coupon-apply-input"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const codeClean = couponCodeInput.trim().toUpperCase();
-                              if (codeClean.length !== 5) {
-                                toast.error("Coupon code must be exactly 5 characters.");
-                                return;
-                              }
-                              const matched = coupons.find(c => c.code === codeClean);
-                              if (!matched) {
-                                toast.error(`Coupon code "${codeClean}" is invalid or does not exist.`);
-                                return;
-                              }
-                              if (!matched.isEnabled) {
-                                toast.error(`Coupon code "${codeClean}" is currently inactive.`);
-                                return;
-                              }
-                              setAppliedCoupon({
-                                code: matched.code,
-                                discountPercent: matched.discountPercent
-                              });
-                              toast.success(`Coupon "${matched.code}" applied successfully! Saved ${matched.discountPercent}% OFF total.`);
-                            }}
-                            id="apply-coupon-btn"
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-4 py-2 transition-all active:scale-95 shrink-0"
-                          >
-                            Apply
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-2.5">
-                        <div className="flex items-center gap-2">
-                          <TicketIcon size={14} className="text-emerald-400 shrink-0" />
-                          <div>
-                            <div className="text-[10px] font-black text-emerald-400 uppercase tracking-wider font-mono">Coupon applied</div>
-                            <div className="text-[11px] text-slate-300 font-semibold">{appliedCoupon.code} ({appliedCoupon.discountPercent}% OFF)</div>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAppliedCoupon(null);
-                            setCouponCodeInput('');
-                            toast.info("Coupon code removed.");
-                          }}
-                          className="text-[10px] bg-slate-800 text-slate-400 hover:text-white px-2 py-1 rounded-lg transition-colors"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {appliedCoupon && (
-                    <div className="flex justify-between text-emerald-400 text-sm font-semibold animate-fadeIn">
-                      <span>Coupon Discount ({appliedCoupon.discountPercent}%)</span>
-                      <span>-‚Çπ{(totalCost * (appliedCoupon.discountPercent / 100)).toFixed(2)}</span>
-                    </div>
-                  )}
-
-                  <div className="h-px bg-slate-800 my-4" />
-                  <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold">Total Amount</span>
-                    <span className="text-2xl font-black text-indigo-400">
-                      ‚Çπ{(appliedCoupon ? Math.max(0, totalCost - (totalCost * (appliedCoupon.discountPercent / 100))) : totalCost).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
-
-            <div className="bg-slate-800 p-4 rounded-2xl mb-6">
-              <div className="flex items-start gap-3 text-xs text-slate-300">
-                <Info size={16} className="text-indigo-400 shrink-0" />
-                <p>By confirming, you agree to our shipping terms and conditions.</p>
-              </div>
-            </div>
-
-            <button 
-              disabled={cartItems.length === 0}
-              onClick={handleFinalPayment}
-              className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-200"
-            >
-              {isWarehouseCheckout 
-                ? 'Confirm Shipment Request'
-                : isPayAtHome 
-                  ? 'Confirm Order (Pay at Home)' 
-                  : 'Confirm & Pay'
-              }
-            </button>
-
-            <div className="mt-8 pt-8 border-t border-slate-800">
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Prohibited Items</h4>
-              <div className="space-y-2">
-                {PROHIBITED_ITEMS.slice(0, 4).map(item => (
-                  <div key={item} className="flex items-center gap-2 text-[10px] text-slate-400">
-                    <AlertTriangle size={12} className="text-amber-500" /> {item}
-                  </div>
-                ))}
-                <button className="text-[10px] text-indigo-400 font-bold mt-2">View Full List</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser, currentUser?.id, handleFinalPayment, shippingPreference, appointments, pickupAddress, pickupName, pickupPhone, orderedItemIds, shopConsolidationOption, isMobile, activeCheckoutStep, couponCodeInput, appliedCoupon, coupons, setAppliedCoupon, setCouponCodeInput, goBack, navigateTo]);
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="animate-spin text-indigo-600" size={48} />
-      </div>
-    );
-  }
-
-  const handleLogout = async () => {
-    // 1. Immediately and synchronously clear all local state and items to avoid transition lag or state re-fetching
-    clearActiveSession();
-    setItems([]);
-    setOrders([]);
-    setSession(null);
-    setCurrentUser(null);
-    setIsGuestMode(false);
-    setGuestEmail('');
-    setActivePickupStep(1);
-    setLastBookingRef(null);
-    setIsSchedulingNewPickup(false);
-    setShowPickupConfirmModal(false);
-    setShowPendingPickupAlertModal(false);
-    hasShownPendingAlertThisSessionRef.current = false;
-    
-    // 2. Perform background async Supabase signOut
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.warn('Supabase signOut background error:', err);
-    }
-    
-    setAddress({
-      fullName: '',
-      email: '',
-      phone: '',
-      addressLine1: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: COUNTRIES[0],
-    });
-    setPickupAddress({
-      street: '',
-      apartment: '',
-      city: '',
-      state: '',
-      zip: ''
-    });
-    setPickupDetailsTab('pickup');
-    setPickupDestination({
-      fullName: '',
-      email: '',
-      phone: '',
-      addressLine1: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: COUNTRIES[0],
-    });
-    setPickupName('');
-    setPickupPhone('');
-    setPickupLanguage('English');
-    setPickupItemType('Everyday Items');
-    setPickupVehicleType('Less than 5 kg');
-    setPickupSpecialInstructions('');
-    setPickupCategory('Personal Effects');
-    setPickupEstimatedWeight('Less than 5 kg');
-    setCartItemName('');
-    setCartItemWeight('');
-    setCartItemQuantity(1);
-    setCartItemFragile(false);
-    setCartItemInvoiceNumber('');
-    setCartItemRemarks('');
-    setIsPaid(false);
-    setOrderId(null);
-    setActiveTab('home');
-    setTabHistory(['home']);
-  };
-
-  const handleAssignAgent = async (orderId: string, agent: AgentProfile | null) => {
-    try {
-      const previousOrder = orders.find(o => o.id === orderId);
-      const prevAgent = previousOrder?.assignedAgent;
-      
-      await api.updateOrder(orderId, { 
-        assignedAgent: agent || undefined, 
-        assignedAgentId: agent ? agent.id : undefined 
-      });
-      setOrders(prev => prev.map(o => o.id === orderId ? { 
-        ...o, 
-        assignedAgent: agent || undefined, 
-        assignedAgentId: agent ? agent.id : undefined 
-      } : o));
-
-      // Also update 'pickups' table in Supabase
-      if (dbStatus.connected) {
-        try {
-          await api.updatePickup(orderId, {
-            assignedAgentId: agent ? agent.id : null,
-          });
-        } catch (e) {
-          console.warn('Failed to update pickup agent assignment in Supabase:', e);
-        }
-      }
-
-      if (agent) {
-        logAgentActionToSupabase(
-          'ASSIGN',
-          agent.id,
-          agent.name,
-          { orderId },
-          currentUser?.email || 'admin@jiffex.com'
-        );
-      } else if (prevAgent) {
-        logAgentActionToSupabase(
-          'DEASSIGN',
-          prevAgent.id,
-          prevAgent.name,
-          { orderId },
-          currentUser?.email || 'admin@jiffex.com'
-        );
-      }
-    } catch (err) {
-      console.error('Failed to assign agent:', err);
-      throw err;
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 safe-top safe-bottom overflow-x-clip">
-      {/* Supabase Status Banner */}
-      {!dbStatus.connected && dbStatus.checked && (
-        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex flex-col items-center justify-center gap-1 text-[10px] font-bold text-amber-700 uppercase tracking-widest">
-          <div className="flex items-center gap-2">
-            <Database size={12} />
-            Database Not Connected. Using Local Storage Mode.
-            <button 
-              onClick={() => {
-                setDbStatus(prev => ({ ...prev, checked: false }));
-                api.checkHealth()
-                  .then(res => setDbStatus({ connected: res.supabaseConnected, checked: true }))
-                  .catch(() => setDbStatus({ connected: false, checked: true }));
-              }}
-              className="ml-2 px-2 py-0.5 bg-amber-200 hover:bg-amber-300 transition-colors rounded text-[8px]"
-            >
-              Retry
-            </button>
-          </div>
-          <p className="text-[8px] opacity-70 normal-case font-medium">
-            Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Settings {'>'} Environment Variables.
-          </p>
-        </div>
-      )}
-      
-      {/* Header Area (Sticky) */}
-      <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-md shadow-md">
-        {/* Error Banner */}
-        {dbError && (
-          <div className="bg-red-500 text-white p-4 text-center font-bold relative z-20 shadow-lg">
-            <div className="max-w-7xl mx-auto flex items-center justify-center gap-3">
-              <ShieldCheck size={20} />
-              <span>{dbError}</span>
-              <button 
-                onClick={() => setDbError(null)}
-                className="ml-4 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg text-xs transition-colors"
-               >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Navigation */}
-        <nav className="bg-white/95 border-b border-slate-100 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.04)] sticky top-0 z-[100] backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 md:h-20 flex items-center justify-between gap-4 flex-nowrap">
-            {/* Mobile View Logo - Only visible below md screens */}
-            <div 
-              className="flex md:hidden items-center gap-2 cursor-pointer shrink-0" 
-              onClick={() => {
-                if (currentUser?.role === 'admin' || currentUser?.role === 'Admin') navigateTo('admin');
-                else if (currentUser?.role === 'agent' || currentUser?.role === 'Agent') {
-                  setActiveWorkOrder(null);
-                  navigateTo('agent');
-                } else navigateTo('home');
-              }}
-            >
-              <Logo size={22} className="h-7" />
-            </div>
-            
-            {/* Desktop Navigation Group - Only visible on md screens & up */}
-            <div className="hidden md:flex flex-1 items-center justify-between gap-4 flex-nowrap w-full">
-              {/* Desktop Logo */}
-              <div 
-                className="flex items-center gap-3 cursor-pointer shrink-0" 
-                onClick={() => {
-                  if (currentUser?.role === 'admin' || currentUser?.role === 'Admin') navigateTo('admin');
-                  else if (currentUser?.role === 'agent' || currentUser?.role === 'Agent') {
-                    setActiveWorkOrder(null);
-                    navigateTo('agent');
-                  } else navigateTo('home');
-                }}
-              >
-                <Logo height="h-12 sm:h-14" />
-              </div>
-
-              {currentUser?.role !== 'agent' && currentUser?.role !== 'customer_service' && (
-                  <>
-                    {/* Services Dropdown */}
-                    <div 
-                      className="relative"
-                      onMouseEnter={() => setShowServicesDropdown(true)}
-                      onMouseLeave={() => setShowServicesDropdown(false)}
-                    >
-                      <button 
-                        onClick={() => setShowServicesDropdown(!showServicesDropdown)}
-                        className={`text-xs lg:text-sm uppercase tracking-wider font-extrabold transition-all pb-1.5 border-b-2 mt-0.5 flex items-center gap-1 text-nowrap shrink-0 ${
-                          (activeTab === 'store' || activeTab === 'pickup' || activeTab === 'warehouse')
-                            ? 'text-orange-600 border-orange-500' 
-                            : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'
-                        }`}
-                      >
-                        Services
-                        <ChevronDown size={12} className={`transition-transform duration-300 ${showServicesDropdown ? 'rotate-180 text-orange-600' : 'text-slate-400'}`} />
-                      </button>
-
-                      <AnimatePresence>
-                        {showServicesDropdown && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                            transition={{ duration: 0.15, ease: 'easeOut' }}
-                            className="absolute left-0 mt-3 z-[110] bg-white rounded-2xl border border-slate-100 shadow-[0_12px_36px_rgba(15,23,42,0.08)] p-3.5 grid grid-cols-3 gap-3 w-[580px] pointer-events-auto"
-                          >
-                            <button
-                              onClick={() => {
-                                navigateTo('store');
-                                setShowServicesDropdown(false);
-                              }}
-                              className="flex flex-col items-center text-center p-4 rounded-xl border border-slate-100 hover:border-orange-200 hover:bg-gradient-to-b hover:from-orange-50/20 hover:to-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
-                            >
-                              <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center mb-3 transition-all duration-300 group-hover:bg-orange-500 group-hover:text-white group-hover:scale-110 group-hover:shadow-[0_8px_16px_rgba(249,115,22,0.25)]">
-                                <ShoppingBag size={22} className="stroke-[2.2] transition-transform group-hover:rotate-6" />
-                              </div>
-                              <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-orange-600 transition-colors">Shop & Ship</span>
-                              <span className="text-slate-450 text-[10px] leading-relaxed block px-1">Buy from India and get global delivery.</span>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                navigateTo('pickup');
-                                setShowServicesDropdown(false);
-                              }}
-                              className="flex flex-col items-center text-center p-4 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-gradient-to-b hover:from-indigo-50/20 hover:to-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
-                            >
-                              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3 transition-all duration-300 group-hover:bg-indigo-600 group-hover:text-white group-hover:scale-110 group-hover:shadow-[0_8px_16px_rgba(79,70,229,0.25)]">
-                                <Truck size={22} className="stroke-[2.2] transition-transform group-hover:-translate-x-1" />
-                              </div>
-                              <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-indigo-650 transition-colors">Schedule Pickup</span>
-                              <span className="text-slate-450 text-[10px] leading-relaxed block px-1">We gather, pack & ship package from home.</span>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                navigateTo('warehouse');
-                                setShowServicesDropdown(false);
-                              }}
-                              className="flex flex-col items-center text-center p-4 rounded-xl border border-slate-100 hover:border-emerald-200 hover:bg-gradient-to-b hover:from-emerald-50/20 hover:to-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
-                            >
-                              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 transition-all duration-300 group-hover:bg-emerald-600 group-hover:text-white group-hover:scale-110 group-hover:shadow-[0_8px_16px_rgba(16,185,129,0.25)]">
-                                <Package size={22} className="stroke-[2.2] transition-transform group-hover:scale-105" />
-                              </div>
-                              <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-indigo-650 transition-colors">Drop Off Package</span>
-                              <span className="text-slate-450 text-[10px] leading-relaxed block px-1">Deliver items directly to our warehouse.</span>
-                            </button>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    <button 
-                      onClick={() => navigateTo('track')}
-                      className={`text-xs lg:text-sm uppercase tracking-wider font-extrabold transition-all pb-1.5 border-b-2 mt-0.5 text-nowrap shrink-0 ${activeTab === 'track' ? 'text-orange-600 border-orange-500' : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'}`}
-                    >
-                      Track your shipment
-                    </button>
-                    <button 
-                      onClick={() => navigateTo('about')}
-                      className={`text-xs lg:text-sm uppercase tracking-wider font-extrabold transition-all pb-1.5 border-b-2 mt-0.5 text-nowrap shrink-0 ${activeTab === 'about' ? 'text-orange-600 border-orange-500' : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'}`}
-                    >
-                      Why JiffEX
-                    </button>
-                    <button 
-                      onClick={() => navigateTo('support')}
-                      className={`text-xs lg:text-sm uppercase tracking-wider font-extrabold transition-all pb-1.5 border-b-2 mt-0.5 text-nowrap shrink-0 ${activeTab === 'support' ? 'text-orange-600 border-orange-500' : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'}`}
-                    >
-                      Support
-                    </button>
-                    {currentUser?.role !== 'agent' && (
-                      <button 
-                        onClick={handleQuickQuoteClick}
-                        className="text-xs lg:text-sm font-extrabold uppercase tracking-wider text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 px-3.5 py-1.5 rounded-xl shadow-sm hover:shadow-md transition-all duration-300 ease-out hover:-translate-y-0.5 active:translate-y-0 text-nowrap shrink-0"
-                      >
-                        Quick Quote
-                      </button>
-                    )}
-                  </>
-                )}
-
-                {currentUser?.role === 'admin' && (
-                  <button 
-                    onClick={() => navigateTo('admin')}
-                    className={`text-xs lg:text-sm font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'admin' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'} text-nowrap shrink-0`}
-                  >
-                    Admin
-                  </button>
-                )}
-                {currentUser?.role === 'webmaster' && (
-                  <button 
-                    onClick={() => navigateTo('admin')}
-                    className={`text-xs lg:text-sm font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'admin' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'} text-nowrap shrink-0`}
-                  >
-                    Catalog
-                  </button>
-                )}
-                {currentUser?.role === 'agent' && (
-                  <button 
-                    onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
-                    className={`text-xs lg:text-sm font-bold transition-all px-3 py-1.5 rounded-xl border border-emerald-100 ${activeTab === 'agent' ? 'text-white bg-emerald-600' : 'text-emerald-600 hover:bg-emerald-50'} text-nowrap shrink-0`}
-                  >
-                    Work Portal
-                  </button>
-                )}
-                {currentUser?.role === 'customer_service' && (
-                  <button 
-                    onClick={() => navigateTo('support')}
-                    className={`text-xs lg:text-sm font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'support' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'} text-nowrap shrink-0`}
-                  >
-                    Support Desk
-                  </button>
-                )}
-
-                {/* Cart Only */}
-                {currentUser?.role !== 'agent' && (
-                  <button 
-                    onClick={() => navigateTo('cart')}
-                    className={`relative p-2 rounded-xl transition-all shrink-0 ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <ShoppingCart size={18} className="lg:w-5 lg:h-5 shrink-0" />
-                    {cartItems.length > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black border border-white">
-                        {cartItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}
-                      </span>
-                    )}
-                  </button>
-                )}
-
-                {/* Profile or Sign in */}
-                {currentUser ? (
-                  <div 
-                    className="relative shrink-0"
-                    onMouseEnter={() => setShowUserDropdown(true)}
-                    onMouseLeave={() => setShowUserDropdown(false)}
-                  >
-                    <button 
-                      className={`flex items-center gap-1.5 lg:gap-2 px-2.5 py-1.5 rounded-xl transition-all border-2 shrink-0 ${
-                        showUserDropdown ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-transparent text-slate-700 hover:bg-slate-100'
-                      }`}
-                    >
-                      <div className="w-7 h-7 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-black text-xs shadow-sm shrink-0">
-                        {currentUser.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="hidden lg:flex flex-col items-start leading-none shrink-0 whitespace-nowrap">
-                        {currentUser.role.toLowerCase() !== 'customer' && (
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">{currentUser.role}</span>
-                        )}
-                        <span className="text-xs font-black text-slate-900 whitespace-nowrap">{currentUser.name}</span>
-                      </div>
-                      <ChevronDown size={14} className={`hidden lg:block transition-transform duration-300 shrink-0 ${showUserDropdown ? 'rotate-180' : ''}`} />
-                    </button>
-
-                    <AnimatePresence>
-                      {showUserDropdown && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                        className="absolute top-full right-0 mt-2 w-56 bg-white rounded-3xl border border-slate-200 shadow-2xl shadow-slate-200/50 py-2 z-50"
-                      >
-                        <div className="px-4 py-3 border-b border-slate-50 mb-1">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Signed in as</p>
-                          <p className="text-sm font-bold text-slate-900 truncate">{currentUser.email}</p>
-                        </div>
-                        
-                        {currentUser?.role !== 'agent' && (
-                          <>
-                            <button 
-                              onClick={() => { navigateTo('history'); setShowUserDropdown(false); }}
-                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
-                            >
-                              <History size={18} /> My Orders
-                            </button>
-                            
-                            <button 
-                              onClick={() => { navigateTo('account'); setShowUserDropdown(false); }}
-                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
-                            >
-                              <UserIcon size={18} /> My Account
-                            </button>
-                          </>
-                        )}
-
-                        <div className="h-px bg-slate-50 my-1 mx-2" />
-                        
-                        <button 
-                          onClick={() => { handleLogout(); setShowUserDropdown(false); }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-red-500 hover:bg-red-50 transition-all"
-                        >
-                          <LogOut size={18} /> Sign Out
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ) : (
-                <button 
-                  onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }}
-                  className="bg-deep-blue text-white flex items-center gap-1.5 py-1.5 px-3 lg:py-2 lg:px-4 text-xs lg:text-sm rounded-xl font-extrabold hover:bg-slate-800 transition-all active:scale-95 whitespace-nowrap text-nowrap shrink-0 uppercase tracking-wider"
-                >
-                  <UserIcon size={14} className="lg:w-4 lg:h-4 shrink-0" /> <span className="whitespace-nowrap">Sign In</span>
-                </button>
-              )}
-          </div>
-
-            {/* Mobile View Group - Only visible below md screens */}
-            <div className="flex md:hidden items-center gap-2 ml-auto shrink-0">
-              {currentUser?.role !== 'agent' && (
-                <button 
-                  onClick={() => navigateTo('cart')}
-                  className={`relative p-1.5 rounded-xl transition-all shrink-0 ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600'}`}
-                >
-                  <ShoppingCart size={18} className="shrink-0" />
-                  {cartItems.length > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 bg-indigo-600 text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-black border border-white">
-                      {cartItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}
-                    </span>
-                  )}
-                </button>
-              )}
-
-              {/* Mobile Profile Or Sign In icon button */}
-              {currentUser ? (
-                <button 
-                  className="w-7 h-7 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-black text-[10px] shrink-0"
-                  onClick={() => navigateTo('account')}
-                >
-                  {currentUser.name.charAt(0).toUpperCase()}
-                </button>
-              ) : (
-                <button 
-                  onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }}
-                  className="p-1.5 text-slate-600 hover:bg-slate-50 rounded-xl"
-                >
-                  <UserIcon size={18} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Mobile Menu Drawer */}
-          <AnimatePresence>
-            {isMobileMenuOpen && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="lg:hidden border-t border-slate-100 bg-white overflow-hidden"
-              >
-                <div className="flex flex-col p-4 gap-2">
-                  <div className="px-3 py-4 mb-2 border-b border-slate-50">
-                    <Logo size={24} className="h-8" />
-                  </div>
-                  {currentUser?.role !== 'agent' && (
-                    <button 
-                      onClick={() => { navigateTo('store'); setIsMobileMenuOpen(false); }}
-                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'store' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      Shop & Ship
-                    </button>
-                  )}
-                  {currentUser?.role !== 'agent' && (
-                    <div className="flex flex-col gap-1">
-                      <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Ship Items</div>
-                      <button 
-                        onClick={() => { navigateTo('pickup'); setIsMobileMenuOpen(false); }}
-                        className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'pickup' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                      >
-                        <Truck size={20} /> Schedule Pickup
-                      </button>
-                      <button 
-                        onClick={() => { navigateTo('warehouse'); setIsMobileMenuOpen(false); }}
-                        className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'warehouse' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                      >
-                        <Package size={20} /> Drop Off Package
-                      </button>
-                    </div>
-                  )}
-                  {currentUser?.role !== 'agent' && (
-                    <div className="flex flex-col gap-1">
-                      <button 
-                        onClick={() => { navigateTo('track'); setIsMobileMenuOpen(false); }}
-                        className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'track' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                      >
-                        Track Shipment
-                      </button>
-                      <button 
-                        onClick={() => { navigateTo('about'); setIsMobileMenuOpen(false); }}
-                        className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'about' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                      >
-                        Why JiffEX
-                      </button>
-                      <button 
-                        onClick={() => { navigateTo('support'); setIsMobileMenuOpen(false); }}
-                        className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'support' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                      >
-                        {currentUser?.role === 'customer_service' ? 'Support Desk' : 'Support'}
-                      </button>
-                    </div>
-                  )}
-
-                  {currentUser?.role === 'admin' && (
-                    <button 
-                      onClick={() => { navigateTo('admin'); setIsMobileMenuOpen(false); }}
-                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'admin' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      Admin Dashboard
-                    </button>
-                  )}
-                  {currentUser?.role === 'webmaster' && (
-                    <button 
-                      onClick={() => { navigateTo('admin'); setIsMobileMenuOpen(false); }}
-                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'admin' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      Catalog Manager
-                    </button>
-                  )}
-                  {currentUser?.role === 'agent' && (
-                    <button 
-                      onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); setIsMobileMenuOpen(false); }}
-                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'agent' ? 'text-emerald-600 bg-emerald-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      Work Portal
-                    </button>
-                  )}
-                   {currentUser?.role !== 'agent' && (
-                    <button 
-                      onClick={handleQuickQuoteClick}
-                      className="text-lg font-black p-3.5 rounded-xl text-center text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 transition-all shadow-sm hover:shadow-md mt-2 flex items-center justify-center gap-2"
-                    >
-                      Quick Quote
-                    </button>
-                  )}
-                  
-                  <div className="pt-4 mt-2 border-t border-slate-100">
-                    {!currentUser ? (
-                      <button 
-                        onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); setIsMobileMenuOpen(false); }}
-                        className="w-full bg-deep-blue text-white flex items-center justify-center gap-2 py-3 rounded-xl font-bold hover:bg-slate-800 transition-all active:scale-95"
-                      >
-                        <UserIcon size={20} />
-                        <span>Sign In</span>
-                      </button>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        <div className="px-3 py-2 flex flex-col">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Account</span>
-                          <span className="text-lg font-black text-slate-900 leading-tight">{currentUser.name}</span>
-                          <span className="text-xs text-slate-500 font-medium truncate">{currentUser.email}</span>
-                        </div>
-                        <div className="h-px bg-slate-100 my-2 mx-3" />
-                        {currentUser?.role !== 'agent' && (
-                          <>
-                            <button 
-                              onClick={() => { navigateTo('history'); setIsMobileMenuOpen(false); }}
-                              className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'history' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                            >
-                              <History size={20} /> My Orders
-                            </button>
-                            <button 
-                              onClick={() => { navigateTo('account'); setIsMobileMenuOpen(false); }}
-                              className="text-lg font-bold p-3 rounded-xl text-left text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-3"
-                            >
-                              <UserIcon size={20} /> My Account
-                            </button>
-                          </>
-                        )}
-                        <button 
-                          onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
-                          className="w-full p-3 rounded-xl text-left font-bold text-red-600 bg-red-50 flex items-center gap-2 mt-2"
-                        >
-                          <LogOut size={20} />
-                          <span>Sign Out</span>
-                        </button>
-                      </div>
-                    )}
-                    
-
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </nav>
-      </header>
-
-      {/* Main Content */}
-      <main className={`relative max-w-7xl mx-auto pb-10 md:pb-20 ${
-        activeTab === 'home'
-          ? 'pt-0 md:pt-8 px-0 md:px-4'
-          : (activeTab === 'store' && isMobile)
-            ? 'pt-0 px-0'
-            : 'px-4 ' + (activeTab === 'about' || activeTab === 'store' || activeTab === 'warehouse' || activeTab === 'pickup' || activeTab === 'cart' || activeTab === 'finalize' 
-              ? 'pt-8' 
-              : activeTab === 'history' 
-                ? 'pt-6' 
-                : activeTab === 'admin' || activeTab === 'support' || currentUser?.role === 'agent'
-                  ? 'pt-4' 
-                  : 'pt-20')
-      }`}>
-        <AnimatePresence>
-          {activeTab !== 'home' && activeTab !== 'about' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'finalize' && activeTab !== 'history' && activeTab !== 'agent' && activeTab !== 'support' && activeTab !== 'admin' && <BackButton onClick={goBack} />}
-        </AnimatePresence>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.2 }}
-          >
-            {activeTab === 'home' && HomeSection}
-            {activeTab === 'about' && <AboutSection />}
-            {activeTab === 'track' && <TrackSection />}
-            {activeTab === 'pickup' && renderUnifiedCartSection('Pickup')}
-            {activeTab === 'warehouse' && renderUnifiedCartSection('Warehouse')}
-            {activeTab === 'cart' && (isMobile ? (
-              <MobileCartSection
-                items={items}
-                appointments={userAppointments}
-                currentUser={currentUser}
-                customerWarehouseId={customerWarehouseId}
-                addItem={addItem}
-                removeItem={removeItem}
-                updateItemQuantity={updateItemQuantity}
-                removeStoreItem={removeStoreItem}
-                handleCheckout={handleCheckout}
-                navigateTo={navigateTo}
-                storeProducts={storeProducts}
-                orderedItemIds={orderedItemIds}
-                shopConsolidationOption={shopConsolidationOption}
-                setShopConsolidationOption={setShopConsolidationOption}
-                showConsolidationError={showConsolidationError}
-                setShowConsolidationError={setShowConsolidationError}
-                couponCodeInput={couponCodeInput}
-                setCouponCodeInput={setCouponCodeInput}
-                coupons={coupons}
-                appliedCoupon={appliedCoupon}
-                setAppliedCoupon={setAppliedCoupon}
-              />
-            ) : renderUnifiedCartSection())}
-            {activeTab === 'notifications' && NotificationCenter}
-            {activeTab === 'support' && (
-              <SupportSection 
-                currentUser={currentUser} 
-                orders={orders}
-                tickets={tickets}
-                setTickets={setTickets}
-                refundRequests={refundRequests}
-                setRefundRequests={setRefundRequests}
-              />
-            )}
-            {activeTab === 'store' && StoreSection}
-            {activeTab === 'finalize' && FinalizeSection}
-            {activeTab === 'history' && CustomerHistory}
-            {activeTab === 'warehouse-mgmt' && renderWarehouseManagementSection()}
-            {activeTab === 'admin' && (
-              <AdminDashboard 
-                currentUser={currentUser}
-                orders={orders}
-                appointments={appointments}
-                onAssignAgent={handleAssignAgent}
-                agents={agents}
-                setAgents={setAgents}
-                categories={categories}
-                setCategories={setCategories}
-                adminTab={adminTab as any}
-                setAdminTab={setAdminTab as any}
-                storeProducts={storeProducts}
-                setStoreProducts={setStoreProducts}
-                setOrders={setOrders}
-                setItems={setItems}
-                onUpdateOrderItemStatus={updateOrderItemStatus}
-                onUpdateOrderItemWeight={updateOrderItemWeight}
-                refundRequests={refundRequests}
-                setRefundRequests={setRefundRequests}
-                isWebmaster={currentUser?.role === 'webmaster'}
-                shippingRates={shippingRates}
-                setShippingRates={setShippingRates}
-                shippingDiscounts={shippingDiscounts}
-                setShippingDiscounts={setShippingDiscounts}
-                coupons={coupons}
-                setCoupons={setCoupons}
-                isAutoAssignAgentEnabled={isAutoAssignAgentEnabled}
-                setIsAutoAssignAgentEnabled={setIsAutoAssignAgentEnabled}
-              />
-            )}
-            {activeTab === 'agent' && AgentSection}
-            {activeTab === 'account' && (
-              <AccountSection 
-                currentUser={currentUser} 
-                onUpdateProfile={handleUpdateProfile}
-                customerWarehouseId={customerWarehouseId}
-              />
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </main>
-
-      {/* Footer */}
-      <footer className="hidden md:block bg-slate-50 border-t border-slate-200 pt-16 pb-24 px-4 relative z-40">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
-          <div className="col-span-1">
-            <div className="flex items-center gap-2 mb-6">
-              <Logo height="h-12" />
-            </div>
-            <p className="text-slate-500 max-w-sm leading-relaxed text-sm">
-              Your trusted partner for seamless global shipping and warehouse solutions. We simplify logistics so you can focus on growing your business.
-            </p>
-          </div>
-          
-          <div>
-            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Company</h4>
-            <ul className="space-y-4">
-              <li><button onClick={() => navigateTo('support')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Contact</button></li>
-              <li><button onClick={() => alert('Shipping Policy coming soon!')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Shipping Policy</button></li>
-              <li><button onClick={() => alert('Privacy Policy coming soon!')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Privacy Policy</button></li>
-            </ul>
-          </div>
-          
-          {currentUser?.role !== 'agent' && (
-            <div>
-              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Account</h4>
-              <ul className="space-y-4">
-                <li><button onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Sign In</button></li>
-                <li><button onClick={() => navigateTo(currentUser ? 'account' : 'home')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">My Account Details</button></li>
-                <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">My Shipments</button></li>
-                <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Order History</button></li>
-                <li><button onClick={() => navigateTo('notifications')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Notifications</button></li>
-              </ul>
-            </div>
-          )}
-
-          <div>
-            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Services</h4>
-            <ul className="space-y-4">
-              <li><button onClick={() => navigateTo('pickup')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Pickup from home</button></li>
-              <li><button onClick={() => navigateTo('warehouse')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Send to Our Warehouse</button></li>
-              <li><button onClick={() => navigateTo('store')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Shop</button></li>
-              <li><button onClick={() => navigateTo('home')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Rate Calculator</button></li>
-            </ul>
-          </div>
-        </div>
-        
-        <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-slate-400 text-sm hidden md:block">
-            ¬© 2026 Global Logistics Pro Inc. All rights reserved.
-          </p>
-          <p className="text-slate-400 text-xs md:hidden text-center leading-relaxed">
-            ¬© 2026 Jiffex Fulfilment Private Limited. All rights reserved.
-          </p>
-          <div className="flex items-center gap-6">
-            <button className="text-slate-400 hover:text-slate-600 transition-colors"><Share size={20} /></button>
-            <button className="text-slate-400 hover:text-slate-600 transition-colors"><MessageSquare size={20} /></button>
-          </div>
-        </div>
-      </footer>
-
-      {/* Pickup Choice Modal - Removed for Unified Workflow */}
-
-      {/* Conflict Modal */}
-      <AnimatePresence>
-        {showConflictModal.show && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[130] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100"
-            >
-              <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mb-6 mx-auto">
-                <AlertTriangle size={32} />
-              </div>
-              <h3 className="text-2xl font-black text-slate-900 text-center mb-2">Order in Progress</h3>
-              <p className="text-slate-500 text-center mb-8 leading-relaxed">
-                An agent pickup order is currently in progress. Do you still want to place this order? 
-                <span className="block mt-2 font-bold text-indigo-600">If yes, this will be processed as a separate order.</span>
-              </p>
-              
-              <div className="flex flex-col gap-3">
-                <button 
-                  onClick={() => {
-                    const { item, source } = showConflictModal;
-                    if (item && source) {
-                      addItem(item, source, true);
-                    }
-                  }}
-                  className="w-full btn-cta"
-                >
-                  Yes, Place Separate Order
-                </button>
-                <button 
-                  onClick={() => setShowConflictModal({ show: false, item: null, source: null })}
-                  className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
-                >
-                  No, Cancel
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Cancellation Modal */}
-      <AnimatePresence>
-        {cancellingPickupId && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[140] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100"
-            >
-              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto">
-                <AlertTriangle size={32} />
-              </div>
-              <h3 className="text-2xl font-black text-slate-900 text-center mb-2">Cancel Pickup?</h3>
-              <p className="text-slate-500 text-center mb-8 leading-relaxed">
-                Are you sure you want to cancel this scheduled pickup request? This action cannot be undone.
-              </p>
-              
-              <div className="flex flex-col gap-3">
-                <button 
-                  onClick={confirmCancelPickup}
-                  className="w-full py-4 bg-red-600 text-white rounded-2xl font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200"
-                >
-                  Yes, Cancel Pickup
-                </button>
-                <button 
-                  onClick={() => setCancellingPickupId(null)}
-                  className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
-                >
-                  No, Keep It
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Login Modal */}
-      <AnimatePresence>
-        {showLoginModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowLoginModal(false)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden"
-            >
-              <button 
-                onClick={() => setShowLoginModal(false)}
-                className="absolute top-5 right-5 w-10 h-10 bg-slate-100/90 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-200 transition-all z-20 shadow-sm"
-              >
-                <X size={20} />
-              </button>
-              <div className="p-6 sm:p-8 overflow-y-auto flex-1 custom-scrollbar">
-                <div className="text-center mb-6">
-                  <div className="flex items-center justify-center mx-auto mb-3">
-                    <Logo height="h-14 sm:h-16" />
-                  </div>
-                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
-                    {loginTriggerSource === 'checkout' ? 'Almost There!' : loginTriggerSource === 'pickup' ? 'One Last Step!' : 'Welcome to Jiffex'}
-                  </h2>
-                  <p className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed">
-                    {loginTriggerSource === 'checkout' 
-                      ? 'Sign in or create an account to complete your secure checkout' 
-                      : loginTriggerSource === 'pickup'
-                      ? 'Verify your identity to confirm your pickup'
-                      : 'Sign in or create an account to continue'}
-                  </p>
-                </div>
-                <Login onSuccess={(email, name) => {
-                  saveActiveSession(email, name);
-                  setGuestEmail(email);
-                  if (name) setGuestName(name);
-                  setIsGuestMode(true);
-                  setShowLoginModal(false);
-                  
-                  // Auto-redirect based on role for smoother testing
-                  const isAdmin = email === 'admin@jiffex.com';
-                  const isAgent = email.toLowerCase().endsWith('.agent@jiffex.com') || email === 'agent@jiffex.com';
-                  if (isAdmin) {
-                    navigateTo('admin');
-                  } else if (isAgent) {
-                    navigateTo('agent');
-                  } else if (loginTriggerSource === 'pickup') {
-                    // Start guest/member session and direct synchronous confirmation to next step (Step 5)
-                    const guestId = email ? `guest_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : sessionGuestId;
-                    confirmPickup('AllAgent', guestId, email, name || pickupName);
-                  } else if (loginTriggerSource === 'checkout') {
-                    navigateTo('finalize');
-                  }
-                }} />
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Payment Gateway Trouble / International Card Fallback Modal */}
-      <AnimatePresence>
-        {showPaymentTroubleModal && (
-          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowPaymentTroubleModal(false)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl overflow-hidden text-left"
-            >
-              {/* Header decorative */}
-              <div className="bg-red-50 p-6 border-b border-red-100 flex items-start gap-4">
-                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-red-600 shrink-0">
-                  <AlertTriangle size={24} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-slate-900 leading-tight">Payment Issue?</h3>
-                  <p className="text-xs text-red-700 font-bold mt-1">
-                    "International cards are not supported"
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-4">
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Razorpay accounts in test mode (and standard Indian accounts without international activation) block foreign cards by default, displaying the error above.
-                </p>
-                
-                <div className="space-y-3">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">How would you like to proceed?</h4>
-                  
-                  {/* Option 1: Simulate Payment Success */}
-                  <button
-                    onClick={async () => {
-                      if (paymentTroublePendingOrderSave) {
-                        toast.loading("Processing simulated transaction...", { id: "sim-payment" });
-                        try {
-                          await paymentTroublePendingOrderSave();
-                          toast.dismiss("sim-payment");
-                          setShowPaymentTroubleModal(false);
-                        } catch (err) {
-                          toast.dismiss("sim-payment");
-                          toast.error("Failed to complete order simulation.");
-                        }
-                      } else {
-                        setShowPaymentTroubleModal(false);
-                      }
-                    }}
-                    className="w-full p-4 rounded-2xl border-2 border-indigo-600 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-900 text-left transition-all flex items-center gap-4 group"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
-                      <Sparkles size={20} className="group-hover:rotate-12 transition-transform" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-xs font-black">Simulate Payment Success</div>
-                      <div className="text-[10px] text-indigo-600 font-bold mt-0.5">Recommended for Testing & Demos</div>
-                    </div>
-                  </button>
-
-                  {/* Option 2: Try Domestic Payment */}
-                  <button
-                    onClick={() => {
-                      setShowPaymentTroubleModal(false);
-                      toast.info("Please use 'test@upi' or a Domestic Visa card to test.");
-                    }}
-                    className="w-full p-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-left transition-all flex items-center gap-4"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
-                      <CreditCard size={18} />
-                    </div>
-                    <div>
-                      <div className="text-xs font-black">Try UPI / Domestic Test Bank</div>
-                      <div className="text-[10px] text-slate-500 font-bold mt-0.5">Bypasses international card limits</div>
-                    </div>
-                  </button>
-
-                  {/* Option 3: WhatsApp Support */}
-                  <a
-                    href="https://wa.me/919502758111"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full p-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-left transition-all flex items-center gap-4 block"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200">
-                      <MessageSquare size={18} />
-                    </div>
-                    <div>
-                      <div className="text-xs font-black">Contact Support on WhatsApp</div>
-                      <div className="text-[10px] text-emerald-600 font-bold mt-0.5">Pay via PayPal, Stripe, or Bank Transfer</div>
-                    </div>
-                  </a>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
-                <button
-                  onClick={() => setShowPaymentTroubleModal(false)}
-                  className="px-5 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-xs transition-colors"
-                >
-                  Close
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showPendingPickupAlertModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white rounded-[2rem] p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden text-left relative"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center shadow-inner">
-                  <AlertCircle size={28} />
-                </div>
-                <button 
-                  onClick={() => setShowPendingPickupAlertModal(false)}
-                  className="w-9 h-9 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-200 transition-all cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="space-y-3 mb-6">
-                <span className="inline-block text-[10px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200/80">
-                  Home Pickup Pending
-                </span>
-                <h3 className="text-xl font-black text-slate-900 leading-snug">
-                  Your Shop & Ship Order is Confirmed!
-                </h3>
-                <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                  Your Shop & Ship order payment has been placed successfully. However, your <span className="font-bold text-slate-900">Home Pickup schedule is currently pending</span>. Would you like to complete your Home Pickup schedule now?
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-2.5">
-                <button
-                  onClick={() => {
-                    setShowPendingPickupAlertModal(false);
-                    navigateTo('pickup');
-                    setIsPaid(false);
-                    setOrderId(null);
-                    setShopConsolidationOption(null);
-                  }}
-                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs transition-all shadow-md shadow-indigo-100 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
-                >
-                  <Calendar size={16} /> Complete Home Pickup Now ‚Üí
-                </button>
-                <button
-                  onClick={() => setShowPendingPickupAlertModal(false)}
-                  className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition-all cursor-pointer active:scale-[0.98]"
-                >
-                  I'll Complete It Later
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {showPickupConfirmModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white rounded-[2.5rem] p-8 max-w-lg w-full shadow-2xl border border-slate-100 overflow-hidden"
-            >
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-2xl font-black text-slate-900">Confirm Pickup</h3>
-                <button 
-                  onClick={() => setShowPickupConfirmModal(false)}
-                  className="w-10 h-10 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-200 transition-all"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="space-y-6">
-                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
-                      <UserIcon size={20} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Customer Name</p>
-                      <p className="text-base font-bold text-slate-900">{pickupName}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
-                      <Phone size={20} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact Number</p>
-                      <p className="text-base font-bold text-slate-900">+91 {pickupPhone}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
-                      <MapPin size={20} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Address</p>
-                      <p className="text-sm font-bold text-slate-900 leading-relaxed">
-                        {pickupAddress.street}{pickupAddress.apartment ? `, ${pickupAddress.apartment}` : ''}, {pickupAddress.city}, {pickupAddress.zip}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
-                      <Clock size={20} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Scheduled Slot</p>
-                      <p className="text-base font-bold text-slate-900">{selectedPickupDate} at {selectedPickupTime}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3 pt-4">
-                  <button 
-                    onClick={() => {
-                      setShowPickupConfirmModal(false);
-                      confirmPickup('AllAgent');
-                    }}
-                    className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] text-lg font-black hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-200 flex items-center justify-center gap-3"
-                  >
-                    <CheckCircle2 size={24} /> Confirm & Schedule
-                  </button>
-                  <button 
-                    onClick={() => setShowPickupConfirmModal(false)}
-                    className="w-full py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm"
-                  >
-                    Back to Edit
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {showPickupInProgressModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
-                    <Truck size={24} />
-                  </div>
-                  <h3 className="text-xl font-black text-slate-900">Active Pickup Order</h3>
-                </div>
-                <button 
-                  onClick={() => setShowPickupInProgressModal(false)}
-                  className="w-10 h-10 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-200 transition-all"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="space-y-6">
-                <div className="p-5 bg-amber-50 rounded-2xl border border-amber-100 flex gap-3 text-slate-700">
-                  <AlertCircle size={20} className="shrink-0 text-amber-500 mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold text-slate-900">Order Already in Progress</p>
-                    <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-                      An existing order is already in progress. Do you want to place another order?
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3 pt-2">
-                  <button 
-                    onClick={() => {
-                      setIsSchedulingNewPickup(true);
-                      setActivePickupStep(1);
-                      setShowPickupInProgressModal(false);
-                      setTabHistory(prev => [...prev, 'pickup']);
-                      setActiveTab('pickup');
-                      setTimeout(() => {
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }, 100);
-                    }}
-                    className="w-full py-4 bg-indigo-600 text-white rounded-[1.5rem] text-md font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center justify-center gap-2"
-                  >
-                    Yes, Place Another Order <ArrowRight size={18} />
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setIsSchedulingNewPickup(false);
-                      setActivePickupStep(5);
-                      setShowPickupInProgressModal(false);
-                      setTabHistory(prev => [...prev, 'pickup']);
-                      setActiveTab('pickup');
-                      setTimeout(() => {
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }, 100);
-                    }}
-                    className="w-full py-4 bg-slate-100 text-slate-700 rounded-[1.5rem] text-md font-black hover:bg-slate-200 transition-all border border-slate-200 flex items-center justify-center"
-                  >
-                    No, View Existing Order
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Mobile Bottom Navigation Bar */}
-      {(!currentUser || (['customer', 'guest'].includes((currentUser.role || '').toLowerCase()))) && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-100 shadow-[0_-8px_30px_rgba(15,23,42,0.06)] z-[90] pb-safe">
-          <div className="flex justify-around items-center h-12 px-2">
-            {[
-              { id: 'home', label: 'Home', icon: Home },
-              { id: 'track', label: 'Track', icon: Search },
-              { id: 'new_order', label: 'New Order', icon: Plus, isFab: true },
-              { id: 'support', label: 'Support', icon: HelpCircle },
-              { id: 'account', label: 'Account', icon: UserIcon }
-            ].map((item) => {
-              const Icon = item.icon;
-              if (item.isFab) {
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setShowNewOrderMenu(true);
-                    }}
-                    className="flex flex-col items-center justify-center flex-1 h-full relative"
-                  >
-                    <div className="absolute -top-4 flex flex-col items-center">
-                      <div className="p-1.5 bg-indigo-600 text-white rounded-full shadow-lg shadow-indigo-200 border-4 border-white active:scale-95 transition-transform">
-                        <Icon size={16} className="stroke-[3]" />
-                      </div>
-                      <span className="text-[8px] font-black uppercase tracking-wider mt-0.5 text-indigo-600">
-                        {item.label}
-                      </span>
-                    </div>
-                  </button>
-                );
-              }
-              const isActive = item.id === 'account' 
-                ? (activeTab === 'account' || activeTab === 'history') 
-                : activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    if (item.id === 'account') {
-                      setShowAccountMenu(true);
-                    } else {
-                      navigateTo(item.id as any);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }
-                  }}
-                  className="flex flex-col items-center justify-center flex-1 h-full relative"
-                >
-                  <div className={`p-0.5 rounded-xl transition-all duration-300 relative ${
-                    isActive 
-                      ? 'text-indigo-600 scale-110' 
-                      : 'text-slate-400 hover:text-slate-600'
-                  }`}>
-                    <Icon size={16} className="stroke-[2.2]" />
-                  </div>
-                  <span className={`text-[8px] font-black uppercase tracking-wider mt-0 transition-colors duration-300 ${
-                    isActive ? 'text-indigo-600 font-extrabold' : 'text-slate-400'
-                  }`}>
-                    {item.label}
-                  </span>
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeMobileIndicator"
-                      className="absolute bottom-0.5 w-4 h-0.5 bg-indigo-600 rounded-full"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Mobile New Order Quick Drawer */}
-      <AnimatePresence>
-        {showNewOrderMenu && (
-          <div className="md:hidden fixed inset-0 z-[150] overflow-hidden">
-            {/* Backdrop */}
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowNewOrderMenu(false)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            />
-
-            {/* Bottom Sheet */}
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2.5rem] shadow-2xl p-6 pb-12 border-t border-slate-100"
-            >
-              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6" />
-
-              <div className="text-center mb-6">
-                <h3 className="text-xl font-black text-slate-900">Start a New Shipment</h3>
-                <p className="text-xs text-slate-500 mt-1">Select one of our premium international services</p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3">
-                {/* Pickup Option */}
-                <button
-                  onClick={() => {
-                    setShowNewOrderMenu(false);
-                    navigateTo('pickup');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100/50 transition-all text-left w-full"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-100">
-                    <Truck size={22} />
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm text-indigo-950">Schedule Doorstep Pickup</h4>
-                    <p className="text-xs text-indigo-700/80 mt-0.5">We collect, pack & ship internationally</p>
-                  </div>
-                </button>
-
-                {/* Drop-off Option */}
-                <button
-                  onClick={() => {
-                    setShowNewOrderMenu(false);
-                    navigateTo('warehouse');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="flex items-center gap-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-100 hover:bg-emerald-100/50 transition-all text-left w-full"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-100">
-                    <Package size={22} />
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm text-emerald-950">Drop Off at Warehouse</h4>
-                    <p className="text-xs text-emerald-700/80 mt-0.5">Ship your package to our hubs‚Äîwe deliver abroad</p>
-                  </div>
-                </button>
-
-                {/* Shop Option */}
-                <button
-                  onClick={() => {
-                    setShowNewOrderMenu(false);
-                    navigateTo('store');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="flex items-center gap-4 p-4 rounded-2xl bg-amber-50 border border-amber-100 hover:bg-amber-100/50 transition-all text-left w-full"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-100">
-                    <ShoppingBag size={22} />
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm text-amber-950">Shop & Ship from India</h4>
-                    <p className="text-xs text-amber-700/80 mt-0.5">Shop Indian brands‚Äîwe pack and ship abroad</p>
-                  </div>
-                </button>
-              </div>
-
-              <button
-                onClick={() => setShowNewOrderMenu(false)}
-                className="w-full mt-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all active:scale-95"
-              >
-                Cancel
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Mobile Account Quick Drawer */}
-      <AnimatePresence>
-        {showAccountMenu && (
-          <div className="md:hidden fixed inset-0 z-[150] overflow-hidden">
-            {/* Backdrop */}
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowAccountMenu(false)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            />
-
-            {/* Bottom Sheet */}
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2.5rem] shadow-2xl p-6 pb-12 border-t border-slate-100"
-            >
-              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6" />
-
-              <div className="text-center mb-6">
-                <h3 className="text-xl font-black text-slate-900">Your Account</h3>
-                <p className="text-xs text-slate-500 mt-1">Manage details or track order history</p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3">
-                {/* My Account Option */}
-                <button
-                  onClick={() => {
-                    setShowAccountMenu(false);
-                    navigateTo('account');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100/50 transition-all text-left w-full"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-100">
-                    <UserIcon size={22} />
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm text-indigo-950">My Account</h4>
-                    <p className="text-xs text-indigo-700/80 mt-0.5">View your profile details and preferences</p>
-                  </div>
-                </button>
-
-                {/* My Orders Option */}
-                <button
-                  onClick={() => {
-                    setShowAccountMenu(false);
-                    navigateTo('history');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100/50 transition-all text-left w-full"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-100">
-                    <History size={22} />
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm text-indigo-950">My Orders</h4>
-                    <p className="text-xs text-indigo-700/80 mt-0.5">Track shipment statuses and order history</p>
-                  </div>
-                </button>
-              </div>
-
-              <button
-                onClick={() => setShowAccountMenu(false)}
-                className="w-full mt-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all active:scale-95"
-              >
-                Cancel
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      <Toaster position="top-center" richColors />
-    </div>
-  );
-}
+                                This is a scheduled pickup from home. The item list will be finalized and updated once our agent collxúÏ}›r‹H≤ﬁΩü¢ƒò3›‘≤õˇá+R¡irfË#â\íÌZ£Ç› +4Ä–"9<åpúﬂÿˆ˙ÚÑ7¬‡_ù◊Ÿ'ÿGpfU( ıáÓÊè∆”3b£ÅB˝fee~˘•€O‚2rùdª	π	«1ÒRw◊SÇ_Ü„ÛÓ ⁄œÀ≈hG{ÀÀ≈Å˜YwÀ<Ÿ"m}PÈ˚NíºuFÓˆ\9}∑s”Yù”øöê€ƒı›~Í„Å∆¡Á–Îª]⁄ÃÓ»â⁄m¸sÅxÉÎy≤Ωc®I^õOÓÕˆ-<s'÷Î¬wØYv˙nê∫1˘Û8IΩãõŒπõ^πn@¢Œ*9øÏ$æì∫ùı%á„`‡:◊>9±ä¸~«Ú“í±â≤™W‰“â,∫K^⁄‘ÉÒPı´!îõ◊€ø$ÍFÛØ©{ùÚˆ¨--©⁄I¬œn|·áWù°7∏Åe]aàÒ›]o‰\∫‰yÈç.I˜∑ÖÀwÂ∆\å}öCˇ	œˇ”£”«óœëÿΩp„ÿçèBﬂÎﬂlœa'ª4Gw`ûæ<r˙üMâ˜ãª}ª≤t◊ÔÏz’¥ `€¸Í`±ﬁëã0H;Á°?˚ˇúO¨g∏˚ÆAùìˇ◊πäù®>›Æ;kÙﬂõŒ2•?ZëÀÀ—ıG±RÎ0¯¥∂#w‡çG÷5AàU óN®Ë∫≥‹]'—Mg	˛·3V|Ò‹4é"7Ó;âÀk˜V.Ôª¨≥Ü}Ï.|a√˙ÌºwΩÀa
+s'I„0∏¨≠Ã:4ónz‚\∏“wÅó≤G©Ñöø#ü.°¥åù…jÚáÙ∆Æ¥—;AÍ•7‰_˛Ö,ﬂM˘Í”0u|b◊õ’Æ†ã}—M√Ôºkw–^ô¶[ö¨H€[Ìolºn≠* Ü.äaèixˆ˜˝˜ØÑKwg √Zùñçƒ≤lâ’mÛÛ˙7öuıÛ¸YıÔïéŒetjæè≠¿u6Xü≥-ntﬁY”v˙≠óπ¡¿.πRﬁLè°o„ƒ‘¸ƒ	„h◊D-ÀÉÍ\ÜtõÂ¬v©êg>l]¢ºã·;TæsÂ‹$%Á~øC´óÁv≤Ωa#˜˙NÍÖÅ›⁄j4≠W†û#ˆèŒ‘–Îé3NC‚ªˆ)ÏºæK‹bﬁgµΩÚ`G?w…¿K"ﬂπap9∫ôVª$Ú˙ü‡T|œ·~w`Vp-&xm8º¿˜∑√;5Ì¨‚Nt⁄_Ñ€!ÃAgtÍÏ}ã+|∞ÿï’öäT‹πZLX™Ω»∂,ı[Ù‰Óï„•9Ç^"_ìo°áå›cû≥84ùxT;©™ﬂ%8âº£œ≥?® X\∂ëπÚuXhªÙÎub7>‚&iªï’* */|•áqUúä≤Õ‘fù[≠ä¶cb”·∂˚Î,Ê˚ÂÌA{C*
+Wa£)ƒÒ‹l–∑oútÿ•ª˝våã]5>†ˆ@z!Hk–…¥7˝‹Áw-¡ﬁ;À≠ºﬁÆíXsGnÏ¯™‘õ©Dlâ[”¥rKs–èúõÃ≠ì‘I«âYÔ±õ◊Êõ^.NßŒ4+u˛˜íÀwÛmxè‰áÍ ¬ˆ¥…éÒx\S)=/œ«i’ı√c/X5ñ≥ë/YÇï£Ô!ûπ∑Ú«PÄÅïçéÛƒhY¿ÍÆê˛8N¬∏ÖûVÑº<äÈ¸ËæºâGwB/ €ª»<iop]lCæ‰]¡üyqÔ}q2D]®‘ÙR„ûPL◊óã£Îﬁï¸*y§¥^.ÓﬁÊƒQÏ&.hp%Â˛vÒ9ŸsS«ÛÚ&¿~Ÿæ¬6“Û=*4 ‰`oû<_,[+U¨AM~dÔ¯˙ÎöfR€÷(Jº q”ŒœãÑŸ #ê¯„U·_@ˆ≠/}4©|-æ,zñHƒ`“8˛ˆÌ-	#ßÔ·ëiÅ$}«w·ØÓ7ÆÄŒy'ìAÎ£“”À˘”ÀÙY≈£ÓµóN¯÷ÚÈ¨ºPp√dg<£qÎ^ÇÊªÙy¯±0ﬁ∞D2t!ª]ekå@‡ı°≥√Q'È«°Ôü;Ò\≠b“˘nØ“$©ß®en™$™N“Wj∫√JIw®ŸÿƒÁÛˆÂ‚pEYvT+°äEÆÿéÖ£[Â»àVΩÏΩ{[ E‘ıwJ?Åf√ÀÑ¨¢a@˝ˆmõZÓa˘ù»ﬂﬂ`“(˜\QïZŸóñó™áÆB0˜C?åì™–ïæF9Ïyqﬂœ kwjùm–ì
+hã©|{Çˇ√v%–∏•lN>Å◊j-©È|ù\múÄJ¨ŒÌúΩ(Bˇ]é`ÜØ)_>;„öfNøÍ“%ûº˜“aªuÙCß5èwM{œ∂˝m7Û]4Aå£”õHæ›≤œ+“∂,hw0Ä--y’≈ÈâÌï≤Z3©Á∆Ÿ}≠ø@é›˙6∆÷º¶Z[§ıΩãã˝?í˜†.√q‚∂î∑´Vú^«ïç]Y>°NU1qYÙ8√h0¸l∑ç⁄aºˆwY7ÿ∏tºÄZÔÍµZÛ›$ÚΩ¥›Z¿?Aî∫mÿ≥WÊªIFØﬁΩ<èUBgÚÍ˜πS¡™⁄ŸÕP›ª	ﬁCõjDÈe˘›≠˚j˚/^‘nÉ	&>j›·5¥„‡`·Ë¶®¶°&„úizøﬂ=ﬁˇ·›…˛œª{{«˚''–Õ±Î¶V\'ƒ›ÇºXΩ	KÖì⁄áΩ?çotñmÁM u?=÷é{˛˙˜[´ï%n≤≠c∑Ôz†.í◊!síˆŒÊØ ›2Ü”‡ªƒç_Qü}„˜~	õ∞~£zª∏€2-kª¢ãÕ‰ŒÚ	aGòMJíŸ∂\Òáf(Q‘ßÉ[Â\ù≈BúóŸUxïÍ˛Zn[Øz∆¯ıÂö#w≈◊Ü8[_hÑéLpñ<¢oıõu•‘§.•Uâ]Rärß™™≥©hƒ‚ÜN0æÏ9æú‹Ä)9*6GäW˙{Í G‰§?tc)Â,≤Û“„ZŸµbfõ‹9RA4·ÆF«g©ª>∑√˚d0⁄ÚkŸ[dEµbæãÓqYb\(Ÿ?2È√d†æÆ¶üß´9Çn@NΩ—L{€ÿã©7≤ÎÓí¨Õûj}ÔËÀ"'~ò~ô}øõ$ﬁe ]ø{	ÇhÜ}Ø◊ÆUÀ¿·’°µ)¥„L˙\Y´ê“b}Ñ*nÜA∑€’Ç£æƒY⁄	.«àYeKM<∫}˛˛‚ıÕGO^Fk?∏ÙΩd¯eÆND6í‹~∆7:"®úPªU„qüÃdœâ/√/s~táZﬂ±M:üŸã'Ö √≠”´∞Û~ËBÒ,ÜAl#(vºtV¥Rˇ~FÁ;Ù∑p]çõ¡HmˇÛ:V˜b}ùëB˜d∆jØh-ú0|¥N‹ÉvŒr»&S?î„ÅÜ?kÛÅıÕÃI:ÕÏˆu±±KN>ª&1&ÿ°ç¯±7ïxÂS8≥„¡]ÂnúµÅsço¬Öœ\qÙmÄ¶1üP(2àÄÁõ†=°¿≥Ÿú}ÅfO=¿Ãç8XwˆÅd@÷ äB~"!dè:ˆ!cO/TÃ
+Èk“kö*>¥}16Å$√ÿ>uL:œÃÉ…fFf)ó*H‰eT&M£R]¥∞NW≤UjÁ/ÕÂ/Úp©bÈ¬◊ÿ°=óÌ@#%D›&lÅäB◊+ú˙LÇn¶QU}8öÏÙ√¶ÆìÍ’<®¥Xw‰UÃÜŒwTY˙¡—≈•|ìmd≈Ï£øû√îkÕ√Áí1ö«Ä3ò}/≠ÓØ÷ıÍãÆGÛ0î{àÙë
+]FƒÛè€≈¸dAÛS∫…>ÊßëÔ?èÔa¬µà©H◊Ïá\ºf6≥i]íß◊~>2ìÑ˛(O…•Ä]üÒ.ÑrÎ»Ò‰_W·dÀÃÖâÀBeÃyxpÙ5œa¨∞yPà¨
+bz”"‚•›í	›áø¶¡T˜¸0y™ë,“Gy¯7üƒn:éÉ‹†≤=à†lª„x9öD:ÚYs~+±<+å/X¡”ù#%Cvòóù»WÍ·bl>U Ÿ,+ir+‚Ï+¥>Â<+Ê◊%‘/“Ã≤Ú®æ‹ç„Íµ{ë
+1S% î÷a5È–w“∆`8òP˙ÁEè™áWÒq	é£\∫)·‡‘˜'ŸÙñí¨ÍIﬁ‹∞ ™JIe∂Á‹∂ôàπﬁ⁄ÿä˙·(Ú›L‰$Ø=∏∂M∆Åw·πÉ‡[ﬂt/<˙æba¶!oooì7#ªÉ¢ÖBn9+˛Ï˙npô…lxb §wA⁄íWg∑cŸKÛŸ2CÈ'>\kÃõ^Vÿn?ÖY∂·∂°Á¿≤GöÅ÷|◊Eõ∏æ°Ûä™Tdê:RÍ2v,»NvŒcrá#a]¿EmdßZÂº≈¬A®Ìì≠Z;Á<	˝1HÅ4å:T];,ãáåÅvœWb∫*HìNÆ,Ó;œwOa÷f´Õdz,îYr◊kú7ı4I÷™~Ëì—`ã˛bˇ÷⁄^Q4 l⁄*µ÷NöØ†[©‘N»ô˙¶Kµ0≥™µÙÍ®l‹©ñ4ß©:üÎÔÖƒNÔ≤w¯ˆ‰ı¡ﬁÓÈ˛9›˝#9x˚„·Ao_]µ2'Ò?`á©%©¥Å∑â¢Ë“W§µ€¢∞QUMH˛‹≥ñÍô-rˆ’≠Z¸›ëÇ|u;ë ÀJê‘ÁL¶@™*∆ Dúù‘‚[D~⁄—¬úÜ‰ìÎFå ˘]<j:taF·πDÏ∏Ôí¡8Úë’∆%–n7Y <§ÈíR7!Ã·‡“wÈ˙‚0ƒóÕ–˝KFù"ÔjB•h"„ìë?*ÊôTL‘ƒuØËÕÉ⁄Ç·xê¿˘†'4ù≥)»∂U≈—Aä‡›êËk/ í®~Zßı†XÆóééπZïÌM£Aˆó∞è©±∏e’/€ód'Öú:qù∏?¥vT–¸ËπWDÏ“å∂H'à‘ßïâ«€InÇ>©kl‚á)>(^Ç⁄éy]8ø$3‚hÔª∂£–uGp¶\êi~§w¯Êh˜Ìü~ﬁ€?›=x}"%≠¿O: Æ¯Î€¸ﬂem	ÒC*∂HÎÑrIó-b˚îe$„~ﬂM,C≥Ú°R®ì/¥≠œ4e∫pjà°ƒ^8ÜyÑ)>?êó¸Ÿs»>ÿU≈Sﬁ):LR/™óúï™«,©J∏"5£ô¶Ì‚k≤ÊDﬁ
+”í£›9Õ2ìkâıãµK¬HUXX$:;‘ÉE≠[ÂΩŒ5ÒÚa^èÃ_ñÍ†U%@<IBZïp£Ç‘ß‡≤[^©∏„e˙oŸ◊ΩV>Sg|pî¶+;!¨»É‡_F;
+«dËÄ*ÑƒaJUí©)]˘˛ÀÂee+úœﬁ%T˙4l∑Ü·»≈…≤ùn≠∂h™T.8å1¿ÕÌúP'Øåj∂…lIí¿À ê!~ÑM)r§@å–õêá°|(ÿêÇBT‘+
+3ÃjùØÜ™Hrµƒﬁµê3h(9â$e°÷Ë†5jú6z”i„)ÌùSÌºÄ6$çΩGB/¡ %r®⁄™O‘„ö,±R—GCX¢‰úTﬂ
+;€VºbçzLœ⁄ôØ›MÌÏ.E§[ç‚⁄ÚÓ±s^€8©µîû±‡π6:®•ëb˙f]–ììúÈà∑Óop$tudÀF‘öt∂3‰|Ù!<¶ï¡2>)wf/óK2Q⁄ë®n˘·∏TØÏ`V+iï%òıCtN±4—åkF‘J5¢qUg≈ UîÆ,ègÃÇ˘¥açlb5‚‘¥®—`´Ó(Ç‘|ö`g«@Q9∑ÉÒÇú¿
+≈F-‹∞º î¡Ö92 Oh¨>¸5™~•¢y¸^˘≤]¥ﬁ¨√°Ïá6@◊6UÃ¿¨õ∆`$d?I'h]Z Q$Ìa∏Ñ´¸Á•
+oVÉS
+tú†™√rkÏÓö4Ïpˆ›B¡Ì∏ÛM≥
+K¡böñJC√N‡î‚íÔ√pê4i‡T–¥Ü»¥öÿø=+mß·≠%_©,V\L¿#∆J˛.ja˜’g™wqó≤k^ëñÄ—©Aq@˝P:(πóVïøˆÓÏN©™MﬂRlQÌ⁄VÈ¡…†àíÙ€ˇJy˚_Ál‘>!òq÷&è≠–≤˚Ã:jt'ìNz,î®9!L	a¨T$uÏR	Üp«‹ﬂ√\¿ˇ¯€˘?ﬂˇ5bÚËœîÌ  √ú=˝“=êT7ÂËÿË&"Àå)<Ò	u“ÖÖP¶*wp?›Dßı´Ã@ ÙzÌÀË°,£¿lªFGÊ&1™Ë}	Ω√¿€˝úE	∞
+Ù¥‰ƒ+\* ª-6Î≠¨^IFx˛.	m¯.√Ø¨È±€M¥
+‹†à1ÆÅRT÷Ë´ŒÖßF	øÏ—Ù+∂|IMæéW∞KafJK1äi®ïJ©pnÁ˛qÜÿP»˜ä“qZ?v—π+ÃK~Ègá^√{ªAx’û«√“Õ˘ÓICÖ⁄88p6Ë\≥Ñ†ï·$ΩAÎç«î<–g∑'√0N5Ù≤˜@Æÿ$>Qfﬂ‘¡†ÎøƒMO˘8‰¶O•Ûú?¬pEßŒyªEgPKÛÄ¬Ååu@aÜ¨Z&ïñÎíÔAÍ2Œ\j£§ Í:Å{§åﬂX°IhOÁ¯¶	‘SO
+å~§8Ùêgp∂Î¶Jc¨~Íx+à~
+ò≈¡Dê
+¸(`ˆH
+¸ ö¬ÿµ…x4r@#ﬁ&g"∆k˝Sê9√∂‡òüªî~
+çΩ¯E–≤À¸°≠ªÈMπ√OA9ˆ+π—MT(*∂∂¨‘=∂ç„¥÷HŒtA÷‹U∆l÷Õ¶û-Ùw‚`2R)∏mz
+∑ç∑å 0ëé8:g˙iEã9µïªÈv 'ˇùÙù$L€ÿ3ÑcÇ‹ÓïÌ÷[áÌ2Xî	íò◊Ó†µ@\”Àusü∏>åŸèVﬂ˜¢Û–â›´ƒ7ÇÅ€º3’Õ$óÌB<%ÿ#cÔCíø‰ônScÌ¥ ˆz*Z⁄ÇdÅ◊ﬁî^⁄5æT◊Ò≥›ÉÖPº|÷ô˛Ókﬁ9…>,b∫Vä\DŸ"6Ó¬V∆«gíàí⁄ÔÿŸ‡*6mÂ5ØOKfÆ Bâ”Õı∞C˝KCéﬂÛ·∆/˜7‘¸]™a÷4t®W…p•<÷¨œ5∂~Ω≤•ÏC{ì4g”`÷˚"´≈¨g@‚ç∆xÃs™∂[ô™Iìñ¢∞¢¬˝ÏO®eê1q#C'!Áx*/@˘§”"∫gN¥iP€∫Ÿ6ŸÏŸ„ûf™ÃËº&ÑïUÓ∆“\Œ™çÄxuS
+S¨‰2±±†¶ˆl[~Ÿ∫ü„08f4%πÖEmE—ß”kh·í^û/ì‡WBqKT„≤1´\÷4ñUNLßKßJ<Yèô6Nõ4nöîq'åõ8]ú<˝Ë…‚‰¡}MaÆÚ<[j{¯°ê◊·eH<8ÄúÈ €ŒöÁ´;uÆpæ*[›√Â™À∆™s’©Ö‘ëV¬÷°!b(Å∂'»Q◊ ƒb˙Ñt∆Ä
+„biöäN≥D/]sRÆjfµ∂jÖS¢QÇñ	35Õ:G”Ã≤3MÊ6{Ñy§KÆ4-£J≤…ÃêZ∑„}Ã1õ ï»yıs≈¶8mØÏ^õ˘iSéÜŒWZ≈YŒcïîïudfÔˆí#f–œîÿÌ:3yV}ÒùÉ±[∫ƒÙ%w0ãHãAÛü)˜‰å3W{Cô‡Cf•ì“h‰›fÎ 63´¶““ç≈òŒÅ⁄rW÷„≠£ ƒ≥Í7µMb»‡4D¡
+∑„FU)2úÑàCsq[¿hzıM∞ ı÷u]-Ám»öC"ÜåÂ¸u„¶ |Àö∑…©u"®N÷Iv|≈ÁtË% _02è‹`°9î•Ü`®eÓriõàè\AW–ré,Å„CG(â√8bë”!fA;ôÉÿjê`> ÜÑﬁ3rùd{Û*≤^rRz˜p|.£hGJ€sÜÅ4fÀT–yôfú˙ºBE_#"q°&OÉN\ﬁ5ìëäÀÀzö‘‚|hü8¡8ÔQäÔ¨ÎÌ~ˇî„Ú˜‹Ò∏ÂpK@`OÑt\®›£RèãıxPrÒ≈OâÜú◊Àz⁄›h{[„UjQ≈Yå[∑¡‚&°µU&¢ÌπB$Uï*Àl„“"‡gZø¬‰±fùOAémÂÍ¯Zø.ûutÏ† ûSõ√¸ycDˇ©zìÈãòb¶Íé´∫YM3ı=µæsì©¨)◊qA#ç›LwG•ï)Ô&Â‘|å®É†√Ø√;3Ì¨‚Óíá∏¡¨sêÄw≥≈>HÏ jM’)Ó\≠öú%€–DƒŒÏ≥ã»¢Ã@@æ&ﬂBﬂ:∆4¶U‹õM33c:ãŒh}DOó˘‚≤Yíö–‰uØ≤fDƒœ2;Fıı¢bÀVœWãë≠>iÛ¥∆±0w¥›N9À·h¿DØj7}_ôÏó•®Œí9(‘2°œ$YJíß@∞IÈH'	ªµI∆°jâ;ﬁúÑ√<ÕÅŒìkˆÂIl°Z≤¸˘:
+g•ØàÁœpÔgùáâƒïŒ6ïSåîæ‚‹\©ìKèÎ∫ËåóG1£|Lw7°˘2mÆ'€ï∑ZXÕ≤Ÿ%òÂf≥úƒÅ[Ω®¢»Ø„	†ö:9æp#r≤<úê”æÇ‘¶æt‘2O˛|	©£«Í®≥F»¿~èâ◊1 v¶√ÏLÅ⁄ô∑ÛDë;rƒÏ–;z›aÿõ¯Ö≥GúyHËLû⁄R	ù—oZû…dV5\r0√ÊcùY¶)ò∆4cP3SSîføR ŸÂâFç∆˜ä¥õ&úC∆TµfbŒçÛ–≤ø@é›˙v¬÷º¶Z[§UEioõ+¶˜É&πÁa4Œª∆=õÃ‚≠˘n˘^⁄n-‡ü>Baì^ôÔ˛9ÙzUpô¥˙}nx∑Œ•Õ´{7¡ª(N«˙e˘›≠˚j;«˚4ò`‚£÷^C;é2›LzæúŒ‡5!ZP˘TòAe©ì!yÃ¸p>Á…cA-˚≠’ *≈eÛà∞ò ·˛nÿ;õøB»ô ∞6yÔó∞	€–YÍóµ]—≈frg˘Ñ∞#Ã¶
+%…l[ëqÎÅÚNﬁ*ÁÍ,¢ÜbYá$4'"cnPJ;ºQ·SVG∂Hß2ƒ”≥Íà¢V5!≤—9ú™4L»:¡XcA6Ú…Ÿ∫»MƒºÙƒ∏Vv_¸¡&á…Ãâºñêh0£ÇÜì=kòŒî…∫´DÀ¶Ö¢§^÷÷’Çoˇ∫ö„ iûgŸ€∆^Ãy°M7⁄1Ey}_¶;ûaﬂÎµk’2P—"õÜg“Á&%Xû$g¡k'∏#íì-E4Ò<Ë2Ù˘˚ã◊7=y≠˝‡“˜í·óπ:i0Fnø§∫≥ëUw£qêíw˜ú¯2¸2«‡GwË°ı€Ù†CôΩx≤Q®<‹:Ω
+;Ôá.œbƒ6Ê…ª‘Å·˜7:ﬂ°ÉÖÎj‹F⁄h˚ü–±∫ÎÎå∫'3V°·ÙI7≈†ùÜ≥≤…‘Âx»Ç/ïÊÎõô5ítöŸÏÎbcóú|vMbLêÛÊ4èäîÂ¿¶%=ZDdÛ`,ç˘$ãQ˝qæY8÷
+ƒöM÷ó|ı‘√Æl”¿öyˇAV^eá@ÎÙDC¨?∏Í¬™û^@’l∞ªìmbFò¶K‹n(aö–´YÑ]M ¿«UÆM√≥Kç©ÛàÊrY L7O|Xd«T*¡6Pr&≥ÖÊ–†ÀT$vÌ‚¶Jû’4{ñ∆—¥¯úE/NIç·ó4®ÅÜ/ ß˚<ÖqâGNJ⁄oC¬èÁ·u’õøŒJÈ\aJÁ:1ÈsÕÉvJ+0qG^unËRu9h»R§	(˘&€ã)M≈ÏI¬o¯5Üﬂ4Õõ0u/Íé®UPΩN§Î—<ÂBt§í\ÉÙ]_‚NwY∏N&TJÓ⁄õÏÚÃ4®Ÿ®ïÙ–eJÍÕRÍtë1ñè¬$A> ﬁ*˜Ëzåﬂ¯s!’[òËÅÙÍúlIa≤X HèáS_√˘Ê¡
+õÖx™`¨7-¬`*!/ô†‡`ˇd‘Ö›Û√D≤ÄV◊/´¬\§èTËgM¡.=ö ¿c‘6j*⁄f.	å¶X∞íõˆ∑hóﬂ¢] ⁄≈ ∫d‡´%MkM;ZÛõ“:µ¢∞ùy$é≤c≤ÂçA:Ω√∑'áØ;∑–êöt^àU<Dø√◊ˆ‡µmäıjΩ;9n›uä<aÛ]–$‚—∆ªyÍØVﬁY”‡`:H!ÏÓ7*ÅúIw¢êï˛$ƒ~˚≤ÇÑÓﬁÑvR4˝ÏëÙ3D—ˇÜ∑R∆>,}|%«âéj Â∂Æ≤=cÔƒØê:i≠ü∂õ˘ìï≠rÒ⁄7mˆ´»^ÚOŒf{~€Ú1Ëæú∏6√‘ΩÄJøqx∂&T8îÛ&KËdÚ ﬂín∑ÀÆ—'Y"{ÿ|ÔÊU±øπìs'ˇÊN~∂Œ'ÌD÷âTÉæï38lÒâ –oékÕÕI<πãwzÔqﬁ9ÊD}´›µ⁄ú¢o¶\pΩp˘.™DLc!AﬂC4tV&UvZ((:-œ,T!	Q	1çeF,@0∫˛°|àS–'ŒxlDÉ†5á¢é;q∫J7v„æ€∆Ãª†h2[ŸxD~GT>·p~Å,U5 √»√åÔ=¯wß⁄iùΩUFçFüÔ'v©úkO7Ëo«»Ÿ⁄+ø´~a:4$»˜‡6~x»£›ÉΩGv‚™yõ⁄øØ@láW∏±i€∆¿˝$X+ÛLf+2
++ÁT#GΩë‹æﬂù‰&Ëu%ﬁ„4ïRá#/¡JN‰u7HVÌ—ﬁwm—A„éœ_ 6~ÅÙﬂÌæ˝”œ{˚ßªØO4i…Yns^£6ˇwAõ›©Ÿ¥≈û©©/
+CèKùn∑µ†)Ögs«R†ﬂïÕRÃaLsµ–.x¶-ï&iá2ã,ÌÿΩÚ≤?{Ÿ«"ª:+e◊)≥≤?- œ≠)C(éÌ√'ä§ê> «ÙnÅ|†Ωë,¿B§Ñÿ¯&¨;\qÈn?ı>ªßŒ˘Ç*ÀX˝nõ¥]±^Ú&<˜|˜#Tw&)ﬁáÒ'˙‹	ÅaV€dú∏o‹QX ◊Ê]êˆ3°“ÛY63Ùo˛æ∏≈°Ì»≠‹FÔcÔΩ
+^z–TBπ&fzhmØÀaúœÒÔ“πzûÍø/}å€$#<¿Ø…á´êéeÔèÙ˘•Í£WôGÜj+€ïö>Á≈óü⁄ÛZË((Oäwgø®ﬁø$/hwÑˇßoØ÷∫†˛¬EhHµNsïkõPÖn‰\£ÁΩ^dßˆÊy>X8®^Ú˛!hÛπÃÆe≤´i^BÅ&<çAf/áaIŒŸôNVëaË,íí¡ı∏@ ﬁR’q$F‹4‚n‰F\L>P¬Mñæ≠û˚∫7t˚üòß}Öã∑’ïdD"xdGd§™⁄1 !9a€TˇôRÜÖpàQgŒ≠∏z9√Òme=#…*:	9ßˆ˙8ƒ7LënxQkX]mïLÌò'#•Ÿ<ˇ™”Hm’ÌáPÓhã˛áWZ‡‹W≥ˇ÷ ÇçVfíü _WÎÓT-(É€úåG#C˝á´íbÔçÖ˜*<Ãm∏5¨çú®€ï€eH=µÆ\9ü»’K&G0i—}±MŒûgËãbŒÛé}˛SSP4¯+°≈?ø)ªû…ı‹u˛S¿L1Lñnj≤hÏ¯)ÇúÀÂeûŸüﬁÇ3F∂‚æ&(í±éßC'¯ÑÍ+∆2ê˛0‘òY√ûù…µK‘Yﬂù4Ÿç¢vÒ∆h†*íj¶&∏!a	gΩëcqKó_à]Ω-±kx'5V›¥RÏI*ÍÉïÕ∫ tKƒ‚÷?%¸î»}ï7©¨8ˆ˚ôÃ˝Ñâú˚|ÍÛ
+©'ªr~ÊÛ}A1mÀAw˘`ÚE∞L-~¸n˝bQÃf‘RÁ≥wÈ§a‹Mÿ0Ø<`Vnl´¢tí‹ƒº£4ßCúÑ[Y´nªõÔˆù¥?l≥#£€•'J≈)é∏>fs[˙æùáN<Ë^≈∞@N°&m^ÂìùÃ˘1π›™Ï(0a"}ä!…÷R’sI!úZA!úK´g’ı%âlOπ3Ï  ˚≈RF‘œ≥JŸP*˛>ÉŸh'û¬~-åNa∞ì†VuÉ£ÈfjAk(äe¶8Îæìi›´™Æ∫LFÉ≠zU™¯…êB“àÑ™’ıL	2FÉ»ógÀô9ÄQ±÷î·AoúË»≤·Z©cécó⁄„)‘D§·ªã‘Œ#gM ëÏmj˚˚Ã!ê¬Î´L2¬ÓäHDîP≤kÓñ;3å
+µªmâERiÊfù∏‹#T3KÂR≈S„æU⁄Ú‰>ê_Ô˙©ÚµJVPÖØ-=‘ †¶hµ]Arj÷ƒ‚§JÔI\nf⁄»µ™Z§Zp"0´ÍPcì¢»ßk|fﬂy„¶√p0”÷ãØÅ~‡ob/ö®#ÙÀVzÒ∑]SRÅ2‡“b—Sc:yÌ%Ú¥rvÀ=ÎÎ∏∂YãåbÍ ™ƒ˝)w&f„G¸∂]á$pƒ¬:®câÕA˛◊ZíhXc£ä÷`§ä˘ÑPÆ‡ëè˚˛µH∑S∞Cè.A“AZ∏‡*©Ωk~ærÏ6‡Ñ‘k^◊∞÷ñÜùËöî˙#Õ+éI3¬Ô»{Pªÿb™É3“ôpoßtzYÂ,µßo‰æeî©πºêK—…à: ıöÉ é“ﬂ¢ƒÕ’4çí\‘|b¢’©q«RYWu—Ìê%˚¸;']ﬂÜÜLo‚u#ÌzEÔ˛iﬁ<∏”a›Vv⁄ıö¶ﬂ‰BE+;6ôÏX~Ÿ!'3a¡}∑hüo.1d‡"Bñı∫‘8:È˙7^¥±â®=jÃKV%bH·Û˚óπìòÖ•‘-'*W’Ó] )rè%¿˛}f)uO√vÀA∂ˆ\îX(•ÿöµ
+∂FäùëÀDq,µÏ"£AH#8∂´∆∞˙XrœyÎ^1?VmX&∞'—∑¨ﬂ*ñƒïè ˛+≈[L÷·◊’˘f˛}H3°Xu≥ 	.˝öaáÿz´@-‰@ã5–BMpåå/?∏ˆÏ∑~uÂ•CÚ-vŸ∑l6|MNR7J»)û]‡6ëF„Æ_ÌÆ„“˝ˆT/m5r„k!"Ê0BäÕáw“l=òá◊JÜ÷W¸À"Ωâ∞≈Ù∑Í©DHóKuY®—‚5k;%]ìª6ru *±sñÇé5BÜ_˘á¡1céî%	ä√îv‚Êæ˝äu>úÈAtˇ⁄K+kA∫Bdñ
+ VYﬂ$\’º·Ñ©Rπscl JŒb“$(3dÜEf‚{œÈ"RúeãL:U!b°Ø5ˆΩ˜ã$8J›î•Z≈Z¡$$#äÚ#ü=ÿ	¬¿øA^‚|vôdêPñõ≈É#»⁄ßhV~Bvs@÷ ôÂ#ï$°uót-ùÏ{«ˇ{m-rÃm$ÆcŒwÖmô–uràï√´ÄP™˘‰SFdë¯N|âﬁ•~íÖí˜«Ó_∆0\Ó† åUURÛÈ°Vç™Ä¢™$ÀºñpUõ	3TüD9':G◊‘•ãeàÖ öARPS#/ÄÕ¶~»ò	≤GnTyÅ”.[⁄6ì]Bï¯VACkîﬂ≠L[…EP∞Â2yŒsG(˝¥∫ºoUôDIÈ‚q–á/s;™®¡íêÛ‰ä}&óVYÖ∏´Í˚Î´Wà;®ÍË/íQo@≠ˆa÷ÔÖ~(R>öπT[e}˙“ÅÑf˛Øz3’~)[QÉäÃRT–/i⁄äoùò¥—±G…Rƒ˜>°ÓÀrÇê$ΩÒ›D]Ù?9Áæ[Â£≠≠ÀBlr0x'Äz€Ä •(â\ﬁ(d∑j”Œ–PJhÁ;ÁÆè4ÉœÅ›≠_wˆ∂π´cc≤ÁWäÁˇ˘O=≤ˆì¢à›ƒ#9ÿ”±Z!8êãRé›æyxL—ï≤Vî¬˝ E	'nö“xíÀ®Òëf$
+¢ÆYJNÈ‘⁄çdÕn$≥ÇËtO¸XÅ¿)≈^A^í´''äìÃÈª¡%v»í?äÌ{˙ /hÜà ~*,oòlÔ`∫ù{ëÇƒ a∏éS◊ŒÛÍ9ÓÑC‘Ä|PZˇ¢Z∑g√í»©r±°J=«tñQ Ÿ5æRı Ô˜ÌÌm¬«BiÛEZe”Cqx‚ÒﬂVË÷ﬁRó¥E™„Æº5{≠ôö5Ø¿ó¥Dõæ<ÍÈÓL6Ïçw˘ÃPÈ#¸ŸäFq{&Ó;zïú*¨Sæ5ŒhlÂ‘Xóéd	vª^”€MZ9ï“≈’ë!¡î£≠2$É∞£"VE€`o;Õ∆v≥§.~£ı–äjW˚*£›`ê_ï˙	;£ﬁuãõuÓ9M{Hiï´æ<ã†™⁄úÓëÂ-“€=˛˛êÙ_øﬁÔùæ≠®+∑Bw-◊] *Øs=aì}ËjVvÅ&é¯‹Ø!ø·tøùhÏ'Ó\â!â,wYVC8~˙>∑ì—ƒqL]?â@Ω%â∂iÅdn√û!°±:I‡Dpíu¸ŒU˚4zu@ß>Ö7ìzè [HmâÏ®;0?[‚¯‰}EÒÇhú ¨ÏáZSôöÉ%Ã’Ù€s˘k†Óˆ…ùNøÔFÈˆÂæZ|.π£ÔDÈ8Üwπ¡g/TÒd∑UèÙí{@ı:¡%åt€U*_Oªfõ∏›-iø'Ø∫ñ> ‘(T◊ï6∆ åô-wõ oÓwp˚1Ω–VhfÏˆn`ò5<•)gØFàÜr‡n˛4e∆~äëÑ≤Ú™0Êÿ÷”p*ô*ZP◊ñZ…‰j&} G∞Õ+`å3œ–ÏsG8ë≥A–ÿÏ\œÊ‘1◊o/©µU]ìvªü±;Òﬂ–Ö√Xh„´Úä‰|t∆nÂ=~	•≠j⁄Ùqî£ìtË“2‡®ô§∫÷´U˛^π ‹ı#ﬂŒ¥”ˇŸM∞iÔé_≥…-3™]´•¬à“62Ÿr^Àèä€IÌoB£á©·m]äyê—6„Üƒ áW∏°“6PSè:çB1¢
+U›ûk6πAk∞∑∞›+Ø›ÀE˙6EMÚù}òî«◊Kƒ)˚DPCwäõÉåÓ^v®l#Á–˘h9r‚æã÷üÎLµ s<Å5$g(âq~<ã≤îÃ∏$ÍfÓ…™F„A◊⁄6ã/π·qâîN©Öf2lïÏÇy°Õ¢rΩ∫Æ`S ‰≥„èaﬂax
+XW‹X€£r°ÖOµÛâ® tëü—TXÕ_Ÿ‚ê™Úá\A9A•§ïC∆◊Å]gôä©ÇL^ÂVn»Z„û®¯≠¥x›{\SÇıó¥?]Œkñiieã+†‘K Â%]`∞"TçPªÿˆúH"†≤œó± 4~˛‚SZX|l–Æ°/¥RÛÆ¢zºE‘ÈKô~‘≠`	ˆ~Œ†UYüj]@–F8¡<°π_…2£d¸W—N=ÅUT⁄ùL¥òñì—.ûO_’$Ê1˙í®¢¿|J√ŒáUjï®¯ˆt¿d•Ö8˚òL¡ŸßI`#Îòˆ_rŒ≤«E“At©é¢≥¥∆ëEcÉπ˝_0∑ˇb‡(ì%ÒÉv, JØBÇ*&aÊ◊Ÿ¢Ÿs@Úà∆˙'¶T˜§z¨È®«QK˚EÔ0rkQ^ÊH52∫2ÇÀµ±ºRbRÅÒ†9H˘ìì:’ÃiÇ ‹®SíÿŸ¸¡ÅeÏ@±}ó>s·π˛‡#˘ı÷VÁ =ˇ‰•∏'J‰÷{∑äáx)¬Ì˙Ôµ∑Î:¢$„ˇ  ¨uRæ°ú∑ìÙ-¥ä˙=qÇ¥"¯»ÚíÓ$àü˙2ßÔŒ^µo“o	öMAπ-‡Á°◊_»Ô@X˝&´Jù¨˙›ƒ≤ ¸u/
+Å(ëf†b”µéL¢dﬁq›`+ÊB…z∂G¸L∏HÙBHb¬a&8Ω,Ä,G√(Ê·⁄˜]¸Û€|VbÖmÕøÍRÃÇ »>ŸRˆ∫ropÆAi	*„¿◊≤¯H0$õ"zîéˆπ*Ïê∫q√O’qZÕBöÉóEv~∏°ˇÈJµé9¸0o´®ô !“ÎRb»^F≠™<yÏ#˜ﬁ≤èNˆºÏ1ÄBz˚LÏ‚W§“∏EÊÊ4yˆs+ñ°¥…´S≈õ9ÁIËÉÚA:iàÄZÜ>Ö?Æ(¨yHˇ_qäóÂÌÉçä›Ê¿‹ñE ¡‹ŒﬂˇÌØÊ,ZædìÍŸ§∑,dñΩ‘j(∑jéÄñIdeÊp/∏€s=îAó!èòsKcˇf≠Ä™Ëõ016qZ–¨u!4Ñ^XÆ•x…/q[ÎÂ§yŒ“ àEM;tF¸èB®±v’ôgö&I„¨ çxsX¶6∆Ö.œKµÆ◊E´ s;ààÎ3W0ü°/é(µlJYè—ﬁﬁ’∏˘u”º jÈ¡‡˝!.1˘PºaàÉ\N´ÌÃ‚˛ùgf∂O∂\è…)Çu4hå¨N&ï4Ç5_±L∑d_sòïá”*ù*Z)oH¶ÿæ 4ÅC…◊ÃÈ¢PRCŸ-†iû≈/f¸_·É+lq6ÅÜ5.î≤L,A
+îs∑n¨øm´§<;”D ‹y⁄À9oÀa—Nøø¿|†X|£——ıÿˆÇX˘VÌû„˜«>ıé6yõ>∞^˜ˆâ(â≈OçqWNWÜ¨UÇ÷’A/J1uñmJ∂WïÃØ%µŒ|UxøÌ1/º˝C™dOSº]j√RÑﬂ¢øÇC≈h•Ávnkì˜é‘Øq‹H ú5∆`–≥ VS2€±°ºñåÈÊí¿u˜(„3QföŸQu›7`¡òl$∫áKr¯>∫X<∞ñ˚8„OH]1}q¬^U¸P≠wÛ»`(ŸƒzπFÖÙ7\≠B‡ã∂Æ•±hçù+¯ﬁ,î∆⁄X◊ªîÒ*˘˝mxÌ&VúB∞!–hŒ¢oC™Åø≠GhH1¥ˆdõß‘éúÏ#÷ëô¡í6™¥•+…l®nª¬"∆ñE˚∞‹Ï§çŸºà•¨h¡h™÷©™M0C˚ÂâB õÜn`˚WÒW‚∫™ñ*ï±ImhBËUÿq°≈\ÿùÛT1î"»˙ûüÕ˝%Õ!óEá›÷∫˙q/\∫ü„¶Ì\}LñL8’y∂∫|PµXÇ™ÿËÖ¢ö ÛvSJU≈¯ÆÚ√ò⁄=2pí!à•≥D≠6æπLÜS'îp„¶]≤Ok≈.M!ÅÖôfa‰˚¸†˝ﬂm∞k¿Ë»˙∆ûâÃÇál¢–^ûÎ∏N"çf\VbŸhõƒ™BGü€ÿ272·6x}§M^‡¨úø≠âeCa’≈¡«Ãh1º7áMK≥uÇÈ¶E¨T}YVF—≥MÃâé.jç}öl5¯¡ÌF#1÷kﬁOôK"è; ]6Væë ∫ØF9Ô∂¡Â†∑πE⁄n«O∑E˙¡:∆ní4ﬁÜ™‘˜;£GÖ∂†"Vrßä¿Íd±‹T´EäÇ,ÁL9¶,ªZ·Áóç”Ÿ"±∂ﬁ5'¯aÃ˝§=-HÀ–˙yõòº6L“Ë2QÎôd1+f3&‚≥ee1L Û÷Üäµ≥P∆Àa°–k≈,#m9yª{dùJ‹X]Ûà”r*¨∞ı.„⁄#ÖùvéÊπ9}´^yêŒ_T•r⁄DÙ“/AHø÷ÙïNI}›Y≥◊\Ñ∞M»Ö™™zﬁ•r¨aéR-’ÄK<l5ª∞ÜÊxZAˆÎáP∏QÎ∞3å£MG˝àX¥dit‚tu Ëo¬Ï´∫PEì≥P@ÉÁÆáòí’CcrÃoâ°Êì	@Kﬁç¶X44Ap ãMO!˝æ—3Í;É—∏.ºã¬Z-Dr	›jq?«kJ(î-nà⁄Ã>"z”†…<B¶C˚±É•S)çÃ≥‡¡,P∞àÎ•XN$h¬Ö≤è›¿]AWê¡V`¯™ÑeQ≥±Ä^∂àË0O„÷f°£Ÿlπ,dÙ§©NÙÚµl¡\û◊Gæ¶7%ˆD˘∫^gÎzÀzaK≥zTe0%õ‘úœ`∞jÜˇÚE;Ÿ˘M∞õ˚{ÉGNx’}…uã»≤‚#nÃ#ˇ–“âKˇÔ¸–© *˚e@ ŸgBŸ≈Í›ø‰_˚“%øÕ˙êA≥LâÚ“€Yî;À˚Ù˛6æç	,ÚÃfSa8Ü~¢L∆Õ•	>P†/ëXäY˜8÷·´KÑ.VÊÕf'f„»Ûúì$1LÉd }ö#≠y«móíÌ$öÅ≤=îfˆ3YtÃÕ¶jÖ¡TfÖƒnÇ≈nå∆û ÕrOéã≠M⁄ë∏–™‰˛9¥S‰ikËT—1n◊?Y÷—<ZIˇÄQˆ’,´Üm”åÈ∆œ#OTâÓt·˘–ªÇ˙Ù¨PüÙ1Õ¯1N5ƒøåÂê…±Á˙.hbÿ)g«iÏ$√ïŸŒùâı!döeX¿¸|›ı_/ø¯®ñ)Â&eπ∑_R¿åòäà}>£¶Y∆Êv˛Ÿu#7¿0o…M–∆a £;`y7FI´	+ò)Ú
+N]ﬂ}x‚|vyJ3¿*Ûl“`]ñhÓ∫C·VúMDé_íÊeëáZWì–nòVp∞.KbyEGØ_vM}ƒQ*:'î«_X©Ñ^)`yå°IÀ”Ø]Ñ¶N∫ØJTzH¯ñsEÆl$u˛qˇ¯‡ªÉﬁ.Âä‹;ÏΩ{≥ˇˆÙD√π2-kd3»¶äRÕ¸pî8Üx‰Ë](Ió≤ƒ<π“eè¸Ÿ^ü%T>ä√B:dî§	%üè$c≠'ﬁ¿eGáœbí>,M¬È≈√m”Õ'î®/ßÁ∏*·Öú A H©´ NÒ‚¡A√TMdﬂÚN5vf’(µÿSÀ⁄Û,›•≠–ûptﬁÏæ›€==<˛ì§ô2Q≠é„Ÿ„Z6aöﬂ"ÂM;°ƒa|o\ú†€ˇ∆«˘‘˘8©⁄Û√éU≥B,ôœ+HK∞æ∞.¯œ∏aﬂ(ÉkóÚ]D˚ˆ»	\ô+†9%‰:çß“A⁄‰'ÆDjQ⁄(·Î
+◊ı‹uµçp¥èwP`˘Æ$Ÿ ÚÁ'ÊÂZ_í&˚®7–ÅëœôS&z∆Hñ∫¬Z9¨PÀ›ó\n`dbÑc[≠â’&5sê⁄ í-p¨ÇÅ˙mq6Öî‹e"GdŸ·ŸE_Œ#¥ÎÜNå⁄Ê†5üøíI∂ÚÑT•õ‘µ»	wÛ“è`§£0N’Ew4*w˜≠° ≈M eè'dœÖI Ú@‘^q‚]®üÀnmÚÆÉ‡sËıQÂènÍÌG–äæ7g˜-íoAπ2æ£\é˙vÖ°My`	#™È±µ1'Ãàπ·ÀÀEvüe1ŸËœÌd—ÓhZ
+k(Öˇ’∞ …Xf9úJQ•5,[f‘ß%„ö˝’oﬁÙ√tàHY˙è†,=îäË«G©ùP∑g)£’jü⁄sì~Ï—^X|ñcæ0˙0#	Û°„âù•XN¢âIéø8Vc.íöëgrljN„ÜSWn3Û8F;/Jq<)6¡çŸ‹a÷6öu≠6q`rî„:Í>+k⁄r9ÛäÑ•K˜òùdLèeÆuÊ\h∫J!Œ/‹[ElIë|I∑R¶>.ìM√ï¢›ﬁªs+Ùt
+[:Ã√D√OùO4ª!√ò5±åym,≠ˆqë<|[VhŒ«ß=K©¸aÖ°≤áù’R¢yñB5ËJ!S’Qx£÷‰1®Ë§;ıù"TŒèbìøjËbÌBàîèÎBã©√kú°vBôo07rÄ:´ˆ˝…Çï\¡ˇ∆àCÀdoô–‚∆R5ÍπB1‘ú“K’TB¬ä≤KÔºkL  ÅÃh)∑5•*BÕTh@fec>ª«ß—€$W2◊rˆïpÄßÒô.≥Õ≥byÍ‚SôH∑[GæK}Ë›1ñàö¶™«#Á&k…6x®hOÍéoå®iF÷Å{’á>PW›¿∆ ’˘πE~Gˆê„#Ø⁄ÛıºôŸ≠[E´oƒ!›"yo´o‰	qäÆVﬂ :”Ï¶[‘¯än#RÈuàl∫ßﬁ»=°Ê—ˆáè‰ñÌ8Üˆ≠t`Wˆ0¡Á»@ó»]›µÃ>
+ãfaÅ°#ò¥?tª›´‚˚Ôıè 1µ=ã◊§úù∑<≈Y~™la¯?(¨t}t4—¥Ag*ÀÆâ	Ω/kåÆÏπï∫k©)!Nˆﬁäñ®BLÊæZô‘PH¡#úîΩ¨»‘óç†T<ŒàÄmóéF>Wlik¥Ià$˘®ßH∑¿9
+èsQY4ﬂ„APñë:S˜ÿ≠ì–WD∞KòÆ™«êZË∑Ç üUP9¬ã—cs
+o*]3B˘¯ä∆ÉïÃ’∫™ﬁwçÆ”
+ˇ∆‹Œ€0ﬂí"âreH˝†äó»—"ÃGªõ|*¸≥Ët=ÿ£[–,˘0ƒë˘@ì¶∞QÕâgÉ9Bù?óÙ~UÖ2r4Ûç0◊àÃ«Çü“TC@˝ 79√á»Ò7V)>8o^Ó™S¿/æ®aUyƒ6 Û—ä†fÒ∞ÁÒ∞	É≠ñEsBÒMÏG*"
+ˆXbz ¢Cd8±%N¿€oÇ·n´3Q∂Î¸Ü#ÿµfé≠Âlë®ï¬û^u√»ÃWŒòb¶H¡œU77]≈0®Ì≥úwbÓ+°{ÁXzê}x ˆÈp&˚?˝ûY¯	 √ﬂc\πJ1?<Ø¢M˝JÏÕÊíÙc\(§r≈8bá‹ÆâÃôæ‹pá=<¡Åó}‘…ÜòÑ;ù≈"VG®´HEÇÑbπXLX≠t◊sñC7À`;Àåem©˚[_™≈J‘†;¥O$a	C{$’∏sÛ €≈°h¢ët˙ ≠Fq∫±
+•4œØ)b.4¯ÔGLq!ûªD%Ä#√‘xû!√Ÿfoäùƒ—ŸW¬vª#ÿ]ΩÙ≥‰y∫oƒπîcâ%òY^Æbd'À-”G>E∫9êø!x’pû∫G¥7 B)6h
+∏7Çã”Bsƒ∑⁄fZßMQﬁø>ÑwΩW§á!pGÓ(/ë\b;ê/í) ÿ´[doˇ‰Ù‡-√^ÔÓÌÔüËê◊´”"ØeâáBKø|„DG^}U¡Q∫ƒ"ÖX„æ[ÅLØv	êz√pp¢v¬'∑d∞d®ÈòiòüΩÅK·õ}eÔéúûá∂2tÙ`úﬁ¿IaçSˆ{xQ†nÿBØ…Ì_é^‰^0)âßoç–®G\SOª}/ÚPÛˇ≈Üò°ÉeA*ÖûÄÒÄr£•Äé»≤`%’0â$·ÊŒ1˛d˚ñß˘∑í¥UÅﬁI7]…ØÚO`›ëõ=fë˙|ÇÈ∑?ÇUOˆ¶πXê“5˚‰ßûdÚ—ô:∆πGÀ±õxM3ë?“§)d÷—∫y@≤_◊Ãâ∞Wf0sh9˜1s4“Ï¡7¿Lyç{ÀøÌ}Ÿ$rÿøÿ-
+∏3I,ÏÅ˜¿'∏ÈıLπ”ßFø>˘È&ôpHC<°’ß‰}ø¢›Ó?yÈÖÉ{∆Kâ3Ê/¬éô¡§·%˝⁄˜:Ò‡›cô—tJ¯µlh<‹‘{/«nÆ(ÈΩ√woOèˆO®ù:—≥PÍ/ÔﬂeıÔﬂÌ¿y¯à¬H´
+i ìy`[ÌÜ÷2Ö—Va‡˘Õz˚ÂXoE1•∂Œ‹àª∂ENz?ÏÔΩ{ΩOæ&Gª“ÿo◊Ãˆ€ö-∆ø¨G!ongπxÚ<Çy>#Îö«…º jõ±f«yHñçû„ª¡ £∞l)6÷∫E.‘ì˛–å}ÜÁ$u“±,™v4«¡ √n‚]îíSåíÊÖÛL˘7ƒG+(	≠â°n	≈vı√‡¬ª«.»†
+¨∏Ñ'Øú“°∏æûx£¡‡ÕÖà∏;]æªb¸l≤€—‘vå£√=öGQÜdúÍ(ÀÛ‰áÉ££É∑ﬂˇº∑{ w÷Õ´A®ô\ÍvuÜqÉw©Ω“≤Hä¨O(ö∑äß∏=ãÅc2ë/wT#TY|;ïi¥≥^Uc∞6™Ñô’x´zJ†j‘V°Óï3
+¥‘ŸÅÏëyRÄJ1√≥¥7K\~„ƒ˝°	°!{G%{'bG∂üDæó∂[ù÷¸áïèzxèﬁ;ﬂ»Ø˛ÇÕÏ˚üˇÉÙﬁùúæŸ?&ªÔN8<>¯OÃ3Ÿ><="ü=áº:i≤EÛRÓŒ:H∏Ã∆QVÁ≥¯>§»-Öˇ-./iâ;¥X'∂%6n™ËrA©À)“l_£ox«Á“Ìyqﬂœ’öÕ∫Ä3æÊ(NïŸòp∂±›q:cÔ™)ßî\í“ﬂÏw<e£N0≤7¬"rAH¸ä;]‚ˆqõsƒ úe/Ü`õt`K§Ø%#÷Cs¶eròt+)öÓœy4™Vñêê5Z’VØ>xáiƒà∫‹ÅÜ-V qUMIJït≈f´ÿ]cqi‰P£Ï¬¶r -€ }_r@gæ)'i~rﬂ#∫t˚vï≈Zre©ÓYÔ©±o:≤Ì{Ì±ÇL‡€¨¶™≤È£#ò ®Ä¿‹ú§4¬YÚ ·√¿Ì–Mü≠¢|ä3“dgrìzˇ¨c‡M¨9˝p‡f§˝~∆m¯êﬂ±k†É¬îıú|C¿01¶ÅÙQÖV(ö·⁄¯ã{°[”vèmÓÕV~˚¬Å˘bÒ¿Tu—_§Ê‚"˘vÏ1ÜhTˆb”–¡ÙFdö§±2€•ú™îzÑ‰¿Ω¶£•,ãê≥øˇÁˇäûê·∞˝ï,{‘Å˚&†&?Sæ}æ˚g–4€≠ü(èiFÒmÄ:sﬂ2bémLTZÚgbú>ûâﬂáÒßCT<^ø¿8ucób¥⁄[º\ ìè¿µ
+áº7…%TÂÏ˚Î%œ{ª«ﬂíﬁ·Î◊˚=ÛU´Á??g‰w∫yéU'¥Ó[œ°œkÌÅ„6ÊÌ˛˚÷ùπ¥ú^âBKûS≠æ]±©V%˝¯¥ÖMï|⁄”1|Ãı`i XÜﬁzâ]©Ã>sq˚†:éËŸΩ&X‡ﬂˇıﬂÛ2ÒR^‚ ºπªÕÕ3ö˘'œOˆ{Ôé˜+ä9jLpxÖJ>ˇÍÂﬂùÕÑ‚1œ©ãõÎ–K»Ø≈¢ò§U+«<üË^Aäó2mÕezU7≥D–a–%ßC'¯Dn¬Ò≥3„ÚÕ÷ ªÈ‘ŒÜi%[ããN‰u≥ü∫˝p¥ò¿&¯ä.ÿÌØn› k˜Ó¯†é"∏Ç\"ÊÔæFŸ)ø_X£Ûw hrΩî>ÄÄÑ%Çhg€Ù—yw¸öf Ü™+ã#äÑæ Ù3®7¡ßâƒP%¥g«>/>E–a^?#áVTjÚZ˜·D3nI•ï.ôÿÄ„wS>2©ﬂÁÜ•‹è5πAZ†~)7HCè‹¨ôª+÷m–†¿U”ê$Zzæ„fkTX
+îò†·à¡Ã…Et>@Ìe¶ √ﬂ-x`d⁄ÊU¶©”	+K$éP:kî—º¶x® ë˙Evæë:ìÚºî•AáÔï”øÓTÀt£±bæKá%Ésü>]–/VO∫∆l<Ê45£0´V⁄9N9b+ãø∫ÍåúÎπùoƒ”Ê0'6õ‘5ÆØöﬁZ•%	™ünlL˘Õ|ÇÊ.hÎkﬂæ}ª°ˇ)Qø±¡À∂E\ï(DuØ…«Ÿ!@˜.9QZ~|(ªà%™6{∆¿Kúsﬂlóç÷°Oô+ëß≈•ÑcÖ+QùrlµÃ∆$⁄ëÖ≈]qî‹Ùn˝¨q["L øXÊ©àÒ’‹™¨…◊°ãò2$Ÿ«‘)F∑‹g÷ì…>*èF&Á≈R~æÏÕÀµc±·Õ>⁄Í\$2≤l¸úµﬂä∆∫¯†ÁÃMSØ}ãÓ˚‘ÉΩñBU∂»Í“I"§¥ﬁ"0#ÓEYÜFãBHÍ¯^n‘ÃƒEópE;v”¯ŸÖ`MáR·¿=∆`i›†[F2ÊÏÅ%h¿F∂ûı
+ï^? lg:F@¸îßµ°[—èT÷	ıOKàü-˙∞=÷!ô∑g]Iàµ€IäY≥!∑Úøˇ˛o•é0z·FAÚáü)"4ï«Ö€gÂä)u@˙[:!N:O∏Ä∞8/k„ªë Âœú%<Zâá”œ)WH´œè§pÉW®…]ñS„°æÙxTZ‚YU””
+/Å¬ò´È{…˝:\ÓÎÓá∞1f  π„HÈm{Á˛™ﬁπ√hß»ÿú)«ÀZÔ’éèxÛﬁ∏0:ï?JvhyfÁíëïµEëò˚∑NQT9ãh)ÌÑÌ¶˙<$ú*ªRÛ6DAîπ&©&lx“B˛n6(ÔèBﬂ†À7ﬂÆaÀ“k˛÷åG¬ód°ñlìƒJöD≠_;¸ñ“‘8Á  ÛN¡2(%
+Tç:£°jR.`•˚™©øÖ?—Á¡GÉ≠êvÁ–é:Sı–ÔË*∂"4	ï*√∏ÔiÖÃ»9“#;Ih¿,ßÕUÿ·⁄¡N¿ƒYÁQZB••™ıI {03ÑöÖ£“Àoù‡S¶¢É_K»–h¬Njçÿ§jHÜπùt/9DÏ§è¥’7§çWÊÛ‚(V˛:ó0áë¿6>√SçO«{Ry;*ºÎ0ºÎÇÿlGvö…æ!√5≠2ƒíACTæ¥2…Óbóe\Úÿ\‹t∫‰ƒ…{ßb„»{R2Îsè"lB©$TcB°Tß/ƒ‘ª£ÉGë/Ê˜6ó%®†@π‰«òÇcÔã%6sn∂íÑæÒ◊%H˙4-–í$¥BOOî∞wlŒBΩëÙ®Û8 
+≠,˙=˜‹Kyæ†
+óΩƒY oPP‚æπß!Y¨Ê‡¨ï|Â„»ñF?©ç1“ãï´hü9ä1øK„Ï‹s'&^Äﬂ≥f¡-Ü›¨ó≤àK.Î•’kè\/∞–πÔ∫AÙ[5}™`Ëúñ%œ·¶"ÚÚEâ2óàY\+L/†NÉöª*ëß:HBﬂPØ#ˆ'<¢Ú5JÌ]≤3˜
+∫¢W2E«/ÆçE‰≤aπnæ–%ﬂ°H⁄åﬁ“¡™Ëns;Z$ì∫|m,˙ÉÙCnÀ<¶q;Swƒﬂˇıﬂ°/∞∞ª≈âZé$‘^BÉpè`˛£}Hìo~&=E˘ +±¶*ÅF€ìUê¥ÎµΩ˚ßyÉSû˛ÿaï=º;¬ˇãx5y!ˇ  ˇˇÏ}[WI∂Ê˚¸ä(∫∫$NÉ@\òº0ÿUúˆÖcp’ÈÒÒ*'RÇ≤-)u2S5ÕZΩÊ·<œöôóô∑9ˇb˛N˝íŸ;.ôëqKÅ/U]π∫À(/ëë;vÏÎ∑=Égéb÷Fh∏:ΩV%é1V˝±dΩ7^µπ·uó¯¢ƒ»ΩÊîËKi¨¯ß Rcò`cäu9
+éq@X(©Ç8N«QV∞»÷U)'DS¿‹Dì·&¶We3?ÚP4\•c8¥ îi”ÿñwñá[™y]G'ßﬁZJﬂÛvMBÃXEGÊÕ«kX⁄ëp U;á“{ms8í©|,@ôŒ$•–‹†öLÖ=Ÿpπ)IˆTà,ê˚ yB¡o^ª˜úÊr∫=©NøjA¬˚pΩNBÉ?RÓb≤Ω∆âC
+lq·ﬁ}±Q¢hÖ¯‘¥hyñÇ\ﬂu]Më%P«0YÃ°.-5lEY@B£/·üˆπ¯û €Åﬁ:!5µ]ÜLyyÛª¯"é‚÷ü{∞Yq≠9ã®®b"ôÎj5ÔgÈhÑ
+ÇÍ0îÍnY◊2¯≤v‹AQD˝!wî≤$8™~õìÄLﬂPSΩ`√®I^Vo{Î˜oÅúF<o≤
+éï≈ÒÅTókXT/òj% ÒåËÛX«åó—Õ† ‚1‹`Ò†Ó`-aªÉòe˝sÀ Xù£FwÏ∂RÄ&v˛ÙX˚Eú?π@:”¡Ö#à¡ﬁùm›≤•àÆ'GO+¬ƒ$°õ∂»1‚ıÉ˛â¨w∫ΩeYÓ!œ{˙“ò≥ãÄÔ›õ∏∆#æäE<ì5@‹ûÓõˆ£ÙjB+ q\w˙˝¸Ü§2–ÕÂ|µn‹ÎäJ≥Ç e6ÖÊ5á≠bi}kg„9yé—Q?oòÙ‚Vh‰µî;%P¢ ?Ω«wÊ≤Xkc>€ª.+≥-Kg4%{wœπ¬2(cÄf≤®b]Uh›“>Õ}c	È'	ç%y=%Ç`|,¡¿út~PÜöQ√“Ò—1±≈[ﬂ´åLïœ¿cÑ∆òì\õœJÆèìáÅ@24è’¬oX&5ùƒÉ_œg
+‹Æª’®˝tÆr√§òYj¢32ymùÃÏFŒ)Eﬁ·¬H)˚9J–	Õ’™yU[úßxπúëjLH]·˜∞dT¥êŸjEñ}[%Ó7ª#Ìw◊f`E~˝SQóyçP¢b∆6&;†ê¯läÁ˚˜∞:ø≈†*èÚq2—w;-$˛7◊π.KÏß‚bWÇ¨	åÏæﬁEÆË)—y*3\@å˚÷Yπeè¨Ãñˆˇ¸Úı+¬”:y"Á"Ç[Èco◊¬7eŒåÊó1„˙è÷óŸWøıïK:FYÃv◊2óTÑÁÍY§w›˚}à.¢õz0F—¬;ÌFp˛2Â•<ë∆ÂÎ‘î¢*…#,[É|£TôL»,`ƒpôê:6ˆ<Ωˆffxäπ98âpWñZ%o&ÉW{®&¢ÀYAÊ‰7kÒ1G?›K‚ÁˇÛ1ª/≈A¬5Ï§^w?ΩáäªAnt©a'Á)pb#W$/¢…%≥Ú=¶ìkBwMŸ.V∑—›'bπôßÅe<7ƒÃ3m»∆}“5ƒó€rø‹+Ÿà‰/icÈD<Cˇ]%]Éƒ°Ç‰läÏù|ºCq>Òﬂπ)∆•€ní¸®T™’Q›≤#ÅZÀ
+jK±TqÙ±®S’œˇÒﬂ…	VêLg9•çëôñç):€ rõNŒÅ™K¥'≥—ËSÕÃÊñb^≈˙HﬂÍ‡xx≤ªıQg–?oá—§è»7‰…u¢'ÍZÊÏˆøW⁄.Ÿ¯X+Õ¥O≤,»ñµÀº]ä1ã√∂eD*Ÿ<!0™–¢ä|VbóQiá∆êÄÙmÿˆœ,.fŸƒtÕ¥°Z∏…Äõ‘õ0l…*o©d¸¿H∆MJ«+^Ö˚`*&,a?πæ@SùÙüˇ„≥•¸⁄'¶—ØÍXù"K∆ÌÂ&îôO„>&≈äv›˝i}ïÎv‹°øjçï{_*õø≠çÍXlm‹˜ˆ+êœy.X}6‰t˘:øÊYÛJ-,ÌúåiÛï !pÍÌ2Xz}£VPn¥–Üzjruéœ˚$•˙{zEQ¶ÈåèÀøD€hÚ–Ë$'«O2=í·⁄îÖf∑˚ûÇSZœ‹l\EÕìK%…êÂÚtøNßC£U9÷Xô7˙4RÀö∂JÚ-ää¢¸î~PqªBﬁhñÂ!,à?k≈ﬂÃÆ∂Bí¸«ó'Q2¿ÛÙ©c˙ßCã'd@ÂB•;é”Ek»ÆRzÓ%øπ^2i'=Éá_ÁxØ°¢ }5≈ßÇ¡•3lÁ[©X&˝ƒ¸…ÄŒ zQ?YZ¯üà1¥¢"ü‚Â¶pÜ∑ê·ÖQ√√)≥ë=2À„ÁÒ8mÀ˚'›Ö§Ô^Ê[A·ùÒz˙÷ µD†-ÈëN2ËÈkTNa+–ìÏâú„»¶Eœ…s$jZGÿù®√ë›ià¥Äü¥(°rM†ã¢èd6m)Ø	±_'÷ÖÒu¬£Ωâ Òç_Dü¬Ô`ç¨5‡SS¨|*ö„Îäé7£‚≥Ëº64è¥·›q='}„#mú‹œÒ•è…ΩCﬁºÂ±∂ÇR,x>â∆IüÇÙÁp˜®œítb´>î≠]e,ä “^°%Ó…œu@ìõı„v;üça˘+‚ Ùi“VHã'g¬'¿Ëb¯Eıé£,Ç˛„Ö„â˙>h@AêŸŒÿéÉø^Œ(¯[ô˘Ÿz€I&˝—lÁÌîœπ"¡Òu]në>âéü¯È™<≥^ ZÇWM∞+¿f◊óÎc˜*˛Of12“¶„ˆ˘Ü
+’…¥√”ñOÂıü—Ú$∫F‰aÏÛﬂ‚Yîøœ)å°≤ÃÑÙÙuIß•U¬œ úcö•0∞∆@FyE+‘ﬁàa÷ºªè8÷/JEÌ∂Òçk˙ÛàÏ≤hcUKıˆ≤9ÇBùf 2å$O•ó∞~q∂≤8:FY!≥)Ë.#ŸÁ—tï#Xøª9Ö^Å-=F˚=7∑‘û¢˝Ú?ƒüí?˙Ú$Í€—¥êÈï5=éä˛⁄°Ù]≤`¿0X)ﬁûbú“<ñ‘¿5Ÿb€S€y§ØÕuı)¸û”"#¨Q¸ıG÷aîì?√±˙¸˘Í—B±7¸…∑∫kπBiààuÌèR3bk≠‘/àF∫úƒU˙Ó„¨ÇË˚e·2Â¢9úE¥%Z*Éè“C¶Ñ$pÒ¡·ü}–‡ﬂ’’emFÜ«°ˇêyË)˙äŒ%ˇÖÄ»â6)6∂(Tüæx÷¢˙√Yk˘Õ˙[ı	V»ç=Ú1-‚#6¯d+û¨æ>>tC∆†OA0…)CŒ=Å_@Å _ı[ÃU9BùÈ,∂+ﬁÉ#ºC{∏Rû£oØ~
+∑±6øÂºTwN© ìÔh≥[ªSÙÎ∂\¡Ã£$v€à1ì$ñ@Ø•Ωˆ†ººC¢…¸Õ[i⁄U∆fYjZ+˙ò$ÉÚ˙∞J[˝˙Ü-µ€w’ó¢*ã„^ä.“•§¡µw•X√Â:‡ˇ>ãÛBjˆã>‹yêc° ∏©íΩM¿üPfÑo≈ìE?ﬁ*œS)~á.[!ÙK«œp*wd´∫ûsÏhK√≠T+∂‘\d-}ó?ìcãJmÍy˜ıçr™∆˘(¯8*ì/÷ZjªY¸¡“(n>,we9å°÷~(¡·∫Ë≠cΩï‚0ß∑:ùU¬Á◊7Âﬁíã,…Æ˝ıí€ÂEàNÏ%äì≠%j‘o=æ◊Nt≤dr«’m9{øTuÉ/ÆYü3—a€ZˇMcõ˘(Û8g1ƒÙßk|Å5ü¬÷≤C–’èzπY ê·{¨ôb»~≥åó—;áß€ÌhÖúS·¸ºSˆªC¡öb$[Ω€QueYºExÕÍRÌŒ\Ï-Øp≥Ä≤≥{ÑÖ“ñ<*óºkB…äÛ∏ ∂;Ï’¬0ôI$ïmî∆AC°º•}∂=û¿XF£›µaOk‹X¨G4ùèku{Ù‹¬˛fÓÔÁ—ìæAÅa7…»RlÍ:rVÕ¡_Kú‡ê±›“X∫…ç•={Q09à[°îæ•2°ñ±⁄J9›ão“tnEAØ5∞¸çœ”Ûd”T§“[}ZÈHé^(¢s5t°∏0ÿ·9nÊ V¯÷jw¥§îNΩIÅÚı|^Øó:≈¿mPÃÓ*Ø;
+êHàÿ3ËXªu:è#P>qoi{q‹]Û∑» 	Ä8◊}z^·ë”zÑ⁄ö“÷ÖjoÖ3M`¶ëÙ·‹l≈?ı|£Yã_Ø5EÃ‡⁄20=W6–û#ﬂúz–ù4PUÀ”G\C©·<é2™*oH&˝Z(*œÚfﬂi
+N™åÖ¸æGˆ§MÂÉÓéâ1{#MÑ[
+œ&g·ØÇòÂ°§cu‹æ˙≈ÙH)Ô˝ƒ,çÉõ†Âsz¥i≈∆{‰tvæJôx;ùåÊ‰jÃ_z	äQ<âõÌ≥T·ÕIíÛ»¥x†WYºiﬂm˙ñ˝ÂáŸñ¢‘ê ±¡æÃãÀU±sÂ|‚„zﬁê-@" ¢ÈÇlŒ(ú˛˛r—rQFN’—$_ΩR˛è∂(ç(Ÿnüà·ÅêÕ‹ÀÊLy!)ïŸ9ÊÜÑéP
+áı€ÍhTu/peÎhõ.=	√ZÇ˚^È§Ú˝ZÈ§˙¬0:QÎá~J©¨ÌìÌˇsQä	˛j	E|`ùî6ÉœC$¬H4Rw=íà)]ª¶hwGq˛æHß#ÖnŸ ;’9ÅW2ÿÒË`∏]>®ÆiÆ±j10P≥áíõhX°öõF∏:—öˆAH›¨©ÜP6Ãƒ®tvªx⁄HóZLº'±S%eç˙j‘Éö–…DNn,õ´"eT£ÓâbÏíT¶˜≈“ç]å˙r)Áp$ï≥QM˘eF5EÀ¨øygLÉí
++êú<'t/ﬂA*7ëûﬁ‚ÖY*¶Ë⁄((îfπR„¯üpÂ8dÀ_√ qñ’ ©ºJ'>”⁄1D£⁄ñP˘âüs	)AlrŸ£Zô˜{YDFë˚3."´ÿ˝´XCVôªZB•†≠à›ügÒ¸´Zû‘∫n¯g}÷e#≈p∂Ñ_≥´„˝¨É˙º\™3ö∂·qµÏ¢ó%m4òô¡Ú¿bJY“œ)FòÓ;™∑wô%ÇˇAl≤i}ºS˝Ïë—•Ùsìi2uÎû	’»ÿî˜ÿUµL„Ç›4A◊±¶±Ë]DÔ´◊Ô,Î≤{ñ1/‚Î©(›¥iv≤°{‚Û™(ÜFò≥l◊Rµ«ëNœÛ`H‡“?mıIÛ≤MÊ•Ÿ{du©¬≤ÙΩ.Íƒº±Öã“à“qt›ÓÆÿBGÀ¯úıÂ€ﬂã`%
+5·Ç^5û¸‚©øD°c ~›3Ì?NØøX¢óÒ∑…˜4Î≈›ø8Èõ¬˙kH:ã.©⁄m}¿6èë7mcjÅ∫LKfyYÎ(<ÛóÙ¸◊∏§∏≤ö¸◊C≠,∆ó∑,xaa>aE ∞ìûØQ0K¡À«/Xrtùåg„ß≈:ùa}œ|áÙ»ÌÚvê*Ã©ænNX\ñ9%¥¶0ôBçT/‚¸Tc˛}“ªd§˙“Hù+†&—)/sS»1|˝ıGÿ	Ùò€ﬂ˙µ≥My˛`
+„A#—lÇûã§ßj
+5hÁD$`6÷-eb#PôêÀ•Ù»‚K+`	 Åùz,ö≤†+7jn®! E{˛«ÔÅ7qÊ`çÊhtªk√À+å†:Hã>§£Ÿ8&ÈôÁ9Õñ‚ICX…DD}Rß-Åœo´û⁄Ñ‹n¥’7Ωm∫ XôrÛ¯æäÛ)P6®Ãá0rQ2Å~¡r/Ü{K0Õø_"C˙¸óeú 0ÃPâˆn ¥ò[ÿç≤Àd≤ws
+ƒÛÀVH∆Ú^œQ|¡Á)Ëˆc¯ì‹Z%Ì‚ã‹”ÖòeQˆ](8Ö±O36·K‰∫ª∑¥æDÊÏüÎ˚ˇx∞Yst_¶y√∞CÇ'±ÂΩ•ﬂm^l>à∑ÿπóO`ÔfΩ”›∫uCL*ç>luΩÎj7Âp@ñ9rÑ≠"ŒìhÚÚôº»“˜ÒQÎ=À¢˘ﬁ“ŸX¬¢¡“¯ﬁE≈øÂ∑Aœ/∫[]ïìˇı‡:…)°¸)ÜˆhV‘R’¿√Õh„|{â.‰”≤‰5ºÌ=Bïî/!'WNÿ_¯g˙¬;ø`6I`™ﬁ_∫æÌ,MGE2u‘Äó“º’˘(∆EqåÍíÚ€“˙›˙E˜€^‘Z·ÏˆÃ„D∑V˜¡Ù∫<ãôhÈÛi)u„s- „Úù¯·?Ú‰≥:êö⁄ÿ>\l;Z≥<rFÇÄ∑øWÛ|≈W·Ñ2'ŒÑ€Ô/ó•πØ»O¸HŸ–MÔñB$ñÀ†À~Ô-Õ≤Q˚w“
+_∂ŒÃÓZ…°Ã|÷¿Ô$π2>öõ|íƒ•Ì–_ƒÏÆ"n≠Çq‹^‚æÈ∆˙œÈπ¯⁄Á…µm?€MèL¯=üQIv”H$Ò]•Ÿ{ë—f‹/-€b–>πŒ™¯dw·ß0Ó7µtpäöSGµ2w√êT¢’∑zë¢1!ØÜdãîWøè-ö¬∂Æ®Í«»dÖ7é;`P)øP3-…áh4És&©]‚dåô '[	{CÂ2,ﬂ`≤ÒHoËÆü?‹Ó6xÉÆT/®˚Ad∂æπq±∑åP[‚x+@DÆ—7x›°#.Ä\ªíLÆÎñπ˜ñd2õ‘ﬁÕÉu◊”YQ›∫ÌºuPÌ:ò\‚vµÂ∫µ‹\ËW€ªÍíƒºÿú†öH√)Gå¯6∞§læì  ˜≤-~˜0çZ¸;Ã©\˝˙Ü>z˚éÔß7¥¡ÌäßêÜπ}wVΩÉ'….G¨π9K‡nm©¨W„“ç*FÁ9Ëyà,ßl∂é=√]ñ∞Å]Ñ‚ßÎΩwñ¥Ω√U'»¿|^˜SÎ–*Ó,HZ∆h≈[´Zc{Ñ”HVÇ˚2SX·4≠Og®NG+˛ˆtgøÇáËRM‘6ë'CIi°πMöçg˜U?ı◊3Kí÷;Mï{y≠™r∑Y≤8îõ%uñD¡2ˇâX˙{XA¶hòEãözO⁄å–∏ 9K∆1- ,ΩÙZ£Ô—r‹TÛD≥Ò¶≈µ”sí’Ó˜‘j^{ùÃKπ∆\U1œ@zxY˙H4ê2ËFÆ6uµX∑Ë(
+¸™Ië4*ë|0¶ÁP'§f_¬– ≤õtÅÛJ±5äaí≥–±N	öQ€ˆæIQ@%ﬂd*π^röYzmÏ®åü‡çi'®D˜ÈÂì(Y±b¯ˇ:ºÏıSi]%TÄÂ•Ä9%2îu›ºªÇß—©¿9˚E?ø¶L—L—yÚ†¬mh—c±tπóÆ∫*È"ÅôVËÀQ∏¶ ‚Ú9-Híù∑Vàs‰0Ï´]‚Ø$Ÿxgs{ÜõæbB/€™*R |ãç?b·¿~0‹t;º¢æ˛Vè¨œ_Œ¡c<öÜgRå÷øJ"s» ıçjÂıÙ—A we%{uPm,h5"5h÷ÇÓû˘Á—Î˙»E)	Ô+ErÈŒ÷ÔX§ŒåIM7Ûh=¯V«†QOË,›Î†Ï¡ØfıçtÎ€ıîéÌ*Z⁄TﬁÓ y≈$=8ŸÉMe˜≥dD&°Ht∂!ï‚ﬁ4Kô&)H¡8◊ÕÔ∞k∑2›ßÕxÎ‹¢NÏ!l˘+âMR=êö∆]	–Ê€Úe¬m2«»Ã$®≥å[63H„îbñ„Thùm„cÃp9ô¿fã˛ 1¸‘ÌLÀŸ√_ùá[fè«_PûÎñœuÕ›è?áI¯ºñAÅ^√i›‰¨≥Èj„r¨Ç*Rm†2fê-ãêµC2ÿà%8äﬁÁ`ï&yô∆#kèw5°!∞°»jçƒè AçÉú¸Ô±$ô¡}fó›7Ïa<¡J<ˇ(SToÁVﬁdeb›¨WØ‹â-ﬁ\DVj„€r\p!k´‰€¸˘Ôˇπx[eW(^È¢˚4∞•8™å„öÃ◊`"4ŸPÄ[•7j„GÑf¥àUé˚i–8‹Å%£˚˛È0ù|0}=—i0Ñ;ﬂi$,„∆HeÈ‰““Pµ4ÖB{DÀ#XSÎı§ÙîØëÉ…ú°!∑p‹h√˚†Ω
+*Ìå•ZDh ’#zÈ= ˛[œ±¢ó@4⁄X≠êØî#Î‡ø∂T`	ÉÊRÜÑ7‘XÉ]5◊’XtÕYkg•∫Pa˘≠w∂™Ç»¢√Vvˇ8C&íLÌf †,aào>bñAqˆW≥Ñâ∞∫«ÌÉ]µÈ Öî∏*kRÀj¡b®ÿaæò≈àÔdYzıäÒŸv„ˆ™ºFÛD•Ê’¨*@ë´ËTyÕXpJ)ˇT+?e™•£!k%†T}y•ûíø¢`CÆËi¯¢4’[⁄GÅöéuòÀÚ),ªà÷<)Î4…x ¬]‹NkE¡-îDàPÇ∑E_é„AﬁFy;A0xëtÚtñıπ˝∂*ﬁÇ™zM`,Sµù6›æ!ùN'·_s<ÿ°≈°HDÉo1ì‚oÏƒÌ≤R!âﬁ˝£ﬁs^ÎÑMÜ_œ'5Ì‘?kÅû≥J2úgR,«™™M˝öTë©$3◊ßS¨˝[N≥Àı
+Y£ë¯“7§:q+ÿòaXî<=E¥"TF%Q>¡\ßGôãåﬂ÷Íû∑U˙üµ5ÚZ+ ÷YíÛ9 Ì‘∑Ñ]HG…@ØEÔ~</ÎÿÌ©›,´E˝˛
+ΩY¡…Ä∑OHœD#,øµBÆ‚∞—ËC\ΩK≤ƒö∆¥Ö©û~*‹^Éxú“ßÅÜgXïñå—R6B%O∏˘¯H¯∆x~-à÷:|}z∂⁄¬íDÙE…†ÉÈX–Ì†hØ/ìﬂì-•∏,≠ºüˆ¶jÊÌ2—NH•:à~ç!Û”qwp w∏±¨mtsãU+∫#ÍÁ·8øyª/ ‰Òﬂ∑ÔÇˇæ ÚªÌΩ$N…kÑ˙.Aº”ƒ¥ÚqZi ƒà“/£J:p
+)ØPﬂ0GáÀç1ﬂK_‰Üq‹X*ª≤r€ bÎà
+º¶Ü{+`áFeÏûdº§™"Ã·IL°M.‚\-wmÅ!Ù|πé>V®Í_l,&´~$∑∆é.µ2∞8ö¡*æ»‚|xx•¡È|“NıûM≥πwÄıOiu=ö∆„¬[tªkL‡$ZÃÏK0Ÿ!-X~DË¨Óoe®sÎdáú¿j·¶ä|¶ssR§ùòO8COm≠◊j´àöèØƒR¨∫ ÔóZ®+[{}iºñﬁ/  `%Óê ,†Í∆ÀÛøÄ ◊yœÛ∂∂±-k›¢rˆÎÈQz5—:7ùe†jkΩ„'ù›;JÄ9Ë«'gX`´ÍWY,àÓÛº\êºœW¬ëﬁOj˘—z(°˝U=,q≠á<¢ﬂmPÆÿ>äÙLÕm{¥pdﬂÆBViìBÒ‘Cî(v©èÊùπØ§X≥∆¬ù0_ﬂ–ë9øºÚxÓ&[H»n9å›x÷0Ëô˘5ËwP2µ⁄<mAqÜ(å2±i<Ì∆àC‘£1L.Oô:o@πã§xo´,©`i)"ç&‰π´ú®Y‡&¡M4^rTÚ/≥xá«
+ {”ÎleÒ¯m¿‚*£æ∞7ó√ºe⁄óıÖ&I5k∆Ú∆ÅâMBTw%6/Ö?π"AZ–¶√∞ åA 6¡““5Ìvg˛Úá8 ˙Cc¬fz·Ètµª÷#,Féé◊úû–]V∞ºÚe	V∑∂ôÈX*6∫dªe
+2…àeoâ˜úŸ:ÎC2—ç0oö›M‹=m'ùnÀ*>∞S®~—÷ÚGÖ\¥÷['W´õ€f#^Ü3\ßË6¢àŒG±¡‚…VêÉ!Hà¶µS¢ô!HT(2ç„∏óqŸ¢¶5l„n
+ƒ¯E#Ê¨hieN¬k√ÔÆ√/®k†åÄL7È«_XøN©¡ÓÎÀ3ˇ¬:u–gx{∂N¡cz>aYZª≈y:PÇ„a˘C?VÁÑˇ·Ã∑Å¡†lyÚ°ÈrvDqT0NAPŸªQΩÀbêE¥ª'åà∂f⁄ÕÈ|‘ÏRKSw¥ç&¶–ÚMls[ÈÆˇÎπ·º!≈•¶Çt"fJ-RaµÅ…îmz‚t◊
+∑µSíÀùFTΩõÃë:ÛUë±3uçYHïÒ´Y¢÷TcUxrÁ	$©:ÈU˝jè≈Oÿ‚ÁÏÌ(ëtïT‹$Œ_„&tVÀÒ‚uHÙëÚvñ3õá1“Ù#êº∆ó$œ˙{“È[√F?dˇ§‘‡/˚ ï\π-¡¬÷ì≈ŸI:J0€|íÆäSK<+‡€ñ5Ng^@9≤nØÜﬂˇÂÓ0<S4.t∏ÒºÔp`óÒ»x:ùLcõ§WY4’’&22%”<…yy“7›-ldí£RÆØ∞Ûﬂ‰Ω≈≈^Ëı˚Yìﬁ Õ-∑ÆÔ	6n‹’áÖ¨_2`ûØïùË:nØØêm^ª°ï÷Nã¥ˇæÂ¶·œ6é5úqã‹ˆËû+Q*≥ã<√G…‡ëU´]@¶ÎU”$Ú≠u›k°Î`ÊÚJ‚pÊB±„FÍ{ßH_#	Ò∏xœÑ∫≥g>Ÿ P%w‚¨≥çÜY1º%ß“.LÅüÃ–‚n’∆ÂC›I–“ä¬ﬁÁ—»âMÔöp&ä8ÒE4?†’íoîÀ∑y·ëNèfŸﬁM;∂[3 µëàFdèL£,èüé“®hôFŸeÃ®∆:lıÉ˙úŒmxåFJ`√E }äπ“´≠=ô5Ü?IÄMcÏ5Â∞(C2Liç9˝a£Œå¿OÑÂN‚0ˇû¨≠ë◊¥3⁄›<L˛û§¬;Ûd§6èã‡fÛ∏†¬q{ö≈pæÒﬂ*¥És(õ‰	\Rõ\q7úõ[`Ö…r«≥9ú3‹ÆœÑóEB¢i“aÛ£OçòåN›MmêÍ[ò[<Ó¿œ4k∑ûF	¶–ÉÚ¬°ü(æ™µB‡∂&_≤¥¬ÔπÀÅπ'èäá«B0-K˚àÉÓ€UhÛ°‚pΩ€•ZÂÚH¯πL¢d £Zú˛Àãã§üT(®|Ç£‹.¢,KÄ8~AÂB€&+‰ÎﬂºOFó…V2	[ñAª˜≠ÏÉ¥É1w∞üÊ”…·0ö\∆Â¶…ÀKg<»∆“’ÉîDT{mí€
+z⁄˜5À7ù“ÄL6RK<aiüˇ±ª∆Æ7nË‡*=}rYE’aD .ú•˝Ú⁄ÅXJæƒΩáfa√ÈÖ_rRÜ>±Ã∑2˛.√#≈W3fëN.ﬁﬂ√°óÙﬂ;å-∆Ç¿ÓÜ$ác*˝\∏—„	9c&–·ÀønÆåÍX⁄/ˇm∂ ·º˜πCÍ´CÆø◊∞Ö•:ôÖÌ!?«kÜfQ™Ì÷…•6hQj]?øµ˙ÄQôW®öŒêÈï«˙·ŒêÔ∫ìp`7g◊r ”¶éC;Ë.1πW©4¿¡j≠ «êëÔgÁøú∞ãœT°◊	6ÖTTQtK,MÏ–†
+∞±àVÃ∑IØ[⁄ßëÒ∞xÙ`x$;a∆∑àµ`û+[ë;Jm<.A@ìÿöËt‚5E£≤Öë8›g
+≤FÄ/ÕÂCc∫{VÜl*Q€´2ÿ\`mœ¿¢H˙∆oˇˆÕ[ñ]”ñ¬˘W™töÑoU=ÆzNW§’õûìc(òV|ıµ∫Kyê–M±ÛÓ6*†≠GˆƒU¸≈Y.EÈÜñRnAüìÓÅ~ª9‘Ñ†ﬁ"ìVà>ﬂ–◊EÌÆ†Le1î•{X˙∏ÑèC‹}Ÿìá —¿}ÄºÈê4~´+…èC`Ö–;‰BòiË∑x÷†çôV®”∑Tµ(PB¿10eZü4‚6≥ã9·M∑k5ﬂ=áêË&¡´U–JÔ≠+¯•ﬁp…5M⁄äO‚˝•YﬁÂùq/;¯b†eı≠µV5√*A◊NHghJ,ßÛ(ì£§›“6ô… wWíjMˆFÈKZ˛|UiïïØõ ﬁe`-F‘Æ≥öJÔTä∫F©ª2&Ò[„cñ)Ω;n‘’7˝ïv°z·≥hûŒ
+ìÌâﬂ‰QXZÀu!ˆMÎ†€=˛†GˇªAˇªâˇ}Lœ?¶Á”ÛèÈ˘Cz˛êû?§Á7[,ÂØhBµ∞ïäù‡]
+/âÚ)∆ª‰ˇ>C85¡O÷T»Nï•îwxÂ
+5ò#Å5÷ﬂüey
+RY íÏ\QPç #Ÿ˚6’†"yG´á±°id\g'A
+(X€àˇ†Ü0∫
+VµŸÒ¬Zy`\SZ ƒ=ÿ¸=y
+Ÿö¨Rì5{õ(kv∂å‰¬¢®<¸¡‹ÓË [à’tÎ∏¢t∏Y¢2"∏Lv’µyπ"9}´Q+ ZAŒål«0UŒ›iñŸ„(Îß¨⁄≈rÊX¬Aï4We75˚—\<§j˝ªxÇüó…≥Â+û&£¯⁄R^R&	Í*ä˜E‹ıÕúºy˘ñ√h‘ü¡‡¶ôÚK≠lÔ[û\O”¨PRH˘ÄÅù*Øpî ˆæÊ4F…Å∫´oy¶§Å⁄„äåÕø-!ßi ∑)çë,PÉÖmÛtFˆê!°ëñ¥Fvƒêﬂ(0f`µ£Uóﬂ®®ıï…∏fqﬁZ_€LˇﬁÙÑ·:≠)F5äñ¿¢}À{ÖÍ\Ìvï”?/“lÏä¯⁄ï¶»ãs„SzÃ(wñ@Rém∆æ øåêR≤t¢ÄÚ<PÌf#f7S¡h%Û∏=uΩm £˚6
+…g.H◊ÚÒÿ(@zÌ…ÚÍ)Ë„¿åå€É›Ê+≠*k÷K˚/‚x@ÜÒhJÆíbH¡Í:dî"¸~“œZ€®_êô3
+ÀO7¨1≈ åv‡∫)BôíåÜA6ÄèãAƒ)É|qÇ0ÜÜ∂»∞é≤Aq <X’ œ≈3ëÒñNáÈTËà*¿R Êâ,†‹ÛƒîªÏLîVÊiñé	íNçı¿d^Ú±´E∫öë∏uu«S*uÄF©ƒ‹^ÆˆG…t_∆ﬁ(ï7X⁄«´Û&=?⁄Ë÷ºΩìËCr	ﬂrñ∂[Xú£Êwµ&rÄ2â§†HéR[‰™ÙuH‚+r 4i =ÎiõAù@uZÙey◊GnËHjÎyQæ¡ºB∫0°e4¥PõDT!E+BwoÑù¯Ê-ÎîNû∑"ái˚A⁄ƒÎ`ñ˝x‘•xR†‹ı∑øëıÜÿ¢üöÌNqã9Õ!∂âTƒëˇº{¿ê¬O≤8«tJ”æySçâªÍúÍ	œ\`òØH»Êˆ¿D	–\ÄòKZ ÕÒàØì¢˘ÎL´UöNh0¸ã∂rÂêy£˛í\\ƒ◊´iÜd&∫•Öy`j™|eÁd—S¨Õp´˘4æÃ#˛°óé÷ô{ FÆßâ
+0fªAô–U.1ñ”çäÍ≥á•yÖ‡d0c 8´∫Â…	≥Qòwﬁ™åªT2uU[Ì+iy∏’$K¨,ˆRæ2º∞onÖ∏±Ìn≥•˝üˇ€ˇ+ùf∞_‹íüˇ˛ü§<«M˛√áõ8∏-Úå∂Ï∆Ö52V∞5w4¨√Q¸=RéÃ£:ŒDü8ã¶2wÍ<¥ﬂØ…—ÄÓhÌ{|ŒÕé≤OÆÿoA˘Íx;†ìT›O:nßk≥∫ù˛¥◊óçavêüxtﬂºz≤v…ˆŒ€!Ñ€nOÿFV.…îã≤q-€w; ⁄≠|ÎZ◊ÔfU£OF≥\Ç0∑Í∆
+%7XC°&UpP˘≥ÂÛÄÿ4h™?áÈŒòQ‰ô≤z•XQôÄ˝¡ç]n©]‘!0ÍÂqt…[˜Iy!◊±Yk5>≠ÎR£K9ÇÑar}àÎL9L˚Ø)˛⁄ºÍÖ–’r	å¶:?´≥ÉVÅ´ g«]ÛÚ#Ö!ùbﬂc\º≈√†ãÙ2.Ü(˛§$GÑSh	qM/GÈy4¢è„H•È–⁄>`	ÿm™∞Ÿ√bΩÜà∆^;Ö 	Ùπ8•≈/!j£
+æX˚a12ºû$I<¿l`	Ãyú‚G;U2Ïﬂdc…±∂FÅ‚úók∫¬ƒ≥É)•Ã√™É4◊Éå“<g÷6ˆˆa4åb$;’¥¡Û˝ÑñÜÛµÃ’1¡áX3–:ò˝Z¿ÕÙ¢‘Ìƒy‘Y⁄&Ü kWw*•œ∞Ì≤mVÓÜ¥ämUÍ√?ï˜˛W+´}P(ö;é{.≤Ë2IØ| NTw$ì)Ï∆/Ë˜T˜Àß´ªÅ√FŸ˚º∫Ô;Q›1Ω‘Êò°€T7û(Á•˜≥Ωæ|/˛|ùç¯uÿóëhPów∞ Ì#èãCi8€≠ñÈœ€3_√÷ÓöÆÚk_D£‹¯Ze®¥Wºà>úGŸ_…«K¯(ZÆä1ë/Ûp•Ù≥1ßD¨Á(AÏmñÑ6TK K=\Ná,“(/:˘¨èô+ÌwK_ﬂ»§zªÑ-≤l∆9„ÂåU%:1@Ä7
+‘Ú≠Jà	‹G~JñNgÁ„§‡π1xÀE2âF∞vﬁIí |4VÊMgEª]s.© ´Ø‚ãG®‘…ÈÎè'Eä÷,XpÁÒX7ıqÂ„4-Ü—â®xadéÍΩ@f∞ùï'ji≥«Öok8_Uü«vé€?÷˘’a:ù∞Ç?5æ≈±‘ŸUÙu¬Ôææ˘Ò‡’ìÔ_æ>}Ú”¡——´'ßßLª˙∑…AQL¶AƒêUÍ∏jz0/≤8.,QûÅ—1?á£åó˛öLmÌ°-!õ√’3ÙRöna•ﬁâa„{pöu–H{ûFŸ†sï≠„`¥•Å)Zù≠ä‘≈(¬òN6]eì_â••œOŒ*¬{àäûHÂ:9år;¢jñí3R¢W·Á#Os‘~ﬁt∞,J”ºèU˘ûeÂ≥ìyœìÒ¥òCs&Æ!–£¶ı¨E–¸
+)ü¿,m%üømGÍ" 5z«ûôƒŸV@"ÁsºıE|≈G˝Z<bË·WÕT¡~;ÙPÙÉæﬂPÔê˛Be&y˘I-Ãß≤ú:„~ ãƒov•ó,2,’K Ä ˚a” ñ2°<†eYÜ|6ñ 2¿Ø≤ˆœG_¿Ú
+Y◊◊ÓŸ„#sÀt≈r7∆U%wÆ7¨O ˚Ín"Q´ÖÕŒïú»¶ªUUäª˚ÚÒÒ≥'‰Âãg&??˘ë<}˘äΩzyB^>}JNˇt›“.ô˘≤?ãã÷÷v∏˘ñ[ÌW/¢AN›∑˝<=1Ï(Kß//.ûÇ∂^3=∂º=„>X{íRãõ6‰~s9~ÔÜˇQøƒbPŒÿM’ﬂı˚∆ﬁç¯ÀxOYTáﬁW˛™ﬂ+ïË¡/-‘Ô0{7‚/√wN,0õ‘ØTzﬁMı∑°?íT¥ß H¶Ô<Tn◊Nÿ[g+¶jˇGÍLM˛Wﬁa{JW¶™˜à3Œ7UèN⁄ﬂ∆µåÍe¸ÑÛ]ÂCısˆ7)ÍJı>Â¥Û≠Z∂+ˆpmßz7?·|k˘P˝ú˝M™“YΩP=Ô|ØﬁÑıícƒπ˛&6?„ÁÚ1√I˝IÕékÀ∂}vprÜL˚˛¯8gﬂ¿»G∑¨≥˜S∞(¨∂6%è£…t‘Äl_9î„ú«rpı4•Ê“rH›öbVf- jÅ¸Ñ–Ö´’Îˇ)Cù∑Tó@º¸}MüèfViX⁄7[Ÿ›¶a7¥~èAÎ+.	ì;+4Mƒr{2° -∂¢∫≠¥~ıﬂÄRVÈh‘j*ñJÿç®≤A÷B'æÊªQz+~Ú30ãVräìè˘5∆·∞ÜJö :m©“ø∑¥(ÒuH« 2˜ª»,ÓÊ†L˛˝4?˘`2øÇ|Ã#úVvaÖŸ@πg¨"Êo¸ıÈo∑c$Ω4ï∏`´Pµ°!ÑäGÕ¡qõ∆uè?@Hbﬁíé%ÔCî3Œ dFåR,˝	d8;.	éCºB`0íã9+~uëf–ÃÄ=ŒLqÃ%1ö[>ﬁ‰ö∂—çÖÌÚïMÙÂm¡Ê5ÜÒ„˘2ΩtS≠TÅ‰Ë±yIóskÖ¿*Í√…ÉqÙWåèG˝OG…Ù=≥™Y¸¥‚è”Î™e‰±UÚ]öÚ™ÌS¥ÔH"
+≠?6Àí8À˝ç›«£≠=ª¢∆¡«Ωª∞uVo9QÖCî7£ed}/8EìXj˙*π(∞xN<´ƒƒ?J2ƒ≈¡Aöf-3‹è©GÇıñ$O[â€2Ï4ı¯0qáña’5`K€s7w©Zõ®˘€rˆπHïÅ#m”™dfºa{Yö™≠êíÕ
+¬'Î÷&nÁ·∆|PÀVΩXê∏{Ôˆıq†2û8ÑÕiå∂∏…ÛÚ*∆∏kâTì∫ÍêÀÊtÌusÇ˙ÆT[≥u]tˇ¥àß§ª#CÇÒo8DˆZÔπ©Rƒ‰ˆ"81aÁÓÈNhtÉ√8§®ï!Ù°V∆œìø˚<öû$ﬁÍWÏ^gŒ¥î¡î™‡
+˝÷A%∏ëøÀiƒ_SΩ5«Fí/@ÇA+£FÈ„∆íŒ∞ú/u‹îÏùÔPÆ≤ã‰âs¥í%"¶	ƒ	ET:É'…álVÜL‘|Yv,õµIDPÕTNÁ–#¥Ë˜öAµéµ@*ÀXÿ!√ä§Q æÈ\êòÌfGñ}‹[Ó…ùëDØ[T2W%8ä}œ‘◊¢4¯v˝
+∂ˇ.≈VL¶®≤lñ¨ë„#_Õéz7‹)Æ6(Y%FõØÛ˝>˜Áπß·#Mƒ)ıÌV‹—9fΩÀô¿gı&ﬂ≠DÀgØ√§òØ—ÿ£µˇäñº∏É›Ó_∑∏◊ÔZ«Küúi≤–ÄÊå¢ÒêÛÑ≈YÇ7o*5“†é¬:)˘€Æ”âõ∫ÎZä¯∑Ao˜k¡W	øÚñ¬≥(0 }Ω≥Â–‹Ã≤înàQÑ)˚`Îñ$	ƒÓ$K…Y2›·Ü$r0∫äÊ9I&˝—l3Ï¯à¥]mXv⁄‡2¢9kÈÒ,aÁ◊Ngò(C®mdºËCö»≈ÕA…AåVb3Ï’ÿi¶Tàz;\ÅÉ©?ûÙ”1ˆC†˛#ËDuË°;´Dï¸ÁR¯ KqÛ_∫Z$”
+Ô˝ΩÎE'Yu<Ü%:G≠H		§`ìÌCûf´˙.ÍQ…˘b€.¨˚]jz
+›ÒBJéG∏·—º’£8Ôg…î8§/rtƒ[[&†(,ãhP@8oÌVü_W¿$=ï=]r%ôº]Wj⁄∆ùÀŸ∫&á)’QœVOáIV‰+‰Y4}À‹:ö‚∏ˇÓ0ÖÍ®A˛Î°«Z{[>Äç@⁄m¨Ü,B¸è¸E˝S—ì∞*_8IìF#Ç'˚¨7JπFôæ@˘pQ©⁄N8Ω˙@”ı™‘7¥¥œ˛É⁄◊ö••}Ò◊BÕ<üÉ†-Ì≥j‚‡/I
+üˇ]ËÒÛ˜tÄ˛≥ÿH$Y^fs	˛◊b#«˘>Ñ˝ªP/1Îjiü˛“ÄøvBC≥ÀÁeWt∑¶·7§˝˙’3Úr  ÷ñC8X@Q∏¿≠˚ãÁtnŒ¶lﬂ√¢òÊ;kkû}∫∆Ì·SÚ·‚ÑeJMËÄû]‘X`±ˇÍ∂zë Eı‰4Í(a·àﬂOπx“â@.k≤ÑôÎ©wÚªf+…±)ŒÂ§§¿}Ç5ı•∏!gØôƒ‰ÃsQ¶ø0i`y"-˚Ÿî"˘<*Üùqt›ÓÆ‘"•…*È⁄ë≤≈°x.7¥`%A∫î‚lŸ=Ë⁄N&!–Â˝azÇ Ω6*ıZgQ0:"ëãéH$+s_$çÿ„”’√≈J1s]¯&„ﬁ∏F¥ ¢˝bi6≠£º=ÄdÔ‚jfûê!rU÷≈Nw◊◊kõØŸ#“@Œô≤à‚ÍR·Hß◊ΩO»óÀ~·} Õ≤ÕYÕÀ≈>Öz√O¢9µ∫æHãm*M]hròkˆ€ xı8Å€aÉå'9∆[Nyè–åÚãàM0˘ñÁúíÛ.bxM<gıRcå≤A+rè€qØ¯◊ìiîàëq4'Ò5Ï”	¢äq':w$œç®?m:Hû1‘ÈÆ®p÷
+ïŒ{¨6ñ∑öÍ¢”"ëÖ®∏Âa+H&Ò9ñeû”G˝!ØNú‡û√IV‡v4Ái	/úü"é∆c ¡la2ŒÛ§OoÕ Zy0÷¥yV7]l’ºzÜ‚„9∑=<¨a¥”¡¿êM(éAí£é3ÿª˘*Ã∆¨¬D\[çCV~,≠Æà|Ì™~-˜”ΩÙQÙpsÒGSGSÀ˝&ßºtsW¢9/1I¸ºÙ*¥¨Õ›æ≥æÉödœmí<±0TV:sÌ≈>W∞ÂtÌ|Èﬁÿ!ß≥Ò8 Ê‰Úîck√an·çÜN·m
+l∏wSÈ0¢è7Øèf-¬8µN˚∏iS°â;ª§•pßSöÊ8&Y˜~!^ÈÙJSXòä@Ô›-}òN.ílLÂÄ>nXL4@!D(Ó˜•[ìÆWîÄ‰XóL$Üú5=\J]{·€7FhÇ®ﬂó†	‡W	M w)8¡m…Ÿ`‰h31/√µoÖ6£ä505\SÔ2´∂âÊ°ºfMo”hê	√v‘!xQé‚P- Ÿµ˝®•Ba ã,}ˇòä!h'◊k–>W≤*∏∫cÆ5ZœïJèñ5èw»ù1¥è•ÚΩÈm°(Ã‹09«[Ÿûº0ëïπX	f3≤‰2òﬂÖ,¡Y‘3XˆJnñä®vµœ^‰≥iÕıH˙π·u®+∞Ã9s%ú±n˘ë∫Ÿ1¢•œú∑Hêﬁ≤ˆJ¢-;$hÔ
+–ªl¿†À•8b®õ@^¸òj!¿Ü›Tg¶^>ñ£ØóêÎã˚ﬂ≤éU@%¢<|;ò5oC)Åº°fj `éî™÷Z´‡S›»ñÕÜÁ,∂€3Á–¬Lø!—ºÓ¨ S3äê©√≈KIéêdu€RiM=¯™°ﬁo€Ü≠}Vâ∏^= ·÷ÈâXÎÕ1”ı√ŒßµN´õ≠[§ÆZ˜-õÄ™¡ã
+˘≥j≠C0G‹9¶>#i&úyµ÷>
+€zÕ\¨!=XdÊ ÃÎRÖ¿öÌ÷\∂∞R,Ï8®GÇ∆ÖT|K˛•òá|â≥jUΩ}’^!£ˆœà’ı˜®h&Øßw"Ëì}ãÖn∞zW_’Îˆã˙‡¶ë;¶Ô˚„∆ÁJ®˚öªÀé∞√[µ9‹ë%Mô1{BUKARßgà\Ì≤j!√|–®ƒõ£õeÑ‚ ∞2Xä∆MU&$Üû¡Ã√x≥f‚°ÖË)${<<ÚÓ&UO‚;JVóf⁄°òê=-3∞–\éy	38æÖóÔÂ…ƒ±I1ö#J<ı3E#ó"H¸"pó“vîœ'}R«36Éº•¸Q1ßJEÆ*|À`»MSŸMÈp_xÖmƒ_«◊‚ø¨4=˛Ú±Ü–NzB«√Èt:	®}‚©ÜΩzÙI‹7È•æjáwúJº∆v›)-_É\qïYSç
+øàíÒ¸´´◊z ‘∑ÄyÏP‘hFZBà\ˆë"°&îvUÈ}ÑV hÆƒ:Ó‡ü¬ ˇv¡}j,Ôÿ!o¯ﬂo=#iËıÒ ˚Õı&#õá›HHt%Çfvòw‚TOõΩ|E  ¥⁄PTÙá§zÕâ&Û¿.≥ÅMGqL≥ˆªßQ2b÷¨cl˙ææa]∫•\∫\:ÔV<÷y≥Ï©ˇ&Ô-ûúó›fUPÎÆ£§∂Â/…°muïkF´œRîÂÒ2º]^Ï·ñ√à·ﬁ+OaKU4“ ¡w ”Ì\[ôSb≥ß©™[XŸ_1S<Q˝“ıvô∏h“Üx®V°˘Îäã˝à¥d§çz¢Â3Ω÷mïk*≥|cƒ◊6€OnYø2‘/€–O¬ˇnö‚[Ê3™Aÿ´ÏˆÒ∫#D6Gr¯ËÈlî«éíœN'ûı’ˇßI2ñ¸z’´xÁ…ÂΩ'YzÈÉ)≤bnïqD/b¨àÉw”Ew<ëvK#¨Œcñ§˛!•SÙ6ÅÓ=@·WDÒdÒøœ $Z`·tu˝Ù≤	ûﬂFÌÊW“pÜ√ÔüΩ~ˆÑú˛Èı	Y%/_¿ƒ•}˙Ú’säX{Ï9zÚ√Ò·ìSKÚªgBò8Î£K\rπÙ5Ì›ËgÏ{Q) èN⁄[`ÖDP∞8√‚ı∑ÛÕ'⁄£µSæ∑>µÛv∂Òt@jŸÆ∏⁄Qw>{Ïà∫ÄÍÁú}956a8⁄,T£˜œ5ËÖh¬p⁄ﬁ
+”˝ƒΩß£¥»˜n'}Û{ 'Êe^?0´Ú„Üìæ∑≥≠∂˙;‡ç%J¸I¿S¨eZ~]ºÜ˛xH˝Ì{GXÔÚ"†ï≠óÍg¸Û´gB›⁄’ñßÇfPj¿t÷—É,˝êbÈﬁg∞r2ZI◊t¡›[cˆkæ±©*¬,QSåë·R¿Xt]u¥9L-Õô/∏˘âµ1Î5wœ®6/ ÆU
+q\ıˆ——¨˚{À√(/‰•;î™)ı
+Ô6ãÊ5ñÿ¨ä_ı¨#z7∏á8dQB,ÏœÄhX<NSt∆º¬ÄKı∑˝π–‚∏◊Ø∞#ŒæÙ3Ï©«0z⁄ìÙîˇÈ£$ß]“”Â)ﬂ“ˇ!&˝Q,ÀK“©Ä•Æ4`:Îú∆∞ñ‚˛íÿCÍoﬂõNß1∆ÁOÚ"õ—*õÂd∏–cÉÆ´é6#AÀg)pÒVß§~“Õ:åçœáÙÑﬂzñùÀ}ëN€ZqÎìV]ÊË…Èü∞ﬁ-µqt|z¯Ÿì#r¸Ç<=¯‘òóO…ÈÒãÔû…ÍçKù©¿õQîÎZÿ7ﬂ‘4Ú‹∞e˜ÇZT4ˆaﬂ« Dm◊´§ñ -UHyU4€◊Ô±Œç%gîÃ^ÖºÕ~ªÏ+‡©9çJz≥MΩØ]›XØÃS•té¡π∆êr4£¨éØW∑±D≈∂√±á¯ˆhe ’1ı”FÀG|úvCp∆¥vµîwπéyò¡Ê/…≈Döa:h›ÉY(Ô9É[œÄëº∂ÕÌªÑ≤:^b(∏a≤ﬁH•‹µh!êà|'nkı
+ˆVc0´+v›aÆËÍﬁB%ﬂ˚	wèbÉ“÷ÎVR7õ©n·2∂QïÈ.+ªäjì|ß¡FóŒ‚—›¨W√à¢Ωµ≤∏‹≤W‡,=ûêQÚ>Ê≤⁄¥¬π¬€”Ÿh@˙Xo°èöŒíùqﬂs∞Æ≈uáÏ¨d]«ìA“«b£!L,lqˆèlÜqµ˙fì«1€ò´•B^"9Ã<x(®k/[!=‘ì™Vπzn£zéÎ•AèmVè±§è†ß∂™ßé@Á∂TÃ e—å|Ö$ÉkOsU6Ù¥∂ÈS∂⁄’∏º?åÕΩy·!˚Äﬂv¥
+Pöi0cu(Sp&Ë·aa∞∆ŸVÃAKSíCAıt#X·ãºñøëΩÀ∏)ToS.√∆∞¿+˜’ñ,ª•g	⁄s Ò∞Á‚·˘‘É¡nﬁ±HØáÄà-vNÛ∏‘ —ÇgJÍ;5éS≥˜ıˆ‘1W≥l\£~kÚê…¨OV„≈5˙ûp5ßò`ãkûå©üÉÜµ37¶-ÿ.Ç€7Á∞Ùí∞r1rt∫}“K»ú2âÖäÅˆ4Õ∆>¡ﬁRHf≥Ú0bπ¨°∏n.	cn?∆\Û¬gÏÕ√1ΩŒÊ·ı]ÚV1ìò%mÜòõ¢Ú·ui_ÃLÓªÛ«UÜ≠ÕP!∞s—dŒÂKê…U4ah —%E≥IKqêñ¨£ÚÁƒÏ{Dg)î·zŒ‘,•E¨Éb{¿R¥ApD“¯úòiTi˜°ôPÅœ∞h(Ch$G(∑ÆêSPI‚‹6àGCh`v‹@0;ºYJ˛@Í/çûü‰Q§ò#Ì˜ó!¥7ç»:gÎóGÿ›é£Të84“ıπ÷≈·"^÷∆b¿^˜B∆Û∞Yÿ—°ÖüßÖ˜#≠Öü≥Ö˜à‹¬∑ﬁ÷Oçcπ†|"“ü%π;Ö˘˛ ÷Ï÷4H±Óxä⁄≈.u€¨˛Œ‘n≥P≠Êﬁ9%Í^£!∂˜z—_Á–ﬁèºN[>dUÕõ‰ÉàÏÍ¸Ü$_ﬁG⁄‘‚Çq¯Û‚E& ”ê·Æ˚+0¿¥ª^'Ã;ÂBá%©F£x2à2Öc¯ø!$ŒÁ¥êÓÛ‘⁄j"ÖUÆå™Òﬁ˙f÷(zk¡Ømj>çGù-v˙˘¬'u2‰[Ó+AÒs9®µaãÅs·–Íà÷.∏V& M˙òÖ#Äl÷ù ı–C‰î∫˘)◊C@¬Æ;Sw±D]îîû'êıKc%üRñ˚Fæav±≠ï€AÕ}»]]KÖ1›COî’s7‰~åì…ÍﬁBíNx,]f¨í¢‡G&}cmÀøØ(—õÆh~ˇG5†fSK€¶†]±E$⁄“Ep@ÀA≠Î’hV§\Áœh~eñY¨zùcÍJ<Ë0;.®•‘<ÀåπË‘g˛}
+·+`cπ5Då¡ç"zDA>J˛´ü{›«q*`åo†:ŒtÔ⁄‘˝z4“¯‹È_°ç˙‘ñ¡≤A¢Â3ÅV ®Õö‡46—Ä“˚¥xâÂtﬂn¢,±¸j/–Üó§ó¿W,_[«YÏˆ>&Œb˘b-°oª≤aŸFéPÑSïÑ+p–0~ )€é·±g«¢}¸Ω°8}Ï@Îcá≥ÔzáÙ÷}x{Ï∞ÄˆAÅÑ√ˆ±£ct(hV'2≠Û[‚É¥âªb;[˚¨˙"Ìê®¶4“'√GÒ’¡nŸ’7ê©äë∂¸7òÛPı–± f∞JsÚÛﬂˇì_a∞˛∑‰˝eh√îﬂÛ~còwáw«∞dáV2ƒYY‘ÚÇX˙9Dè Õ,˘cA8ñÏŒ@-v¯<~˛M‘ÚÎ/›–ËR8BÔ=ÜPπå
+–P•©s˝˚ÅOˇﬁ=`{ËIÁ¥∏	⁄ÄΩGâ”´,–›!?bÃ6∫«)ìã≤ò∆„ b®iè⁄ç9˛ºÎ6tJ$∏ª/aÑa◊µ^C?‚Î§0ºo’˜¬äS‡”"úÒç7‹j £Ug[9óK‘∞⁄ÉEΩ√DsØ:ÁùΩÄw≈œmõ´‰¿ÿS\™RUäK7»ë∏ ¥l∞'‚|íZÃ“~ «¯T~Kü«‹†ƒíı÷g¯07Æ»ÚÁ]í•)À»‚ò»ñˆã∂≈å”p¡”[7Vëﬂl§\8ìSj∑íd∞CZO@$ö¢93ê¥VH“GV∏ãô€ò6Ù8∫T√1Y"ñW<√`§µß≥vàYWÔxú^ﬂµÌÁ…µ®Ñ°¥Áwm˘(Ìœ(˛N’ÓSÃA—ölô•ƒ–ıd/áÿ•ô§¸◊ Ò}ÅZπ8`Ô≈ﬂ£¨å€£ÄÓÔ¨˜V»w◊0õÄ“⁄Y4ï⁄ZÔ<‹n÷HΩl§
+ï”Êü®[∞CìÎTÜÖzÃó√Í&∞3¢nÄÁ9&*®ïÏ¯˜Ü©d’ÅÒeôÑË©Ak[éˆÕ˙OÎ?ı@ ˛)ª<è⁄ΩÕá+›Ó÷JØ∑≤ﬁÈn-øä<ìèù≤WïGAÛSòJÌÜ“0ÔãLì_îö|Ñ´¸¿:3f-éÜˆB˘`∂√„¡ﬁRË*vaıË/DﬂïS5âd´ou›@2M[7jÕ¯Fı°y3v•†!√Û∆”™G#ñ•K%á˘Îjêå+|kËª \=∑˙Ò<!∂\<*i© ÷D˚‹rs∂ç±/P6‘–˝a‘¢˘fÊ∑_ñ‡{0ùfÈ5]p"K îë€t?2∞VH…_9I=öÀ¿œ0±ºF≤Eﬁ_∂™Á⁄ÖAú˜eŸpÖ‰c¶Q÷èG3í•£rô\‡\í5≥∑†d∫Ö·–Ωuµ´ IﬁÕ”"¬‡HDßN
+úNË 3dÉ|s≥ÓRÃ!´M´K—wÌÈsV=∆OÔn˝
+ÔÛ˜qÙaéqÛó)ﬁù°p2Ω'£ŸÂ%åÌÚx6*íÈ( ÚRß∏äﬁÚ˘áO)úh(ô≥ÏˆÆ&ªÌó/—7àM†OmÃ0tÏz;ŒeÛ∂}ª™xl
+ñ˘›GZê∞Îºl7hw–-x!EDt*·~¯ºä»ñY˘M1O‘Á—C>∞Æ¸¶äÑøU§	9VxdáÏ∏èu^&Ú
+Ñ˚î•Ö3nØ~4èÆ„IÄäÅ!w·b•ÒÕò]∏ê3£¨Ù'±y˙Áb7î#=ä0‚XÕ&XW˘j·Öm‡0[†E™¡P±:KúMÀb ÜçuŒ¥ŒFÙ…(Ùá$üE#NìèYƒCs“4í»PàÜ/TÓÛ˛ü∆YßÍqõv¯∂›xÎ≠oæÎULTì=5 «¶~‹ÎÜâá!CÒ5IÊÕÿ4çXı"Võ`„Ñ8p	ù%bg?m.K(úÒy˚]L\€ñZp‰©ˆ&ÿ ∞Á{‘»ÃdyøëÊz∏πeª@4¢ØFΩ∏ÈõN˜/ﬂ"ÜÓXM¬ËıM‘Ωã›"˘„~ÕÔ¥Å	“)eØ˘∂Aù»›„…E*‚«¸©1“ÉAÈn¨C4`ÚœÈÏÁøˇo*ıc\YôfI?&1◊Ç…y|Åˆπ0;˘˘ÔˇãLR2çÊh˘J√∂Àæ6à5ÆÈ[àÿL⁄Û®:^b∞´F»2Hí\|w<X!UÆMûÅ+E‘/Jä≤Øaœ∞¨„Ç”∏BXå'K¿$X„∞/ç-Õ¡¡Ï>§æå1Ça9ê·KÈ¡ù°¢à°§Jªh_	TxH1s8Æ
+vóD§€ÆÑw‚à‹_‘È!Ù<ô‡ó•eRŸ=»≤ÙÍ›¿≤ì&·®¥™=¡´ãÏaX$hoîˆ*f’A„ÊëêΩ˚çÑtŒ·oëêøEBÜµÛ•FB6ÜT˘Ãqê&Ò[Ë£¸|,ÓúNÒΩ@∆Ò`H,Õàg˛(J˜,ä™t^∞¨h,∞…ë˙œ£]q∏?ÿPzã∫˙0ÕπôÔâU≠ê=2âØË”F(4Jw/~õã¢b–^ΩVC
+≠á7|„⁄9>=#¥˙0M°ûF¯qX>¶·ó\∆¥ÑE—‡Kö˚ÛX#ìÙJ◊Fﬁ7^ïªËcÈU:ÑΩÅÆ¸Å¥•M'ÒÀãG·“?– ÷◊Ω(ããY6©zâØÑWl–ñ÷°…≠Œñ∑>µt‹6'ö‚®jÃõUŸˆ˛¥»∞Œ3m±S§«ß/·¨Óˆr'üéí¢›:k-øY©ÈÃè&¥w@XÂ„ú—]Ç!Ï9-ûD©æº–ÆN—úû!àæ%'œ…È>‹Å	l¸ı¯Ò'ÿ™¥¿»Æ<,˚©V6]â“E,àÕ&·{–s†¶˝=ËMÉôæëì\‰n„hèP~r3Îb“Xçm≥ÍÒΩı≤è´m÷∏lãßÙ“˘"™„ö E≈˛‘ºnsKΩDôèHK‰)nöpâ€XÛZ´Ÿí~ˇzO ΩÈNûz/ö}˝¯ƒ.¯fN¯fnxíÜ/˛qiˇf º¯Yän9Œpê%∑‚…ÍÎ”÷
+π7~?à@«kÅÃõ-rª|Î«ÆÌõÉΩ&«v‰{|ã.r|ˆÓﬁÒ£√Ì‚ÊË∑_é1¸KT®p¯c2mÙN:B-]*◊BEC˙†∞
+÷?ù>{yv⁄πÄÓµs∫ˇT˚~]0_fêáLá(®–€\ápˇLé∆Ã¯„ì…˝∏π˛&˜€éœ(˜ˇc*£{¡ÖÙãhî7X	†J¥˙¥,‡/7"‘≤#E6k–è[Cøm›Qïäfb≥4’„y4›!Ø‚>H@ª9ùú¬–ı˜°øÕ–÷√üˇ˛?ª]rºµCÜ{”gª]|‘2x∂€m˙0<ª¡ü›h¯Ï<ª≈ü›j¯Ï<˚-ˆ€Üœ~œ>‰œ>lhÉ•/&öÍΩ®h¬îÚIÉõCÉÖ«VÖQm-[oFÉ/ëèw~ëzr(‰qu»*Ú˝´«îÀcßÓ†SwÈÙzµ§ÀiÆËπøÈ∏øvWÅÇƒTΩÑ‚s˝¶±—;mûè`ï≠I–∆ímLÅ›%∫zΩOº!{èÎX¨Z⁄bPP«V-¶„˛¢6¬ó“†U¸‰ÚVK U6Yüì^6>>ΩºÈΩ˝eá˚ÑéÚ√aÒÔÒ”åêBk|º‡†24h£Dí<∂ê s@–Ü+ (((ã/ˆx‹8ØÛ*æ∞Sp;¥a'àE#áåZ,jh¡ò°O1ƒ√V«≈jo”6‘‚º◊–°˚	˙EÑi≈GÍ¶ÜÅ˚{ﬂ€8^Hî˚≈$‡•,º9∏–”]qÌCäãùEÁÑ)'i÷“àûWóêÂù©Rﬁ‹ÅõÏ¶Â m9<A›ÜËƒÁF†›bÃµÂë”kÓ]*=n
+Z/Å)õÍ˝˙ÓT˚V{Ñç_”*ßÚ˘∆É˙ÌÖT¸SÎÅo©@∫•tó“Ïû≈£0â.e§€[πh⁄O≥tÏäÎ*Ú˜…ÈuPÒì_— üÙèMπﬂç“ÛX%‹^GŸBJÍ=KÔFªæ-¬P˙ ∞∂„çõ75-EZP≤)Ê√rˆ∑jÔëø˛}˙c∫æübJÉ“‡¶œŸè°v°◊yú—Ùz^Ñ {)R÷zÑ%ú”œô”Í˜--†KVÅfG£ÁÏ0◊ÉûétY∏iUhUV
+CÀÇ{¢Jí◊8q-ØsäC°ë~BŸ6ÕI√™°m≤“l)á’Cgá©∞ÙIŸJ”öËÏL7∫sBy€óÀ	NÜHI¨:˜'d∫a~AFP˚ÓÒ“˛võÛc£ﬂ¯ÇR\~}uê\&@TÈy2Zå/PJe„Ë˙-Tõ¿˙¬‹§ihÙóÏïÎt≤òE{Ìﬂé÷.WH´’ ¶=ﬂ–ä(∫µªG∫ÎÀì£CÇ7‹∑ù˙ìÛ¿0‘]¯‰GÂíO∆ ìVµ^Ÿ‰ùò$Ë£…Ës»JM"cá1éN C¸u≤CõêDGÜF2 Äam*Ãë`ÿ⁄∂ÀL¥ëEÑ¶˚™’¸Á8äpâöÚÅ‡’PÔ0/¶_Í2R—˜à˝J^§+‰Ò,hÙ‡ië≈qAı÷êˆîƒyw'ßmÑΩ}Ò∂⁄7ùNGi}Ö∞Êw4!$û#4ë˘Æ∆CTzHh«¨¬&≈ºâÍ“xk`¯u≠HmM‚@/∞wâ•áé‹ªnaé•«¸ƒÕﬁ˝mo_Ù*¡™ˆçÃ}ühô¸   ˇˇÏ}Îr€»íÊ´îµ=MjZ§HJÚE«ñWñ‰∂Œ¯¢c©ªœ9^G"!mê‡ ê%µFÛc"66v7bf˛ÌDLƒ˛⁄Gÿyù~ÅùGÿÃ¨PU®
+eª˚ò›A†Pó¨ºUÊóøΩmB3}É}í§ŒiÆs (hˇÀN±´y˚/A]}Ÿ,c≥‡dÔ¿dﬂ`ø¸Ãnq∑@ÎüvØ¸ ç¶√ô?ºêÌOA7>"˘4∞úe^Ï{øk(É∏ÔI’úõ€F€”Kñ‡¥ûCDœÁï<9.‡„∆FíX+y©nf)lÓXêet5<ãcò<átCŒ’˜¨∞(hæ—[•‡•*Ú∑¬Z„ΩR,e5	4°	zÚ*√¿y¡h7©ÿX
+Q¶Ìqt·(âÇ0ÔÉﬂ·‰“I£Œ,éNú=˛ Uêß’=πñ–Kı„•mô/BÁØ◊›»2tfQ@æ7oà&“”é›√Ÿ¿D(£H_ä¯ Áó0áÂ∆ä= ^π(ÅíÛÚq:	üF±uπÏI1ãø'Aˇ
+ S}∂y)±E«„?úñé}Yàt0eìKh9I£	¥)˙9ﬂabYzôNKÊx∆í`úöúsÙèî
++∆·¯0?~,:çÖ!V)¨
+·˚ÀtRr˛9¢√Ö—È)\ÖÒj+Ã
+K`l◊u’ı¨”]Í∫®%7.‰n-Æû71wD™æ‚ﬂC,2Ö0mqÙ‘&EçÂ+átQÃjÓêÎºzøN;A€X}`Jœ%:’¡EukËZnƒë›ãyÎHÛ÷°˘¬+Ô”hÊ¬ZÎ˘>üùúÔÀ0 9€œÊ∫ga˜˘CN] xΩ†-˜á7óﬁ„vûúÏ.»' ¢WnßΩ®eô;ﬂŒw<8ÊÿŸ3ŒÁ‚i‰%i7òûDÌ•?Eg∞Ÿ¶˘FCF&o6"ö.˚¡oi`’u:T’πª‰äæÏpó√q∏ãô¶…‘˙=·,^Ôó©π©8›g£h⁄JŸ{Ñ+—g˝“OÿΩì\p‘≤-˚©6~ì^Q¬Œﬂê±Ûës⁄òÍ˝û¬{õ!ËªÂ¬¨ï‡Í›¥Y€ªVDZ^kG·zŒU7*™8(–Û…ÙÏ‘Y≠YÿNv‘_ö†∆◊ﬂËp™{3û`/áIÔ •Ò%ksÂ¡ó+Ñ¬ûRÂª‹ÉqKùs,Ç0·±üñ„T‹´a|`‘æÄA*Œ2Wı
+Œâ¿}íÿWÁ,ÛÄº+=g5π3√⁄#Ó’È«ëD9›!ßwTª˚HjVrÕJWWòx€|.Z¸∏√7\Ìº˙ÓÂ—Î˝ΩC¬W6+«
+ÙqìÑpZÜ◊ŸØ∑Æ∞åˇµöÑÛ¡D$Jv&|ùõq
+È¯∞∞0'≠“·%»∞≥ºÅ‡À“SãHs„CPI?ƒ—t7:üŒµÖuπQ˝óz?Cêza0ÃP±∏ä ]6ˆ√Y¬Œí¢»M&AYåê◊‰’•p≤ÿˇ¯ÁÆ5møYo≠SSÛ([ãJ∑1µ›ÏTëZ∏MI˚öW5äõ¶ﬁòÜ÷X¢~ÚÍB£h{¸ÃëäÉüﬂfú)ˇ(áA9M— õdÂ‡«*≈±µ&ô:¯πë œ^8ø$oPRˆñ‰¬ØÑ˚PZ¡'`?<◊ËW»{‹≥}Ûó«z2'¿x!Ïg÷$?7‚=Ù∂_-„π9∑+É˙8Ïâ“>≤∑·S%€–ÀÚ•ÊI7¯˘Ìr%3O‚©7Ì(s_-¿≥·ª'·‡ÁF,âﬁ5?KrFX˚À‚1LåfåÊ”†¸ö˜ßM<ypÂ\⁄∂=Û‚îj˜b•·π≤áÂ}*Ú≥û√@˚7Gpÿ¨ÚÁ›≥MRr·eô3»‘ˆgfÁ(«ÕrÉ®osâ„Üäﬂﬁ>◊v∫æã8XpŒ¬œÕNÊŒ%¬œ¢ÖÔØj«5Õ3¢Œ}Ÿrﬁrrêc›srës£MwÉº$¸¸≈Ì∫?Ô∞Uv¡ÖùfÈJ‘µ/{n{◊ äiº∞A"~¨õÓÁ`Ü-}§m'ﬁˆ˘lºﬂ†≠)¢iæÑ–‘}~m^™/A5∆œó†öÚ˝_Çjn~„√⁄Nﬁ8-•≤ÆóΩ:õ·*	~î6É/ø1ˆ≠S‰MÉB+Óÿ”¸3WQSAñÅSÏø»›o£pè”ﬁπI¡˜+ü˝¨Æ2* Ãæ˜¬`ƒı,Å~a\1∞aw9µè91w
+»Zˆw«ÓHHï“w[ ∫ìå˜c∞_˘:h‰Msp| Å∏›:}TH1”3
+ëcˇoœÃC‘ÄÏO?%ŸåÕ‚hË˚ò+–u«Ø‰uó≠√Á\ö„ÛŒ#å9ﬂú–jÒ £lªì4˝oòÜó–*#‡“‰Sé∫±ˇ÷∏‚Øº<ï{îÀR…¸`Ó“TÆ,≥NYqâ©˝u u{Ωî/‚]˘|Ô÷œ_Ñ¯uó:7ﬁU¯˘Ï9ıg<ew,Y≤Ó3&mSÿ∂D÷•∞JÀorÉÂm#ïä,ø	sì"ﬁŒ€JñËB•E¥eÃdgK˚î£¿~êñö‡¥7°W:pßIxFÓS[¥%Z:ävè€Lπ7ˆÎ_TXÀß©
+˚ör¿>Ìµj≠‹
+⁄~¨´¡Z[Åu}3õ&Jõ;é"<ûiXÜu˝∆eXÛ∫™÷bü_Í™.¢ÆÍóR™Øî*aƒÏÒ0ÙøÇÇ™6ÈÎ®–"Ó;…≥4–π´cf≥fØßöøœ-Ë≥&út AÚ"LŒ'‹ŒáN÷úÎÊÙK[˚∏Å”®Ào7æë aƒ96FÚ5kã+ﬂ˚„ ∂]\v~q√X•O3ó¬∞=£Ù6ft
+€wæ∂˘q´?6\ZÓ¶¯¯Ì0≈ì˛vÀüvæ;l≠∞+å˚˝»!◊J∆Qú¬µ	ºg,}ÁøÇ©È«¡∞≈ÆóØôó≤+ıUG¡ƒø˛m≠ŸOÿªΩ@©√¨˝ÕÉ>S {›ÌÀΩñ‘APDdKïaÔÉ‚Ïv`9ªlÙVÓßÎMñÙñ6¢Z©∏¡ª.r^˘wí¬Ñj‡†‚Úco≠6À√„∏IZo©ä_)7éë¨¨£_GÙ∆o‹üéœ}Zl3w™ˇ¥ƒf´.‹àﬁnßŒÉVjæﬂàYC6òRÑòYï«öı≥¨â}	; ”∂(\-á´Î´Xñ˜≥Øo˙˝bŒIgµ@⁄5Å4◊–!Å àd¬ hzõÕLÉZö˘3ı|‰û∆G`Fo¬Iìëaƒ,ûãÒÏê˚‹ã˝1’ï0®t8vÉ®+>ˆ»<tT˜5Ä† (Œ·ÿv≤(ºäx@±:M2ÂÒ#~{#>„$5ˇëÖéqs∏–Y¨pÀçÂÑÒ]Jz‚böTE^9Å£{¶8Ûı°iàjCBlôy‡.ˆ	n≈ƒ≠™jì Œ≈⁄¬JaéÖkãπI`*.q;öë•4CG´Ω}œ€3–g.8Ñ€î>€À›\`DØ⁄ÓÁ„°üb1ë|: xƒ˙.«+Ùêwë?¥·˙Pêº ˘y4ˆ¶É<w‚Öâˇ;óç‚x8õâªÎÅïµÅn0Üg@¡Ì÷s˙)tém¥ñÒ≤ÓÅ~nt?2k<œÙP”yfÏö˘0ØNCﬁ¿ì†Aœm∏ùæ„ƒltú€ƒÙÁûF«Qßq–[¯<"Ys“qx7∑[ΩoÊù◊°jtÊ¸î∂°Å!˚çÊ÷uLÍ~Ç™6º∆<aÙk{µ˝_Fﬂ,Ø:ü…„Í“ìM¢
+‰*Ó3/N¸˝i [y”{ªÇ+Ó!ÚrΩ“1å„¢›_°÷;Ã-ê]¥$-!>˝|¸HÉ ¥áÏ√Áèße —Ÿ≤öl"ÿ$yzÃ∞À®¯+˜ZŒpP_#ÍÂΩo±Òæ¡Û&¡‰£nÄÑH#EÎª‚”zNb.ÎÙ˘ã`˙á≥à˙^–«_”pö˛¸Öwë∑ìSG÷ésC–Öll–ê‹Ωøfm}>Va6›Ë?€‘Z„Yü+wn˝H)ÑÓ õ´∑¢å°#èØA«y”ﬁÖ°Èlytn›ÊBévÄÂ¸N).f?√+
+ãô´äπ¬∏èú{x‰‹ìzs7≥Ω’`ó£h
+œ…Kà„Ê…(˚Kº†ô´K$µ’n#mÕ|§ﬂ»©∏ÿÉRÎ„çíÌk{Ö&f˜¡FØ8ïµ(W«ç:†ª∫‘⁄‹Øy*◊¿ªØñtCˇﬂÏ¢3@Oj…âZa≠6ÛR‰L¯∫sï3“Î+E˝yÃZﬂ¥ÿ&kµÆŸ˚”Fﬁãfû—Ü~4ÉW{ ÔπcòÙQã@≥õØﬁ¿J!ï–k6ıø¸√ø_eLºõFOÉ‘,£'™¯…ªê≤.À-ÆI%+Ÿﬁô€viåü+EY∏˛»ƒP·S6{”˘poÍVJ2˚<"±hä‡,”÷R#’,:ÅyK„QÏµNÂÓ˝•-\hº˝zı˝)Ã›øEhˆ⁄‰1å≈§:3Á\’·°Ja0	R|ó¥è—Óî∂2Ïÿ&>¸+]1ŸbΩ&Ó;±FíÒ'~ÏÖ#Qµ,sÜÒ#Ä9N§`˝ÎˇaYı\Ω„◊ï+¥A˛ËïU—ˆí4#√Êìî˘◊[>jÇf¢˙‹ΩÍ‰ırª:Wú–/x‡]Ê‡ÜÏ–'ﬂßìG–¢'fîV©%f7›PM¨Tãé,FGtÆ®[Nwê5T›	‹â †ãjX6E˘ÍaA¸Ú˜ˇ¬K5Û3Àø%„h√ã„‡É∫+eÊ:`JÓ	—0˜ŸŸÀàÕDøß—yÀÑ≈rÔA´èy±0>™n
+_/˘p|*Ñ*ŒdôwÇãOaô*•0⁄OQ.ÃŸªßqÒh”Ó]W¨<ß⁄—∂R°sBuûwÓ√ÓΩ_oﬂÖßı{∑·∂Öﬁ<èN˜sÃëªŒ∆€ÕjÛîk/f∂Q≠6O¡Ê±”30F≤x†ª¿§pbYkèΩ::@eÖóV"ê?•ª»*;∫âõ®pœ ù3'‘ú[¥ÊöΩ‰¶Ä¸62ã]1òˆ@êf—AN‘ÊöO</=Äı7
+˝√·ÿùÖbôÁ[8ëF%D’ø{3†î^≥ÒT∂ÉÛ%+äõ≈∂ïÅc∂ÿ⁄‚ñıJñW`J˚:	‚	{¬9÷á¡ÈÛ)€¿©»õ0Zv≤µ‰îª¶⁄dä∫t∞*ÊñßÑmlfcG70ŒòJV‹ú∂Q)˘ùR¬äú0k÷≥&Ö%ÍéYW6*ôô%7L<ﬁØ|÷î Ê˙ﬁ9”ƒt)ôlb·ﬂ…hÌmÉ¬><çAÅ≈Çﬂi‘9f'q4{§nŒW1E~∑≥Ï>‹sOŒ-+ók•Æd_ÏÎeß]§æùh2√⁄8œ@ÌÜ>lá>ÿ_U∆üQ
+CÂgÖ˛é£s≈¢ÉÎUﬁe^EèÕé—Ç‰”p‹§lAInNõÑ>“&»∞^ÑK§ÔDÓÙQÕ€u4oiÈ·À]¸wåˇjÑó∆úÚRﬂ…˛E‚SÏ·(ˇ∫nV±ù“˘Ù„ì"oOzŸÍ†äõ∞z°aJÎ[8§ı’Ûfqßã ∏A∂ÍQ_åºVN‰Äπ‚§Aˆ|Àáqn0s¥P£ì≈Ì´4@–Äÿ•rôéEwfga‚;ﬂ…Â€◊å+Àµÿ≈ó˜p<0¿°ø◊«R¯n6ß)9x5'5]tòA<xü¨®Ú˘qw{&Ç9√û=Ó&≥0H€-÷Z~”£C|Iz‹ùöÔi•c?ˆ[◊wÿ¸€ˇ¯Øµ6‘NWŸMîÉÑ‹Oú¯ìÄåÉ,ºv»ı2Üãÿ$¿Ó∏∆<Í≤WπcÆGSÓX˜.Ô‘é™∆‡tÕãΩ±Y+ây¡mãÚ˚ú„÷%y- q’∫W`◊ÆﬁÌI,÷O:òÑÑ·J(˙Ò;Vi/ISê∂Ÿ%.~35¢Ót≈â÷Ñ˜ñNÁT¢QÀÏki+SÇ_˚'@Ô”°Ô‡f0t≈êÿ˜ˆSCeﬂs^JH~≤M#RøÇß¢”–g‹™ÍﬁFu‚˝ÊtÌlÀ6ˆjààÿ#V?“z?Ü≈AknAqSÔCpÍ•Q‹Ü¡Ï8Ú‚Q˜<ÜtãHÕ∏8V8TOr6˙I“nÂÑ≈ˆwax≥ ‰Ï†¸w\pwÍñ¥âJ7£ ´√37Ô•¿È √lÍ'WÅæÎ,˜4HCËÀN4ª,∂ﬁMu6lL¯R] Í≠ˆ‚†πstÅûM¶Ï[ÃΩmbÈîíu√S)Y∑œ≥uÔÀfO%©¯	{˙ˇˆœˇç}˚›˛Óﬁ·
+€˚„¡ﬁŒ—ˆ—˛´óá†6Ìæ⁄˘Ó≈ﬁÀ£C÷&‡=>¢ÂöC;}<–˝<ø√‡°ÚGÏ¯c/≈-≈≈¶ßSH˚Y?cfw∏¬V<ºd^úNaûÈòM#$Á D˛ÔOfÈ%ÔS›∞ 3·Ö,^#Y\|«”BÀ˘ﬁ+b¢ÂOÄª≤ûÌ∫z|'˝b‡§eïœNÄ∂˛¿f	 ÏE¸‹'£úSÛB]Q¢‹ŒœÄ,¿3’‡X7¨¥¿4ã“/m©4^Ÿ‚ÿ„Ü‘Sá†ßu°∫‚=i†.ÍÕáºbË0‹dK‰âÏ/≠pq∂IÀﬂ…A€Ê◊Üp-akΩIñ¸*Œîªp#W+6)Ïü]Ø4Ó¡@ÍÅ ¯öQ@¨`—ÃÙÚ†+¸8¯^9©“‘_D/÷§^ÚC∂√(Nï. U˜KºôaZ§ À=†|¶y∫∞.u„RΩêÌ/Ö‚RÓ√%õ84tñyÃÄπΩ#Õ–è⁄nº•Rmd+,Xv-ôA‘Mu2Çk√π4q®’∂.4πJÆ´‹/©[HπAî)X∫Â%ÆÃM’¥nB®iH.ólr‹,;”V∂‡lÃOº,Ã%5z £g—˘’ìL]òF´†›h¬yÖ3”Ejo∑’0R]ë´wÁd∏èÛù;≈¯pÖT¸ =Ìá—*w˘6sØEÑü«¨UÂ¯]WΩ(Ì3¸…ºÿ&ømØ’¨?õ‘.èo–µ^ØÂ‹“ıª[ãõ7‰KÓ¿âÓÃú…ÙÏtiã”q‘€\≤áIi>9˜´—bv÷MdÔÆΩt“®çëtqU8ƒ4°±œ0ö+ÉTÄÈ~çx!„‡8@¯	¬Hcá¿í:«ó¸óµˇEËW¶úo6∑J’dT¬c™◊õj~∂åÆ>‚“ÕŒIﬁ_GÒ•d·‡u‰∫ÎMÃõjôÍh≤Ã’i5ìP¯Õ[∫∆^¬∆üƒ[∞î∞·&˘Eü""2Ù¢y]¨&lh´	GRm2ï)ﬁ≈lj‘ı9(+£r◊ÄE'ÉànÃ5Ô˝]d[—	Cáòdy£±Ø∞ËÀƒﬂΩœ òCz¬MÛ◊ﬁ	‰Ç¯„0XËPº˙0òÃBÃ_H(}akIÛ5ÿB`ÅíÎ'sΩˆ{¨n«ã˚‚Ro|Äπ∑∫?˝¡» ±8}zÑ…1≈ÛéCLäâDÊz˘kË£mì-a<{—Öß®ß°Nü¯#ôÉ1•c,1
+ì ‰köá‡ÅíKéÃ¬‚E√&~lFè1$’N˛‚—Z•Z7…b¯‡˛][î’ìÃŸ+1N3‰b®‡!˜å!≈6ÜZñi‚ÃÃ˘®RÍ·Ò˘)“`û≤É7O†¶ùÛ~√túZµ6„›o˙ZJñAÀ2n™‰ö∫ëÈØ≈ª◊¥wﬂÌe+U•’ä5—gEwn)M«≠g≥ßõÙ íÇº(≠2éøùgﬂJz%˝E±¨R,iäÑf)ÊÒTKjπënI°Gq‡MOCˇ≥S0i<’¶N˚!˙Â∂sÊ)ö«~|Jv")^—è—bÔ2¡k—cæS¯‘Æ`zzì	i^a :˘h>≈k«K∆Úﬂ˚Á~*æÂäl^≤iî˙RËfÄ)∫ÁÏ4
+G=Qa;’‘y^CÄ‰a8œ≈0Úºö˘”UEöx£lîp`∞'#/à/±œËl8ßÊ˘Ã˚ŸãG—YÇà–/îz∞=ôúM^∏:åÄä°ÈÂ‹±ó‚›ÿˇbF	∫ˇNŒ¸∞°⁄Ÿ‘—éüõÈùs∏„-z'mÎO†xfrJb.7Q=3n;ØÓ˘G€˙°wÊú|ŒUS7ÈùFÆáŒ„H˝˘ãR<]∫€éÙÿãÒ®Û8J”hÇ˛á ÛŒõzjUç÷:O;(0ÛÎ√1\S¿ÊHÑÌÏ≈¸¯y:;K∑*f"ËÕ?ä⁄≠qê§Q|ÈV	Œîzÿw}Úπ€◊ûÇ@v}t?…pÏKˇúøΩMg≈NMúS`˘›dGa£Ó≠0ú/álIC¶‰&ô\jâŒ»¥ı0;$êıÙr]ïv∏°π)µ0>)“®fÙ˚ˇÄü+ÈŒÏ{,GÙ‚íΩ¬÷e\:◊j˚Ã∑®á_ˆò·sÛ=&€øŸπJës…¡V|äº>¯›ñítÀ[K:ú·%/«∂[©LÚ›ºL2ﬁ<"\»vªiu0á¿‘ˇıﬂˇﬂˇ˝ülÁ’À√Wœ˜w∑èˆvŸÔ˜ü>›˚#;<zızè>{up∞ˇÚ[∂ˇÚhÔ€◊∂ ⁄º§æÌ∞C"F4‹n∑∫Ó\(¨ŒÕ•&ÃQˆÜ¯ª/:ËIiüZ±@)º#(˙f◊Wut“òGï†f>ÓºŸ∏O±9Ôø›ÂﬂäƒPT])r7–I«¡h≠iç‚à˛cóË‘Üé¬‹∑!LmPº˜NâgsE>≠7¯∞ıﬁ’‚qt∫˚€Ù8¨n∞«Ú‹M'î2Ôª%
+j©6ÇñãœN‘9®¥n©{˘`E^’Oçíh•+iÆsÑ9m…ìJxÉI˙≥GL«û˙æhE”	j‰i]3Ñ˙›3%krπ‹·8öÒzSS<| 'ö„(∆kıŒ
+-”ÈÂs¬ª»Z#öféj#~ÊT¡”&O<ñ…›ûdÂ–ï{*k±ƒÅ6A\ üs/ôQ«“ı5≥Ëd‘+Œ•ß—yÏÕ?Ú©πÿÔ4S«˙§é˙>€C'∫\(ÃàCÙü^ëI˜]5á"ú¢Âû#®ƒ+ívè£!†4∑¶#_6Ñ[\1‚•¿‰rÙÃzË(r§’ﬁE∏(πÇ(òùgR÷ukzÇ∞^g£Ew£`B∑gÑÿy‡a1-'$Cl„0k_óÒ2óCbŸèÆîØ.{ó∂‘#Ú6&›ì Ñ≠“ê/›°-·èpË˚£§;ˆív–Fné@oD>∫∏<∫,L›!éÄ?´]®o£÷qÌ~ò˝µ⁄ùhJ«F’√#	˘y6ôxÒ•√Ú&6Ë&@√CüpsZ4∫¢Áÿ'º˙”S†:gD÷2ºﬁö§´∞‘b⁄ôä:(ùÛfë º‡òõ“y[êﬂ%mÕZPœäî1ø“|ﬁA<îıDÖIwÆ_íÆX¿•≠_˛ıüõÈØú@É©JªO¢ãMGÕ®Å.X3˘π†/ÊƒD|"”—ê≥QV3„˘g1{Æû˝v€Êv'˚Ü¡"dë™yÙóQ´∫Êãº‡πæÕ(¯äqÏóL¸QîAFüœn·_r‹áYÏ¨©/f!Ëº9·¬`ŒÛfÒ4#4≥˘Ö>+Aã/¥ﬁA¶ªä„–õ÷[¿Ÿ9‚ƒŸt_ñ∂Ú©@Ãó∆Ì÷LÆ⁄iÁz	»•P/Ú>d€Ëc#≈[‹(Õ¡[ç3R‰¶©ìüëq˜<+_”÷ÁÇ≥îe¢ú†‚o∫P&&}w£'Û◊ØäŒ®Ü[ˇnuınÎ®zéiÆÜésñ◊°0ûg±-9äN}ÜÂm‰zZ1tLˆRJ#/ù§uÏq `$ÒÕ⁄˝°gu
+®©_µo]‡˚U˛$˝·¶µnØÿ˝ÂFuSz*o#∞ÅknOñÍÀÇYÂÓ ∫ë3ÀŸù•;¥÷QXsóîÌZ8ºÚC≈≈(˚∏.TÙ=7ó≈´•πæ,ﬂ†ˆhë\	í“¢≥ÉAΩKG“lÄôº¿ÿ¢	·–∆¸áú’?;‡FZ:ˇpuõ„!ƒ~ÇJ·Üﬁ*∑AE"l.å2ÃÔù:òﬂ≤◊Å¿Ùs8ÔösÀBåA´∞Åï8TiÓıhÑ,™·ï´πn%9Ã0…ˆX≈úP∏%€d∆€◊ˆÁÜª	C¸∑
+D©™¨;π7ïÚ(Npä…x5í€>=≠ß0«z^_˚Iy¬∂?x9düªzw[ß≤E‡ê†õxà˛(ÄQæK6¯ §WﬂpÎ–;¡æ«™ﬁFx2I%2x]°',L™o÷¨8I≈Ñ ,ÿpå Ï£«Xº‰<¢†t*\¬Ü†¶≈Ÿ‘ﬂºpÀsŸÀºÈeL|W∞÷2H:ê7òNQ˙Ñ◊6I∫7^1Z†·%AvÚØQ2uKÜ^v:Byˇ¿ü√¯rFUÑ†k˛4…LdYóº‘
+œ¥qpÙ<{Úk'/9˙∆x°C˜[€òﬁYLﬁØ∆8àS‚=ù’`N@yÅô‰o$ûî“≥˝ªÏã√PÌD+¬∞µ˙ŒR?—qãj∞BM¨d
+?ZEêÂ	À•f˜=Tú˙À∞Ω&°⁄ì<fŒûcN1	µ˚>Hàá¿™‚¸•ﬁq≤¬@◊`	V;	ÜX‰X¨¨ˆàt'/Tƒ·’ùˆ3s…t‡ƒI∂C;H,`è`‚4(J	~πfÖ¥á◊S<›Ú≤.X!CÄÎ}%ª≠N6q*By÷{Ω≤ﬂÍÍ±$’›Cû]ÃÿuLiª_‚Xfôcä0’_Ã›ZK[ƒ%0:Ñ◊	XÜ#˛ZnK%_xSN•aeeôx∂xÃÛºGDéÔ,0≥€ÃHÙÛáÚî‘+Ÿ.1WN™ÆÒs∑"®ÿ(]∞“ﬁ,Ù.iÇ5;.)¶2f/ò‹„˚F˜∏Ö?TŸPÍ≠bÃ≤ef≠g5l‚£'ª¢“4»$rkà˙õŸîàÇÌ™∑éE©W>œ7”ÖâÛió4v©ndô)=6ËË’;∫Jw≤@'…áibÚ%-|Äı=£@ßeµöxE*¨DæﬁªFqΩ˜FÈ¯—Uﬂí»dRÂå¢,áz*P!|P”Üßu∞0‘¸%VikdM0~0|∂G#¡ç–„@†Â‰èEñî+j^¶~Ä‚sÍßåL'dÎ(Ω≥.8^ÛbêÏ™á,º“igZ∑çŸY⁄®–[»ìß§¨ë»O)\√™œT9â≈8æ+≥Z`n÷¥¨K[á¶UÛÚeÜ/<&F»4€"∫g$oTõÍYBñjaÑ†hQnn	}îâ/@•∆=hv#õxh˛PÜãiù2≥¡¿Ô≥¬7÷Íû4ﬂY˙d mTFloßJ'Yôìy}	≤Ùô\Tó ÿ∆≈G™z=˚“ªËP÷ÅËRUGiÛj-0]'”(•:!ﬁŸ
+Æ¥z•≤õbSq¬ ‚ì	t—aN∑hÉÕº`TòºS‘e}^•3Ò=—	ﬂÜ|S˚a^‹3€ò(é}tPÄÒÜ(Ô&›∞¬¸≤≥f˚BZ2◊˙‚Òl¢„õœÜÕqU∂x»2ÅQƒ€3Ú'HR7â&~€#ÖØÇ&=Kƒ	Kˆ¢YF oÿ Ù‡;—¶›¡x«h#π3å˙¥
+Ñ=.Ÿ^C¢y,˛√£¯L¡˘—{"Uñß∏P}Ò¨$cﬂbW•ßdÛØ!»f)hˇ£ãöà«‚VñÍnˇAMÖ+Ka∑À⁄“XÚÜ—˘Í
+∆q˝ÆÍfi•Ùå{πi©bm.Bä∏œe*
+VUzÀ…–√ ßx4∑ º≈î<3J[¨˚‘8h?»ŸDçƒØKêºı’"èò‹é‰ıÒó·—ÇµsüÏxÒ>H\i{≥˝]◊„2S…æ¥uªc¶Q≥“ıñe<<EY¥˙*UD´G®N\*u—tr¶∫ L[+.˚h÷h=C?	Ω|â"g‘Ú1EZG>ôÊ
+1√(å‚dπ¨G±óåM–Jõª⁄Ä#œuAıµ#Êv]À•83!É6T‚AZTüù%Åuµ∂¥%t6Q>ŸÎf VÆı”r‹°MhK„Ì#π4{µæÊ÷¨S‡:Rƒ.‰2~TìÔ[,≥Œ∞s≠ÅwÓ	m∑3ô;^ËOG^¸)&Û^>ôù÷(Z—Ìö£À/m˝›¢ZªõwOX?Ú J®[MˆÖ7;‹ˆœÒú{m5ß@5àN§8¯˝ÌíÉ1%IJ~3√.,~ à8Z∂Î∆sÜrâK∑¢Œ‚-ãç†≤n'	Ø<F·#n¢ëS≤xêó12Ú‘OìÖDÁÜÌ„Oø«¯¢F8¢:I;«øjíy–ªº–&ë’&[*w+Y˜ö≤¨YB∆M_kÈ6æÉ?Ü°ˇíP«õºŸùM:ñ¯0R‘è◊ñ∆Ac˜pTEaK˘`ÿYiëkƒëÄÒ-Lqi4á›˙‰c˜i¯HÖN~çV≈K¨?ÅŒ‚Ñ˝≈Ô—ˇ6üië◊ÃB	ÁÆà¨⁄Ùéì(<√dY˛=ÙO†ÛÑ]!Æ§íò¯¬ÒãÔÁ+D¸x⁄H‚8„^i•Ó∂y4ò^ÌéÇ»x(ûL–y∆(ä‡g10ùw¯"ƒ%	£ÀÆ¿V7wå9Ç“›y≈Ÿô ﬁ—9
+∆\Q"º,¡> ÔR/d…–Eâo8<∏,z∂√,ƒöºÕª¥+^@ufRqQ∏Å® ﬂêàß¢º>E˝√sKäﬁ»s.Yo≥F÷0◊óõë∞ª¿‘ˆ@N‰NﬁéUa^Å-∑Y)Ø5–<‹»e∆”„¥‘∞bKé,1qs®÷ÍÿZÂE¶¨ßæ!Î©\Äﬁÿâ’Y4∫‰™}4∑km‚BmjÇu<súY~¥7Àk	_≤Cû…e>π$‚é˝ìGW˘π+=¯⁄?π6I9õœMúÄ>foﬂ∑†íºic+¨ıC÷tÎ-?˛ íÀl…OºÜ9øãè„SÇË¨πj¸OKbìÒ‚Í*;ƒ‡VcÜ‡z˚'‚¿êG!‘$WgCàÅ>éŒŸDÑp ⁄'T\ß•=»äE#ºG∆WciucLåú|']÷√b≠gæˆbÌ±üû≈”™«"Îõ:°’ıºoéö4FîHÜç1†§íﬂJ<âÏMiNB˝ëèª*cIËÓZû1L	=ﬁ8Æ§D“˘quΩ&∏ò0¸îCM`g©‰ &‰{å"˘E¸m®±è⁄Íd«ò@¡eq¢PÁ¿X¨à;î”(≤†ïÑTµ,≈`:‚:T"G®d%Ñkƒ@•ªIˆöÖ]Y<ÁkÃPnêYÙñ≥é¡˛Õò‡3Dî‚ÒÅ|V‡=Á>iù¡4cf¿÷rfŒêuUÛ5çïqÅpÉ>æ¬Ùƒ}y'X˜8”∆Q∑X€–·Â⁄Œ“øw
+1¢ÙîôóÉÀ*.d…≠Ú»0få|j7çº˝1ÀÇr7ŸÆózà“eûY2Ó‡Ÿ†Ìu-=ÄÆe}wK„ç£≠ÓÓV}oû{«~hÌMV—.Í%Ÿôs+Íˇ9¡5∆ùÎ+–7cÁjD]•†sëQ*æzgàÜ˙ÍJZ©ÎÊ—PÔÆ+YéDtJHÔï¥"UôçU|ˇJ^£BÅ´“≤∏óÕy’ÍÇ¯~_ˆAô]µ`T)o◊Èê%GÌ%AÍL2U4Vû™‘àFx'!A]2ÕÂü.ıHŒ•òËÜºŸûZìáh)›<	0Y+œ®ÀÚ¯Äø€:ñ∂rlyqÆqõr≤¬ÆõÔò˚Jïh{êí^ÎEpº√%—YZsì=BØ_háüπ£Ù√} òXÑ¯M57KÛ[Ç—Á1w	+€·–®P€ï≤AÄÚ]éÁ”·0!t¶p…Í∏òÜAN¢<ΩI|-¡–s¸Úµ%F•{%©›øé˜+WKï|]ÙNUÒmÆúä:%BÊÒÓπMà›*éú°Ö˘ÎObÔ4+2yJù(q3ŒóÇtƒƒO(6z∆Û
+é®Âxñ”.ÿ^*ÈÚ&]Ωœ4S=>.íüÚiqÙÇπ;!6âΩœ˘Ú„™€_ù¸<Ys.luöù–P¥J‹BW*œéÿÕBWië%E´X”\0®*Ûõ'¿„ÊáX¿Ç∏∂ª‡ ìû∞:›W÷`d˚æR°ŒÜDèúwNóWÍ∑Ëz`’Y7ö≥)1Éπ√\Á0Ü∆ΩÒ6¢‚\ëÖö–ıù–µ´ºî‰wﬂE~ﬂ .0 ¨o}™%;@¿¡π˜F}Úw»RÅ~ËhC›!ä˚Â˛ùC—âÁWçÈsC'∫ÜI‰≤DœQ˜À’ÌFÔ˛ÿE Î∑SÌf∞+¥fÿuÛ∏)ø∑!@úu%≥ãˆ, wî¯sA¬›yS6˘‚# åàÑÓ∫-+Åö°oâ}-z·∞±c∂ñ•CZizLEﬂ]ŒG“ ∫W@	∂Û+G¬ÿTQõ&˜˛7öO'é’‰¿wÃ—ì›Emóyuaâ*n§œáﬂø6F4!—¢%~„x“πŸã™éIª©tw§ØœN“.TÌºí˚Cz9ßªI…µ„é√Yé9ã*◊|¿Ï£Ârˇ<:öˇ DM[x]WXßÔ»PÒ£D=`–√]&CÍÔM™=Âiá±Oà ¸;5àW»÷4˘0˚∏Àµá/ÇÈY"∑ÓqoÄoÈ~£–÷Jëj•‘®ò¿õAû•D_ïıàÜ‡Ì∑Ib7ß∞¬≈°˚?Ê"1ÈyâÃD·≤è@d·«†13˛ë˛q7>?#ä˝Ñ~KMÉ_¥ÎÁsQÂ)õ}¡.M◊‚b¬%îí◊“Y≤b˛ﬂÃoRr˜óëò™Ï(°/Û;XU0É©MGç
+ºﬁ€Ÿ€ˇ~o◊ô+‹í´ia"ÅS!,À9üòêReÌS7Æõ¥Ï∫d∏g“6§ÄÃÖãÑ€Øˇ¶˘∫7ëü°£ÔcÚ’˘mõµœ •ŒMÏÌ	êÒ¢LlcPÓGÒ©èqùﬂÜAØ⁄Ë\AŒtbÍí.YmË:z)3A¢…^ÂC&ñÀáâ9$ÉnnYtÉKÕagË1g¶ªà¨œ⁄˙|!⁄}¸>ππ¬Ÿ Tˆ \+≥¡ È»»–0'/ö£!›Œ9
+ “C∞
+@ÿûB<≤®ÍVDKàôXêyP[T¶>}äö©
+¨¥@™ ˚Mqœ◊∆7Ÿ∞∏ç∏≤juà’%≈</ÃÇÌ˛Ñ6J¬:rp¸îΩ∏‰ÖwSÔòµâΩ,2¿$‘e%ΩJ*ú6£ñv¥‹àQï6BäÙ§ﬂB˙y%õd€^∆∆nø
+VØFœÍÿõéB?+◊d£69$ú^ﬂGùxµ„˚j R°Ø®qéBvJk‚1z<2Ú+{%1CÊòi¡)á§bè=f≠‹9ËÈËÊY˝¨iî‚8¢s*pNcôFSøU—&5l6+LfC9Zt–≥µoÉ¶¥1ì+}≤¨˝~lﬂ60S;<'ö«N”âqF:-s&
+üà∂»cAòj&{[8Nß∏Ω”àçYÉzn«@˚ØÈl¶ ˚ê¥	Y`_®Dl°( Â“˙#ùKtLûDÒ§e˘UB˛ÊÃT∫ÊZ¨#<ïı8;ÆCËù4∑îs*FR[÷´®T;¯˛íRÕMy∏¶
+ U@%øØV;@•&#Ø2OÜı4V±˙õ˘∑QË’T™ë§™lñı<?≥E±ª”9ÍÊıAÏ=±óm¯$Ûñ[/d‚*∏µÚàÌô™Ç$ˆu„)-h›ÆŸ&›e›î$	€<ôós+Ä$`.)eƒcS™MyÀaFô'…qË≥h∏#∏s∂Cè∂,ﬂÛ1QSƒjiW{;öVﬂ≤§îœf†ÑÔÄÄDù¸ItaÑ]0Ëƒ˜kTb3Î3dÅ[Nµû∞uÇB.∫oÀ!1`’¡√√`:;KmJJz9}_≤›§0Ù«@ç~¸hièd‘$∫ı~≠s<;Å* ≠)π	6â´◊ñ•§Œ·Y≤	Íù5†:+.!ÅaıÍ‚ã¢îJ∞Y∆Œ⁄t#aí®Ã˙®ä≤åßÓ_ ä\ãÑ°òVAq´⁄[„N⁄Ø≈˘´∏K˙ù¨˜kJY⁄Ëç>ÙπÂ¸À3º'Q[Æ√-„Ë"`◊∆pû—G®lOˆ=Éô…&¸îëÓ';∞<ßhÜèrê®‚˙≈∑√ê Ã∫C˘∫~ÛÔLç˙^<≠∆d/‚vÁ~º˚∫Ω‹¶√ˆt;°€˛pÊ«óÍ-À∆V_S
+"áv'˘üÿU—OŒc∑ä_Õ≠xy+˘ü•Vøf≠àlm}˛0)_uq!Ô∞tIiÙzYdÜ#ƒKßFß¡ê.˘M∑€’/øÌÇIõÇYa«JπÓ‰<¿rÙm¸˘…•å∏B∂E#ÌÄ‹⁄ÃÁâ·wÿ1ˇÎw∆g∆†ÇÁyÊáê:^2îﬂCtíD/ç˚Ìc∫∏l|Qö‰7˜ÃèÛ¿=}ò"«…ˇ¥<¶è4Œ+=7ÚOº≥0ÕoÓe?]´kÕ©Q7lÕSä%k"Ç‰EtÑ~±Œ%xÅá¸ô«HlKa èÆîØ2{Ï ·¶‚o˘ùG@c⁄ıÓÙ–@È¢˙LŒ9ﬁ¸K©]Â6˘ª|ß7°˜ËJ¸!ˇ∆O'h ¯=⁄˘^“i˘£:„Ë¸)ÌZú◊‚ãﬁ[Â6Âª|g∆›]eiÌº»oêæ(-&-àøÙÚ§/ =ƒRòˇ’«ë˝ò˝©œ≈ÔÉììÀ√≥”S–ÎÄ˘úhsS~Ãx]~≤®k˜Ë™¯[Y{i«=*”ëÔ$Ã'Ÿ¡ΩÍw≠ø˚b7æßgØf>Ô¨~±x¶PÑ`êY¶€=Û„Ë0P|ƒ⁄Àe±˛F8ÂË¶Ï¬ét·-Á/Ä·∑{öxMí.yd?mµ¯ÑP%=v¯ct¬ˆAçÙ–—GòIªQ#†ﬁí·òúgè?›;<⁄ˇ~èΩﬁﬁ›?⁄ıÚPπ3É∂<K«Xûy“À˜”dÖÕ¢Ë'èo≠BG:N@é¸ò'Ã?÷∏Gh$tŸﬁXÅ/‡'ÿO—eﬁœ);AÚ¯‡Ö	;G¨&xò™/ÉËË*=„Ò;<N”Y≤π∫é◊∫ßQt˙HXaÅaá—du¥⁄˜∂øˇiÔè?˛y4=˚”¡ΩÒwœΩ˛è{…ÓÉÀW?^¸|0+-ÉAèB”RB8û8À˜ü¬Ôà*#i–O÷ß#ÒË“ﬂïßOAÃ¡ÛRÚyÈñcoD√{J”·g–r =
+πœß!çœäúp	û”D!~|,õΩÊÇÁ[Z(ÀŸÉ…´˙qLú6"Ÿ˘Óıˆ—ﬁ.˚vˇÈ—˛ÀoMdM∆ΩXU§6ÉÅøÈ‹!æ	êJ±‹_3
+9˜‚	˛‘e/º˜¢vx"pı&mw6Êc1z∫”·ª5JoKn@.£ãÁó—üv~⁄ÿ;8˘√¡∆dˆ‡hÔ˚ãã„g;.œ◊:≠ ó8J¸˘®Öû¨$∫£ÇV§ïÉ≈ıFóã†ñAB±bjiø?∂Q∆—ˆ·—{ıî={ıbœDﬂ¢Y˚…xEZ6ŒD®®"NéÇÿß:€D/Ó≤ß¯˜ã(ÿpåπ!hQÑ|ÌoºüŒ‡`QØ –ÿ11@¢õÔV™G/ÖÔ•EYœë`Ç7 ëÔﬁˇ˛â˜˚ßﬂ?ËüM?‹˚ÈO˚ÍèÁ{˙”É~|ÔœØﬁÿ˚å9
+Œ>Ï∂úá/ÇJ¿ÂÚÂÄ‰¿^ÇËZÅ«1Å^M}vÄÆ’Ïøﬁ?˙n˚9{∂lk$¢ÄQpÈ—B£(L~˘˚A	qôé≈ö≥©OpI1Éu?√˜{«q‰çêõÄ∂ ˇe%‡7†ÉWüOtf"â¥ ÈÏ€'/üé£'?ÃÜG/N7¶ﬂ:ØˆF?º˛·‰ﬂ>›ª¨ î‘˜¬˘ËÑû¨$∫£ÇJÛ	*÷“çPƒ_os45òîΩî8mU# ¨¥Bs†z°O§AÈN¶´JÌˆî„å±o0ÛØÑñ$%+ÛzÖ›Îız“ï¸èÃ +ΩrÇ!íwâ∫)∑òé+™Z˜v9zŸ∂≥·†€ æY„gzWùtƒè1àXªÔ¨*∆˙–Ò™‚ê{∏Õ·üÄ†ˆ•yÀäÕµF¿OÚuO¥î™(eDü*ﬂÊ_i]SÖ€Ôùq©G`V>ÅÔ.·?˚”WgÈR˘iw0
+ÎÙTÔjÈƒñìó∫‹›|+òøìSìÉ9âáèÃÌ1∆{ajyÜ#r©+¬â Æ¯òˇˇõ¥3DRd?ÎS¡?±‚√k„É(Üóèñ¶†∑àKÂ€K>iKlÎ·Ä·∫SÏìSdË01‘©9—4]«ß◊ïnÈ0ó≠◊"îãwb˚Í $∫¢z¨S3\“Áù7˜¯ûÁY˙Ö˙ZC}œ‚Œõ˛=ÀÚŒQN™ç˝∫SCÃNaX9˚π3ËeîTB|OKE˜ÄW)¡≥,c3mbÙø€	}ñ¯uâ≠<∞¯Ãã¿7'ˆû∆È`∫ÒâÓ†ÍázCñgÌÅë%˙œŒë˙®ã◊ü‹Pkyñ·∂¯m˝ûJ„ñ›¿’°ÎE@ﬂÙ∫k(/m5iÑºOÎQg^¸ka»yˆü)≤µa£éSª§Õlë—‘√â´ô`˘ÓAœPL5ªaΩ◊k6±òÿàL#´EçrŒπqâŸÕˆÏ∏o∞õ∑Æıb˜Ïö„û•UŸ@ïnƒ#ËÔiëŸ¢§(q`È3∏XX§oG°6ﬂÍF7ôÖA⁄n≠dı«aü§.ıTæˆΩa⁄E¯B*ê,
+™T«t_aÎ◊WÅDp{œÚÛJÏﬁ˚8ÜM[˛pUÌïΩ7ˆ†úDÅ˛*„BÃøâá≠¡°ÛQÓ\tk°⁄u˚ÜÄú
+‘òó*∞®5(ÀHT∆2˚Ÿ◊,ABÔß_ÑßE0KΩ˚Õ&ÿñ”·∫”E%ê˘’ﬁ`Ö≠≠∞uQn…Å1X +ïËUmòKπu5ÿÊœ˝Â_ÓgÅˇUÒÓ∫Ωù√◊AÄ£5G¶€ªÃ˝tg±˜¡KΩ∏;ÆÇ¢˛ÓyÙ∞≠oÄ>ÆA_G≥m	„∞k Î0≠ÄZœ3}Rÿº[5FÃm
+øŸx?Ø.Pı£)g“V˙q]*3E"¥
+úﬂy(¿'≤0«•≠£¶x⁄Ò%KÒ√õé≤®^!áä#.¨DÚÅÈ»5Ÿ|∏uZë]‡Ë”$àÃ3 zgπ5'9TBmıÁÁõTfπ⁄Év±…6öÛP—BüûoŒMÅAŸ\FfáQˆ1æ}…çŒf´∞˝o∆rã p‹Ø±Æ˚5Ä¢»ú[SËÛ≈±bàÕ¥@;~≥ŒΩáh)¨Åtsà1ãRˆvx3˚©ØfjäÀ˘|Qo;≥9ª¯góˇ‘9æÏOZóLõ#…ìj±XˇòÍ:À≥Tå©+ ‰ï&ûhå∞no÷U–»Ò∆?÷t'Ó·tπî2cn˙·j…Û,˝äÒŒ»áX[2—ù≠[C‘¸Ï#+?IÖÔà˛¨√Øôdò)yOPWW~¥ô2"é∂4+Bq)]◊íßM	u˙ÅF`»50"•∞fÎŸÚn¥'k”c@°Èh⁄ÇñOòì1ÊdìÂ≠IF[Äi§ãd."Jü8Ô–K!ßÇÂ◊◊ôx◊Ôß&•Eù≤gCWØ‚t|îÊ!I‹íî}ÔµÆÕû•©É}Cø1£¿Ω\¿,}ÕîƒIîvÂ‚H}®≈3I≥^ù-[óe™Í3o3æÀm«u`÷⁄*V¨Æk—&ºÏºsØú|PDõ∏1úı¸†‰˙◊@+™lŸR^CÈ7%°AtsñówªÂ>x·ôoç≈‰‡]coz
+∑µ}‚^jHf€ÔÇ©sÍß]jÃ`ì(f◊#CJ÷éπ_s yåçπÉ^OÀpÆÀê`JFÖ∆∑≤‰3≠£⁄
+ò‹3T¨πﬂö$PF€w§8” ô,¸Ì8{Ü:9⁄òmp› öòπ‘-å∑œ˘Ô‰!¯yT>ødT5xö˜O¡…	Ï·(F¢"6_kı˙öF+W[fΩégy+µêçπ‰d†î≠c*ı¬í≥¡‰Y?√bµÏ*,õ#¶–ñ5v’ÆüÿeNH…2E°:ÊÇUôDE¶/mŸ:S"?[féïèñ#≤ûRå∏i-3~T
+@Œ>FfDw◊Û!ı{6ÊMáÇG KZGéÙ¯	XRyjd+ (∆Ÿ§‚5˜hF±|RóN|§>ñ–~*˛z∏ Ôpx8œ:Y⁄"j‹dœAß{úé∑É˘yCÿ∂6h(ÀNY⁄¬ı‹d€ù?7}ùƒŸ„Ól7xº»NY⁄‚ôΩÛŒáî∞R4Â4#∞oi~Ÿ˚‚h∫ùOçZ
+èLpVSò†∫éˇ√mâÄó§≤áe’≈!˜Œ¨≠Zu 5ÅŸµKGER™A¶*ã∫%¯Ü≤ÈVhNE∆wd√˜
+≥∞ÃŸx»îóÖ@K°¡∑π*Ü A&ÌGAh∑gÔöuS‚!NHÖÃ˘>PÁÚπ∏Pé^O≥øÚªÜÂf≤cq≤ür~MæRÅ''ô§~•«UÚµé[È≠T∆–)ﬁ’Ïô÷¬n≠TË!zŒoí6¶vÚ“ÿO±4ìqÃ•J∞kE#KI`Ï…IJI µHQü≤Ê¨áTŒ∏æbBAµñÌ ^ìR◊˛Â˛}˘·*5ﬂ ‡¡
+d˜ÂV•€gÜÈîJ›YSË5ıEPZ‚#îASæú˙1)ÖYù¶fI√tàÊ”U«äs5É-õ≥^gÖQ ˇoò˘ﬂ–∑[•B∞ôù§ç€XtÔ¢~—ÈãÍ«∏Ë‚©øËEoä;R…Ï@£ÆËv¬„≠ÏI0cß¨WvAòr≠ÃV….ÎifŸoÖ+äöqO©*Õ(ñJ¯p∏î1Æ]ÒW':9°Cπfg|ØA‚ßål?.·-kπ(4€!è¶°Xí:ΩN¢*!økÏ"îæÆÏïò†¢‡ï~E≠\∏:À',<±dË≈È>UÈY<'∞≤Ì oÖÄ¯ÑhÑ_@,kKùß;j&qwÏ%Ì apµs˛n|·¬>≥Gy?+à[=ı1ÂK)oD¨Aïh)NñH6Fc·n∞úÏÍ–CeÍÒÂÙ ‹∆˙€π€H-WØVÍ–¸sULˇ4á 5ãa»‚Íî]˛ëîÎ"\°Z≠ÊüLπnˆ:ì›èˆ˛zn˝”©˜yÁ>#@îÓ$4‡ˇê‰k	Ñ¨µ0Îçî≥ÙÜÒ~˘R÷ƒ˜YdùAÃWpΩ¸˝ÿSêAñsò„R≤ñ e≥≈êGåÂªê;PLÉÃ}Æäá)7G>-Â—˝~Ø&ÚÄÍ˚V8eΩ®§µ∆èø÷§Ç˘·Ì-P].Â`€∑{%T◊®E=…g2√A∫)∂≤…‹`¨æàex=∫]Q[T‰‘îò¬µ¢µaZÊ'#ÎÛ$F+U•83p&Ω”hH®<CﬁÚ‹õP˜≤WêÛwaòí
+és_ Õô˚>≥’vPMÌ¬õwô˚gy’¿Y•˘Ñ·.Gπ∏¨ÇtoPqBÆhc©6^±∏a:Úb	ç}uã†ì≥ÏŸÒÂf≈8Ï±ÓvÄÛ€≠<ì¥É~ßyê*Î∞)Öt®´é\+Ùü!Kïv∑BLãgéºô,¨ª™ûp >‰®}U]T`JßÚû^©~‡\PºJ5Õ¯…ç≤ØkIÚäÃ[©|¢DÜ≈”ÂùV—“ıJ¶∂Q˜≥OyI⁄MŒÜC?I⁄ÔñæR9„ÆÄ? 1#PâøÛÆ¢E∑‹û".[Òíœ≠}i.Ó˚jÙ¶Ñov≤œë(ï√¨W‘·»≥™sb¶ZﬁT6vÂÂ∫.ßÎú%áÌŒ¢ü=π≥gêñ„Ô)v–SKn6[‹…±E=ä»ù¿c¯≤¨˜‹ŒËJäÖä™kBÌ}ÂÒEpå≈§@ƒØ$rè`˜z#iÜ”¬√ëX≥ƒí€˚]Évç¥π2:ã™úK’Á∫√®ò$æsQΩ	ªÉ¿æ ≥®
+ŒT˜÷`LÌ”0Úhé3Ñv»qﬂüPË,{}@§îÁﬁ¥˘’]?yˇ≤Ôˇ\	¬≠2∏ØH9`Ú‡·˚H$'aûí∆ÍS±9båæñ§≥∑e^ııs¡°õ^ñ7Àq»õΩGx¢u¨iˆ◊ÊJˆºJ'C“4ﬁáè∞·7öw—ûõ«£$π>@ﬂWrá19Mr\™N)£Íl±˘+’l<©ÿd≠dÜﬁı÷
+yì¸µ…+X·‰d
+Çìaµ™ÍùÇÓY¿˘}oÆÜQ\d@–√a8˝_u1¨˝[©ä~¥ü;oÓmº’É+HÔ≠wzï+@º˘OΩ˝çµç∑JÈDÙ˜Hæ;!ÚﬂÙ~ƒ™Æ?Æ„ˇ‚”cØ˝`e–_ŸX[Èu◊óMÈÚ∫•j…â–ì—›M·ÚAdwÉèÁ◊— m™è⁄9∏QJG®2Çµìˇ*ãG‡Vl6mñÒPO0<Èâ™#	u»^∏*õ´AZ[ÛB≠ñJ™.)ˇtËúß›—Ω?•bPue˜Æ4YÈÇuÓfÆé‰¯i,á;[Á–ô™'Ö»JièıœÍj'¢7Cç^†ÂO;˚/´´°÷MXEryqòèz'L«ÌÁ^◊äı2îk&NZL?¬äˆÒp5µ0∏©d√‚J&‹4®¡ñ∆√?Œ÷yÅQ€n°]XehûÉ ùwìaÖ!<pÖÆSíf«˛⁄âbRì(J«-Bü67„‚˜Úﬂ(≥ÚçîÀ
+Õ^‘™ËîsëÿÉ≈3Ôˆ1[∏¶ATõ“…HrÒ√çNxò5©¨ıú©\∆™ø¶¯‹ì4éﬁ˚ù7koô≠8≤ìß›ö˘NtU#∑≠òˆƒ;CÌøBÎ/?XaoÙ8¿ﬂ{EÄMØ‰π+y$˚äúN∞íy∂Vt–Ó¶∆[…‡ÑåÛ&’5[1U¨2Gm?ÚéWÏË´ù>â"$‰◊˛	ºC†=Øò†W§≠æ¢AKò?n<¶^$U]ï˜;R˜´@‡u)©ë∞güÄÊñ∏[l˚ôí‚öï+édmá∏N´“±!Ã·~z)ô«rTû´£COÿzé9ÈüF9¿x<(	√µ™≤eK[∞Zg±ü€«W«•≈
+?Üéf≤¥ub˛8t7Ø¨Gæ∞¸Hd¢Áù^^ÕÇó¸éôwIê8àö}"ËH¯E∆¡“› Fà…˝Ò<:¶Gq [#>$cV^ÔÔwY6›ˆ"! e|Êó]!Âs…„t⁄¶ûkaI{:É∂‰∏-ˆaOIï·V∑ï+‹ßI=.*(sWóŸ)K∫É\]W}yZ∆Üπ$ß&oeˇ¨Î‘<!
+éHŒUŒÄ1î˛ØÜ≈ÃÁí9;û)B]†WÜSã‘vê‰ïﬂsØ”#Œ8˜G†2äø∫t‰ô¸§„vÎáN]≥yøxIß#˚Ää™Ú K°ãy±ç÷ÈêGî∂ù>ã0L»Ù
+D£B¿j`täNÄˆ‘$a∆NÈ‡›yP˝‡rW.*∞¡à/ói&8 ∂RrÃéE=]’∑mu‚btÆaàÄ©d,Éu,Î2Ê]æœ‰3—πúË<á(u'àá°üUø´ülX°„¡M“iΩZ:i
+‡ïioÅv(Ñ{ÌˇÌÜKàz±˛Ëög2√›ºé¶zKÎ@H†C~ÛzG+p®ã∆:'øKﬂKzÔcˆÓO≤ÿ‚Ê#Ç›÷í?Âa≈#ñ‰˝/ª¢4Ë˛Ó&˚ÍJóÎwÂ÷7EÎ\Ò)n≠n˝ù÷é>-≥jù§Ï∂+n≠ [êj∂ZéûóqÃ^r\~€ÃRQ„f0`+Y#y@„"∆k¡<0Ï4w¥ÌÜÌs/†Cè¸WVVò JÔ:˝∞wí ùøl◊ªLZ∆ SJõÅ‚'zÚÜrGcH¸I@•˚Ê›K5˚B&Y¯ı4H(X∂ãò¸ WaV±q™∂"D_t¬ULNwº–;m§ƒÄ†rÉ!õıP¥ñ†Â∂'*¡ßÿÌÛ ’ù(§d`z;—•™¯bA“Öê%n„kGgTÿaF“óF÷ÇÊbËc©óΩíóø'^Äû∞Iaõ|
+õVÈMÓ=.‰miÌ|¥ô‚„-†4`^èÜ§»«{>∆ä∏cüüŒ‡∏∫üi|¿ã)±æ|†xZ¥2RLﬁÁ‘˜&ŸMì(F^f¢ÎD—C–˜	h‘€+|ªpÎuAn¥ÔUÜe•∆⁄ÛÛqV˘‰qıØŸ∞πh"u'‰Ù˛¬≈Ñø≥À£aaæ›lG~¯œ’%28œïÕ˙äﬂ"%≠¿ﬁµÄÚì]Ωª°p˛¸»#Ák92fÆ≤Âb†Ãù’“≠:ÀÃ^¸`£W¿’5(’˝∞`£:ÔÀö∆4	°Èufgaíß
+LaåΩÑáŸaÍœ6Ÿ°≈iâƒëøÆ‰˝*◊ê5„ãD∑ öÒcF<ÚáÅ˝°Õ5≈\t3/M#˙{Ëﬂ¿∆g«]ˆÉﬂÇMÜˆ}fõlHT
+S2ío¿»àœ»[îtß¿ÀCûT˛ö∏À∫•y∞≈CîF‚‡Õñ≠‡s›∂R?‰Cs§}‚¡€Óy≈ï™6û@€Ó94Ô:€3’g≥2vmÕ	.€π-.ìÆπÓ≠!_®_≈‡˜@g8ﬂ∫ŸŒﬁ<(gyïik%˚Ôê"Œˆh#/˚Âˇ©DÆa#*™!∏≠¬í=cé¬)9°JÉíiNàÙDïÓ+úÒïﬁå∑4"∑™R!Ù‘Hm∞∫¶yÑ,5î-ﬁ cÒdÂ’ÆÊﬂ∑T+◊ﬁHÀ•Ûn=S¨KWÉ€ÃN¨™éiÓãA%ë´O‹	è•+%-Wt∏òÂ[o≈v~=‰GT+.g?>¶˛Ü›ˆ¸›¨µºLéÆÓyÙXH7tÆqˇÕc∂ã¬≈≤ï√;¥ä≈|ˇµ^TéûÅ‰®ÜS¥übp˝ ?:‹ÓØûÍ–ˇWÚX™h√Y‡¨gHfÚK∂∞¬ì˘Po5QÆ§º$–Õu[¨86íW©›∑ú…^3¯R√∆‰ﬁtòµi√’ ◊ùFËnõ+7V-Qg<…π
+\ÿ≤§‘wEM5Äë)≠güì"\Ö4cÑ›–∏õ1“µÏ´røiEñ∂På∞Øz€¨F¯q€Ó9*ıRÊ‰á+”~∞ò≥Ô®≥_]ïˆ
+¸6@œºv}ÆØ¡ı˛5˙÷tKé6MÕ“¶Liz%]∑Ñ7k“8!æf#ZNIu¬»WÕtXµ^*•@eúhÃRˆ3	Â‚˚FÎZ‰0UÜ‹…~˙öÖ6'a)k∑¸K&e8“+#´|,’ŒÔd	Ÿi}<6„FAB±%óÉ‘o^/n~Ìì!Û5⁄U>≥Q<≥M¡‚÷©·-Ã‡Ç˙7(n™tÂÌk≈Ìô—l¯7∏®≥íXƒdvXï´Z˙^F“5 Óà≥ËëˆÏñıIK(1~äb¸·ÎíÆQ‰•µ&o∏ÛŒ=6ÜˇÊHP~”Ôó°Äe¡eÑæ¬è<E‹Jär(4~ÿ„÷
+¶`ã€%êu&ÅphaKõ-€IÙzœ rÖ.1~ƒb	ñ|œÃPHwnÿÔ\ÀÔ¥Âl€£a-HŒl@Œ<◊uí7ïV(±ƒ+UtLmÅµÄπ‚ùƒ≈MımP8œ3È¥Ûm3‘0g∂l…÷…J’ê……œS™≤]m9LÇig‹y≥FÂu€@4∆˙õåGúõHªö‡E≤ÍÕ+:`Uƒ∏cÙtµùcnÍú|;cÓ 0D=‘™%•ﬁês•Ì⁄ıºlRÖ`•π5ßp[»§,à`©vÉdzó,@"Ä~ñE	üßæd¶˘ê6◊MËƒõÊò›´¬ÁÖ≤å†GQMÛiÔƒ¡⁄Â¿N∆c—çEnäãˆxq{VùKP\nJ9∞TExÛŸ∞÷®ïÜë£Uè®
+∫– ßbº	˛1◊âï:ô%_<ÒN%f;ÍYÂÀÊæ7ñŒ)‚‘#c<Ø €¡Ö-È2«q¿CÔ|	¨ËñîmK≠<€“÷0ÀÍ™úávÕ~˘˚ˇ-~‡Ÿ‚h2~%_Ë¶—SLíjñ:·J £'ª≠™n6ØÁ§ñõ“f©@†∞N&sîrÔ‰Æ7Ô©ı'ºú≠.âKqÕ§”h.4—˜ib¡WwLaûÛDæ©>O	yÀ>nÁˇ¶4‡ÛVIPSïW;·¥QB.ø+ƒÁ3ÿûÁ—YHs Óﬁ#éM~∞^út?67ö^ÇA´¡‘¨@öjAz¸B[ã<¨ƒ?@%∑€U/b;ÕÊŒy¸˜é»˛ò£ß¡≈V´‰OT7’gyÉ√√≥1ÿ»Y7ãÀSÂÛ`ÍÉÍåã?/;"ˆ˝ÙZøÏaÌQ
+ õ`Öµÿ7ÃvÂ@Ω´ÓœaU[¿k’O·nıı«Ëbıs?≥ùhTz.◊ÙC’x£E•ÍÃFˇÿSï°0Æﬁ…∫bÆ*ñÇ≈ÀÜ∫cÿ-ö€ºIIA?ñÄ6…†”˘Q´åù}*Æõ•&¢<u7*≥néŸ&Ah’*èçf…Ó“®v4Tò∑b(ﬂÜ—±_Â–WÓÆ.9áVÄn{åWäÿ‰íÇ™Í*q◊¸ÏÍ≥ouR|v§–´Û Ñ0ﬂ¡•¨®àå”cD‰·‘i_üHL…!vÆBÍáÌ◊{œ^}w∏˜„ˆÓÓÎΩ√√œè…√˙¬~ÁËˆòœ0¥x?!˚yB¡ü"vå∞R-üÄœû’Ü≤ä1ë´"hı,©—O6oËµŸ z…ÉèÃ9ØR´zx'¬ßÊ≈øÃ⁄}%<vŒ1˘AΩyáÎﬁÑ>ù˙Ò06„.∏ßú¢◊4∆•‰eøÈu‹[[g»∆v,Ÿh˘lTe=;ÕT^≈Ea>uXéa3‚´Ê÷x #ÌÈ˘&∂»rIπ≤ÛN∫Ì®Cj7Yñ≈ÛÀ?˛1O~U
+lôÊ∆æRñ4t¢∏Ÿ˚?(ﬁæÎß`„ïw[…˝?¯‚˛Øqˇ√¨Ób¢;W·≥Æ<h‚æ7ú#/©zÂÏJHπ`
+/M^„êyƒ&!B7,m=E/5∂[]:•≤
+ÜTë”vÀ(HºcêáèúÙ lè,ôòVπÊS©
+E„˙t%/t6π~RqQK¯≥@˜ònÊI≤ç∑(Ò·gÃ?ÛPuª]— ä‰êRKzËGû≈G)GÚö˚˚‚V¬rj0¿ºÅ≠ñììo–ÍÊlºSn}ØÏ°_Ærü‘ÌîlØêáØ¢\Ãb∂Ào`√î∂ÕúKQú #ºÆÆ€E€0ÙÙˆ/<åíË£R%›Ï3¯ŸgFı‰W&™ˇˇ   ˇˇÏ}›rπíÊ˝<¨ÈiR3$ERí-ke˜ë%π≠∑≠c©€s∆·qó»íXcí≈SEZ÷—Qƒ∆FÏ‹MÃFÃÌFLƒﬁmƒ>¿ÓÌ> yÅùGÿÃP† Të¢‰ücFt[,V( ë»ü/3oJı”Õ/BÛdÊø1Õg¡Ç4Øà	_îëZrq¶/AfíB<zPXÁõ‡t˜ÇìÍ¬∫°§{√†é…c÷`Of—KˆﬁáΩà·«À£∫˛üﬂÅ≤M/ótûx6Œ∑E˘€≠7>O∏w¡„i‡´ñö0±«≤§¶oTæï.Ä"nLÏx∞ µ1‹Ω†Ù•ˇÄ°eqˇ€6∫€m§Î∫≠ÛÎt◊76ÔWﬁxms„Mó°v™nªØ‚‰ÿ„ò£2¢ÁôfætÓ÷ïF˚ÍbüÈõKB%VïN=¿ÙΩó?ø8yuxpL˛vªÛÄÇÒ˜ÆÂ[ÙÆ√;k¸◊«¥.'ïÂxí}ò›OÓMˆ˘H;xB?;/Ûü˛˘øëß˘=Ã.Ùíåè¸%Fi˙0–O©i’d{R/®Z∑zï
+ı;ó·î‚LpAù(£¥§;±Å,v&Iú‘WD¶‚3Ñt fW≠Ø∏EﬂpC8ÏSj¶I˜¬∞ﬂZÒ`ÆxX®3Ω„∫ùx◊]âæfÔ>˜◊c&5Kn¸‹¢´~};è@†∏c
+.˚ıo.˚ó=Œ._¥I˛\}ˆN\ôËÊÛ`v? oD˘Ö¬Éio@Ôû:Ä`7“ÈÆéüæ¯Ò›˛Óâ)I[ Á˚/Oˇ	ò¸8º†——SN^Á	Ä/QVmTîe«^|ucä˝±íoë“˜|¨´¡Ï‘§ÓÄ}Ói fùa◊¸£&ç$Bk‰}Ñï√iµ±0xæ§E˙VÊ∫1%{=©†7,¬	ﬂıâ¡l©ı_ì¿»ìïf⁄Ùèñü+§ÒBı¢~xÃÜ”ZÉ]±t4ÿ¶$[…¥Và 7ºZ±√YyL;†ïNÜ—¥^k÷Vﬂtﬂ^/÷∞2UŸ™îÆ¬¸ Ì‹sï∫√˜˝‡rIs‰aÒ„ÇÊ©µ¸≈Í/ã 9ˇı˚Ïm|’8ÿÔz˜ÇÚFñ|·˚p[‹∫ÒMR.ëîçÈùOB∆E‚Y/èg£Qê\":Ω_5Ö5çß;úπDÜ∂-/*Dcﬁ|Ìµ\—…÷6+O!∑pEÔàµ™Ä2¸uO˙	^£çóÇ|MÈJ ¥ŸÎ d∆eQŒê&|mÀ?∞P…¡€xÈL›´å∞´KôJi†LVñˆÔW®fΩ1˙}K)⁄´ZﬁÉ
+Ûe◊∑¨’üÛè–≠¢î:?‚yif1¬}Òã}îmü—ÀlÙ1ñ?v´|$ò¸úB±EÊÃm˚•°ÉîF-ÎÊØã„\ÉÜ|-ïÍñÛêißJûèJ_ ïk$lºÀı_ï–∞⁄^ì*©‚U%<Ò¥_Ñv◊ÀÙÎÓºB∂ıA*†xG¸Å'«⁄ã”Â∞Dú„^°y:5XƒÖ≈Ÿà ù´	PFîÖô¡¢yG\¥æÃÈŒ…:ûP⁄,⁄ÜàÔº,#A{˘ô«]ÀgR’®◊˝B,(ÖlùP†:^µW•)¨ÑÌ'üzh˘Ö
+iƒ≥	jÅ‰◊µ…K-P§ÿÁ¶í©#}÷VªΩ∂EU%]Êâ´{¡Ùˇ∞/∆‡NOµàÔ∫Ã{˝p1Á5y≠q¥‡B.+‹-q^ﬁ™@=º˜çÇèœ)ßœ£´Mü¡"s˜ËıÌq˛gr∑q=î:Èûﬁ@]wø˘ÁvÊ∂æ
+úä0ıµ7ˇ∏€¸ávÛ·€µÛ´’lIî‘èMÄﬂ“xÕ«>ä«±5ü≤⁄é5ƒ[TAµ†<≠óÊπ∑ôÿ—Œ†@I™ O£√_Ól˙Ó˜∞{´[Ûß~£`sdy¿èHÄæ7¨Äk–PköD£˙™æÙæ‹¯°≤MôóäÚ3˚§ΩÏeUØßÿ±ÿÕPY¯1†j.õ¨7`ãO©˛UÈ® úùÚ„ß^9g#tä¸ª4D¨«9Ós,DØE„≈3$õÜJìvO¥:Ô4˝™N” wWYØ◊+XÁ*@WsÎ◊;õ#ıeZQz0&,Ã“_ãõÆÓΩ–nß|%I∏”#pòú¸ÊœÊÑCfœ7~({õ“y·≥-
+meÛS≠éf[úˆ˜ÿ1iK˘ÔÌÇΩ|˙¥tA<ô^£ü÷D#ñ~¨À√†r·^Û„Wêê.}lΩƒMP¢$˘$EOûÕr£)äk–⁄kW4¸±´•BıKBv	\Mubï∆ï#?;ËAB◊§MNîí&—J£˝j%…R•∑¸Æzœuä≥óˆå)®’¸	ôº˚ÕÓî+äfπÑ€´√•≠vé±¨º≥|˚ÍU8ä?òe‰ÚOŸ¶Zû~eqüuXiïVó]vÆb¨§s√ÎÓ	Ÿ´€[õ∂‘H\t√£nìY“‘Î~
+¶Éh"ıvÉõﬂ–Ó¡ö¨û˘kV˜Ó@a>[E∆ï=Uû¬uÓlÍ>CV,9CH≈	˘¢Ç)◊ÁÁJ÷jcø˜ÙöÕûL◊w¢Œ™Â`Õ](n7èúæü¬È Óª≠z|~}ﬂõ∫ŒÊ>#‚™◊fì®6™∆ä/Õ!Á D˛›’D7·àñüNn>< EÛ!¿vó`ïîp^â+œﬁ¸Û—·Ç–ª£T{næƒ€2o™¸40`?ø}%l>ûÙ€éÆ¯ihÄ¯±p≈ „„¯|"i0 ?p6€t‘`ª„KÜ}√·^“ÎºÛvıÎh» ]4—·ª©πxsRÆêÌoA™Ωﬂ∂êÌzï‰~ŒÅß∫⁄és–k%Ioˆçp<æ\öK`IΩ Èf<âÜÙ1•\¬\ê'Âhg/	˚—î∞jÍ»œì-Ò¡g⁄O·_ıíô”/Q4@z√öÚ∏Ï¿íF·«/äU¢÷Â2#ﬁÂß„Fﬁø¢x˚*¯Cú¿˚∞“˚	Ìeœ¬!ñœ˚qú√;Dm/:Bú 2ï!†7HóH<òâ0+Ÿ;’ÅÍ¢¨ÇnÁr~ÏŒÒ$Hﬁ√TÚÉn±ÿàBRF5Ùµ«∂I•ŸÙ,‚úÂ=ÚÌ+ﬂUÏ_†≤úa$£`8‡$fßóËâEj“p¨—g√hMÒóÏÌji˛~6·QFÏÌ™cVˆ¶3Õsáäö®B„@WÓ7_{òΩ|Ê%¥NÉ¨}‚[¸aÙx'ù&Ò¯\ó∑A≠‰óŸﬁ é·]›nz!◊í⁄`úÓv»mQ·pÙÅÕTÕ"Œ}ì[∫R\y<Ö˘F;kÿÙ=Ñ8D,7ÔÓ17‰ä!cXçf»Y@ıÌyΩ4!RÉ[;k0S'ÚE8=∆®*≥(bdxÒGVß`Ï„'á´î¯|ÓAÉjoÀ€£èìπÜπ8ú.=:Vïë˛ãMŒ/√Únñs£”È∞éˆ?±≤<[¸ﬁ/ø8fH˜}Æ<Ót◊≈<ïÃ»Œ⁄ÃïΩHeß—Ÿb“»m∆%vy£ZQ∆mTû€û·Ä◊˙'≤ÚÏEIov9“Ö$πœÀTiñ§ê;ªúìÔ±ùT…~ˇπ¡qògq¬´`UvY°`Ñ”¢¯I‡»–¡zf√eÒYﬂ‡Cöà+m∏ÛåpY·ö+%¯Iòkú¢U
+˘Lfû„AÛ·áâP˝kﬁ‘ÏûCÈ…%xˆ(eD¸*gú'!’3Bûßü◊Ÿ"LÈeâô∆¿UÁ+˛˝mtv~,Nˇ=bOî›÷≥^q”Ä`ˆg·U2 ÍÜO#†aÖ®IB ô|Ê∂ñêóËÿe≈òÄ∆/˛ROÉÖì≠€,ˆö%pê≥(QÑ/∏_ÖøüÅp‡
+‹f™ïﬂ…g°Â#Dâ¿Ü∫r<¨ÚLÔŒG∑ŸØx˜˜Lm ±ókø„‹õ€^≥∫ò7Ñtî∆œXä≤Wäü…4≤≥†Ç<%N9†+˚·xHÁnÛë(Úä]>ÈÇrrø(ÃË°∂î'Zq–‡È@,Ã®Z)úG]“iêLÖUÔ∞9*\¿≠h∞h6ÕﬂØmË •M'îæsª>Ï¥E¥Ívù’]J">*cÆ£1 Ì—<>WìÍà”i0u⁄:‹ﬁ54>Ω%!Ω/_ÌÄ˙Ú≈”√W?Ï;%'/àx–-	◊rò©Ë∂gp'päºOŸŒk˛ £}YmıMõ"+j{@¿œí⁄ı=∑®€Ωë®ªiAò÷ nÍtæ–<á~ÄmˇE‹˘…`t.$¸\¿“ÈÏ›˛Ñ Ì3ù¬µølyÉ◊∑E„$vs.„oÃù*i^π∫:Ã!3m∫¸œ»Ñ*ïCñŒ∑ä¨√√≈Ê°ô≠ÉÛ{<ﬂóØûº:x±w¿˜}%è<ñ≠¥©ÃUªñÆLΩ˜—/Õ˛aüˆ€Ò≥fª›Ìl,ë.J§À9†LõÑgÏ≥⁄çNsç$NZΩa49ç·‹n]$@S'0ãuh“Él“·ã5.,Ω Ç8˜a`ƒ-∫·QNhî™Z†	5mE&+ ”¢¨¯¥q8€U0SÓ5û\J≈∫f£@ã◊{¥aÿoùe¥ΩZ«|õOVô¶ëÂàp!Vv*≠—ÓÄ⁄íÆ*©t`p(∆ˆ+/9z,8E»Æh=ﬂ‡€ΩÄ÷∆Á,˚ïÌ&IÙ+á¬1‘È6;õ†˛ß aïß‡2ı.πèï€,e7ü"∑Ú;i∂“NÎ(Ö?œ#ÙÅÜ˝{âLAéÓ£BFˆ¨ŸiÉ]ÑºVF'SÀ)~%c—ç#I˙·äµ,_ﬁızÜ<ÏhÍáAf%C•NTÎs#,∑Yïà6Ø ¥"_r∫ZÂe…~F≈Éä—–3n“~_á }P÷âﬁ_¯j˘(¶a0‚ÉË)ÖWÛJ‡J≈Uúoﬂ]©ÈãÆ[Ûh”ñS’gaÀk¡¢˙r¬ÕuGI<öLÌ∆∂+	µ«¯S|…2a¥Vµ¨;2›*Z≠ÍºÌ™ﬁ[V⁄3lÒ&óí]<îûP@≤˚p}9ls˛Â2¿?(zn≈â∏È)zÅpRô∆ƒ≤ûG•≥≤¸ÌöÏ_á5ÿ
+ËπãÜr+ÙHÒÇóƒF è>U+,ôëO/m±C¡70«%Òër_ÿÌınÈ—åØ,!
+1/<âÎ
+I{dª4úgç˙ı≥ ÷’ÁK.sñ°Á©∞±uØ˘ü¨"$ º√ò¶cNS™*(⁄”3óaæKm,!TYl47;ë¥π"/Tπ,!”ÂÛ˘1∆Õ:Ä”<N.Ì¶=∑6c“©˝§VâTt$jø∑@üŒ€t‚tﬁ67eZ©“Jëöc‰°Jë
+œ÷iQ±Â´Ã}æ`*€™ªÑVæº?]rìwJíÍ/òSàkuœƒrXV›Abv√∂ÛwÌ´òoAâFz:o£>úzBZkˆƒ{41ÁÂä'fáœ∑ÛØÎ¥S∑ˆoûÂp;‹ŸDŸ¯Jf%◊‹TŸw◊ñ˚’∫)pÙß”q3{ÉSÃÏß›bV?÷®öƒ*? 9…ô:≤ì«ù!N(ÜœCe˙ÍÓÄí_<GF[h®…{oR'4$Ñv(]“üpúéL›E}‹T¿§ª]5xﬁ
+ú∑¢^ï”´±Üú–˜Ÿ3ê‡/}3cHÅ’‚Rät Âø5øb(ÏÁ	(∞~Õi‹Lÿ»´Z‰e‹¸≈√pJﬂ&Õ˚E…Q"rØû
+ë)≥‰ ª9–_“]O`⁄˝dz…≠∂ÃœïŸã\F[o]-ƒ
+Tq±:ˆDòˆã¶ÿ˛ëóB|‡§.àÓ–|?â'–àsNÓl"3CÄ–Ê áU∏§±LÉ`≥tCäöÈJA}Uw≠W˝·JcmïíŒ‰irDRÅ«¨Ì†{ª5Íæ#/ú”.Â¥FÕikKhIºó—√ñ≥÷áó€Œ	hÔ=ÄW¬-eôuR%…uûTﬁr÷ZS˚ŸÉhxW‡,\€/BÌ¨Ô˚<øçàlJÇ&”Y^≈f≤ÔT´¡ﬂÊ®rÇÄ÷Ùb €ÑÄ?¡X®h«9´œ-Ñhm˘‹”ÉYÕÕ”¯<Ñ?ìËAı5Û¢±D&Î#8Ωx≤—À¸ûÌI∏(ÿ¨0Ée:ô©Z√“í…£~A»±ŸsÈ–„{Ω√SŸ„ª©Ø%’ß#øÇ®Ôì∑âÙ%Â+Ñ‚?¶sr(ÑÙ∞i`´◊U¯ñÎYÃå¡yöZxX·¢V~¬ù:C≠˜‚T|Û‚€≈n≤⁄¸£¯U~+¯Åyù2w˛
+Q±∏ÿØµa6ô]ıµ)*¬€‰Â:≤A…Øæ∆Ù:ö˛)w∑¬ã
+ü∆ÎÓßDu∂‚cÙÉ˚π¨¿TÒIÒìg§≤Ëèe∞¸'ö±üèw]Ê`WëkÇ÷ª\™º)››ê∏††_øª‚œÓf•`∞ Íµy9òÄ‰Bˆt–t¨∆˛Üπnÿ∆JÄøV#æ]• ME¬€Uk÷T&∫›º∞Mb´ ~nä≤^5\ºôî¢ñæbs«oâÂ£1m~Àj¡ò ÃÙK:
+,§ûsàÀ¿t9}_%¡úkõ™{ïJõuòZ·Ï>evqbWÊ(∏ m€Xm—£.o5Ä[9ˆdtÍ,:R•9íµÀ”®t#c[+Ad≤ÿ«ä@kÌ»áƒc ÿÁçÚp»⁄<¬u≤ÂqùîG2Œok‚YΩ—?oŸ‹Â—™ˆDÖÿ3›Â…Ç!TäK˜˙•	ÖLÔd•™ ÏæppÌ<6gdxi®mÂŒ≠Q∑]xÒn¡™k±n@‘¸qNè^ß™GØ$4ëtÈx4‘9Ó‚∑Tt£Ëú±cóf éD<ÃÂ”s:ä±¿†óO≠)c3Æè¿hˆCZP‹Ö\v&èˇ„ﬂˇÌøV€<@˝ù¯€2`0sÌÛÌIıâ~»ãB]Õ™≈‡7Y1&7>∂T‘i0^;f<ÖI‘√Í1∏	/¿<„rûÍƒîÃ∆=,≤å/¸/ÛºIúøÆ_É+T<Dyˆ«R$µÎÜÌy™g®<+ø◊∞ ∫ÛÌ»¬$î˝Ó6; Œ¥;éi|:5ü;”oC—7WóŒˆÙ√NE§`ãâ⁄éú]€X¿i8å/Z_Ö0+f¸õ8˚g,Œ
+∏UÅˆß`rç?gë÷‡~w.Œ
+ñîuˇ5…≥*Ö}âVvˇÁ ”
+X≥O"m à[û`qÇàŒhÇ.f∆öÄú"Ì$3íJælëˆOˇ˝_˛ﬂˇ˛◊ydºQîì6e6Wb[Vï0]l`ÂÒSƒÀfE¢È@B˚”?ˇ€“ºı‹õ√É‘ƒÿ›Àx•pCáòßÇ•›OJ3˜Î›Wœ^˛||nwˇ’¡Òq5π–g–4ÁÓÎ∞fÊÀÒM¸3ñ\˚mäÅ9„˘å%As£ﬂ\T·«Ud¡g≥SˆnÅK_ó hêŸ'êı éØ^|∆3ÁπÖ¶î€¶ Ä‚0¬zÉÛ∞Å#ÑJNÇmy"lËÀˇ„ﬂˇıÕ#¬~Ã-~—Çú‚∑ou¢ço h*D£bÒr0/f;,ΩhC)*ﬂPï&≈ß(È~Ø†€ê§û«ÁQØ P¨ÇC‘QàT+/B—4Çøgâ≥;öyùºäﬁè’B ¯EÛîl9Úîx≈
+=h´Ìã”Ø&dÿÑîÚ%áfËÃ<˘I‘ƒ‰æ,<âºÌ#–J°∞÷Sdú˛+èUJê‰jR™Ù5⁄wQ.1;˝Ω<{w'¥ù·%c`«ÑU9°Ü2™ì’ÔÿÛ“`óaê]1YeJ¶9eVQÖ*Òñ‘Ë≈ƒ‰◊Æ·ï‹ﬁ·±{P0’ı™ÌºÚ≈íVπËàƒÛ¶©†Cﬂ»K¬ıŸh|◊k¥:é/,@‘,°]πW√¢“VÜ?P‘6;Ü∏€.&pPa»F"@3wCû¸®R/J≤+,Ω-ú©x‚aBŒOtb)ï*«Vñc—Ü≤Ô∂>ØÚÏÒüÚ¥≤ó'[ﬁae*∞ü¿ é&õ]$÷€=¶\b0˚”˛vî†òV·¥Llµ˝" ëÛ&	®r—W+Mâæt©ÔylgW7êlµ]¡ñ9Vñí
+C/⁄ÏlIø≈Ï© ù-¬Àã‡©∞±+›Ó€7ÁÇ<.=Q¯,Õ&ìêíıQƒNÂb’˘r*¸ªFπAÊpûÌgßw∂˘•¥Ñ¢óEÑµÊß≤«ÕÎJs$†˛¢è£ªS…∂ëáW9¨.Kõ%›m≈ËD,N◊ãc±çÙï–c≈˙Ítª °Ë˘íx∆ƒß8ÂÿÇ∑.7/ÆÌ2Î+uµ]∑Ù£î 7è*m£9≤>ËiÒ\ÇŒY‘ºMûäÆ˙%#∆∂^±Zw[ï¢≤ã∫ ïVG‘7qaÆwÀÀÇá2Q≥å„hµd|LC	›–kÑ_;i%≥3@rÂÌ/`µ’{Ì{∑L©Wrc*•Ëîodö2•˘π!çä®†Öîû˝M¯1¿ö†ﬁèæÍ§¶%–o¥©|⁄§†±“¶<ª)Û‰!k/f£SWü˘)Ùì… Rr¬ÿ:÷˘&‹.´Åå7$f=&r!ö>&eΩ¡ûÃ"“=Ï)º{;“~våç√ﬂHˆvIñ¨67#U=ªâ‚
+!ƒ¯—Dº˝FêK%H]FƒBgùÓ˙∆Ê˝äÏ1!‚ß"g±Ÿ’»¯≥£Œ=Ó,Û'w~#ΩÏcÚB>â7eá2dø)πL_W{/~qÚÍ‡∏5
+&ıvπs_‘˚Ú—UÔZéøw˝˛€Y„ø>vt¥≥∆◊ˇ¶ÿfµóVÃ£k/Ö˙†Z)ToÍ&È˛èn9≠ä;á„≥X"7‹≈R|àΩjc«√L7%Kœmî2¯J	h	∞?îË}zc_!å9Ïœæ!q∞<ÀÚ®Ç~8•=Õì,i1	Áx”i®dYrw±ÕjRô$aÛ,"æ ≥‚â|‘F∞BñØi˜£≥KË3˝å√∞è›8â|æîÎÖÕbá‚k©Ÿîq◊ñ2∑:TÊÚçÏÏ√p‹í“Ñf¸ÿ–^ﬂ¬*¨YÃ¸ñÙ.KGÖ¨Vv,ˆ’Ò≥√££√?æ€ﬂ=<ëRî[t¯0¸u8àábvoî◊;VÚùSÁN!Wèÿ(û»µtÕ|¬U∫¢‹Á@†¥≠	⁄∞Vùw·ÚuÔ±≥6}U§º/É§Ãyø]V›È*É>ı5∞ì:ı√≥`6újP'åÌG ”_◊kô)q,≤~S≥∂˙¶˚÷û§RˆÁNÿºZ’-eÖl˙Òö≤ﬁÄ ¨ñÈÙûZÉ¡D§|ÅÃŒ¶hJÏ*û•i„EÏ‰tjÆXi•»uƒp¯hÍµŸ$™ïVÓtsù
+·IÖ)› Ü4QG¡E
+…" 's©—s—Ï æø”5†BJ ˜R®ê
++2+]çDçroàQÂx!≠y^3}d¶«\y¸cüC$ÿ7[Ö¸65ÿÓ¯íaèªì…Çfd…hÿf”ò]¿ﬁ(ª|ÓìiÈæÌ<+â&qˆÂ	…XôÓqFåîïàsÃÏbªøÏ3Ÿ˛4îOæˇsP÷b€Â±z48 iÖÀg º#‡˚·)¸ã=.Ö¸•AÉ˝`M&\ÿ¸£„∞Î+ë–≤∂=ÔÏ”Ì˚ ïÇpø≤¿ïIs+Ûz¡ƒ¶ñ&ÚI%ñmÜ+ˇ+LåP¨Ó15Ó§î´dÀ[∑◊∞ùèÎì"-E]W+5•e"! Œ¿’—Ω¯∆£)êïÁ–ué#¥!ak™‘(ÖæÑ]p≈,zª1© ≤Tz≠%@˙dC2ç5îÚå'Ûæîï›HüÔ–Lô∂ÏGR
+»-‘ÙjÜyZ)≈Éπ∆¡0´π∆ÀõÖ¨è¶[O6ü˝Êx‡U]O2ÓÃæìïg6…%,H?<ÙäæJ"∫ÎÑÏg1 Em	∑.Ï†ﬁ˚KXYΩÑ	Œ^‰•jTöÃ6ÈÅ
+ Vó’I-BÛ©®ÓPÖ ∞È’ÓzÀäuº·Ôgúß,¡
+ÃTÉãÈ$á˚%à£^òëﬂy81 ∂œÇ3
+•ÅÀbw$≈2Üy˛ˆÃIUi»Fä†ˆY ‚3µﬁ`4.çß⁄Óë¨2è ˚bÄìùÍç%4'uYhÑ,ﬁ B]t	O≠—Q≤°qyõŒÓ2≠œWhb=3@9À['VÜ7úƒSX{≤Å/£ËÜŒ|ÂÒïY#„∫¨£€4ì»í,ÇØÕiΩp1«j{x£⁄ãÖ|çECßs≠§©“K ∏öbãº¡÷4~ª©wWØŸ{OZÜ hÆeΩvf]Ø‹ë´KôÜ?˝óˇsUW¶Ç˝5∆∫ÒN_¡H”7FøTíæ”^]U'mÅª™˚2Ò*◊˝(•^è@ÅAˇ(ìNˆ≈/ˆ·µ›!Ã&≥∂ª‡≈iêÜîcÈ[d¢\ïy„iÄ'À£ºìø.éqöq∑cîL+~™”fßiV,ùIùË‰*◊Ë÷xõÎøÚÆ⁄Zâì&®≠âg}∫Û\	Ò≈ÃbU@k2®’∫’‰r[ºÄ⁄ã”Â0@ú‹¸ôi÷Îıt6j∞àõôf#ˆ7¨µ&	
+K∏ØVﬂM7>HN…ÓÑlM(∂âHŸ ªZB~‚ë≤R◊·—≤ﬁ“g;'fRT©ú∏kÊ•ˆ≥aF^V/€Á™êíÄ'1»st’WR‹≥∂Íü≤∞ÚlÇafì…0‚^wˆÑ‘;[Fπ‚`ÃBéó”Ç¥à…^@"uÅùØÓÿÿ£)Í4Æ˛•ò‚+x\≤*÷Öu≠å™w+èq÷.Â¢Mü’71=IWΩ8,€õ1˚‚≈cÑ/Ù‹†ÅΩ˜çÇèœIò}tµÈrîÚèD—ã‚{‚ ¸œ‰X©z(MŸ{zuÃÊgúÎ=òÎ˙*∞)¬÷◊ﬁ¸„nÛ⁄Õáo◊Œ¨V≥˘K’èC∑QunÕ1=ä«±’E≠Xœe4#7s6œì¯B«¢Ÿ¥§¶M7n"êM1ª˜‚aú§*≤∂∆?:êˆÂ˛¡¶ˇ~¨Z…◊∞â˚Ì≤I¥‰{∆ì”çï‘∞ÊıSπÊ5ˇpë™§¥7Å?bu∂¶I4™ØÍDÂ.bÕ?(6fm rà˜ÄSo∫%GÂe)iGò$qR_\[c£ ñ!?Ω)påM≤∏¡ﬂ†¯∑VJG%≈ì≤˚¸˚BŒŸ(ò‚aõÕX⁄:¬‰¬^ã∆ãgS6ï&Ìûhuﬁi˙Uù¶ïÔÆ≤^ØW–∆çÅ3D}Ã\÷èC,¥>ÖIå‡Ò_Ôl÷‘◊kEÈ∑
+/˘EEë-†çht"»æ!‚X’Û◊S\L~zïñ≥“ÛñKìC;»7~({õ“y—ì¡ ôáIW«Û.Ñ&ÓDgœÂ=vLjZ~sA©a/ü>ÂÍaÈ9K‹Û2dŒâ[>ùñpI˝pSºefÊùûèŒ9˝t5ro0ßƒÌ·VÕáõYnﬂ}'#9Û“w¶xÄRÚé≈e⁄,jŸcs€-5˜[{≠„ ∑I9s5ÉÍúπb]˘f˝R‚	•·Ù∞èú≥O_…ñ∂‰Ã/I°ÍpY≥Æ‡L√í	i„Ä;YÏ€“|ÆŒ¡òY9◊•¬ñ€?Æ4çÑs¥ÃiW≠¨aµ<œlI:‹íüK≈Æ™B◊\"W·ê@[I	˚≥à¸5W“ÔlyÊ3MÜJ¬QåÊ!ø∏‰e∏™,j	πÚßî®Ó∫è¿&µº&√Û¢4Ôûu]º¢WÙ–Öü7˙òü=}åÁéùÃóaêQw∫’‚»Çq4¬Y?êTJÏ5b`äÈ±dcñ"#$∑ê£ÈÌ≥ﬁfÖµ∂¢ïlnÛÃú|óF=U™˙‹ÑOL-Ç¿6ª#úö˘Ìï]"Cuë:ñå÷ 4˝L≠Q±ﬁn∞|õlÅEEy!{J[b«⁄.«h∏¬9oû[kÇ-ètëNÉd 0ÙÄ™Ïê¥a‘X™˚ECÒ¶zEåù…„'ó®°ûE…àB’Õú'aà(Æ‘ä˛˙qÔÔﬂM[∂äÍŒ«˙5{òHi:I?nõtêù¶Ÿ0$(Ç¿nö∑ZB$—”ÍŒ“´¡Æ2>ì˘ÿç≈≤îÖD ò5LR¿AA±Fâ?æ≥‘â∞«≈_J"d˝`3'‹
+P),ı¨∂«◊ôeêíW·Ôga:-Üém35
+¡≤Ωî÷∏õªÆ`∏V≠1s€˘#ﬂ#X⁄Ïı⁄ yÏz∑‚h⁄‹¬§Á[éîÁ6ÃƒŒ`£Bäµ<)∫”ç{}cÂÒQ¢”—-û0ÿ(c “ÇnS(Æé^Ω|v¯‰‰`ˇ¸Ôß„V
+$"w›X• ,‰Æ ,ÍâÇ¨ÆÎ
+:ç+!º˚ÿŸÜ…Ù$âÇ1‚‡Í˘PÄ…\Ú|4¢ÍÃ⁄£#ÿÜC™4πüÇ…ò‚dˇÖ<M◊Û›|vŸÆJöv„ÇˆU˘BrÛuÉΩ¡ı∞tÿœ2ç4òs÷`Ç∂¡ó´°˙≈ï3∂¡˙ß«‰œUi<¶VjÈ¯Ü^G˚/Ú…+: ®ÓeƒÜ^:Ω°‘∏o®Á≈€Ö}‹á}|7{V_xØÙß¯4bGdÓêåÎxN¶Uπ¡4·A˛NsßÎGãˆ”`ÁÒÿ∏6>DÁ0À'Ò[Xóø‡V∆`6<è	'ÕãÜ«ø¿t¢qs–L{	Js•x\%N^ŸN;ÿeòt’v•0û¬ZòyWƒ.€PkæËﬂâ€õ˘2?èœÒ0xƒÇÙr‹c™∆πWãé–[
+ù/Èh«€	®˝≥ÆÙÜa¿¡z<0ö rÄ_VÌCıï„èÉs*yA∑b∏q8ÌdVjpó¸	r≈ñçòg˝Õ€¸
+Èió‰cäå+ûSπÒÀa˙#q?1‘œÇaÊ?—î/◊èëûhx‹å‘XÔ‰ø=-˘I„*<+t%¸ÈÎãÇ∑`vz<à≈/‚0ÑëCÌ.π<›Èòó7Ú='qD¨‰Òl ¢®‚|¸R∏&1kª4'A4e©∏≠ÖDﬁ˜ )vç∆VVì$7¨˜h∑Ü≠ã ◊kf?ÍH»ƒæ]k‡≤…¸‘4¢È<—b≠&◊"±]~AdÀ/ËôÚÎ<˝M˛ù(NΩêÂQûë9"≤$o⁄o˘è◊˘©Ã.=œ¡¨çl"ÍàåÍÛø⁄;›Áqˇ'¡i]&=/ﬁíg≥ˇ2gG™mπ£¸±\R∆,8áü@‹à“A·‰'óºQ$}Eâôn¸%D¿É¯Ωœ1#n‹dÔœ˜O¬^Åõ&3™ÂìZ∑Ss'óıÏ’ã(≥É≥38âãù¿∫!ÔÛs‹3Ä=°˙&J˛ [∞¸Ù€Y0û¬™lK˛ˆ4	Œ·Ã5yí¸˘ê£∂y
+>k„ØÄ®í˜˙<í`c∂˘íã9ã‰ºï®õóä…~Åkœ"¨ütY√„Lˇ˙?ôg⁄näºh˜ú„≈¡&§™m‹•§«Á¥/È6–œ‡µŸ	i¶úÅ*√‰]LíCáWjqyF¯jc|0!ä4Q—cfÕüóC”⁄˙°–∏√>˝,ü“∏u0âZ≥	∆∏”#ıLTº ı)≠ïm˛öàCMFâÚü˝^ú~˜¸_|ëÌ¸9˘XÓËÀ`||y¸óÎT@√ @[≠VÏÀ≠å.∆´\¨√†ª√4f|Be	â¥∆¶®ÇcƒÄ<€ƒ^-à”™«Y%€™â?_6MÉ®ÚVHü™KWı∫Ê«µÓ◊Ïß¿Ùy®íxq≈DùÒ1Xé|ËW{íS˙ ‘Pjœ√¯ú^eóx„I,[Sï“⁄ÓÒÒ·è/jÍ;…◊-^√Í’´å≤Æ’ÀöJCß’™	˙ óˇÊü®ñfπÕÌŸ´]≥òΩN∂QÁ~•˝ÀKeÕ/ñ_ø˝ó´ ‘qTÑB$ú ∑‘D9FUì.J.€qn¨©G^Âtü7˘tÎÈÓ”=Õ¥0s˝Åﬁ `òq≈ìNQìŸuU¢í^¡Yÿú∆˛«i<≈lıhó;∆ÕèÕﬁ0öd è.r,ﬂﬂÏI ˚[2ª∫W‹˚ËÇ…Ø¢Ç ØÂ‰`±KìGñ…Ë29Æ-/KÎ”"—R”ÒA'yÛ¸–IÖ–sxÔÏS©H£èaWŒÓxOŸûúÀ˚9E+2aoŸ1/î»P-”ÉØf·Rß)V˚b©≤„™~Öß~k0±|€å‰`¨á&rr∫ÔYßÉ˙j·8÷¶Ép\±YÄ+≥NØXF7€∞C“ñ‘ΩˆÀåHî4[¥ÎY"{ÙñÕó*xf’ù:Dß™¨∂±j§§^≠®ø¥n5rπ†À- Kø©˙Ug®æﬁ\—÷f)Úâùe˘å¥ŸÉ#áM¢{wû£aà7Ñ„tñÑÏó√ìÉw«?Ì>Ÿ=>x˜Û´Ád€–ØÓæx˘‚›ﬂ¸é"±ò5ú·T∞Ûî]’◊ÆŸ¡¯Cîƒ¸X˝%H"0“ñˆBá•0≥p*º
+®Öœ›$X˝òSWNµ3‡ø´÷‰<zµÕ˛ÄÃÁ"+æJÆ¨§àö{?Å[Ná≥§9 <#5Ó˚?¿C¢»!·«˛)ˇÕpM[∏†(Û¢á‹nh…∂PTáË0Ùn;wÑò¨«<hÇèÕãÊtπ}‰©JMqˆ4g;«É(ˆK+)rwµúáœŸô˝¨òbdü7ƒU$oë8ÿ©˘ZvïÕ…Ø¨€*ø BB˙KëE„˚~îé¢E+∫Tá*RÿnáEs°Ê=¨π≠÷n:Ç:yzÉ7Ìw›…«w¸_s˛óúüıŒf£ªﬁÿË6⁄≠ˆ∆Í[fÏ8J€o;√{N…ééÛt¥ˇﬁg√s¸w8l`Ωöít9≤çÁ{!I`_$¡ƒ†Rú5n0g‰¬@√.k≤ó„·%˚•™4TÇê·∆&·+-ìÿÚﬂò 9Í˜òÇpYlr◊Úºß5!æUI7ÈîÁê§[C°◊q√.›∞™ÛÎ‚!Àëû…˚ÆﬁPıˆF7ÿq«ôA„uúºÁ*ªû•çñ∑i)…«´ﬁ´öIîıÖ-0!"¡ t∑‹†˘†Ä∞∏ª
+ƒ∑¶ÔQ‡V∂Óè¿i&&¬uÖøa‘NÜÍê8ΩÂÂ‚pgŒÌ"ºoWáNì‚HÍ„æé:ãïwC%»ﬂùÌà[ﬁÛÌää˚béùay-∞"ÖQqKt(!*≤lJ∆ëò∂87˜î…√B•ˆxB‡0y◊?DΩ–YŒíxÄ:Fmñ?ö≤}8µ‡;‚]ƒÕ?
+âK	ÃÖ†å«?!∫Ñ2´âYÒÖãJUg∞òhËy|À‚Â9ì°˙ìœZ≥À⁄˙æóZÆzB‡‘Ã]RÍQ@Ç.˝0k•Z©	09•æRˆÅx4%MÕŒíÑ}@pƒ¨§Ôw>àq=ê&yæ∑S*ûãõﬂ¯Añ‡-˛¢î–ıtDò!®˛„sû®Iºô∏≤â«ºMlã&r¯ùÑ˝‡ƒM™Ó®†áïÆ¥‰ªJáŒ˛\yx}hbI1Œ∞^˚–˜q”⁄p3@>9–ü‰ Óœ:tIˇÓ Fù8øI<%±xKh^˘˚◊åπ€‡â‹‹q ñr√.á+%aäê˜¨ÿáÎƒ7ãÊG1e#Ê%âhs]]Ik¿6k7¸øˇP\hÅ
+Q$–ZCj(oßS÷H¯1öZÜ≤5◊Hr
+¿¶‰“„≥†Œ04`¿Z‚?/gp‘î4¶‚KN”x8U|ûAf≤NJPß˝÷ûlŒë:X—πHﬂZøo”∑∂@ﬂ9	ÿïë~\‰ôÌÕÊŸ2Ö’? ‹à‘™≈£ù™D»Œ˘™K*úKVÙüm•!Ñ•±•Üîj7%´VkÇ“‚€∏•f<OÇ>V*hNcP ˘e,)ê≥÷‹N∑p“‚_s§+ˇŒŸuçˆ„‘8ﬂ9©ôΩ(≥¯s¬ƒÁ'ö¢Zíß;’vƒy˛ÜèEkW©jtä(Ô≤lf≥¨¥≠˛¢X’‘À<bv≥~5€´[h…∂jw„a£É˚7kwsı≠7∂MÃ¶Ï@§‡ì‡‹Æ_¶”$~6ﬂt[›∑Ãzî©cÁ’˝í¯7Í∫<ÓÃïf,‘´¡ø˘ÀNß≥’}6≥è9≈3Líœx÷ä¬¸+≤E—æ∆sõ|OPÎÚl<÷°´áµ§5·˙1ì¯ÒN>b2ƒ'≥K^€„p‹è2hüáSv>åOÉ°¨rÈI¯®Nyâ nª}~´C°|üØÇ·
+Og5ÜõóÛ˘ZÆΩÃ∆˝€`∏J€Kg∏6¥Å›>úÉﬂû$≥‹)qN´¨9≤â/êﬂ •Ÿ¥Û[ë J$p∫[û˚»"òo?¡h∫Ôyû`¸Ω‹ƒé—\ıÖq]E±ˇ3aºJÃUŒõß¯jYØíÌºêW|ÈÃWm|È‹∑sø—Ÿ⁄ltÊbøGb/Åã—∂7ø>ﬁã{ùΩ<;cb∫Óñ˘ä‹Å"$•%!e{·´y.È˘xØÔû‹2ÂæœS´í›Ãù&†‘»m|ï£”íªÍò‹π€a≠6ÃÀ|Ã≠«∑` û∑€	é7Oı?rÂVÚ”⁄‚kk0õ~akÃ«¸Â¨ÒÎ¡%˚€ËÏÏ‡ÔÔtiSXù8˘“Wé˙ÀYﬁc>‚÷∂‹-ÏÃÜUŸs…√`~;É/øù≈”ê.WqMÆXH¬Xy'Ö(2ònó4mï∏"ÉY~ÒG=£/`BicU…<ØT®Ip£j≤#˙?ö‹j¨ë6≈¥ÀVÇuI“Ó≥ù¶û—‹ó:œlø:ÚY‡-j,¶¢D\`u˘#)/|Ê"-+?ëXEùú•®ã«W…O2≤4*Wô÷"” ≥	ú¡JsI#Ïçu9]`ôL◊ö^Ñß#™.ˆm]Ôz]˜Çi0åœoke˝Á¡<´zÂ\Y¡U.SÀ≠.∫Z≠∏Í|.
+´ÆòÚeWm√¡2'ë¡ÈokÒ´C¿‹›%r‚'€ﬂISÓp!‰<tﬁï..5&ı«D^Üµ°Òì• LûUe˘3Û"¬ªï55Vﬁ-‹SGTJ“„ß1ÖzmIerî˘jìJG4M∫ RmiÊ9†ËãÊ&ˆ†πYûiµòoÏ1k{v”~ï¡k02±ŸaM*ëÜF5ÕØdÊ~Û-\Õ6P,÷æSjaU2¯ÈªP‘XuC≤äÖIÇ^èß"bÇoTõæ∑~/R
+PΩ™P‚6nπml©wﬁ]&É˘„ÑcËjdø™€ÕQŸ¬ççµ cK‘@GPÎÅ∆jM∏a±ôTn‡Äï∂hÒå¥jq«»*‘VÅ°¶∆;¯I—/Ærò≤RmŒLl6Ö=(2†é:Ø˘†Ë]y {˚ÅõÃSBŸL⁄	gwÆ@gDÍ€˘˘∆††ÙVEÿù÷€F’˜ü£t≤àÌ Ú±yÌxÓKi‹ßíπ–Ã4y÷à(Á;·—
+oÚ<æêo¢ÔΩVz´cÇ≥i{[o¡t¨†A¬ÚBÖqó÷ﬁÚ@–Ì√ŒZ
+Ôñ	…£dH~j∞†ù7t¥sN ¢8P)˙Ya(6æëC†â'¯@Œ%ûˆ™ Á‚0ºVÿÏÜ5kX‚-üÁ¸∆àÊ*hfÔl“
+G$›pÒHTkQÕR∫XUõo7« w¢¸ç*™b~åÖûﬂæW(∑%Ú5d5∑å(TËùß˛⁄ ñv{z˛*,Ecô£S^àÎò“À†@§÷˙µﬁ—ËäüŒ'@j˜(5ˆ@ÈIÆΩ]ïx≤+qÙ˘ÏË‘k%Ä∏?‘ƒbh—¢œx≤*4®∏Ö4ß±%ˇìª¬≥¨!“Ò‚Z±\ª*W£±ÌÜ®ë¡K—«÷≥¨ÿÚç=Ôz°&ñ∞¨†ˆ`"ªoÀ™Œ+NÅZ‘$[◊]>[7^XõÔC~ÏY˙≈sﬁ\˝õî™øÉq˙]/Ë∆›~9E®IMºZø	-ïÑd>éåT¯Ö t‚]=xYL™QÈÊ/=5ÀÎjî¡lÖR©Õz&Ÿy¿fÜáâà∆' ◊úá…q<KzaΩ÷œÇŸPÂ(tO˚JÊ Ëâ0˙aH˘)BUotÎÎB?'ã-¶§@aàß¶ÿ`ìØ¢«aCKﬁjõ4S(WUP*Ï0óßπHÉ÷Ú&O⁄(⁄˛6∏ÌoC≥˝’$ãDƒ{8vi>.“’“‡2≥xX3(TK„1Wﬁé—êg*qö∑™ÔçjÜiáY⁄ofZæa⁄jÜ∂í`π	∫ƒË<ß…πƒ‡å6ar…º|FÁ≠;7:ﬂä…Ÿmú∞’pÔ[s?‰U⁄õ_
+{Û!Ï0‰;Ç˙ã∂ÁRÀ≥g„‹ï—P®û>õ∂< Ö‰jÂGÁä}Œß5ÁYeÓ.Ö©-x‰mY[ï'w .Âä≤	~
+«3∂üFF∏2#Ÿï,ÛÄºúÑV”òœ Ê0ÉÒ‘-ßm1f/˘LèBkÿºÕ‹ÂÌIó8ƒ˘k/DÉ˛ÃºUÀaYT€ëü”1“≈]ù“bÕZÁïèFÂtô¥\•_‘‘RFj©-WY4óhQ3œ|⁄+kÏ>œ]ÆìgπfV¿N®EŸ0›Å&¨–·Ÿ‘[ä»ûvÂá"ÙA=‹¿èÓAªÊ° %fÚ‚o÷cy·UıR9©6Ó
+Ö*◊´-`k≈PÓh"+;˘ús¶∫≤G8/FñÀ"Lóâ°@∞2–≠R¨◊HØÖ∆∂π—AuZJ,7ZH5hÚYÀ|»üp9çP;æ†fdŸB+Í+ Zº¯Iò◊ç(Nu}bj+ã€∫sä‚qX«æ¨€Ê"Îs[#⁄ÍŒW¶$zÍ∂W%C«~nÎRÄ«ﬁ˘ TG,√U -I\®πëCã≤Èj|∫BÃÕTôTı≥Rå†â;U(˙ÖÌÈ‡4í˛≠©£aæ≠ÓRWWƒ¿∞üÇ1H?…ÌÆÓ≤U˛9£b>´5◊b‘ê=ÿÂVV› ≥¿äﬂ∫ïgÆÄX˜î-YxæJs’‘Ï27äÅ-xØ\ëØÑâ´Tœ¢kw⁄ªV∑,vuÓ’≠bqú¢±qöã∂QájtuØ∆O=Œ-ﬁ¿˛c°q%ØŒR—≠o[wéH4=˜ã9Ì¿Hﬁk≈Âvr”ï¯’≈≠˛ÿi´ÁG<Y™Ç€-‰ˆßs¢÷éÂiáé/ËπÚXÄÆ ”Ÿÿ£Û;Ë)ªõ¢”c~0∏ªW,Bìwµ)ÀøÒMe¯Ró%S?F›2#\„¨∂$ˆÖ!R·P¸s«∆G9Ï€Vz˘gN´0C.¬∫|îÍ2ñzeûï.ÛlW#ÖÂÇRÛï∫#P™Û±Â`F[‘¢å·\E@Tl9uÑ$An@—âAì‡©Úc†O:ê$€ÍûlÎe7Ç’ 
+:!;k∞ÎÂ◊ù5^¯/√h>#à∆XdsäéJç¿^∑"Í,ıÀ@¨h#Ä˛Ëjqö&´∆ä; »ÅcO(Äù6∑m ø|ln®˜mª™å¿°)"zÈŸ2∂®Ge¬!@ ÷B≈ÏvÌbÖgQ≈Û5O≈é-,^?ã∆¡àªP≈ÑøœV·˙vaäÂiX 1ﬁƒ}À/ÖFÚÇQ.≥ª∂g,îœ˚ﬂ∞hŸ¶ﬂ∫Ì¨ √
+{ Bä4p/#1§„∫X⁄‚rëäø(k[¸1'@„á|	ãøeãc_&ö…)∑<ìY™wûÄ,˛ÑüŸ·p„U‰ëJÖDØ0~a£∏è«@uh´˜·Â£|5téËFÏpQû†CÛVGxa≥ÿ®ª"JWø’ÄüŸN¯3¯„ò◊ñæˆ>ë”›Œ.˛)“≈ˆúp~‚s‰á¨˙úBŒ∞;Å€ˇ<éŒ¢∞èc—FΩv$∞"˛¶t˙w∑ˆ:,¯‰\…¥-ô˛ã“CÅ_êLÒËä˛±†˜&T}∂p+ŸUÆX0x9{§Íh∂;π+{·√>>Q∏hSøè¯ÿ¸è‚I81òﬂîˇ]ºo6È√Ê¿ﬂ~+ŒéÖkÆˆ±l∂÷Iv°¯ó)©®-–≠4í Ô≈˚s˝‚—U˛wÒ>‚úGI‹üıpÅ¥Ø≈ª…Ã“§ˆ·v˝ª•ıA<Ÿ£bıQüˆ¯À	ﬂıé,-êŸŒ—àÛ∑b;|'Zõq˛d}üÌF*˘KØcπÓz{Æü,îœ&pÆ¿Åp8û 1¨˝ÓôØπzJeˆ˝=DDø√éRøZ«±´?`^1ü1T
+¥:yﬂj	«√QyıhjSb}/î+{§˘[Pèˇ´˛ry6Tgmñ
+£dû˚À2ÎXˆ8ƒ˝*˛∞ŒÙâº)ˇ€∆âŒ@õ|˛~¶xØ˛›⁄Ó+„ë¬•≤5,ô„Lñ#vXÈ\◊ƒºß‚K•'U!pO¬hTÒ<néŒGSÂPŒéÓg≈s.#–Èƒâuÿ!œ|ÊòüÉ∂Ê&-˝¿ºáu<ﬁMSPË©Ç¨<ìîKñ÷œEªÁˆëà[≤?-l	≥Û8âB‰LŸﬂv∂ß‹™}µâ0«∞(øXêÇ l9øqlŸ› ˜s≥xW¨œºKõ˝iΩÎêÀkÚ/€™˛L"µÅ˜OÉÈ,ïíçqπ¬ÛØye^Ûy~˘”∞$[”◊ÄÚ®¢b"
+|ØÑ=™_ø˛Äq≈›√~îí	TÈ%ª‰ÌI}–ruë„>REÄ∞ŒÓÓl+¨‡`úCê–]øÿi’ŸåÁ«õ?πÍOmVS+ÖﬂŒ∫˘èKƒŒAåí„jóß(˘ÊÕnu⁄3‡ˆ k¶Œßq<’¬œvŒ¯k)yûM ñÆòIh2mvÓ£¥ª¡s)d∆“?47ThÇÈK,⁄RçJßJ˛ïáiut/¥Ÿ(‹ŸDSw/nuo€ÙßÕ˚/u±‰y¡€i1b€Úe\˛ˆÈ®PùEd(å·wXcö !¡Mê√«öö¿∆F√0MeïB…µ®za&71ävFQº≈^c†¿‘Ä≥K6åœA˛äz)‹Äu7‡¥C≥@∞@ˇXÀÊõ¢Çß≥4CG-„≈µFÖy0Àò¢¡∆\πî|ıw`Ÿˆ‚¨˝ÂŒ⁄`√Ëg6‘BÀ)a¡es£∏“√Ë±tBU ÏYb{æôB	 =ÎwÍ„´åß¿˜2«ÃŒå¨˙`ÉaòLÎ5y
+±#–r{óp‰å[«„{∑8x£€æƒQ}`w˚zØûWÿYõ´ÓÄyq≈≥Ù=ì!bÃ=3«ÆÒÆ‚√≈oçF%ú CõU˘Åé≥Àîma5ø=*Õ]ˆl?ú—0] Âxò€π/˙b∆L ãÂZ∑í›ﬁ–U€õæM~f·hzP…≠Î≤,ÊÌüÎ2ê¯ˆNÍ /j∫Ë—ËöΩ=nÇ0	"˙Kê3%fÉ	nQâ'ÀÁ-Ûq4J∞Ω`ÿõA{q≤∏∏a|ùC˚qE±(nmOGÉ~FÉñê°¨O√ÈEhÀ§•oJßr¥!ı ∞_◊Hç]˝ˇ'Î∂ª˜Ÿè\Ôyûi2†õ√…ﬁk±]ô(7e®"'¬~Kõ∫…|C˙ò*©¬‘‡Câs√6a˙ûŒÜg—>FB&¨¸ÛhÛ’ü{ƒïîZSüï‘Ó~YÖîs®¢•vÈŒÒ xÅI≥#…ñÿÂO†ÅÇ∏|¸˚YïÆ}ªcgç€@4Câ`–{ÉNF≤(k≤W‰0Óìæ-\aÍÉyh»®¢¥ ö€pë©xX1π8·'“£Iœ—c-ºbÍÖÂé>R bêûõÌ‹\'Í⁄}¯'i?â)B"¡›ÙáÊõŒz˚myÑÑπW5‹ãi's¿[Ú◊®ãÏ"sk€a/v‡KÖﬁÙåê≈LŸ‡{ú)é˙L‡?ï,Ÿé
+ÿ:ñ≥p∂+Eﬂ«J—î¨;ùBK…[¯W§zµätï2—˜%∑Èeª®CÉ‚åœárª¨w-‡Q;
+s∞^ÿ≥›,Z∆°rELë$ÖÊhål˘H≈∏ıBG>[ô—ÊV	ª≈œÓò;øÅ˚·XîJ˚ÔG4#j±}n¸Ç©Öeø∞‡EÃ&Ç íÇ^¡üˇ°h#.lp”)è@”≈›\(Xy|x∆.√¥¡€æ¿>OCπ)liÙkÅN<	<®oGfK˛,∆ı¨€Ë¶z68À-Ë€ßSP˝ëta{í∆œÆŸ#V‡tˆ‚ˆ—œeà,ê?ΩÍË)’’æå¨èÿÀeyÈd‘Ÿé¢iP-È‹ÔpâèààéÂb“n(N∑]}!rHK>πı+ömF xû.rõa(Øú(˛ç]ódÕÒò˙L 2élçyπbÍ∫Öò∫j˙"nÄêGg1∏÷5É6ªºZn‹öÕà≈œ¢˜4û!)÷Û˘=˛∞1.rˆo·∏ﬂ¯v‹.«=Üd˚Eå|eG=ﬂBÜ˛·NŒy–Ë‡ûâ?‰ŸÕ∑?`SëŸ¨/•ÅÑ„~`'¯s¿]≈ƒ8û‚Akè√Va÷>›Q«ÈYîå¯¸ÚÈùè_KÇ≥§¿upj|¬u?<ó·}]sg‡«y"jTr[G·^ÅΩÚ_ 1˜waày?üsé|3ÛÍ¥πCgæ√œÆˆ›ú]™*SÒªà¶∏πÏımi ´û˚:âô(ÖØÍ`œê&b◊fÁy·ƒ”mm&·Ë≠zƒ„›ÉÊË±Wb˚0hv·ñ’∑Üç”õn∏∞],jABp€¿6·Â;mî2⁄√Z{®Ò¨MÖgUKT_ À`ìv€yñ
+yòˇﬁºÍdlff	Ç“—6 oŸ“\r6≠YG ∞öi/âá√” ±ùπF£Ü‰QD Ÿ*ÿ§e˝‘zSõ&≤h_e∆y≥AÔ∫V˘ö£ø◊Ω≤úëª¬:÷´a¡â/bõD\•!ÿébP˝OaﬁC∏Î)%	ÓÀq»û‘Ò4ú–Cµ◊·∞èê÷ÖŸ‹öDÃÆu2äb&ñ˙e5[L4⁄k •Õä≥‡∞S`÷?Qt7NX/	—åôÄê‘è&√pr¿UˆP¨-m∏té›˙%LF›E¿ﬁ®lÑN˛ÉøïÌ*Øèg°c-%\°‚\
+â««≥⁄ ÄüRûì√+N{T|y>≥cxc‘ßlF"`–?¢äpÄ˜Òª≠˜°ùäw-ü@í´˚⁄=LÈ>`˚a›i§r∂{-ó÷÷¢uQ8èí∞ZMÄvE8ôsD∞¡QOîòò÷¯‹&ì/Jy¢¬Gå¶A	û¯Õ?—Œl’÷lÀû'K¨x^Ø.€
+«˝Ùu4‘k-2ÿ™mÆb®µ⁄©yÉkEƒê]&C[ﬁBõIêÖ0Â≤AÏªRÉ")ûø¡íÎÍ÷ıò ˛û#	≠çBt ±Q‡S¨wz9ÓíxœRπóπÖ
+v„xKÅ”≤:Ú[∂πjÌãØutÿœVˇˆ+]z˜›ïm9ìêåÊıµ7ˇ4ˇ–n>|ªvﬁ`µwµ’Î_ÅSàë˛»µ[g≈pπ⁄VáÛdHs_k»±4ò≤{ëD¯§ΩpÌπ
+”û±ÿ*+úÖ?Ÿ{+\ªÆfÇYÆ∫v\íá˘G∏·"∏d' ˝aÅ¨5và≤…ò®‘≤=pz††R¡úÍùËD¥Ω†ûwˇ´’Û,”ÛM·ª+ÖœT˜=.OÊ„◊Ëp/=£‘1¨ˆ‚Ñ˜_,\e“yû
+≥Nå4+tœÀπÅ2ˆÊAÈÎ¢“◊UMÀÛ)xö!⁄Y‹é:∑Yñ±~çµÇí]psj-E´Û<Iˆ$õ;L”Yhµ8S/Vu õÄ2£ÒÂê˝WtﬁŸﬁô2Ñ°†·XƒÄ‚p#!◊V˙–°˚ÿÓ7ŒçòUûW¡‚dàÁSîÛQd§)¨é2êÓ∏èÁ»·∏Âí?z∂ß8U·u⁄(úãæ¨2Ó.y4DÇOËÈ%–à3)ó¯aïÖ¢œÇSÿÃ¶yﬁ1«•;IŒ¢]C∑!YÕHô¨<~_∞ãxTÜæäaÙû\r¸á˝l|Î;p∂ƒ”&∞Œ6;éFà≥S_®G>E/≈--VœN≤ EHÊÛÒsY{¢rG œ√˚íó˚¥.∑◊û¡õÉ ﬂ∆DÑıï#†ÿÒ>}nr‚öV´µ“@HAõ≠¿M—Û
+ªv¯˘©ì‰“38À0«ÛøD›”æ| ‘Qî¶umdﬁÁJÖ˜√◊ì›∞:Ïﬂ/>8˛m∑˙ Sê∂√æfü‡ÓQ±N∏8æÊ\I˜Ñ`Óˇ¬SdÔ—ë˝œñ˜oCÛàS;K¡Ï»≤π∂i/'Æ†2øiı¥üÖ7õÿNáM±(+±íÀ–Y≥Tn»™∆f	∑›•yé'AÚ~¶ä·WΩWìœXO…r›U'Ö˛Ñ√a‰L.ÎILh3◊ŒQMûô9õ«ò!;üıó6≥5,Œ-ÆI!Ì÷Ê „W téFòÍÇ£OO∏µÜ}œˆ√QÏÎŸm)Œ,Ì˛É•ªZ„%€èGÿg/{È*˛„d·ÌŒπU4>ã·©ò
+Üº÷PN˘Õl’–2‰oÚKî$l O√õúÏÎÜ,£†œ4KÊ◊\äÿZÄM,üA8Ωﬂ’yÑc‹ªpMñS≤Jx+µ“Õ˛ÕìùéÑˇÛ—![Àâw{åﬂﬂl∑IºµÕ˛‰rÜ©!0•1D‡V˜˚˙6{=¶ÈÓd¬dy"«^¨#$·Ÿ£ï¡t:I∑◊÷.Ç÷(\{ÿy∏ŸÓ>ÿ‹Ít:ˆƒ∑†˜ûá”G+Ô`Í«ÔÌ˜ÄÜÚheZ¬à$∂2˜¯˘7%Wpñø5eìls™uN›û≤Ôµ≈_|ö=*B‰3ZñÙ{≥-™Õeaì¬Òƒ>DáG¡∞¡éßI4	xƒ w¿“y ¥Ñ…b[5∏ëô¿öÍ√ıﬁ*ôO>6Ô‘ì≥3ëï§$å,A¥YﬁÔ¶vR¸ËU&6© Ñ^vF-[z]?Õ2”\JÇ¨è∆íBQa0∂%‹∆i±:Ã'ÅmïYÔe&Ft∑,`ºØÑ@ﬁ¸Ü@∂ ê3<RCûWá!œ	J™å[ë±õæµÌÎy!¬ƒ£	G¿iÕnüù;ƒ°H∏’ÿÖ)uÀ0©j\√èç*Â%+.mú6\ìÕ≤¨û*hﬁEé>K¥ó˛¸N€√⁄Íõ™
+ÜﬁT∏Û"b^ç§z—¶EÖû¢—^≥5ôJ*ØÀ¸öõ≥⁄∆ùΩ"Zƒô≠aÂÒUÓpøv6Ïëql$+ÁÊk î£ú˙B®D—/f%Y*ô¸Õ√§B3ÚçV,#˘)òE_
+K¡Òª˝>è„ùáX|˘_™!/Ò#ËIå†ïNì0ú^WLèG¶ ÿØˆùÎgÇ$’j◊≥YÛäWˇYÉn¯Í|£ls${‰⁄˝2˚8ã;∆”Âñi8{”∞œ7œ>¸pÕÇ)3ÆüD79LóKÖ=KÑfÄq»qæ‚\sö¯]ºÀ¬ÔﬁÿlŸ‹t˚¬4ëùb∫˚‹sÑ≈Áä{ªULuŒjoB°{Q“Ü]©√§*ˆ=ì‘Óµ[~õc˝—‘úÅx∆>6„Ì í∆d)U+œ‚Recv–èl•<!äSù~iôXOQOÊIÉÅ∏OPU¥Ë?	T;‡U]+¸«?≤˙õöÃL\k∞·kko[—∏7úc¨´ây∂Jx®V[’Aø—GÖ\SYŒ$n@:•Å6Ò‹?CCèd è(å]“çI∞È‹vI±´ﬁ¥ﬂ5∑&ﬂ≠√).9?ÍùÕFwΩ±—m¥[Ì˚´o—ı∞˝sß¡YËÕ#¨Ÿ:‚˙6%Ï›‰c°(Ó’”$KÄû?¨¡Ü¡i8ÑØœ¯◊®áÖòªnÿ‰≈êÚ'Oƒw˛Ëq$ΩÅÛ·qxÒé¶Ki‡Ex¡≥Pdçg)¸ù>N∑)oÜ≥=ô˜6oÌ8ª"ﬁ%N8˚q6"”cÊçÏfWx#ô¶≠≥â∑≠Q0©SûÎ!√ÎÙ‡#Z≠6gû2µHã^ÿüI¬È,[K“˙º‹Tå∑l…Øéü˘IX(Z'¨bÈé©rÿÈ«ºÔ∏!tŒ}%ﬁvqˇUÜfnb–‚sè§20c“Ï¥*úŸ™)5èVWé^¡G2è‹®ÌmG£∏ıì≈@‘πØ°]@WâﬂáÕ7Îo=•í˝é+{ÅÏ-çËŒ¶I¨b6"∑∂E‘Lª‘≠˘∏+ãVHõøHº`Uó1E¥NŸ>Ô•
+ˇP,x)Ô-ñzÃ2…ñ◊ã›õ√v≤7)cïòGŒ‹åq√∑<∏îŸ¯1{Júå/“‚îÏ/Ä„ãè÷Ö«Æ0ºô|,ß· Zã<w(X≠ÊDz.í—i˘L±ÇÒ˚Í◊	ÌAµ™∞Æ.»˙å‰©Ãæs,∑‹é…µîÁú≠”i{¬IkÜƒmì≥m·†ZÂRm Ÿb∑’u1F71¢®π>G¥(⁄îMΩeéuè≤Y|}cŒ…+·¬n|ïç—R)E<Ï(höÜ¡e<õˆ·,ß∂∏≤ÅHˇf™u≥∂… RÓoa“ÇÿOÌ¬AÆûﬁÆ¶ız¶”ÀIàÄIÀ∫“¿~ggX¶bõ≠oÈ#,E ﬂ,>Z˛±ùEEu[S∫6j∑∏3êÆ^[‘∏L>gøùøg˚Ip°ónÒªıU±±Ã°ojfj\zÓM?≥°Î¿†ü=≠Ä7˘‚Û4˚Ûäì«5ˆ„A°vÓ≠©ÃºÓ
+Ë¿µ‚ù>?Æ¡”Ü´e[´ª©Ì;îÆ}pàCp2v0µfpAW5÷_Ô∫çs'l£®:A§iJNû¢£§…
+ôEl∞
+?™Ç«Äƒ*d∂¢,LdøË`äw¥G3t]∆gåÚ>¿ÑG≥ëÅFM≥l¸cu54B°ÃìG¶‰cUµ2⁄Ã~éªyÅ]‘¥ï∞ﬂπ…∂íkAùÄØj<äé‚◊;ÌbÏ
+¶⁄,ÿ≥sÏÖ„òÆ…Xo)(≈–¯;NEwÁ$ôÂé*[æD∫À)É∫›WzÏ†f(3—»Ë†ÕvÓãb˚1»¢ò†!OY£Ωõ<wK¨mµ3ÎÎÙË!n˜õ É˘û™ÜÈ}xÈpG9}NNò9n‰}<„≥≥;€ ˇ  ˇˇ ‘=…xúÏW€n€F}˜W‘vSîeÀ≠U…@‚<4NRƒmQyXíKqÎ%óÿ]öR˝à~aø§≥ºH‚ÕFRÁb t·j9;sfŒô°º¢qzÆËìü˜†„ì[6'ö^ã√ÉåHäT—ÉûÕã}ëî'Áx«
+¥H&0<óÜhH»	®H¿∫”»z›±Ëq¢‘+—ôp∫ ¶i§lè∆öJòìƒ>Ûñ"ç}Í€£wn”àJ¬}{<WH∑_õ?éáC≈-ïìù›∏Ë‡ZíX1ÕDlŒA”Ö∂94dvêrnµººË{Í≥€]Á3˚x°˘®\≠{zÜÂ'e!ÜÌXˇJïf¡≤∫T°dÒç=ƒÅ∑#ø˙µç’Â˙ˆÜx7dNA±t∂ç÷‡t∆‡`}¡ıòOk)±∂1*I\¡˝"@ﬂïüÁcÙÛÖ	º ˛®jmÍÑß=«$ªß‰Ê™nˆGLÊOCà¥=å≠ã∑!K`)R	Iº`.√‘Uˇ˛˝OF¡ßúaE q• ˛‘I>ì©„¶Zã¯bØı◊ y
+oC^bj
+û:Ì:üwwú'‚KŒºõŸÍ	Ã.`’	á¢O»^—Ïµ©Úèb∂“B>Vì»E
+∑8],◊ΩY˙‚|Æ||(6o"È„≤)≠Ñ≈ÛÁd˛u˘\xö≥9/˜}»9H¡Àÿg‰ìË\XmëÌÁ6cp1ª~…`Cm¿KO˛<Ó‹ﬁ\Ì°mÉ¥˝Ùls£Vb¶<M–gê,Ìì¡ÿò‚H‹zµK£™ÊäKÑl∑4ÛÃ’ìVßÒ4™ﬂDyÑSÃbìm®.IÏQﬁ¬©ø©	s–†Åy#	8¶Œ≥òE≈I≈c6»1Ω.„ûyÜß·◊°ÜídH§≠∏N[&™cV
+ìQﬁmr˚˚p∏ÎUÉÍë?	ôÔ”∂†>∞ä\˝`ø;ﬂÉIC¿ë´≈ÆQç«œ±.}”·ö⁄?›‚$Yåπ!|∂ZÅ¿∫fzâ∫€VSRDY€v‹ﬁFLﬂg™ªjwÄÍ)⁄®à´OQÒ*å6’yé>√Î	€Â©ƒ*¨óô”`Xéù¿zäPK(’w·◊Fk!_~∞ÓDØì
+∑;llyd6ÍeBqØJP–Á÷¯$2Í<Å—¯åÊ1U
+/áßu!ÈÊÒ#î¶e·ódÛ∞D∂h.…µ˝n4KΩØzáiõâ◊Ù©≤[ÍÍ«FHÍ9h)_O„ÉöTNäµ∞Iä„U‰⁄gV+©mìπ"ïù0øßCó√ìvã®TçŸﬂëæs”-ˇ4√]YºÿyN:lˆwù¬éÈ‚®æ«÷≈âÕ»ËSMW §…:ZÃ!!3C‘≤£”Ù¥çF¸s…|0∂'∏BhÕt“ÅBÆ~ÀçÚ}ˆÅ≤Õ˝˚ÁIR‹Û8&JtÜÕE{§,◊k]vªˆ≈á ÚËá{F‹∆“7V˛¶®|Èau}’ô≤Ù3*∑ÖˇIÉdi™1I˛ŒhV>Jò±¢‚∏#I*ÕÙ†ÙqC…'AımR∏‘≥ÔnºÖ)“¯M1∏(˚$uﬁáÕÛ^Ñà·ÑEt™hAﬂ˚∫Û—ŒÁ¿˚'ÍÔèÅÂzﬂc‡ÙZe¯ëàrÙ∂PÉJ“X8#{·•‡∂,˘Õ(GÎΩˇ   ˇˇ X›A

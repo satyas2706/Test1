@@ -710,25 +710,13 @@ const CartSection = ({
             </div>
 
             {/* Checkout Button */}
-            {(displayItems.length > 0 || appointments.length > 0) && !hasCompletedPickup && (
+            {displayItems.length > 0 && (
               <div className="mt-8 pt-8 border-t border-slate-100 flex flex-col gap-6">
-                {appointments.some(a => a.status === 'Scheduled') && (
-                  <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-start gap-3">
-                    <Info size={18} className="text-indigo-600 shrink-0 mt-0.5" />
-                    <p className="text-xs text-indigo-700 leading-relaxed font-medium">
-                      Payment will be enabled once your scheduled agent pickup is completed and all items are received at our warehouse. This ensures a single consolidated shipment for you.
-                    </p>
-                  </div>
-                )}
                 <button 
                   onClick={handleCheckout}
-                  className={`w-full py-5 px-8 rounded-2xl font-bold transition-all shadow-2xl flex items-center justify-center gap-2 group ${
-                    appointments.some(a => a.status === 'Scheduled')
-                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                      : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/20'
-                  }`}
+                  className="w-full py-5 px-8 rounded-2xl font-bold transition-all shadow-2xl flex items-center justify-center gap-2 group bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/20 cursor-pointer"
                 >
-                  {currentUser ? 'Checkout' : 'Sign in to Checkout'} <ArrowRight size={20} className={appointments.some(a => a.status === 'Scheduled') ? '' : 'group-hover:translate-x-1 transition-transform'} />
+                  {currentUser ? 'Checkout' : 'Sign in to Checkout'} <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                 </button>
               </div>
             )}
