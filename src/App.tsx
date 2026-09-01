@@ -1727,12 +1727,14 @@ const AdminDashboard = ({
   };
 
   const handleAssignAgent = async (aptId: string, agentId: string) => {
-    const agent = agents.find(a => a.id === agentId);
-    if (!agent) return;
-    
+    const agent = agents.find(a => a.id === agentId) || null;
     try {
       await onAssignAgent(aptId, agent);
-      toast.success(`Agent ${agent.name} assigned successfully.`);
+      if (agent) {
+        toast.success(`Agent ${agent.name} assigned successfully.`);
+      } else {
+        toast.success('Agent unassigned successfully.');
+      }
     } catch (err: any) {
       console.error('Assign Agent Error:', err);
       toast.error('Failed to assign agent.');
@@ -2107,6 +2109,14 @@ const AdminDashboard = ({
                 </div>
               </div>
             </div>
+          ) : adminTab === 'Orders' ? (
+            <AdminOrdersTab
+              orders={orders}
+              setOrders={setOrders}
+              agents={agents}
+              handleUpdateOrderStatus={handleUpdateOrderStatus}
+              handleAssignAgent={handleAssignAgent}
+            />
           ) : adminTab === 'Pickups' ? (
             <div className="space-y-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
@@ -2439,6 +2449,42 @@ const AdminDashboard = ({
                                 </select>
                                 <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" />
                               </div>
+                            </div>
+
+                            {/* Assign Field Agent */}
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                <span className="flex items-center gap-1"><UserIcon size={12} className="text-indigo-500" /> Field Agent</span>
+                                {order.assignedAgent ? (
+                                  <span className="text-emerald-600 font-black">Active</span>
+                                ) : (
+                                  <span className="text-amber-600 font-bold">Unassigned</span>
+                                )}
+                              </div>
+                              <div className="relative">
+                                <select
+                                  className="w-full p-2.5 pl-3 pr-8 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 appearance-none transition-all cursor-pointer shadow-sm hover:border-indigo-200"
+                                  value={order.assignedAgentId || (order as any).destination?.assignedAgentId || ''}
+                                  onChange={(e) => handleAssignAgent(order.id, e.target.value)}
+                                >
+                                  <option value="">{order.assignedAgent ? 'Change Agent...' : 'Assign Field Agent...'}</option>
+                                  {order.assignedAgent && (
+                                    <option value="">✕ Remove / Unassign Agent</option>
+                                  )}
+                                  {agents.filter(a => a.status === 'Active').map(a => (
+                                    <option key={a.id} value={a.id}>
+                                      {a.name} ({a.vehicleNumber || a.phone || 'Field'})
+                                    </option>
+                                  ))}
+                                </select>
+                                <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                              </div>
+                              {order.assignedAgent && (
+                                <div className="text-[10px] text-indigo-600 font-bold px-1 flex items-center justify-between">
+                                  <span>👤 {order.assignedAgent.name}</span>
+                                  <span>{order.assignedAgent.phone || order.assignedAgent.vehicleNumber}</span>
+                                </div>
+                              )}
                             </div>
 
                             <div className="space-y-2">

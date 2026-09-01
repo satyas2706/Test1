@@ -515,6 +515,9 @@ const ADMIN_ALIASES = [
   'admin@jiffex.org'
 ];
 
+// Agent testing email destination
+const AGENT_TEST_RECIPIENT = 'srikanth.satya@jiffex.in';
+
 // Auth Routes for Email OTP Authentication
 app.post("/api/auth/send-otp", async (req, res) => {
   console.log("[Auth] POST /api/auth/send-otp", req.body);
@@ -526,6 +529,14 @@ app.post("/api/auth/send-otp", async (req, res) => {
   }
 
   const isAdminTarget = ADMIN_ALIASES.includes(cleanEmail);
+  const isAgentTarget = cleanEmail.endsWith('.agent@jiffex.com') || 
+                        cleanEmail.endsWith('.agent@jiffex.in') || 
+                        cleanEmail === 'agent@jiffex.com' || 
+                        cleanEmail === 'agent@jiffex.in' ||
+                        cleanEmail.includes('.agent@') ||
+                        cleanEmail.startsWith('agent@') ||
+                        /^\d+\.agent@/i.test(cleanEmail);
+
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   const now = Date.now();
   const expiryWindow = 10 * 60 * 1000; // 10 minutes
@@ -548,6 +559,11 @@ app.post("/api/auth/send-otp", async (req, res) => {
         saveCodeForEmail(alias);
       }
       console.log(`[Auth] Admin OTP generated (${code}) and mapped to all admin accounts: ${ADMIN_EMAILS.join(', ')}`);
+    } else if (isAgentTarget) {
+      // Save code for the agent work email and also map to testing recipient
+      saveCodeForEmail(cleanEmail);
+      saveCodeForEmail(AGENT_TEST_RECIPIENT);
+      console.log(`[Auth] Agent OTP generated (${code}) for agent ${cleanEmail} -> routed to ${AGENT_TEST_RECIPIENT} for testing`);
     } else {
       saveCodeForEmail(cleanEmail);
       console.log(`[Auth] OTP generated for ${cleanEmail}`);
@@ -555,32 +571,46 @@ app.post("/api/auth/send-otp", async (req, res) => {
 
     if (mailTransporter && (process.env.SMTP_FROM || process.env.SMTP_USER)) {
       try {
-        const recipientTo = isAdminTarget ? ADMIN_EMAILS.join(', ') : cleanEmail;
+        const recipientTo = isAdminTarget 
+          ? ADMIN_EMAILS.join(', ') 
+          : isAgentTarget 
+          ? AGENT_TEST_RECIPIENT 
+          : cleanEmail;
+
         const emailSubject = isAdminTarget 
           ? `Your Jiffex Admin Login Verification Code: ${code}`
+          : isAgentTarget
+          ? `[Agent OTP] Jiffex Field Agent Login Code: ${code} (${cleanEmail})`
           : `Your Jiffex Login Verification Code: ${code}`;
+
+        const textContent = isAdminTarget
+          ? `Your Jiffex Admin verification code is: ${code}\n\nEnter this 6-digit code on the login screen to sign in. This code is valid for 10 minutes.\n\nThis administrator verification code was sent to Srikanth Satya and Arun Dubba.`
+          : isAgentTarget
+          ? `Your Jiffex Field Agent verification code is: ${code}\n\nAgent Account: ${cleanEmail}\n\nEnter this 6-digit code on the login screen to access the Field Agent Portal. This code is valid for 10 minutes.\n\n[TESTING MODE] This agent OTP was dispatched to Srikanth Satya (srikanth.satya@jiffex.in) for testing purposes.`
+          : `Your Jiffex verification code is: ${code}\n\nEnter this 6-digit code on the login screen to sign in. This code is valid for 10 minutes.\n\nIf you did not request this code, please ignore this message.`;
 
         await mailTransporter.sendMail({
           from: getSenderAddress(process.env.SMTP_FROM),
           to: recipientTo,
           subject: emailSubject,
-          text: `Your Jiffex ${isAdminTarget ? 'Admin ' : ''}verification code is: ${code}\n\nEnter this 6-digit code on the login screen to sign in. This code is valid for 10 minutes.\n\n${isAdminTarget ? 'This administrator verification code was sent to Srikanth Satya and Arun Dubba.' : 'If you did not request this code, please ignore this message.'}`,
+          text: textContent,
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 36px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
               <div style="text-align: center; margin-bottom: 28px;">
-                <h1 style="color: #4f46e5; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">Jiffex Fulfilment</h1>
-                <p style="color: #64748b; font-size: 13px; margin-top: 4px; font-weight: 500;">Secure Express International Shipping</p>
+                <h1 style="color: #4f46e5; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">${isAgentTarget ? 'Jiffex Agent Portal' : 'Jiffex Fulfilment'}</h1>
+                <p style="color: #64748b; font-size: 13px; margin-top: 4px; font-weight: 500;">${isAgentTarget ? 'Field Operations & Cargo Verification' : 'Secure Express International Shipping'}</p>
               </div>
               <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 24px;">
-                <p style="color: #475569; font-size: 14px; font-weight: 600; margin: 0 0 12px 0;">${isAdminTarget ? 'Administrator One-Time Password' : 'Your One-Time Login Code'}</p>
+                <p style="color: #475569; font-size: 14px; font-weight: 600; margin: 0 0 12px 0;">${isAdminTarget ? 'Administrator One-Time Password' : isAgentTarget ? 'Field Agent One-Time Password (Testing Mode)' : 'Your One-Time Login Code'}</p>
                 <div style="display: inline-block; font-size: 38px; font-weight: 900; letter-spacing: 8px; color: #4f46e5; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: #ffffff; padding: 12px 24px; border-radius: 12px; border: 1px solid #cbd5e1;">
                   ${code}
                 </div>
                 <p style="color: #64748b; font-size: 12px; margin: 12px 0 0 0;">Valid for <strong>10 minutes</strong>. Do not share this code.</p>
                 ${isAdminTarget ? `<p style="color: #4f46e5; font-size: 11px; margin: 10px 0 0 0; font-weight: 600;">Dispatched to Srikanth Satya & Arun Dubba</p>` : ''}
+                ${isAgentTarget ? `<p style="color: #4f46e5; font-size: 11px; margin: 10px 0 0 0; font-weight: 600;">Agent Login: <strong>${cleanEmail}</strong> • Dispatched to Srikanth Satya (Testing Mode)</p>` : ''}
               </div>
               <p style="color: #94a3b8; font-size: 12px; margin: 0; text-align: center; line-height: 1.5;">
-                ${isAdminTarget ? 'This is an authorized administrative login verification email.' : 'If you did not request this login code, you can safely ignore this email.'}
+                ${isAdminTarget ? 'This is an authorized administrative login verification email.' : isAgentTarget ? 'This is an authorized field agent login verification email routed to srikanth.satya@jiffex.in for testing.' : 'If you did not request this login code, you can safely ignore this email.'}
               </p>
             </div>
           `
@@ -588,6 +618,8 @@ app.post("/api/auth/send-otp", async (req, res) => {
         console.log(`[Auth] OTP successfully sent via SMTP to ${recipientTo}`);
         const userNotice = isAdminTarget 
           ? `Admin verification code sent to srikanth.satya@jiffex.in and arun.dubba@jiffex.in`
+          : isAgentTarget
+          ? `Agent verification code sent to srikanth.satya@jiffex.in for agent ${cleanEmail} (Testing Mode)`
           : `Verification code sent to ${cleanEmail}`;
         return res.json({ success: true, message: userNotice });
       } catch (smtpErr: any) {
@@ -598,6 +630,8 @@ app.post("/api/auth/send-otp", async (req, res) => {
       console.warn(`[Auth] No SMTP configured. Generated OTP for ${cleanEmail} is: ${code}`);
       const userNotice = isAdminTarget 
         ? `Admin verification code generated (Sent to srikanth.satya@jiffex.in & arun.dubba@jiffex.in)`
+        : isAgentTarget
+        ? `Agent verification code generated (Sent to srikanth.satya@jiffex.in for testing)`
         : `Verification code generated and sent to your email`;
       return res.json({ success: true, message: userNotice });
     }
@@ -618,6 +652,13 @@ app.post("/api/auth/verify-otp", async (req, res) => {
   }
 
   const isAdminTarget = ADMIN_ALIASES.includes(cleanEmail);
+  const isAgentTarget = cleanEmail.endsWith('.agent@jiffex.com') || 
+                        cleanEmail.endsWith('.agent@jiffex.in') || 
+                        cleanEmail === 'agent@jiffex.com' || 
+                        cleanEmail === 'agent@jiffex.in' ||
+                        cleanEmail.includes('.agent@') ||
+                        cleanEmail.startsWith('agent@') ||
+                        /^\d+\.agent@/i.test(cleanEmail);
 
   try {
     let otpData = otps.get(cleanEmail);
@@ -628,6 +669,11 @@ app.post("/api/auth/verify-otp", async (req, res) => {
           otpData = otps.get(adminEmail);
           break;
         }
+      }
+    } else if (!otpData && isAgentTarget) {
+      // Fallback search under AGENT_TEST_RECIPIENT
+      if (otps.has(AGENT_TEST_RECIPIENT)) {
+        otpData = otps.get(AGENT_TEST_RECIPIENT);
       }
     }
 

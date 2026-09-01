@@ -490,22 +490,25 @@ export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
                               </div>
                             </div>
                           ) : (
-                            <div className="text-[10px] text-slate-400 italic">Unassigned</div>
+                            <div className="text-[10px] text-amber-600 font-bold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-100/60 inline-block">
+                              Unassigned
+                            </div>
                           )}
 
                           {/* Reassign Agent Dropdown */}
                           <select
-                            className="w-full text-[10px] font-black p-1.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-indigo-400 cursor-pointer text-slate-700"
+                            className="w-full text-[10px] font-black p-1.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-indigo-400 cursor-pointer text-slate-700 hover:bg-slate-100 transition-colors"
                             onChange={(e) => {
-                              if (e.target.value) {
-                                handleAssignAgent(order.id, e.target.value);
-                              }
+                              handleAssignAgent(order.id, e.target.value);
                             }}
                             value={order.assignedAgentId || (order as any).destination?.assignedAgentId || ''}
                           >
-                            <option value="">{order.assignedAgent ? 'Change Agent...' : 'Assign Agent...'}</option>
+                            <option value="">{order.assignedAgent ? 'Change Agent...' : 'Assign Field Agent...'}</option>
+                            {order.assignedAgent && (
+                              <option value="">✕ Unassign Agent</option>
+                            )}
                             {agents.filter(a => a.status === 'Active').map(a => (
-                              <option key={a.id} value={a.id}>{a.name} ({a.vehicleNumber || 'Field'})</option>
+                              <option key={a.id} value={a.id}>{a.name} ({a.vehicleNumber || a.phone || 'Field'})</option>
                             ))}
                           </select>
                         </div>
@@ -610,6 +613,55 @@ export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
                 <div className="text-xs text-slate-600">
                   {selectedOrderDetail.destination?.addressLine1 || ''} {selectedOrderDetail.destination?.city || ''}, {selectedOrderDetail.destination?.country || 'India'}
                 </div>
+              </div>
+            </div>
+
+            {/* Assigned Field Agent Section */}
+            <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <UserIcon size={16} className="text-indigo-600" />
+                  <h4 className="text-xs font-black uppercase text-indigo-950 tracking-wider">Assigned Field Agent</h4>
+                  {selectedOrderDetail.assignedAgent ? (
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[10px] font-black uppercase">Active</span>
+                  ) : (
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md text-[10px] font-black uppercase">Unassigned</span>
+                  )}
+                </div>
+                {selectedOrderDetail.assignedAgent ? (
+                  <p className="text-xs text-slate-700 font-bold">
+                    {selectedOrderDetail.assignedAgent.name} • {selectedOrderDetail.assignedAgent.phone || selectedOrderDetail.assignedAgent.vehicleNumber || 'Field Specialist'}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500 font-medium">
+                    No field agent has been dispatched for this consignment.
+                  </p>
+                )}
+              </div>
+
+              <div className="min-w-[200px]">
+                <select
+                  className="w-full text-xs font-black p-2.5 bg-white border border-indigo-200 rounded-xl outline-none focus:border-indigo-500 cursor-pointer text-slate-800 shadow-sm"
+                  value={selectedOrderDetail.assignedAgentId || (selectedOrderDetail as any).destination?.assignedAgentId || ''}
+                  onChange={async (e) => {
+                    const agentId = e.target.value;
+                    await handleAssignAgent(selectedOrderDetail.id, agentId);
+                    const updatedAgent = agents.find(a => a.id === agentId) || undefined;
+                    setSelectedOrderDetail(prev => prev ? {
+                      ...prev,
+                      assignedAgent: updatedAgent,
+                      assignedAgentId: agentId || undefined
+                    } : null);
+                  }}
+                >
+                  <option value="">{selectedOrderDetail.assignedAgent ? 'Change Agent...' : 'Assign Field Agent...'}</option>
+                  {selectedOrderDetail.assignedAgent && (
+                    <option value="">✕ Unassign Agent</option>
+                  )}
+                  {agents.filter(a => a.status === 'Active').map(a => (
+                    <option key={a.id} value={a.id}>{a.name} ({a.vehicleNumber || a.phone || 'Field'})</option>
+                  ))}
+                </select>
               </div>
             </div>
 

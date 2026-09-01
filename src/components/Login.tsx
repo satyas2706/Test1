@@ -42,7 +42,10 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '' }) =>
   // Helper to validate agent work email against agent management list
   const checkAgentEmailValidity = (enteredEmail: string): { isValid: boolean; error?: string } => {
     const emailLower = enteredEmail.trim().toLowerCase();
-    const isAgentPattern = emailLower.endsWith('.agent@jiffex.com') || emailLower === 'agent@jiffex.com';
+    const isAgentPattern = emailLower.endsWith('.agent@jiffex.com') || 
+                           emailLower.endsWith('.agent@jiffex.in') || 
+                           emailLower === 'agent@jiffex.com' ||
+                           emailLower === 'agent@jiffex.in';
 
     if (!isAgentPattern) {
       return { isValid: true };
@@ -67,10 +70,13 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '' }) =>
 
     // Check matches in list:
     // 1. Matches customized email explicitly
-    // 2. Matches [id].agent@jiffex.com pattern
+    // 2. Matches [id].agent@jiffex.com or [id].agent@jiffex.in pattern
     const matchesExplicit = agents.some(a => a.email && a.email.trim().toLowerCase() === emailLower);
-    const matchesDefaultPattern = agents.some(a => `${a.id.trim().toLowerCase()}.agent@jiffex.com` === emailLower);
-    const isTestAgent = emailLower === 'agent@jiffex.com';
+    const matchesDefaultPattern = agents.some(a => 
+      `${a.id.trim().toLowerCase()}.agent@jiffex.com` === emailLower ||
+      `${a.id.trim().toLowerCase()}.agent@jiffex.in` === emailLower
+    );
+    const isTestAgent = emailLower === 'agent@jiffex.com' || emailLower === 'agent@jiffex.in';
 
     if (matchesExplicit || matchesDefaultPattern || isTestAgent) {
       return { isValid: true };
@@ -334,7 +340,11 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '' }) =>
             <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto leading-relaxed">
               {['srikanth.satya@jiffex.in', 'arun.dubba@jiffex.in', 'admin@jiffex.com', 'admin@jiffex.in'].includes(email.trim().toLowerCase()) ? (
                 <>
-                  We sent a 6-digit admin verification code to <span className="font-bold text-slate-900 block mt-1">srikanth.satya@jiffex.in & Arun.dubba@Jiffex.in</span>
+                  We sent a 6-digit admin verification code to <span className="font-bold text-slate-900 block mt-1">srikanth.satya@jiffex.in & arun.dubba@jiffex.in</span>
+                </>
+              ) : email.trim().toLowerCase().includes('.agent@') || email.trim().toLowerCase() === 'agent@jiffex.com' || email.trim().toLowerCase() === 'agent@jiffex.in' ? (
+                <>
+                  Agent verification code for <span className="font-bold text-slate-900">{email}</span> sent to <span className="font-bold text-indigo-600 block mt-1">srikanth.satya@jiffex.in (Testing Mode)</span>
                 </>
               ) : (
                 <>
