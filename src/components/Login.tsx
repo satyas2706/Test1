@@ -117,7 +117,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '' }) =>
         setOtp(['', '', '', '', '', '']);
         setErrorMessage(null);
         setResendCooldown(45); // 45 seconds cooldown before resend
-        toast.success(`Verification code sent to ${cleanEmail}`);
+        toast.success(data.message || `Verification code sent to ${cleanEmail}`);
         // Focus first OTP field after state transition
         setTimeout(() => {
           document.getElementById('otp-0')?.focus();
@@ -319,10 +319,18 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '' }) =>
               </p>
             </div>
 
-            <div className="p-3.5 bg-indigo-50/50 rounded-2xl border border-indigo-100/60 text-left">
-              <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
-                <strong className="text-indigo-900 font-bold">Field Agent Sign In:</strong> Use your assigned agent email, e.g. <span className="font-mono font-bold text-indigo-700">12345.agent@jiffex.com</span>.
-              </p>
+            <div className="space-y-2">
+              <div className="p-3.5 bg-indigo-50/50 rounded-2xl border border-indigo-100/60 text-left">
+                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                  <strong className="text-indigo-900 font-bold">Admin Portal Sign In:</strong> Use <span className="font-mono font-bold text-indigo-700">srikanth.satya@jiffex.in</span> or <span className="font-mono font-bold text-indigo-700">Arun.dubba@Jiffex.in</span>. Login OTP will be delivered directly to both administrators.
+                </p>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 text-left">
+                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                  <strong className="text-slate-800 font-bold">Field Agent Sign In:</strong> Use your assigned agent email, e.g. <span className="font-mono font-bold text-slate-700">12345.agent@jiffex.com</span>.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -338,7 +346,15 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '' }) =>
             </div>
             <h3 className="text-xl font-black text-slate-900">Check Your Email</h3>
             <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto leading-relaxed">
-              We sent a 6-digit verification code to <span className="font-bold text-slate-900 block sm:inline">{email}</span>
+              {['srikanth.satya@jiffex.in', 'arun.dubba@jiffex.in', 'admin@jiffex.com', 'admin@jiffex.in'].includes(email.trim().toLowerCase()) ? (
+                <>
+                  We sent a 6-digit admin verification code to <span className="font-bold text-slate-900 block mt-1">srikanth.satya@jiffex.in & Arun.dubba@Jiffex.in</span>
+                </>
+              ) : (
+                <>
+                  We sent a 6-digit verification code to <span className="font-bold text-slate-900 block sm:inline">{email}</span>
+                </>
+              )}
             </p>
           </div>
 

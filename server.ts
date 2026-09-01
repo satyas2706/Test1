@@ -207,6 +207,22 @@ const mailTransporter = process.env.SMTP_HOST
     }) 
   : null;
 
+// Helper function to format email sender with Company Display Name "Jiffex"
+export function getSenderAddress(customFrom?: string): string {
+  const raw = (customFrom || process.env.SMTP_FROM || process.env.SMTP_USER || 'jiffex2026@gmail.com').trim();
+  if (!raw) {
+    return '"Jiffex" <jiffex2026@gmail.com>';
+  }
+  const match = raw.match(/^(?:"?([^"]*)"?\s*)?<([^>]+)>$/);
+  if (match) {
+    const existingName = match[1]?.trim();
+    const emailOnly = match[2].trim();
+    const displayName = existingName || 'Jiffex';
+    return `"${displayName}" <${emailOnly}>`;
+  }
+  return `"Jiffex" <${raw}>`;
+}
+
 if (mailTransporter) {
   console.log("Email service (SMTP) configured. Testing connection asynchronously...");
   mailTransporter.verify((error: any) => {
@@ -325,7 +341,7 @@ async function sendNotification(userId: string, event: string, message: string, 
     }
   }
 
-  if (channels.includes('Email') && mailTransporter && process.env.SMTP_FROM) {
+  if (channels.includes('Email') && mailTransporter && (process.env.SMTP_FROM || process.env.SMTP_USER)) {
     const to = recipientInfo?.email;
     console.log(`[Notification] Attempting to send email to: ${to} for event: ${event}`);
     if (to && to !== 'user@example.com' && to.includes('@')) {
@@ -387,7 +403,7 @@ async function sendNotification(userId: string, event: string, message: string, 
 
       promises.push(
         mailTransporter.sendMail({
-          from: process.env.SMTP_FROM,
+          from: getSenderAddress(process.env.SMTP_FROM),
           to,
           subject,
           text,
@@ -485,6 +501,20 @@ app.post("/api/payment/razorpay/verify", async (req, res) => {
   }
 });
 
+// Admin email configurations
+const ADMIN_EMAILS = [
+  'srikanth.satya@jiffex.in',
+  'arun.dubba@jiffex.in'
+];
+
+const ADMIN_ALIASES = [
+  'srikanth.satya@jiffex.in',
+  'arun.dubba@jiffex.in',
+  'admin@jiffex.com',
+  'admin@jiffex.in',
+  'admin@jiffex.org'
+];
+
 // Auth Routes for Email OTP Authentication
 app.post("/api/auth/send-otp", async (req, res) => {
   console.log("[Auth] POST /api/auth/send-otp", req.body);
@@ -495,6 +525,7 @@ app.post("/api/auth/send-otp", async (req, res) => {
     return res.status(400).json({ error: "A valid email address is required" });
   }
 
+  const isAdminTarget = ADMIN_ALIASES.includes(cleanEmail);
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   const now = Date.now();
   const expiryWindow = 10 * 60 * 1000; // 10 minutes
@@ -502,22 +533,38 @@ app.post("/api/auth/send-otp", async (req, res) => {
 
   try {
     // Retain recent unexpired codes for this email so previous requests don't fail if emails arrive out of order
-    const existing = otps.get(cleanEmail);
-    const validExistingCodes = existing 
-      ? existing.codes.filter(c => now - c.createdAt < expiryWindow)
-      : [];
-    
-    validExistingCodes.push({ code, createdAt: now });
-    otps.set(cleanEmail, { codes: validExistingCodes, expiresAt });
-    console.log(`[Auth] OTP generated for ${cleanEmail} (Total valid active codes: ${validExistingCodes.length})`);
+    const saveCodeForEmail = (targetEmail: string) => {
+      const existing = otps.get(targetEmail);
+      const validExistingCodes = existing 
+        ? existing.codes.filter(c => now - c.createdAt < expiryWindow)
+        : [];
+      validExistingCodes.push({ code, createdAt: now });
+      otps.set(targetEmail, { codes: validExistingCodes, expiresAt });
+    };
 
-    if (mailTransporter && process.env.SMTP_FROM) {
+    if (isAdminTarget) {
+      // Register OTP for all admin aliases so verifying with any admin email or alias works
+      for (const alias of ADMIN_ALIASES) {
+        saveCodeForEmail(alias);
+      }
+      console.log(`[Auth] Admin OTP generated (${code}) and mapped to all admin accounts: ${ADMIN_EMAILS.join(', ')}`);
+    } else {
+      saveCodeForEmail(cleanEmail);
+      console.log(`[Auth] OTP generated for ${cleanEmail}`);
+    }
+
+    if (mailTransporter && (process.env.SMTP_FROM || process.env.SMTP_USER)) {
       try {
+        const recipientTo = isAdminTarget ? ADMIN_EMAILS.join(', ') : cleanEmail;
+        const emailSubject = isAdminTarget 
+          ? `Your JiffEX Admin Login Verification Code: ${code}`
+          : `Your JiffEX Login Verification Code: ${code}`;
+
         await mailTransporter.sendMail({
-          from: process.env.SMTP_FROM,
-          to: cleanEmail,
-          subject: `Your JiffEX Login Verification Code: ${code}`,
-          text: `Your JiffEX verification code is: ${code}\n\nEnter this 6-digit code on the login screen to sign in. This code is valid for 10 minutes.\n\nIf you did not request this code, please ignore this message.`,
+          from: getSenderAddress(process.env.SMTP_FROM),
+          to: recipientTo,
+          subject: emailSubject,
+          text: `Your JiffEX ${isAdminTarget ? 'Admin ' : ''}verification code is: ${code}\n\nEnter this 6-digit code on the login screen to sign in. This code is valid for 10 minutes.\n\n${isAdminTarget ? 'This administrator verification code was sent to Srikanth Satya and Arun Dubba.' : 'If you did not request this code, please ignore this message.'}`,
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 36px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
               <div style="text-align: center; margin-bottom: 28px;">
@@ -525,27 +572,34 @@ app.post("/api/auth/send-otp", async (req, res) => {
                 <p style="color: #64748b; font-size: 13px; margin-top: 4px; font-weight: 500;">Secure Express International Shipping</p>
               </div>
               <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 24px;">
-                <p style="color: #475569; font-size: 14px; font-weight: 600; margin: 0 0 12px 0;">Your One-Time Login Code</p>
+                <p style="color: #475569; font-size: 14px; font-weight: 600; margin: 0 0 12px 0;">${isAdminTarget ? 'Administrator One-Time Password' : 'Your One-Time Login Code'}</p>
                 <div style="display: inline-block; font-size: 38px; font-weight: 900; letter-spacing: 8px; color: #4f46e5; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: #ffffff; padding: 12px 24px; border-radius: 12px; border: 1px solid #cbd5e1;">
                   ${code}
                 </div>
                 <p style="color: #64748b; font-size: 12px; margin: 12px 0 0 0;">Valid for <strong>10 minutes</strong>. Do not share this code.</p>
+                ${isAdminTarget ? `<p style="color: #4f46e5; font-size: 11px; margin: 10px 0 0 0; font-weight: 600;">Dispatched to Srikanth Satya & Arun Dubba</p>` : ''}
               </div>
               <p style="color: #94a3b8; font-size: 12px; margin: 0; text-align: center; line-height: 1.5;">
-                If you did not request this login code, you can safely ignore this email.
+                ${isAdminTarget ? 'This is an authorized administrative login verification email.' : 'If you did not request this login code, you can safely ignore this email.'}
               </p>
             </div>
           `
         });
-        console.log(`[Auth] OTP successfully sent via SMTP to ${cleanEmail}`);
-        return res.json({ success: true, message: `Verification code sent to ${cleanEmail}` });
+        console.log(`[Auth] OTP successfully sent via SMTP to ${recipientTo}`);
+        const userNotice = isAdminTarget 
+          ? `Admin verification code sent to srikanth.satya@jiffex.in and arun.dubba@jiffex.in`
+          : `Verification code sent to ${cleanEmail}`;
+        return res.json({ success: true, message: userNotice });
       } catch (smtpErr: any) {
         console.error(`[Auth] SMTP send failed for ${cleanEmail}:`, smtpErr.message);
         return res.status(500).json({ error: `Failed to deliver email: ${smtpErr.message || 'SMTP service error'}. Please try again.` });
       }
     } else {
       console.warn(`[Auth] No SMTP configured. Generated OTP for ${cleanEmail} is: ${code}`);
-      return res.json({ success: true, message: "Verification code generated and sent to your email" });
+      const userNotice = isAdminTarget 
+        ? `Admin verification code generated (Sent to srikanth.satya@jiffex.in & arun.dubba@jiffex.in)`
+        : `Verification code generated and sent to your email`;
+      return res.json({ success: true, message: userNotice });
     }
   } catch (err: any) {
     console.error("OTP Send Error:", err.message);
@@ -563,8 +617,19 @@ app.post("/api/auth/verify-otp", async (req, res) => {
     return res.status(400).json({ error: "Email and 6-digit verification code are required" });
   }
 
+  const isAdminTarget = ADMIN_ALIASES.includes(cleanEmail);
+
   try {
-    const otpData = otps.get(cleanEmail);
+    let otpData = otps.get(cleanEmail);
+    if (!otpData && isAdminTarget) {
+      // Fallback search across admin emails
+      for (const adminEmail of ADMIN_EMAILS) {
+        if (otps.has(adminEmail)) {
+          otpData = otps.get(adminEmail);
+          break;
+        }
+      }
+    }
 
     if (!otpData || !otpData.codes || otpData.codes.length === 0) {
       return res.status(400).json({ error: "No active verification code found for this email. Please request a new code." });
@@ -577,6 +642,9 @@ app.post("/api/auth/verify-otp", async (req, res) => {
 
     if (activeCodes.length === 0) {
       otps.delete(cleanEmail);
+      if (isAdminTarget) {
+        for (const alias of ADMIN_ALIASES) otps.delete(alias);
+      }
       return res.status(400).json({ error: "Your verification code has expired. Please request a new code." });
     }
 
@@ -589,14 +657,27 @@ app.post("/api/auth/verify-otp", async (req, res) => {
 
     // Success - Clear OTP from memory
     otps.delete(cleanEmail);
+    if (isAdminTarget) {
+      for (const alias of ADMIN_ALIASES) otps.delete(alias);
+    }
     console.log(`[Auth] Successfully verified email OTP for: ${cleanEmail}`);
+
+    let displayName = cleanEmail.split('@')[0];
+    if (cleanEmail === 'srikanth.satya@jiffex.in') {
+      displayName = 'Srikanth Satya';
+    } else if (cleanEmail === 'arun.dubba@jiffex.in') {
+      displayName = 'Arun Dubba';
+    } else if (isAdminTarget) {
+      displayName = 'Admin User';
+    }
 
     res.json({ 
       success: true, 
       user: { 
         email: cleanEmail, 
         id: 'user-' + Buffer.from(cleanEmail).toString('hex').slice(0, 8),
-        name: cleanEmail.split('@')[0] 
+        name: displayName,
+        role: isAdminTarget ? 'admin' : undefined
       } 
     });
   } catch (err: any) {
@@ -1678,7 +1759,7 @@ app.post("/api/smtp/test", async (req, res) => {
     
     console.log(`[SMTP Test] Connection verified! Sending a test email to ${cleanedUser}...`);
     await tempTransporter.sendMail({
-      from: cleanedFrom,
+      from: getSenderAddress(cleanedFrom),
       to: cleanedUser,
       subject: "JiffEX SMTP Diagnostic Test Successful!",
       html: `
@@ -1733,7 +1814,7 @@ app.post("/api/invoice/send-pdf", async (req, res) => {
   }
   console.log(`[Invoice PDF] Request received for order ${order.id} to email: ${email}`);
   
-  if (!mailTransporter || !process.env.SMTP_FROM) {
+  if (!mailTransporter || (!process.env.SMTP_FROM && !process.env.SMTP_USER)) {
     console.error('[Invoice PDF] Email service not configured');
     return res.status(503).json({ error: "Email service not configured" });
   }
@@ -1801,7 +1882,7 @@ www.jiffex.com
 
     console.log(`[Invoice PDF] Sending email to ${email}...`);
     await mailTransporter.sendMail({
-      from: process.env.SMTP_FROM,
+      from: getSenderAddress(process.env.SMTP_FROM),
       to: email,
       subject: subject,
       text: bodyText,
@@ -1832,7 +1913,7 @@ app.post("/api/invoice/send-consolidated-pdf", async (req, res) => {
   }
   console.log(`[Consolidated Invoice PDF] Request received for ${orders.length} orders to email: ${email}`);
   
-  if (!mailTransporter || !process.env.SMTP_FROM) {
+  if (!mailTransporter || (!process.env.SMTP_FROM && !process.env.SMTP_USER)) {
     console.error('[Consolidated Invoice PDF] Email service not configured');
     return res.status(503).json({ error: "Email service not configured" });
   }
@@ -1884,7 +1965,7 @@ www.jiffex.com
 
     console.log(`[Consolidated Invoice PDF] Sending email to ${email}...`);
     await mailTransporter.sendMail({
-      from: process.env.SMTP_FROM,
+      from: getSenderAddress(process.env.SMTP_FROM),
       to: email,
       subject: subject,
       text: bodyText,
@@ -1916,7 +1997,7 @@ app.post("/api/order-confirmation", async (req, res) => {
   }
   console.log(`[Order Confirmation] Request received for order ${order.id} to email: ${email}`);
   
-  if (!mailTransporter || !process.env.SMTP_FROM) {
+  if (!mailTransporter || (!process.env.SMTP_FROM && !process.env.SMTP_USER)) {
     console.error('[Order Confirmation] Email service not configured');
     return res.status(503).json({ error: "Email service not configured" });
   }
@@ -2015,7 +2096,7 @@ The JiffEX Team
 
     console.log(`[Order Confirmation] Sending email to ${email}...`);
     await mailTransporter.sendMail({
-      from: process.env.SMTP_FROM,
+      from: getSenderAddress(process.env.SMTP_FROM),
       to: email,
       subject: subject,
       text: bodyText,
@@ -2899,60 +2980,197 @@ app.delete("/api/pickups/:id", async (req, res) => {
   }
 });
 
-// API: Get all orders (Admin only)
-app.get("/api/orders", async (req, res) => {
-  if (!supabase) {
-    return res.json(memOrders.map(transformDbOrder));
+// Helper to transform a pickup record into a complete standard order object
+const transformDbPickupToOrder = (p: any) => {
+  if (!p) return null;
+  let items = p.items;
+  if (typeof items === 'string') {
+    try { items = JSON.parse(items); } catch (e) { items = []; }
   }
+  if (!Array.isArray(items)) items = [];
 
+  const fullName = p.customer_name || p.customerName || 'Customer';
+  const phone = p.phone || '';
+  const email = p.email || '';
+  const address = p.address || '';
+  const date = p.pickup_date || p.pickupDate || p.date || (p.created_at ? p.created_at.split('T')[0] : new Date().toISOString().split('T')[0]);
+  const time = p.pickup_time || p.pickupTime || p.time || 'Flexible';
+
+  return transformDbOrder({
+    id: p.id,
+    customer_id: p.customer_id || p.customerId || (email ? `guest_${email.replace(/[^a-z0-9]/gi, '_')}` : 'guest'),
+    customer_name: fullName,
+    email: email,
+    phone: phone,
+    address: address,
+    status: p.status || 'Scheduled',
+    payment_status: p.payment_status || p.paymentStatus || 'Pending',
+    shipping_date: date,
+    created_at: p.created_at || new Date().toISOString(),
+    total_weight: p.total_weight || p.totalWeight || 0,
+    total_cost: p.total_cost || p.totalCost || 0,
+    items: items,
+    destination: {
+      fullName: fullName,
+      customerName: fullName,
+      email: email,
+      phone: phone,
+      addressLine1: address,
+      address: address,
+      city: p.city || 'Hyderabad',
+      state: p.state || 'Telangana',
+      zipCode: p.zip_code || p.zipCode || '500001',
+      country: p.country || 'India',
+      pickupType: p.pickup_type || p.pickupType || 'AllAgent',
+      assignedAgentId: p.assigned_agent_id || p.assignedAgentId,
+      languagePreference: p.language_preference || p.languagePreference || 'English',
+      itemType: p.item_type || p.itemType || 'General',
+      vehicleType: p.vehicle_type || p.vehicleType || 'Two-Wheeler',
+      date: date,
+      time: time
+    },
+    pickup_type: p.pickup_type || p.pickupType || 'AllAgent',
+    assigned_agent_id: p.assigned_agent_id || p.assignedAgentId,
+    language_preference: p.language_preference || p.languagePreference,
+    item_type: p.item_type || p.itemType,
+    vehicle_type: p.vehicle_type || p.vehicleType
+  });
+};
+
+// Global background cache refresh tracker
+let isRefreshingOrders = false;
+let lastOrderRefreshTime = 0;
+
+const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
+  const now = Date.now();
+  // Return cached immediately if refreshed within last 2 seconds and not forced
+  if (!force && cachedAllOrders.length > 0 && now - lastOrderRefreshTime < 2000) {
+    return cachedAllOrders;
+  }
+  if (isRefreshingOrders && cachedAllOrders.length > 0) {
+    return cachedAllOrders;
+  }
+  isRefreshingOrders = true;
   try {
-    // Add strict query timeout to guarantee instantaneous response times and skip table statement timeouts
-    const query = supabase
-      .from('orders')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(200);
+    const orderMap = new Map<string, any>();
 
-    const { data, error } = await queryWithTimeout(query, 2000);
-    if (error) throw error;
-    
-    // Transform snake_case back to camelCase for frontend
-    const transformed = (data || []).map(transformDbOrder);
-    
-    // Merge database results with memory-only orders to ensure none are lost under any circumstances
-    const mergedMap = new Map();
-    // Pre-populate with database results (authoritative)
-    transformed.forEach((o: any) => mergedMap.set(o.id, o));
-    // Overlay memory changes/recently created orders
-    memOrders.map(transformDbOrder).forEach((o: any) => mergedMap.set(o.id, o));
-    
-    const finalOrders = Array.from(mergedMap.values()).sort((a: any, b: any) => {
+    // 1. Fetch from pickups table in Supabase
+    if (supabase) {
+      try {
+        const { data: pickups, error: pErr } = await supabase
+          .from('pickups')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (!pErr && Array.isArray(pickups)) {
+          pickups.forEach((p: any) => {
+            const transformed = transformDbPickupToOrder(p);
+            if (transformed && transformed.id) {
+              orderMap.set(transformed.id, transformed);
+            }
+          });
+        }
+      } catch (err: any) {
+        console.warn('[SERVER] Pickups table fetch warning:', err.message);
+      }
+
+      // 2. Fetch from orders table in safe chunked ranges to prevent statement timeouts
+      try {
+        const ranges = [
+          [0, 49],
+          [50, 99],
+          [100, 149],
+          [150, 199]
+        ];
+        for (const [start, end] of ranges) {
+          try {
+            const { data: chunk, error: cErr } = await supabase
+              .from('orders')
+              .select('*')
+              .order('id', { ascending: false })
+              .range(start, end);
+            if (!cErr && Array.isArray(chunk) && chunk.length > 0) {
+              chunk.forEach((o: any) => {
+                const transformed = transformDbOrder(o);
+                if (transformed && transformed.id) {
+                  orderMap.set(transformed.id, transformed);
+                }
+              });
+              if (chunk.length < (end - start + 1)) {
+                break;
+              }
+            } else {
+              break;
+            }
+          } catch (chunkErr) {
+            break;
+          }
+        }
+      } catch (err: any) {
+        console.warn('[SERVER] Orders table fetch warning:', err.message);
+      }
+    }
+
+    // 3. Overlay in-memory pickups & in-memory orders (ensuring local additions are never lost)
+    memPickups.forEach((p: any) => {
+      const transformed = transformDbPickupToOrder(p);
+      if (transformed && transformed.id) {
+        orderMap.set(transformed.id, transformed);
+      }
+    });
+
+    memOrders.forEach((o: any) => {
+      const transformed = transformDbOrder(o);
+      if (transformed && transformed.id) {
+        orderMap.set(transformed.id, transformed);
+      }
+    });
+
+    const combinedList = Array.from(orderMap.values()).sort((a: any, b: any) => {
       const dateA = new Date(a.created_at || a.createdAt || 0).getTime();
       const dateB = new Date(b.created_at || b.createdAt || 0).getTime();
       return dateB - dateA;
     });
 
-    const deduplicatedFinalOrders = deduplicateOrders(finalOrders);
-
-    // Cache the successful results
-    cachedAllOrders = deduplicatedFinalOrders;
-
-    res.json(deduplicatedFinalOrders);
+    const deduplicated = deduplicateOrders(combinedList);
+    if (deduplicated && deduplicated.length > 0) {
+      cachedAllOrders = deduplicated;
+      lastOrderRefreshTime = Date.now();
+    }
+    return cachedAllOrders;
   } catch (err: any) {
-    console.log("Serving all orders cleanly (cache/memory optimized rendering).");
-    
-    // Merge memory orders & cachedAllOrders to prevent duplicates, preferring memory changes
-    const mergedMap = new Map();
-    cachedAllOrders.forEach((o: any) => mergedMap.set(o.id, o));
-    memOrders.map(transformDbOrder).forEach((o: any) => mergedMap.set(o.id, o));
-    
-    const fallback = Array.from(mergedMap.values()).sort((a: any, b: any) => {
-      const dateA = new Date(a.created_at || a.createdAt || 0).getTime();
-      const dateB = new Date(b.created_at || b.createdAt || 0).getTime();
-      return dateB - dateA;
-    });
-    res.json(deduplicateOrders(fallback));
+    console.error('[SERVER] Failed to refresh all orders cache:', err.message);
+    return cachedAllOrders;
+  } finally {
+    isRefreshingOrders = false;
   }
+};
+
+// API: Get all orders (Admin only - returns complete list with zero timeouts)
+app.get("/api/orders", async (req, res) => {
+  // If cache is empty or stale, trigger refresh
+  if (cachedAllOrders.length === 0) {
+    await refreshAllOrdersCache(true);
+  } else {
+    // Trigger non-blocking background refresh to keep cache fresh
+    refreshAllOrdersCache().catch(console.error);
+  }
+
+  // Merge any recent memory orders
+  const mergedMap = new Map();
+  cachedAllOrders.forEach((o: any) => mergedMap.set(o.id, o));
+  memOrders.map(transformDbOrder).forEach((o: any) => mergedMap.set(o.id, o));
+  memPickups.map(transformDbPickupToOrder).filter(Boolean).forEach((o: any) => {
+    if (!mergedMap.has(o.id)) mergedMap.set(o.id, o);
+  });
+
+  const finalOrders = Array.from(mergedMap.values()).sort((a: any, b: any) => {
+    const dateA = new Date(a.created_at || a.createdAt || 0).getTime();
+    const dateB = new Date(b.created_at || b.createdAt || 0).getTime();
+    return dateB - dateA;
+  });
+
+  const deduplicatedFinalOrders = deduplicateOrders(finalOrders);
+  res.json(deduplicatedFinalOrders);
 });
 
 // API: Public Tracking (No Auth required)
@@ -4093,6 +4311,20 @@ async function startServer() {
   seedDatabaseIfEmpty().catch(err => {
     console.error("[Server Seeding Warning] Background seeding failed:", err);
   });
+
+  // Warm up orders cache immediately on start
+  refreshAllOrdersCache(true).then(orders => {
+    console.log(`[Server Initialization] Orders cache warmed up: ${orders.length} orders loaded.`);
+  }).catch(err => {
+    console.error("[Server Initialization Warning] Initial orders cache warming failed:", err.message);
+  });
+
+  // Background timer to keep orders cache fresh
+  setInterval(() => {
+    refreshAllOrdersCache().catch(err => {
+      console.warn("[Background Cache] Orders cache refresh warning:", err.message);
+    });
+  }, 15000);
 
   console.log("Configuring Vite middleware...");
   // Vite middleware for development

@@ -7,6 +7,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Logo } from './components/Logo';
 import { MobilePickupFlow } from './components/MobilePickupFlow';
 import { SinglePagePickupForm } from './components/SinglePagePickupForm';
+import { AdminOrdersTab } from './components/AdminOrdersTab';
 import { MobileDropOffFlow } from './components/MobileDropOffFlow';
 import { RateBand, CountryRateBands } from './types';
 import { DEFAULT_RATE_BANDS, calculateShippingCost } from './utils/shipping';
@@ -45,6 +46,7 @@ import {
   Copy,
   RefreshCw,
   FileText,
+  ClipboardList,
   Image as ImageIcon,
   Camera,
   User as UserIcon,
@@ -542,8 +544,8 @@ interface AdminDashboardProps {
   setAgents: React.Dispatch<React.SetStateAction<AgentProfile[]>>;
   categories: string[];
   setCategories: React.Dispatch<React.SetStateAction<string[]>>;
-  adminTab: 'Overview' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds' | 'Rates';
-  setAdminTab: React.Dispatch<React.SetStateAction<'Overview' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds' | 'Rates'>>;
+  adminTab: 'Overview' | 'Orders' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds' | 'Rates';
+  setAdminTab: React.Dispatch<React.SetStateAction<'Overview' | 'Orders' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds' | 'Rates'>>;
   storeProducts: StoreProduct[];
   setStoreProducts: React.Dispatch<React.SetStateAction<StoreProduct[]>>;
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
@@ -1473,13 +1475,20 @@ const AdminDashboard = ({
 
   useEffect(() => {
     if (shippingRateBands) {
-      setEditingRateBands(JSON.parse(JSON.stringify(shippingRateBands)));
+      setEditingRateBands(prev => {
+        const next = JSON.parse(JSON.stringify(shippingRateBands));
+        if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+        return next;
+      });
     }
   }, [shippingRateBands]);
 
   useEffect(() => {
     if (coupons) {
-      setAdminCoupons(coupons);
+      setAdminCoupons(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(coupons)) return prev;
+        return coupons;
+      });
     }
   }, [coupons]);
 
@@ -1489,7 +1498,10 @@ const AdminDashboard = ({
       Object.keys(shippingRates).forEach(country => {
         initialRates[country] = String(shippingRates[country]);
       });
-      setEditingRates(initialRates);
+      setEditingRates(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(initialRates)) return prev;
+        return initialRates;
+      });
     }
   }, [shippingRates]);
 
@@ -1499,7 +1511,10 @@ const AdminDashboard = ({
       COUNTRIES.forEach(country => {
         initialDiscounts[country] = String(shippingDiscounts[country] || 0);
       });
-      setEditingDiscounts(initialDiscounts);
+      setEditingDiscounts(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(initialDiscounts)) return prev;
+        return initialDiscounts;
+      });
     }
   }, [shippingDiscounts]);
 
@@ -1647,19 +1662,19 @@ const AdminDashboard = ({
   const isWebmaster = isWebmasterProp ?? (currentUser?.role === 'webmaster');
 
   const stats = [
-    { label: 'Total Shipments', value: orders.length, icon: Package, color: 'bg-blue-500', tab: 'Logistics' },
+    { label: 'Total Shipments', value: orders.length, icon: Package, color: 'bg-blue-500', tab: 'Orders' },
     { label: 'Pending Pickups', value: orders.filter(o => o.status === 'Scheduled' || o.status === 'Pending Pickup').length, icon: Clock, color: 'bg-amber-500', tab: 'Pickups' },
     { label: 'Active Shipments', value: orders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled').length, icon: Truck, color: 'bg-indigo-500', tab: 'Logistics' },
     { label: 'Total Revenue', value: `â‚¹${orders.reduce((acc, o) => acc + (o.totalCost || 0), 0).toLocaleString()}`, icon: TrendingUp, color: 'bg-emerald-500', tab: 'Reports' },
   ].filter((_, i) => !isWebmaster || i >= 0);
 
   const availableTabs = (isWebmaster 
-    ? ['Overview', 'Inventory', 'Reports', 'Rates', 'Settings'] 
-    : ['Overview', 'Pickups', 'Logistics', 'Agents', 'Inventory', 'Reports', 'Refunds', 'Rates', 'Settings']) as any[];
+    ? ['Overview', 'Orders', 'Inventory', 'Reports', 'Rates', 'Settings'] 
+    : ['Overview', 'Orders', 'Pickups', 'Logistics', 'Agents', 'Inventory', 'Reports', 'Refunds', 'Rates', 'Settings']) as any[];
 
   // Force tab if webmaster is on restricted tab
   useEffect(() => {
-    if (isWebmaster && !['Overview', 'Inventory', 'Reports', 'Rates', 'Settings'].includes(adminTab)) {
+    if (isWebmaster && !['Overview', 'Orders', 'Inventory', 'Reports', 'Rates', 'Settings'].includes(adminTab)) {
       setAdminTab('Overview');
     }
   }, [isWebmaster, adminTab, setAdminTab]);
@@ -1813,6 +1828,7 @@ const AdminDashboard = ({
         <nav className="flex flex-col gap-2">
           {availableTabs.map((tab: any) => {
             const Icon = tab === 'Overview' ? LayoutDashboard : 
+                         tab === 'Orders' ? ClipboardList :
                          tab === 'Pickups' ? Clock :
                          tab === 'Logistics' ? Truck :
                          tab === 'Agents' ? Users : 
@@ -1833,7 +1849,32 @@ const AdminDashboard = ({
                 }`}
               >
                 <Icon size={18} className={`${adminTab === tab ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'} shrink-0`} />
-                {tab === 'Inventory' ? 'Inventory' : (tab === 'Agents' ? 'Agent Management' : (tab === 'Settings' ? 'Settings' : (tab === 'Rates' ? 'Shipping Rates' : tab)))}
+                <span className="flex-1 truncate">
+                  {tab === 'Orders' ? 'All Orders' : 
+                   tab === 'Pickups' ? 'Recent Pickups' :
+                   tab === 'Logistics' ? 'Active Shipments' :
+                   tab === 'Settings' ? 'System Settings' :
+                   tab === 'Inventory' ? 'Inventory' : 
+                   tab === 'Agents' ? 'Agent Management' : 
+                   tab === 'Reports' ? 'Reports & Analytics' :
+                   tab === 'Refunds' ? 'Refund Requests' :
+                   tab === 'Rates' ? 'Shipping Rates' : tab}
+                </span>
+                {tab === 'Orders' && (
+                  <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-black rounded-lg">
+                    {orders.length}
+                  </span>
+                )}
+                {tab === 'Pickups' && (
+                  <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black rounded-lg">
+                    {appointments.length}
+                  </span>
+                )}
+                {tab === 'Logistics' && (
+                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-black rounded-lg">
+                    {orders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled').length}
+                  </span>
+                )}
                 {adminTab === tab && (
                   <motion.div 
                     layoutId="activeTabIndicator"
@@ -1870,7 +1911,15 @@ const AdminDashboard = ({
                 : 'bg-slate-100 text-slate-500'
             }`}
           >
-            {tab === 'Inventory' ? 'Inventory' : (tab === 'Agents' ? 'Agent Management' : (tab === 'Settings' ? 'Settings' : (tab === 'Rates' ? 'Shipping Rates' : tab)))}
+            {tab === 'Orders' ? `All Orders (${orders.length})` : 
+             tab === 'Pickups' ? `Recent Pickups (${appointments.length})` :
+             tab === 'Logistics' ? `Active Shipments (${orders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled').length})` :
+             tab === 'Settings' ? 'System Settings' :
+             tab === 'Inventory' ? 'Inventory' : 
+             tab === 'Agents' ? 'Agent Management' : 
+             tab === 'Reports' ? 'Reports' :
+             tab === 'Refunds' ? 'Refunds' :
+             tab === 'Rates' ? 'Shipping Rates' : tab}
           </button>
         ))}
       </div>
@@ -1881,14 +1930,15 @@ const AdminDashboard = ({
           <div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">
               {adminTab === 'Overview' && 'Dashboard Overview'}
-              {adminTab === 'Pickups' && 'Pickup Requests'}
-              {adminTab === 'Logistics' && 'Active Logistics Pipeline'}
+              {adminTab === 'Orders' && 'All Orders & Consignments'}
+              {adminTab === 'Pickups' && 'Recent Pickups & Scheduling'}
+              {adminTab === 'Logistics' && 'Active Shipments & Live Pipeline'}
               {adminTab === 'Agents' && 'Agent Management'}
               {adminTab === 'Inventory' && (isWebmaster ? 'Product Catalog' : 'Inventory Management')}
-              {adminTab === 'Reports' && 'Business Intelligence'}
+              {adminTab === 'Reports' && 'Business Intelligence & Reports'}
               {adminTab === 'Refunds' && 'Refund Management'}
               {adminTab === 'Rates' && 'Shipping Rates & Discounts'}
-              {adminTab === 'Settings' && 'Settings'}
+              {adminTab === 'Settings' && 'System Settings & Controls'}
             </h1>
             <p className="text-slate-500 font-medium">
               Manage your operations and track key performance indicators.
@@ -1942,7 +1992,9 @@ const AdminDashboard = ({
                        </div>
                        Recent Pickups
                     </h3>
-                    <button onClick={() => setAdminTab('Pickups')} className="px-4 py-2 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-500 hover:text-white transition-all">View All</button>
+                    <button onClick={() => setAdminTab('Pickups')} className="px-4 py-2 bg-amber-50 text-amber-700 hover:bg-amber-500 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                      Go to Pickups Tab â†’
+                    </button>
                   </div>
                   <div className="space-y-4 relative z-10">
                     {appointments.length === 0 ? (
@@ -1980,7 +2032,9 @@ const AdminDashboard = ({
                        </div>
                        Active Shipments
                     </h3>
-                    <button onClick={() => setAdminTab('Logistics')} className="px-4 py-2 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all">Full Pipeline</button>
+                    <button onClick={() => setAdminTab('Logistics')} className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                      Go to Shipments Tab â†’
+                    </button>
                   </div>
                   <div className="space-y-4 relative z-10">
                     {orders.length === 0 ? (
@@ -2020,7 +2074,9 @@ const AdminDashboard = ({
                          </div>
                          System Settings
                       </h3>
-                      <button onClick={() => setAdminTab('Settings')} className="px-4 py-2 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all">Configure</button>
+                      <button onClick={() => setAdminTab('Settings')} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-indigo-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                        Go to Settings Tab â†’
+                      </button>
                     </div>
                     <p className="text-xs text-slate-500 leading-relaxed font-semibold">
                       Control dispatch modes, automatic agent assignment rules, data backup pipelines, and security gate protocols.
@@ -4524,7 +4580,7 @@ const AdminDashboard = ({
                 onClick={() => setAdminTab(t)}
                 className="px-6 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-black text-slate-600 hover:border-indigo-500 hover:text-indigo-600 transition-all shadow-sm flex items-center gap-2"
               >
-                Explore {t === 'Inventory' ? 'Inventory' : (t === 'Agents' ? 'Agent Management' : (t === 'Rates' ? 'Shipping Rates' : t))} <ArrowRight size={14} />
+                Explore {t === 'Orders' ? 'All Orders' : (t === 'Pickups' ? 'Recent Pickups' : (t === 'Logistics' ? 'Active Shipments' : (t === 'Settings' ? 'System Settings' : (t === 'Inventory' ? 'Inventory' : (t === 'Agents' ? 'Agent Management' : (t === 'Rates' ? 'Shipping Rates' : t))))))} <ArrowRight size={14} />
               </button>
             ))}
           </div>
@@ -4749,6 +4805,23 @@ const clearActiveSession = () => {
   } catch (e) {
     console.error('[Session Manager] Failed to clear active session:', e);
   }
+};
+
+const ADMIN_EMAILS = [
+  'srikanth.satya@jiffex.in',
+  'arun.dubba@jiffex.in'
+];
+
+const isAdminEmail = (email: string | null | undefined): boolean => {
+  if (!email) return false;
+  const e = email.trim().toLowerCase();
+  return (
+    e === 'srikanth.satya@jiffex.in' ||
+    e === 'arun.dubba@jiffex.in' ||
+    e === 'admin@jiffex.com' ||
+    e === 'admin@jiffex.in' ||
+    e === 'admin@jiffex.org'
+  );
 };
 
 export default function App() {
@@ -5316,7 +5389,7 @@ export default function App() {
   };
 
   // Admin Section States
-  const [adminTab, setAdminTab] = useState<'Overview' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds' | 'Rates'>('Overview');
+  const [adminTab, setAdminTab] = useState<'Overview' | 'Orders' | 'Pickups' | 'Logistics' | 'Agents' | 'Inventory' | 'Reports' | 'Settings' | 'Refunds' | 'Rates'>('Overview');
 
   // Store Section States
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -5950,7 +6023,7 @@ export default function App() {
       const isAgentEmail = email.toLowerCase().endsWith('.agent@jiffex.com') || email === 'agent@jiffex.com';
       
       // Auto-assign roles based on official emails
-      if (email === 'admin@jiffex.com') role = 'admin';
+      if (isAdminEmail(email)) role = 'admin';
       else if (email === 'service@jiffex.com') role = 'customer_service';
       else if (isAgentEmail) role = 'agent';
       else if (email === 'webmaster@jiffex.com') role = 'webmaster';
@@ -5990,13 +6063,28 @@ export default function App() {
         }
       }
 
-      setCurrentUser({
-        id: idToUse,
-        name: nameToUse,
-        email: localProfile.email || email,
-        role: role,
-        phone: phoneToUse,
-        address: localProfile.address || ''
+      setCurrentUser(prev => {
+        const nextEmail = localProfile.email || email;
+        const nextAddress = localProfile.address || '';
+        if (
+          prev &&
+          prev.id === idToUse &&
+          prev.name === nameToUse &&
+          prev.email === nextEmail &&
+          prev.role === role &&
+          prev.phone === phoneToUse &&
+          prev.address === nextAddress
+        ) {
+          return prev;
+        }
+        return {
+          id: idToUse,
+          name: nameToUse,
+          email: nextEmail,
+          role: role,
+          phone: phoneToUse,
+          address: nextAddress
+        };
       });
     } else if (isGuestMode) {
       const email = guestEmail || '';
@@ -6004,7 +6092,7 @@ export default function App() {
       
       const isAgentEmail = email.toLowerCase().endsWith('.agent@jiffex.com') || email === 'agent@jiffex.com';
       
-      if (email === 'admin@jiffex.com') role = 'admin';
+      if (isAdminEmail(email)) role = 'admin';
       else if (email === 'service@jiffex.com') role = 'customer_service';
       else if (isAgentEmail) role = 'agent';
       else if (email === 'webmaster@jiffex.com') role = 'webmaster';
@@ -6042,19 +6130,40 @@ export default function App() {
           nameToUse = 'Test Agent (You)';
         }
       } else {
-        nameToUse = localProfile.name || guestName || (role === 'admin' ? 'Admin User' : role === 'customer_service' ? 'Support CSR' : role === 'webmaster' ? 'Webmaster' : 'Guest User');
+        let defaultAdminName = 'Admin User';
+        if (role === 'admin') {
+          const em = (email || '').toLowerCase();
+          if (em.includes('srikanth')) defaultAdminName = 'Srikanth Satya (Admin)';
+          else if (em.includes('arun')) defaultAdminName = 'Arun Dubba (Admin)';
+        }
+        nameToUse = localProfile.name || guestName || (role === 'admin' ? defaultAdminName : role === 'customer_service' ? 'Support CSR' : role === 'webmaster' ? 'Webmaster' : 'Guest User');
       }
 
-      setCurrentUser({
-        id: idToUse,
-        name: nameToUse,
-        email: localProfile.email || email || 'guest@example.com',
-        role: role,
-        phone: phoneToUse,
-        address: localProfile.address || ''
+      setCurrentUser(prev => {
+        const nextEmail = localProfile.email || email || 'guest@example.com';
+        const nextAddress = localProfile.address || '';
+        if (
+          prev &&
+          prev.id === idToUse &&
+          prev.name === nameToUse &&
+          prev.email === nextEmail &&
+          prev.role === role &&
+          prev.phone === phoneToUse &&
+          prev.address === nextAddress
+        ) {
+          return prev;
+        }
+        return {
+          id: idToUse,
+          name: nameToUse,
+          email: nextEmail,
+          role: role,
+          phone: phoneToUse,
+          address: nextAddress
+        };
       });
     } else {
-      setCurrentUser(null);
+      setCurrentUser(prev => prev === null ? prev : null);
     }
   }, [session, isGuestMode, guestEmail, guestName, agents]);
 
@@ -6224,15 +6333,29 @@ export default function App() {
   // Auto-propagate loaded custom profile info to checkout fields
   useEffect(() => {
     if (currentUser) {
-      setAddress(prev => ({
-        ...prev,
-        fullName: prev.fullName || currentUser.name || '',
-        email: prev.email || currentUser.email || '',
-        phone: prev.phone || currentUser.phone || '',
-        addressLine1: prev.addressLine1 || currentUser.address || ''
-      }));
+      setAddress(prev => {
+        const nextFullName = prev.fullName || currentUser.name || '';
+        const nextEmail = prev.email || currentUser.email || '';
+        const nextPhone = prev.phone || currentUser.phone || '';
+        const nextAddress = prev.addressLine1 || currentUser.address || '';
+        if (
+          prev.fullName === nextFullName &&
+          prev.email === nextEmail &&
+          prev.phone === nextPhone &&
+          prev.addressLine1 === nextAddress
+        ) {
+          return prev;
+        }
+        return {
+          ...prev,
+          fullName: nextFullName,
+          email: nextEmail,
+          phone: nextPhone,
+          addressLine1: nextAddress
+        };
+      });
     }
-  }, [currentUser]);
+  }, [currentUser?.id, currentUser?.name, currentUser?.email, currentUser?.phone, currentUser?.address]);
 
   // Helper to normalize data from DB (handles both camelCase and snake_case)
   const normalizeOrder = useCallback((o: any): Order => {
@@ -6765,27 +6888,29 @@ export default function App() {
     return latestDate;
   }, [items, orderedItemIds]);
 
+  const minPickupDateTimestamp = minPickupDate ? minPickupDate.getTime() : null;
+
   const filteredPickupSlots = useMemo(() => {
-    if (!minPickupDate) return PICKUP_SLOTS;
+    if (!minPickupDateTimestamp) return PICKUP_SLOTS;
     
     return PICKUP_SLOTS.filter(slot => {
       const slotDate = new Date(slot.date);
-      return slotDate >= minPickupDate;
+      return slotDate.getTime() >= minPickupDateTimestamp;
     });
-  }, [minPickupDate]);
+  }, [minPickupDateTimestamp]);
 
   // Update selectedPickupDate if it becomes invalid due to store items
   useEffect(() => {
-    if (!minPickupDate) return;
+    if (!minPickupDateTimestamp) return;
 
     const currentSelectedDate = new Date(selectedPickupDate);
-    if (currentSelectedDate < minPickupDate) {
-      const validSlot = PICKUP_SLOTS.find(slot => new Date(slot.date) >= minPickupDate);
+    if (currentSelectedDate.getTime() < minPickupDateTimestamp) {
+      const validSlot = PICKUP_SLOTS.find(slot => new Date(slot.date).getTime() >= minPickupDateTimestamp);
       if (validSlot) {
         setSelectedPickupDate(validSlot.date);
       }
     }
-  }, [minPickupDate, selectedPickupDate]);
+  }, [minPickupDateTimestamp, selectedPickupDate]);
 
   const addItem = useCallback(async (item: Omit<ShippingItem, 'id' | 'status' | 'source'>, source: 'Warehouse' | 'Pickup' | 'Store', force = false) => {
     // Check if item already exists in cart (same name, source, and submission status)
@@ -10114,331 +10239,8732 @@ export default function App() {
                               </div>
                               <p className="text-sm font-bold text-slate-800">No items picked or billed yet</p>
                               <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
-                                This is a scheduled pickup from home. The item list will be finalized and updated once our agent xœì}İrÜH²Ş½Ÿ¢Ä˜3İÔ²›ÿ‡+RÁirfè#‰\’íZ£‚İ +4€Ğ"9<ŒpœßØöúò„7Âà_×Ù'ØGpfU( õ‡îæÆÓ3b£Bıfee~ùe?ô}·Ÿ&Ä	dä:É8vrcâ¥î®§¿Ççİÿ@´Ÿ—‹Ñö–—‹ï³î–y²EÚú" Ò÷$yëŒÜí¹$rúnç¦³:§5!·‰‹u‡ñÀ¿ãƒàsèõİ.mfwäDí6ş¹@¼Áõ<ÙŞ1Ô$¯Í'÷fû¹ëuá»×¬;}7Hİ˜üyœ¤ŞÅMçÜM¯\7 Qg•œ_vßIİÎú‰Ãq0pkŸœ‡XEş¿cyiÉØDYÕ+réDİ%/í
-êA†ø?¨úÕÊÍëí_u£ù×Ô½Ny{Ö––Tí$ág7¾ğÃ«ÎĞÜÀ²®0Äøî®7r.]òŠ¼ôF—$‰ûÛÂå»rc.Æ¾Í¡ÿ„ç†éÑéãËçHì^¸qìÆG¡ïõo¶ç‚°“]š#‹;0O_9ıOø¦ÄûÅİ¾]Yºƒëwv½jZå°m~u°XoÈE¤óĞˆıÿÎ'Ö3Ü}× NŠI†ÿë\ÅNTŸn×5úïMg™ŒRø­È‡ååèú£X©u|ZÛ‘;ğÆ#ë‡ Ä*åK'TtİYî®“è¦³ÿğ+¾xnG‘÷Äåµû+—÷]ÖY	Ã>v¾°aıvŞ»Şå0…¹“¤q\Ö‹VæšK7=q.Üxé»ÀKÙ£TBÍß‘O—PZÆÎd5ùCzcWÚè¿Œ õÒò/ÿB–ï¦|õi˜:>±ëŠÍjWĞ‡Å¾è¦áwŞµ;h¯LÓ-MV¤í­ö76^·VeCÅ°Ç4<ûû¿şûWÂ¥»3a­NËFbY¶Äê¶ùyıÍ:‚úyş¬ú÷JGç2:5ßÇV`:¬ÏÙ7:ï¬i;ıÖKÜ`à—\©€o¦ÇĞ·q‰	bj~â‰q´k¢–åAu.CºÍra»TÈ3¶.QŞÅğ*ß¹òn’’s?„ß¡ÕËs;YƒŞ†°‘{}'õÂÀnm5šÖ+PÏ‘ûGgjèuÇ§!ñ]ûv^ß%n1ï³Ú^y°£Ÿ»dà%‘ïÜ€°¸œİL«]yıOğ*¾çp¿;0+¸¼6^à{ÛášvVq'ºí/Âíæ 3:õö¾Å>XìÊjME*î\-&,Õ^d[–z„-zr÷ÊñRx‚A/‘¯É·ĞCÆî1O‹YšN<ªTÕï’‚œDø?ŞÑçÙT ,.ÛÈ\ù:,´]úõ:±q“´İÊj•¾‡ÒÃ¸‰*NEÙfj³Î­VEÓ1±épÛıu–ó}Œò‚ö ½Š!…«°Ñâxn6èÛ7N:ìÒ…İ~;ÆÅ®P{ ½¤5èdÚ›~îó»–`ïåV^oWI¬¹#7vüUê…ÍT"¶Ä­iZ¹¥9èGÎÍæÖIê¤ãÄ¬÷ØÍkóM/§Sgš•:ÿ{Éå»ù6¼GòCu a{ÚdÇx<®©”—çã4ƒêz†a‡±¬ËÙÈ‡,ÁÊQŒ÷ÏÜ[ùc¨ÀÀ‰‡ÊFÇyb´,`uWH'aÜ‰BO+B^Åô~t_ŞÄ£;¡åí]d´7¸.¶!_ò®àÏ¼¸÷¾8¢.Tê	z©qO(¦ëËÅQˆuïJ~•<RZ/wosâ(v4¸’r»øœì¹©ãù	y`¿l_aéù„
- r°7O/–Š­•*Ö &?²w|ıuM3©mkx%^¸ig‰ˆç‹ÅøÂl‡HüqŒªğ/ ûÖ—>š‡T¾_=K$â0iûö–„‘Ó÷ğÈ¿´@’¾ã»ğW÷›W@ç¼“É ‡õQééåüéeú¬âQ÷ÚK'|kùtV^(¸a²3Ñ¸õ/Aó]ú<üXoØ":ƒİ®²5F ğúĞÙá¨“ôãĞ÷Ïx®V1é|·Wi’Ô‰SÔ27UU'é‡+5İa¥¤;Ôìlâóyûrq¸¢,;ªŠPÅ"WlÇÂÑ­rdD«^öŞƒ½-å"êzƒ;¥Ÿ@³áeBVÑ0 ‹~û¶M-÷°üNäïo0i”{®¨Ê€­ìKËKÕCW!˜û¡ÆIUèJ_£‹?ö¼¸ïçåµ;µÎŠ6èI´ÅT¾Œ½Áÿa»è	ÜR6'ŸÀkµ–Ôt¾ŠN®6N@%VçvN†^¡Œÿ.G0Ã×”/ŸqM3§_uéOŞ{é°İ:ú¡ÓšG»¦½g[‰ƒş¶›ù.š ÆÑéM$ßnÙçi[´;À––¼êâôÄöÊY­™Ôsãì¾V_ Çn}ck^S­-ÒúŞÅÅşÉ{P†á8q[ÊÛU+N¯ãÊÆ®,ŸP§ª˜‰¸,zœa4ş¶‹ÛÆí°?^{»¬l\:^@­wõ‡Z­ùnù^Ún-àŸ Jİ6ìÙ+óİ?ƒ$£Wï^Ç*¡3yõûÜ©`Uíìf¨îİï‚¡Mµ¢ô²üîÖ}µı/ê…·ÁµnˆğÚqp°ptSTÓP“qÎ4½ßïïÿpøîdÿçİ½½ãı“èæØuS«®?ŒânA^,ŒŞ„¥B‡ÉíÃŞŸÆ7:Ë¶ó&ºŸkÇ=ıû­ÕÊ7ÙÖ±Ûw=PÉë9I{góW€nÃiğ]âÆ¯¨Ï¾ñ{¿„MX¿Q½]Üm™–µ]ÑÅfrgù„°#Ì¦
-%Él[.„øC3”(êÓÁ­r®Îb!ÎËì*¼Ju-7‹­W=cüúrÍ‘»âkCœ­/4BG&8KÑ·úÍºRjR—ÒªÄ®ƒ)
-E9‡SUÕÙT4bqC'_ößNnÀ”›#Å+ı Š=uå#rÒºƒ±‹”ŠrÙ‹yé‰q­ìZ1x³Mî© špW£ã³Ô]ŸÛá}²mù5‹ì­²¢Z1	ßE÷¸,1.”ìŸ™ôa2P_WÓÏÓÕA7 §Şh¦½mìÅÔÙuwIÖfOµ¾wôe‘?L¿Ì¾ßMï2€®ß½A4Ã¾×k×ªeàğêĞÚÚŒqx&}®¬UÈi±>B7	Ã ÛíjÁQ_â,xí—cÄ¬²¥ˆ&]†>ñúæ£'/£µ\ú^2ü2W'"In¿ã›TN¨İªñ8ˆOæ²çÄ—á—9?ºC­ïØ¦‚ÏìÅ“BåáÖéUØy?t¡ˆxÃ ¶»^:+Z©?£óú[¸®ÆÍ`¤¶ÿù«{±¾ÎH¡{2cµW´N>Z'nŠA;g9d“©Êñ@ÃŸµùÀúff$fvûºØØ%'Ÿ]“ìĞFüØ›J¼ò)œÙñà®r7ÎÚÀ¹Æ7áÂg®8ú6@Ó˜O(DÀ‡óÍĞPàÙlÎ¾Œ@³§`fƒFœ ¬;û@²
- kE!	?‘²Ç{„±§*f…ô5é5MÚ¾›@’aìŸ:&gæÁd³#³”K$ò2*“¦Q©.ZX§+Ù*µóˆæòy¸T±tákìĞËv ‘¢n¶À… E¡ë‰N}&A7Ó¨‡ª€¾	Mvúá
-Ó×‰IõjTZ,‰;òªfCç;ª‹,ıàèâR¾É6²böÑ_ÏaÊ5ˆæásÉÍcÀÌ¾‰V÷Wk‹zõE×£yÊ=DúH…®£âˆùÇíb~2‰ ù)İdóÓÈ÷ŸÇ÷0áZDøT¤köC.^³›Ù´.ÉÓk?™IB”§äRÀ®Ïø?B¹uäxƒò¯«ƒp²eæÂD„e¡2æ<<8úç0VØ<(DV1½iñR‰nÉ„‡îÃ_Ó`ª{~˜<ÕHé£<|‹›Ob7ÇAnPÙDP¶İq¼M"?ù¬¹¿…•XÆ¬àiÎ‘’!;ÌËNä+õp16Ÿ*€†l–•4¹qöZŸróëêifYyT_îÆqxõÚ½H…˜©Jë°štè;ic0L¨ıó"ŒGÕÃ«ø¸ÇQ®
-İ”ppêû“lzËIVõ$onXU%ˆ¤2Ûó?nÛLÄÜ
-oí‡lEıpùn&r’×\Û&ãÀ»ğÜÁğ-Œoº}ß±ˆ0Ó···I‹›‘İAÑB!·œv}7¸L‡d6<1 Ò» mÉ«³Û±ì¥ùl™¡ô®5æM/+l·ŸB,ÛğÛĞs`Ù#Í@k¾ë¢M\ßĞyEU*2H)u;d';ç1¹ˆÃ‘°.à¢€6²S­r^Œbá Ôv‚ÉŒV­s„ş¤@Fxª®ŠÅCÆ@»ç+±]¤I'W÷ç»§0k³Õˆf2=Ê,¹ë5Î›úš$kU?ôÉh°Eÿ±€km¯(e6m•Zk'ÍWĞ‚­Tj'äL}Ó‡¥Z˜YÕZzuT6îÔKšS‰TÏõ÷Bb	§wÙ;|{røú`o÷tœîş‘¼ıñğ ·¯®‚Z™“ø°ÃÔ’TÚÀ[‰DQté+ÒÚ…mQØ¨ª&$îYKõÌ9ûêV-şîHxA¾ºH€e%Hês&S Uc "ÎNjñ-"?íhaNCòÉu#Feˆü.5º0£ğ\"vÜwÉ`ùÈjãh·›,ÒtI©›æppé»t}qxâËˆfè~%£N‘w5¡R4‘ñÉHƒóL*&jâ€ºWôæAíÁp<Hà|ĞšÎÙdÛªâè EğnHôµeIT?­Ó€zP,×KGÇ\­Êö¦Ñ ûKØÇÔXÜ²ê—mK²“†BN¸NÜZ;*h~ôÜ+"viF[¤DêÓÊÄãí$7AŸÔ56ñÃŸ”/AmÇ‰¼.œ_’q´÷][ˆQèº#8S.È4¿Ò;|s´ûöO?ïíŸî¼>‘’Và'Wüõmşï‚²¶„ø!•[¤uÂ¹¤Ë±}Ê2’q¿ï&	–¡YùĞ)ÔÉÚÖgš2]85ÄPb/Ã<ÂŸÈKşì9dìªâ)ï&©—ÕKÎJÕc–T%\‘šÑLÓvñ5Ys"o…iÉÑîœf™ÉµÄúÅÚ%a¤*,,êÁ¢Ö­ò^çšxù0¯Gæ/KuĞª $!­J¸QAêSpÙ-¯TÜñ2ı·ìë^+Ÿ©3>8JÓ•VäAğ/£?…c2t@•
-Bâ0¥*ÉÔ”®|ÿåò²²Îgï*}¶[ÃpäbødÙN·V[4U*Æ	àævN(„“WF5Ûd¶$IàeeÈ?Â&Š9R FèMÈÃP>lHA!*êŒ…fµÎWCU$¹ZbïZÈ4”œD’²PkôĞ5N½é´‰ñ”öƒ†Î©v^@’ÆŞ#¡—`€¹	TmUø'êqM–X)è£!,QrNªï„m+^±F=¦gíÌW‚î¦vv—"Ò-Fqmy÷Ø9¯mœÔZJÏXğ\ÔÒH1}3Œ.èÉIÎtÄ[÷78º:²e#jM:Ûr>	úÓÊ`™Ÿ”;³—Kø%™(íHT·üpÜªWv0«•´ÊÌú!:§¿Ø?šhÆ5#j¥Ñ¸ª³â	*JW–Ç3fÁ|Ú°F6±qjZÔh°UwAj>Í°³c ¨œÛÁxÁN`„b£nX^ÊàÂe‡'4VşU¿RÑ<~¯|Ù.ZoÖáPö	†C k›*f`ÖMc0²Ÿ¤´.-€(’ö0\ÂUşóRƒ7«Á):NĞ
-Uˆa¹5vwMv8ûn¡àvÜù¦Y…¥`1MK¥¡a'pJqÉ÷a8Hš4p*hZCdZMìßŒ¶ÓğÖ’¯T+.¦àc%µ°ûê¿3Õ»¸KÙ5¯HKÀèÔ 8 ~(”ÜK«€Ê_{wv§TÕ¦o)¶¨vm«ôàdPDÉúí¥¼ı¯s¶jŸÌ8k“ÇVhÙ}fµºŠI'=JÔœ¦„0V*’:ö©C¸cîïa.àüí¿üøïÿ1yôgÊve€aÎ~éHª›rtlt‘eÆø„:é€ÂB(S•;¸Ÿn¢ÓúUf ez½öeôP–Q`¶]£‚#s“Uô¾„Şaàm„~Î¢‡Ø	ú
-Zrâ.İ‰›õVV¯$£¼—„6|—áWÖôØí&ZnPÄ×@)*kôUçÂS£„_öhú[¾¤&_Ç+Ø¥03¥¥Å´ÔJ¥Ô8·sÿ¸Cì(d{Ei¸­»è…Üæ%¿ô³C¯á½İ ¼jÏãaéæ|÷$¡Bmœ8›t®YBĞÊp’Ş x‹uÆcJè³Û“a§zÙ{ WlŸ¨³oê`Ğõ_â¦§|rÓ§ÒyÎa¸¢Sç¼İ¢3¨¥y@á@Æ: 0CV-“JËuÉ÷ ug.µQReuÀ=RÆo¬Ğ$´§s|Ó„ê©'…F?RœzÈ3¸ÛŠuS¥1Ö?u¼…Ä?Ìâ`"H~°
-{$~MaìÚd<9 o“3ãµş)Èœa[pÌÏ]J?‚Æ^ü"hÙeşĞÖİ‚ô¦ŒÜá§ û•Üè&*[[Vê[„ÆqZk$gº‰ƒ kî*c6ëæÓÏú;q0©Ü6=…ÛFŠ[Fe˜HG3ı´¢Å€œÚÊ†İt»
-“ÿNúN
-¦mìÂ1An÷Ê‰ƒvë­Ãˆvx	,Ê„ÉÌkwĞZ ®éåº¹O\ÆìG«ï{ÑyèÄƒîUâÁÀmŞ™†êf’ˆË‡v!øì‡‘‡±÷!É_òL·©±vÚ {=-mA²ÀkoJ/í_ªëøÙîÁB(^¾	ëL÷µïœd1]+E.¢lwa+ãã3IDIí÷ìlp›¶òš†×§%3We¡ÄéæŠzØ¡ş¥!Çïùpã—ûjş.Õ0ëºÔ«d¸RkÖç[¿^ÙRö¡½Iš³i0ë}‘ÕbÖ3 ñFc<æ‰9UÛ­LÕ¤IKQXQá~ö'T†2È˜¸‡‘¡“s<• |Òiİ³	'Ú4¨mİl›löìñO3Uft^“ ÂÊ*wci® gÕF@¼º)…‹)Vr™ØXPS{¶-¿ìİÏq3š’ÜÂ¢¶¢èÓé5´pI/Ï—Iğ+¡¸¥ªqÙ˜U.kË*'&Ó¥S%¬‹ÇL§M7MÊ¸‰ÆMœ.N~ôdqòà¾¦0Wy-µ=|‚PÈëğ2$@N„tmgÍóÕ:×8_•­îárÕe	cÕ¹êÔBjŠH+aëĞ1”@Ûä¨kb1}B:c@…q±4ME§Y"—†®9)W5³Z[µÂ)Ñ(AË„™šf£ifÙ™&s›=Â<Ò%Wš€–Q%ÙdfH­Ûñ>æ˜MåJä¼ú¹bSœŠ¶Wv¯Íü´)GCç+­â,ç±JÊÊˆ:²³w{É3ègJìv™<«¾x‚ÎÁØ-]búŒ;˜E¤Å ùÏ”{rÆ™«½¡Lğ!³ÒIi4òn³u ›ŒU	SiiÆbLç@mˆ¹+ëñŠÖQâYõ›Z¦1dp¢`…Ûq£ªNBÄ¡‰¹¸‚-`4½ú&X€zëº®ó6dÍ!CF†Œò şºqSe¾eÍÛäÔºT'ë$;>†âs:ô/	™Gn°ĞÊRC0Ô²w¹´MÄG® +h9G–†Àñ¡£”Äa±Èé³€ ÌAl5H0eCBï¹N2†=„yY/9)½{8>—Q4ˆ#¥í9Ã@³e*è¼L3N}^¡¢¯‘¸P“§A'.ïšÉHÅåe=Mjq>´Oœ`œ÷¨ÅwÖõv¿Êqù{î‰xÜr¸% °'B:.ÔîQ©ÇÅz<(¹øâ§DCÎëe½ín´½­ñ*µ¨â,Æ­Û`q“ŠĞÚª Ñö\!’ªJ•e¶qiğ3­Š_aòX³Î§ Ç¶ru|-_Ï:º vP Ï©Íaş¼1¢ÿÔŠ½ÉôEL1SuGƒ‰Uİ¬¦™úŠZß¹ÉTÖ”ë¸ ‘Æn¦»£ÒÊ”w“rj>FT‡ÁĞá×á™vVqwÉCÜ`Ö9H@»Ùâ
-$veµ¦êw®VMÎ’mh"bgöÙEdQf  _“o¡ocš
-Ó*îÍ¦™™1Eç´>¢§Ë|qÙ,IMhòºWY3"â†g™£úzQ±e«ç«ÅÈVŸ¿´yZ	ãX˜;Ún§œåp4`¢Wµ›¾¯LöË‚RTgÉj™Ğg’¬?%ÉS Ø¤t¤“„İÚ$ãPµ¿ÄoNÂaˆæ@çÉµ
-ûò$¶Ğ
--Yş|…³Ò×	Äóg¸÷³ÎÃD	âJg›Ê)FÊ_qn®ÔÉ¥ŒÇu]tÆË£˜Q>&‚»›Ğ‹|™6×“íÊ[-¬fÙìÌr³€YNâÀ­^TQä×‰ñPM_¸9YNÈi_AjS_:ê™'¾„ÔÑcuÔY#d`¿ÇÄë;Óav¦@íLÛy¢È9bvè½î0l†MüÂÙ£ Î<$t&Om©„Îè7­Ïd2+.9aó±Î,ÓLcš±¨™©)J3‰_)xåìòD#Fã{EÚMN‹!cªZ31çÆyhY_ Çn};ak^S­-Òª¢4·ÍÓûA“Üó0šg]ãMfñÖ|7‰|/m·ğO¡…°I¯Ìwÿz½ª¸LZı>7¼[çÒæÕ½›à]§cı²üîÖ}µã}L0ñQë†¯¡G™n&=_Ngğš-¨|x*Ì ²ÔÉƒ¼f~8ŸŒóä± ‡¿–ıÖje•â²yDXLğ7ìÍ_!äLX›¼÷KØ„mè,õËÚ®èb3¹³|BØfS…’d¶­…È¸õ@y'o•suQC±¬Cš‘17(¥Ş¨ğ)«#[$‚Sb‡éYuDQ«šÙèNU&ä`¬± yŠälİä&b^zb\+»/ş`“ÃdæD^KH4˜QAÃÉ5LgÊdİU¢eÓBQR/këjÁ·ÿ]Íqe‚4Ï³ìmc/æ¼Ğ¦í˜¢¿¼¾/ÓÏ°ïõÚµj¨h‘MÃ3és“,Ox’³àµ\ÉÉ–"šxtúüıÅë›¼ŒÖ~pé{ÉğË\4£·_†RİYH‰ª»Ñ8HÉ»{N|~™cğ£;ôĞúmzĞ!øÌ^<Ù(Tn^…÷CŠˆg1bóä]êÀğûïĞÁÂu5n#m´ıÏ?èXİ‹õuF
-İ“+Ğpú¤›bĞNÃYÙdê‡r<dÁ—JóõÍÌI:Íìöu±±KN>»&1&ÈysšGEÊr`Ó’-"²y0–Æ|’Å¨~ø8ß,ë	bÍ&ëË¾zêaW¶i`Í¼ÿ «
-¯²C uz¢!V\õaUO/ j6ØİI61#LÓ%n7”0MèÕ,Â®& àã*×&‚áÙ¥ÆÔùDs¹,e¦›'>,²c*•`(9ŒÙBshĞe*»vñS%Ïjš=KãhZ|Î¢§¤Æp†KÔ@ÃˆÓı?Â¸Ä#'%í·!aˆÇóğºŠêÍ_g¥t®0¥s˜ô¹æA;¥˜¸#¯º
-7t©º4d)Ò”|“íÅ”¦¿bö¤á7|‚ÃošæM˜ºõ	GÔ*¨^'Òõh„r!:RI®Aú®/q§»,\'*%wíMvyf‚ÔlÔJzè2%õf)uºÈËGa’ eo•‚{t=Æoü¹ê-Ìô@zuN¶¤0Ù,e¤ÇƒÃ©¯á|ó`…ÍƒB<U0Ö›a0•—LPp°2j†Âîùa"Y@«ë—Ua.ÒG*ô³¦`—M à1j5m³ —FS,XÉMû[´ËoÑ.íbe]2ğÕ’&Œµ¦­yøMiZQØÎ<GÙ1ÙòÆ ŞáÛ“Ã×[hHM:¯
-Dø*¢ßák{ğÚ6ÅzµŞ·î:E°ù.h’ñhãİ<õW+ï¬ip°¤v÷„@Î$Œ;QHƒJb¿}YABxwïB;)š~öHú¢èÿ?Ã[)c–>¾’ãÄGµ€r[WÙ±wâWH´ÖOÛÍüÉÊV¹xí›6ûUd/ù'g³½¿mùt_N\›aê^@¥ß8<[*Êy“%t2y€oI·Ûe×èƒ,‘=l¾wóªXßÜÉ¿¹“s'?[ç“v"k‚DªƒAßÊ¶øDåè7Çµæ…æ$ÜÅ;½ƒ÷‰¸ïs"Š¾UŒîZmNÑ7S.¸^8Š|U"¦±ƒ ï¡º+“*;-–gª„¨†„˜Æ2# ]ÿP>Ä)èg<6¢AĞšCQÇ8İ¥»ƒqßmcæ]P4™­l<"¿#*Ÿp8¿@–ªˆåaäaÆ÷ü»Óí´ÎŞ*£F£Ï÷“»TÎµ§ô·cälm‡•ŒßU¿0ä{p?<äÑîÁŞ#;qÕ<ŠMíßW ¶Ã+ÜØƒ´mcà~¬Œƒy&³…•sª‰£ŞHnßïNrô‰:‰ïqšJ)ŠÃ‘—`%'òº‰$«öhï»¶è qGç/›¿@z‡ovßşéç½ıÓİƒ×'š´ä,·9¯Q›ÿ» M‰î‡ÔlÚâ	ÏÔÔ…¡Ç¥N·ÛZĞ”Â³¹c)P„ïJæ)æ0¦¹Zh<Ó–J“´C™E–vì^yÙŸ=‡ìc‘]•²ë”YÙŸåçŒÖ”Š!Ç†öáERHåcz·@>ĞŞH`!ÒBl|Ö®¸t·ŸzŸİSç|A•e¬ş·MÚ®X/y{¾û*‡»“ïÃø}îŠÀ0«m2NÜ7î(,åkó.Hû™Péù,›ú7_ÜâĞvä…Vn£÷±÷^…‚/½
-h*¡\“€
-3=´ˆ¶×å0Îçøwé\=Ou‡ß—Š>F‚ƒm’à×äÃUÈÇ2‹÷GúüRõÑ«Ì#Cµ•íJMŸóâËOíy	-ô””'Å»³_Tï_’´;ÂÿÓ·Wk]Pá"4¤Ú§¹ÊµM¨B7r®Ñó^/²S{ó<,T/yˆ´ù\f×2ÙÕ4
-/¡@Æ ³‹—Ã°$çìL'«È0ô‹ IÉàz\ eo©ê8#îq7r#.&(áŠ&KßVÏ}İºıOÌÓ¾ÂÅÛêJ2"<²£†2RUí€œ°íªÿL)ÃB8Ä¨³	çV\½œáø¶²‘d•„œS{}âx‰¦H·¼¨5¬®¶J&vÌ“‘ÒlÕi¤¶êöC(w´EÿÃ+-ğî«Ùë ÁF+³ÉO/‡«uwª
-”ÁmNÆ£‘ƒ¡şÃUI±÷ÆÂ{æ6ÜÖFNÔm‰¿Êí2¤ZW®œOäê%#˜´è¾Ø&gÏ3ôE1çyÇ>ÿ)ø)(ü•ĞâŸ‚Œß”]Ïäzî:ÿ)`¦&K·5„
-Y4vüAÎåò2ÏìOƒoÁ#[q_ÉXÇÓ¡|BõcH†	jÌ¬aÏÎäÚ%ê¬ï‡NšìFQ»xc4PxI5SÜ‡°„³ŞÈ±¸¥Ë/Dˆ®€ŞØ5¼“š«nZ)ö$õÁ‡Êf]º%bñëŸ~J‰ä¾‹Ê›TVûıLæ~ÂÄÎ}>õy…Ô“]9?óù¾ ˜¶å »|	°ù"X¦?~·~±(f3j)óÙ»tÒ0î&xl˜W0+7¶ÕQ:I
-nbŞQšÓ!NÂ­¬‹U·İÍwûNÚ¶Ù‘ÑíÒ¥âxG\³¹-}ß‹ÎC't¯bX §P“6¯ˆò€ÉNæü˜ÜnUv˜0‘‡>Åä…?k©ê9¤N­‚ Î¥Õ³êú’D6ˆ§Ü‹	våıb)#êçY¥l(Ÿ‚Ál´“Oa¿F§0ØIP«ºÁÑt3µ 5Å2SœußÉ´n‰UÕ W]&£ÁV½*UüdH!iDBÕjz¦£AäË³åÌÀ¨XkÊğ 7NtäÙp­Ô1Ç±Kíñj"Ò¿ğİEjç‘ƒ³& ‹Hö6µı}æHáõU&awE$¢J(Ùˆ5wËF…Úİ¶Ä"©4s³N\îª™¥r©â©qß*myrÈ¯wıTùZ%+¨Â×Š–jPS´Ú® 95ëbqxR¥÷$.73mäZU-R­8˜Uu¨±IQäÓ5>³ï¼qÓa8˜iëÅ×@?ğ7±MÔúe+½øÛ®)©@pi±è©1¼öyZ9»åõõ
-\Û¬EF1u Uâş”;³ñ#~Û®C8b
-aÔ±Äæ ÿk-I´¬±QEk
-0RÅƒ|B(WğÈÇ}ÿZ¤Û©	Ø¡G— é -\p•ÔŞ5?_9vpBê5/‡kXkKÃNtMJı‚æÇ¤áwä=¨İl1UŠÁéL¸·S:½¬‡r–ÚÓ7rß2ÊÔ\^È¥èdDezM‰AeGéoQâæêšŒƒFI.j>1ÑêÔ¸c©¬«ºèvÈ’}~‚†‡‰®o
-CC¦7ñº‘v½¢wÿ4oÜé°n+»ízMÓor¡¢•›Lv,?Šì“™°à¾[´Ï7—² p!Ëz]jtı/ÚØDÔ5æ%«1¤py‰ıËÜIÌÂRê–•«j÷.¹Ç’`ÿ>³”º§a»å [{.J,”RlÍZ[#ÅÎÈe¢8–Zv‘Ñ 
-¤ÛUcX},¹gˆ¼u¯˜«6¬
-Ø“è[ÖoKbÊG ÿ•â-&ëğëjø|³ÿ>¤™P¬ºYå—~Í°Cl½U r Åšh¡&8FÆ—\{ö[?„ºòÒ!ù»ì[6¾&'©%äÏ.p›H£q×¯v×qé‹~{ªŒ¶¹ñµs!ÅæÃ;i¶ÌÃk%Cë«~Še‘ŞDØbú[uŠÔ	"¤Ë¥º,Ôhñšµ’®É]¹: •Ø9ËAÇ!Ã¯|Ãà˜1GÊ’ÅaJ;qs	ß~Å:N‹ô ºí¥•µ ]!2Ke«¬ï®jŞpÂT©Ü¹16e%g1i”‹2Ã"3ñ½çt)N2„E&ª1Ğ×…ûŞûÅ‰œ¥nÊR­b­`’Eù‘Ïìaàß /q>»L2H¨ËÍbÁdíS4+?!»9 k€Ìò‘J’ĞºKº¿–Nö½ã‚½¶9f6×1ç»Â¶€Ìèº9ÄJ†áU@(Õ|ò)#²H|'¾DïR?ÉBÉûc÷/c.wPeÆª*©ùôP«FU@QU’e^K¸†*ƒˆÍ„ªO¢œ£‹kjÒÅ2ÄBÍ ©¨©‘ÀfS?dÌÙ#7ª¼Ài—-í›…É.¡J|« ¡5ÊïV	¦­ä"(Ør™<ç¹#”~Z]Ş·ªL¢¤tñ8èÃ—¹UÔ`IÈŒyrÅ¾“K«¬BÜUõ¿ıõ¿Õ+ÄTuô—É¨7 Vû‡0ë÷B?)ÍÜ ª­²>}é@B3ÿW½™j¿”­¨AE
-f)*è—4mÅ·NLÚèØ£d©ƒâ{ŸP÷…e9AH’Şøî¢.úŸœsß­òÑÖÖe!69¼@½m@R”D.o²Ûµiçh(%´ós×Ç	šÁgÀîÖ‡¯»ƒ{[‹ÜÕ±1Ùó+Åóÿü§ÙûIQÄnâ‘ìi‹X-ŠÈE)Çnß‹<<¦èJY+Já~¢„7Mi<I‚eTŠøÈ3Q×,%§tjíF²f7’YAtº'~¬@`ˆ”b¯ /ÉUˆ“ÅIfˆôİà;dIŸÅö=}4CD?–7L¶w0İÎ½HAb€0Ü
-Ç©kçyõw	Â!j@>(­Q­Û³aIäT¹ØP¥Œc:Ë¨ åì_©z÷ûöö6ác¡´ù¿"­²é¡8<ñ¿øo+tko©KÚ"ÕqWŞš½VÌÍšWàKZ¢M_õtw&›öÆ»|f¨ôşlE£¸=÷½JNV	Œ)ßg4¶rê¬ËG²»]¯éí¦­œJéâêÈ`ÊÑV’AØQ«¢m°·fc»YR¿ÑzhE5‡«}•Ñn0È¯Jı„QïºÅÍ‰º÷œ¦=¤4øÊ€U_EĞUmN÷ÈòéíHz‡¯_ï÷NßVÔ•[¡»–ë.•×¹°É>t5+;‹@G|î†×ßpºßN4öw®ÄD–»,«!?}Ÿ…ÛI†hâ8¦®ŸD Ş€’DÛ´@2·áO„ĞX$p"8É:~ç*Œ}½: SŸ€Â›†I=Gå-¤¶DvÔ˜Ÿ-q|rˆ¾ƒ"‡xA4NeVöC­©LÍÁæê?zƒí¹ü5P÷{‰äN§ßw£t{r_->—ÜÑw¢tÃ»Üà³‡ªx²ÛªGzÉ= zàFºí*•/†¿§]³MÜnŠ–…´‹ß“WİKejªkx‡JceÆÌ–»M7÷;¸ı˜^h+43v{70ÌÒ‡”³Wx#DC9p72c?EƒHBYyUslëi¸	•Ìƒ-¨kK­dr5“>€#Øæ0Æ™ghö¹#œÈÙ hlv.‹gsê˜k†·—ÔÚª®I;ŠİÏØøo	èÂa,´ñÕyEr>:c·ò¿ƒ„ÒV5mú8Ê‚ÑI:tipÔLR]ëÕ*¯\eîú‘ogÚi‡ÿì&Ø´wÇ¯Ùä–†Õ®Õ‹RaDi™l9¯e‚GÅí¤ö7¡ÑÃÔğ¶.Å<Èh›qCbåÃ+ÜPi¨©GˆF¡Q…ªnÏ5›\Œ 5Ø[Øî•×îå"}›¢&
-ùÎ>LÊãë%â”}"¨¡;ÅÍAFw/»T¶‘sè|49qßEëÏõ¦Z€9À’³”Ä8?EYÊf\õ3÷ä
-U£ñ Škm›Å—Üğ¸DJ§ÔB3¶JvÁ<	ĞfQ¹^]W°)òÙñÇ°ï°<¬+n¬íQ¹ĞÂ§Úù†DTºÈÏh*,‡f¯lqHÕùC® œ RÒÊ!	ãëÀ®³LÅTA&¯r«7d­qÏTüVZ¼î=®)ÁúË	ÚŸ.çµË´´²ÅPê%åò’.0Xª‰F¨]l{Î	$PÙçËXe?ñ)-,>6hx×ĞZ©yWQ½
-Ş"jƒô¥L?jV°{?gĞª¬Oµ. h#œ`ĞÜ¯d™Q2ş«h§À**íN&ZLËÉhÏ§¯j’
-ó}ITQ`>¥açÃ*µJT|{:`²ÒBœ}L¦àìS‡$°‰‘uLû/x9çY†ã"é ºTGÑYZãÈ¢±ÁÜş/˜Ûÿ±ğ”É’øA;e¥W!A“0óëlÑì9 yDcıÓ ª{R=V„tÔã¨¥ı¢w¹µ(¯ó?¤]ÁeÚX^)1©ÀxĞ‰¤üÉIjæ´xAenÔ)IìŠlşàÀ2v Ø¾KŸ¹ğ\ğ‘|øzk«såòÒÜ%ò‚ë½[ÅC¼ávı÷ÚÛuQ’ñ Ö:)ßPÎÛIúÚÅ…ı¸AZüdyIwÄO}™Ówg¯Z†7é·Í¦ ÜğóĞ‚ë/äw ¬~“U¥NVınbYeşº…@”H3P±é	ƒZG&Q	2ï¸n°s¡d=Û#~&\$z!$1á0œ^–@–£aópíû.şùí>+±Â¶æ_u)fAexdl){]¹78× ´•qàkY|$’M=JGû\vHİ¸á§ê8­f!ÍÁË";?ÜĞ„t¥ZÇ~˜·UÔLåéu)±† d/£VU<ö‘{oÙG'{^ö˜?@!½}&vñ+RiÜ"ssš<{ø¹ËPÚäÕ©âÍœó$ôAù 4D@-CŸÂWÖ<¤ÿ¯8ÅKˆ€òöÁFÅns`nË"€`nçïÿöWs– -_²IõlÒ[2Ë^j5”[5G@Ë$²2s¸\„í¹Ê ËGÌ¹¥±³V@UtŠM˜›8-hÖºB/,×R¼ä—‹¸­õòÒ<gi Ä¢¦º‰#şG!ÔX»êÌ3M“¤qÖåF¼9¬SãB—ç¥ZWˆë"‚U „¹DÄõ™+˜ÏP„G”Z6¥¬ÇhoïjÜüº…i^µô`ğş—˜|¨^‚0ÄA.§ÕvfqÿÎ33Û'[®ÇäÁ:4FV'JÁš¯X¦[²¯9ÌJ‹Ãi•N­”7$Sl_xåšÀ¡äëfŒtQ(©¡ì‰Ğ4Ïâ3ş¯ğ‚Á¶8›@ÃJY&Š Ê¹[7Öß¶UR‹i" î<íåœ·å°h§ß_`>P,	¾Ñèèzl{A¬|«vÏñûcŸzG›¼MX¯{ûD”Äâ§Æ¸+§+CÖ*Aëê ¥˜:ËŒ6%Û«Jæ×’Z	g¾*¼ßö˜—Şş!U²§)Ş.µa)ÂoÑ_Á¡b´Òs;·µÉ{Gê×8î	$ÎŠc0èYe«)™íØP^KÆtsIàº{”ñ™(3Íl†¨ºî°`L6İÃ%9|],XË}œñ'¤®¾8a¯*~¨‰Ö»yd0”lb½\£Bú®V!ğÅ[×ÒX4FÎ|oJcm¬ëŒ]Êx•üş6¼v+N!Øh4gÑ·‚!ÕÀßÖ#4¤Z{²ÍSjGNöëÈÌ`IUÚÒ‹d6T·]acË¢}XnvÒÆìŠ^ÄRV´`4UkŒTÕ&˜¡ıòD!åMC7°‚ı«‚ø+q]UK•ÊØ¤64!
-ô*ì¸Ğâ.ìÎyª˜Jxä}ÏÏæş’æË¢Ãnk]ı¸.İÏñÓv®>&K&œê<[]>¨Z,AUlôBQM€y»)¥ªb|WùaLí8ÉÄ€ÒY¢Vß†\&Ã©J¸qÓ.Ù§µb—Œ¦ÀBøL³¿0ò}~P†şï6Ø5`td}cÏDfÁC6Qh/Ïu\'‘F3®+±l´ÍbU¡£Ïml™™p¼>Ò&/pVÎ
-„ßÖÄ²¡°êâàcf´Şƒ›C¦¥¿Ù:AŠtÓ"Vª¾,+	£‹èÙ&æDGµÆ>M¶üàv£‘ë5ï§Ì%‘Çå.+ßHe	İ‡W£œwÛàrĞÛ\‰"m·ã§Û"ı`c7IoCUêûÑ£B[P+¹SÅ`u²XnªÕ"EA–s¦S–]­ğˆóËÆél‘X[ï‹šü0æ~Ò‹¤€ehı<ŠMLx^&iô?™¨õŠL²˜³ñY‰²²&åykCÅÚY(ãå°Pèµâ–‘¶œ¼İ=²N%n¬®yÄi9VØz—qí€‘ÂN;GóÜœ¾U¯<Hç/ªR9m"zé— ¤_kúÊ§¤¾î¬Ùk.BØˆ&äBUU=ïR9Ö0G©–êÀ%¶š]XÃs<-‚ ûõC(Ü¨uØÆÑ¦£~D,Z²ˆ4:qº:eô7aöU]¨¢‹ÉY(Š	 Ás×‰CLÉê¡19æ·ÄPóÉ %ïFS,š 8eÅ¦§~ßèu„Áh\ŞEa­"¹„nµ¸Ÿã5%Ê7Dmf½iĞd!Ó¡ƒ}„ØÁÒ©”ÆfƒYğ`(XÄõR,'4áBÙÇ€nà® „+È`+0|UÂ²¨ÙXÀ/[Dt˜'†qk³ĞÑl¶Ü	2zÒT'zùZ¶`.Ïë#_Ó›{¢|]¯³u½e½°¥Y=ª2˜’MjxÎg0X5Ãùƒ¢‡ìü&ØM‚ı½Á#'¼ê¾äºEdYñ7æ‘hé¿Ä¥ÿw~èTå?•ı2 €ì3¡ì¿â	õî_ò¯}é’ßf}È Y¦Äyé¿í,Êå}z_øÆùf³©0C¿€Ñ&ãæÒ(PŠ—H,Å¬{ëpÕ%B+óf³³qäy
-ÎI‰Œ¦A2>Í‘Ö¼€ã¶KÉvÍ@ÙJ3û™‹,:æƒfSµÂ`*³Bb7Áb7FcOåf¹'G‹ÅÖ&m‹‹H\hUrÿÚ)ò´5tªè·ëŸ,ëh­¤À(ûj–UÃ¶iÆtãç‘'ªDwºğ|è]A}zV¨Oú˜fü§ˆâ_Æò?ÈäØs}41lø”³ã4v’áÊlg‡ÎÄú²Í2,`~¾îú¯—ß |TK”r“²ÜÛ¯)`FLED>ŸQÓ,cs;ÿìº‹`˜·ä&èã0€Ñ°<‰£¤Õ„Ìy§®ï¾?<q>»<¥`•y6i°.K4wİ¡p+Î&"Ç/Ió²ÈÃ
-­«Iè7L+8X—%±¼¢£Š×/»¦>â(Êã/¬TB¯°<ÆĞ¤€åé×®
-BS'İW%*=$|Ë¹"W¶’:ÿ¸|ğİAo—rEîöŞ½Ù{z¢a\™–5²dSÅ ©Šf~8JœC<rô†.”¤KYb\é²Gşl¯Ï*Åax!2JÒ„ƒ’ÏG’±Öoà²£Ãg±I–&	áôâá6ˆéæJÔÓs\•ğBNå e¤T‡ƒUe§xxñà a*‡&²oy§;³j”Zì©emøy–n„ÒVhO8:ovßîíÿIÒL™¨VÇñìq-›0Ío‘ò¦Pbø0¾7.NĞíãã|ê|œTm†ùaÇªY!–Ìç¤%X_XügÜ°o”ÁµK
-ù.¢}{ä®ÌĞœrÆSiø mòW"µ(m”ğu…kzîºÚF8Ú‚Ç;(0Š|W’lùóór­/I“ıÔèÀÈçÌ)=c$K]a­V¨åî‹K®
-7021B‹±­ÖDŒj“‹š9HmÉ8VÁ@ı¶¸›BJî…ƒ²‘#²ìğìƒ¢/çÚuC'FmsĞšÏ_I‰$[yBªÒMêZä„»yéG0ÒQ§ê¢‹;•»ûÖPåâ&å²Ç²çÂ$ey j¯8ñ.ÔÏe·6y×Ağ9ôú¨òG7õv„#hEßƒ›³ûÉ· \ßQ.G}»ÂĞ¦<°„ÕôØÚ˜fÄÜğåå"»Ï²˜lôçv²¿hw4-…5”ÂÿjX€d,³N¥‹¨Ò–-3êÓ’qÍşê7oúa:D¤,ıGPJEtƒã£ÔN¨Û³”ÑjµOí¹I?öh/,>
-Ë1_}˜‘„ùĞñŒÄÎR,'ÑÄ$Ç_«1IÍH3965§qÃ©«
-·™y£¥8	›àÆlî0kÍºV›809ÊquŸ¿•5m¹œyEÂÒ¥{ÌN2¦ˆÇ2×:s®
-4]¥çî­"¶¤H¾¤Œ[)S†É¦aJÑnïİ¹ú:…-æa¢aŒ§Î'šİá
-Ì	ˆšXÆ¼6–Vxû¸†H¾-+4gãÓ¥Tş°ÂPÙÃÎê
-)Ñ¼K¡t¥©ê(<øQkò	TtÒúN*çG±‹É_5t±v!DÊÇu¡EŠ‡ÔáµÎP;¡Ì7˜9@UûşdÁJŒ ®àcÄ¡e²7Lhqc©õ\¡jNé¥jª!aEÙ¥wŞ5&e@f´”[ˆšˆR!‚f*4 ³²1Ÿ]xãÓhm’+ˆk9ûJ8ÀSøL—ÙæY±<uñ©ÌŒ$ŒÛ­#ß¥¾ôî‡KDMSÕã‘s	“µd<T4†'uÇ7ÆÔ4£ë†À½‚êC¨«î`c€êüÜ"¿#{Èñ„WíùzŞÌìƒV„­¢ƒÕ7ân‘¼·Õ7ò„8EW«oeévÓ-j|Å
-·©ô:D6İSoäPóhûÃÇrËvCûV:°+{˜àsä „Kä®îZf…E³°ÀĞLÚºİîUñ}÷úGå˜ÚÅkRÎÎŠ[â,?	U¶0ü”
-Vº>:šhÚ 3•e×Ä‡Ş—5FWöÜJİµ…Ô”'{oEKT!&s_­Lj(¤à‘?NÊ^VdêËFP*gDÀ¶KG#Ÿ+¶´5Ú$D’|ÔS¤[àœ?…Ç¹¨,šïñ (ËH©{ìÖIè+"Ø‚%LWÕcH-t‰[A€Ï*¨áÅè±9…7•ˆ®¡||EãÁJæj]Uï»F×i…cnçm˜ïI‘Ä¹2¤~PÅKähæ£İM>şYtºìÑ-h–|âÈƒ| ÉSØ¨æÄ³Á¡ÎŸKz¿ªB9šùF˜kDæcÁOiª! ~€›œŠáCäø€«œ7/÷Õ)à_Ô°ª<båùhEP³xØóxØ„ÁVË¢9!†ø¿&ö#…{¬?
-±=Ñ!2œ‡Ø‡'àíŒ7Áp·Õ™(Ûu~	ÃìZ3ÇÖr¶HÔJaO¯ºaäfø+gL1S¤àçª››®bÔöYÎ;1÷•Ğ½s,=È><{ƒt¸“ıŸ~O†,üåáï1®\¥ˆWÑ¦~%öf
-sIú1®R¹b±Cn×DæL_n¸ÃˆàÀË>êdCLBÎb«#ÔÕ¤"AB±\,&,ƒVºë9K‚¡›e°eÆ²¶T‚ı­/Õb%jĞÚ§’°ˆ„¡=’jÜ¹yåíâP4ÑH:}€V£8İX…Ršç×1ü÷#¦¸Ï]¢À‘áj<Ïál³7ÅÎ	âèì+a;‰İìƒ®^úYò<İ7â\Ê±ÄÌ,/W1²“å–i„#Ÿ"İŒÈß¼j8Oİ#Úe¡4ÜÁƒÅi¡9â[mx3­Ó¦(ï_Â»Ş+ÒÃ¸#w‡—È.±ÈÉ ìÕ-²·rzğ–a¯w÷ö÷OtÈëÕi‘×2ƒÄC¡¥_¾q¢#¯¾ªà(]b‘B¬qß­@¦W»ˆH½€a88Q;á“[2X2ÔtÌ4LƒÏŞÀ¥ğÍ>‚²ŠwGNÏC[:z0Noà¤0ŠÆ)û=¼(Ğ7l¡×äv‚/G/r/˜”ÄS	ƒ·FhÔ#®©§İ¾y¨ù‡bÃ ÌĞÁ2Œ ŠBOÀx@
-¹ÑR@GdÙ°’j˜D’psç²}KÓüÛÉ
-ÚªÀï¤›®dƒWù€'°îÈÍ³H}>ÁôÛÁª'{Sƒ\,Héš}òSO2ùh‹Ì ãÜ£åØM¼¦™ÈiÒ2ëhİ< Ù¯kæDØ+3˜9´œû˜9iöà`¦€¼F‚½åßö¾l9ì_ì\ƒ™$öÀ{àÜôz¦ÜéS£_Ÿüt“L8¤!ĞêSò¾_Ñn÷Ÿ¼ˆôÂÁ=ã¥¿Äó‹aÇÌ`Òğ’~í{xğî±Ìhº%üZ64
-nê½Œ—c7WôŞá»·§Çû'ÔNèY(	õ—÷ï²ú÷ïvà¿<|Da¤U…4€É<°­vCk	™Âh«0ğüf½ır¬·¢˜RÛgnÄ]Û"'½ö÷Ş½Ş'_“£İ?iì·kfûmÍã_Ö£7x·³\<yÁ<‡‘u
-Íãd^µÍX³ã<$ËFÏñİ`€QX¶kİ"êIèÆ¾Ãs’:éXU;šc
-`€a7ñ.JIˆ)FÉ ó‹Ây&Šüâ#ø•
-”„Ö†ÄP·„b»úapá]cdĞV\Â“WÎéƒP\_O¼Ñ`ğfŠBDÜ.ß]1~6Ùíhj;FQŒáÍ£(C2Nu”ƒåyòÃÁÑÑÁÛïŞÛ=å;ë€f‡Õ ÔL.u;‡:Ã¸Á»Ô^iY$EÖ'M[ÅSÜEŠÀ1™È—;ªª,¾Ê4ÚY¯ª1XUÂÌj¼U=%P5j«P÷ÊZêì@öÈ<)@¥˜áYÚ›%®¿qâşĞ„Ğ½£’½±#ÛO"ßKÛ­NkşÃÊG=¼Gïoä€WÁfö¿ıÏÿAzïNNßì“İw§?ü'æ™l‘ÏCŞ4Ù¢y)wg$\fã(«óY|Rä–Âÿ——´ÄZ¬Û› 7Õt¹ Ôåi¶¯Ñ7¼ãséö¼¸ïçjÍf]@Š_s'ŠÊlL8ÛØî8†±÷U„”SJ.Iéoö;²Q'Y„a¹ $~Å.qû¸Í9be	Î²Ã°M:°%Ò×’ë!„9Ó29Lº•M÷‚ç<U+KHÈ­‚j«W¼Ã4bD]î@Ã+å¸ª¦$¥Jºb³Uì®±¸4r¨QvaS9å–m¾/9 3ß”“4?¹ï]º}»Êb-ø¹²T÷¬÷ÔØ7Ùö½öXA&pŠmVSUÙôÑLeT@`nNÒá,ùåğaàvè¦ÏVQ>Åi²‚3¹I
-½Ö1ğ&Öœ~8p3Òş?ã6|ÈïØ5ĞAáÊzN¾¡?`˜Ó@ú¨B+Ípm|‡Å½Ğ­i;Ç6÷f+¿}áÀ|±xà ªºè/Rsq‘|;öC4*û
-±iè`z#2MÒX™íRNUÊ½ Brà^ÓÑR–EÈÙßÿóÿEOÈpØşJ–=
-êÀ}P“Ÿ)ß>ßı3hšíÖO”…Ç4£ø6@¹o1Ç6&*-ù3±
-NÏÄïÃøÓ!*¯Š_`œº±K	1Ú‹?í-^.É†G
-àZ…CŞ›äªrö¿ıõ¿’ç½İãïIïğõëıƒy‰ªÕóŸ‚Ÿ‚3ò;İˆ<ÇªZ÷­çĞçµöÀqóvÿ}ëÎ\ZN¯D¡%Ï©V_ƒ®ØT«’~|ÚÂ¦J>mŠé>æz°4 ,Ão½Ä®TfŸ¹¸}PGôìŞ,ğïÿúïy™x)/qeŞÜİææ‹ Íü¿“ç'û½wÇûÅ5&8¼B%Ÿu‹òïÎfBñ˜çÔÅÍuè%dƒ…×bQLRƒªcOt¯ ÅK™¶æ2=Œª›Y"è0è’Ó¡|"7áøÙ™qùfkå]ŒtjgÃ4’­ÅE'òºÙOİ~8ZL`|EìöW·n€µ{w|ĞG\A.ów_£ì”ß/¬Ñù;e4¹^J@@Â’ŠA´3Šmúè€¼;~M3eCÕ•ÅˆEB_€ úÔ›àÓDb¨ZŒ³ãŸ	Œ"h0¯Ÿ‘Cx+*5y­ûğ¢·¤Ò€J—LlÀñ»)™ÔïsÃRn‹ÇšÜ -P¿”ˆ¤¡ÇnV„Ìİë†6hPàªiH-=ßq³5*x,JLĞ…pÄ`æä": ö2S
-åáï<02mó*S‡Ôé„•Š%G(5Êh^S<TåHı";ßHIy^ÊÒ Ã÷Êé_wªeºÑX1_‡¥Ã’Á‚¹OŸ.è«']c6sššQ„U+m‰§±•Å_]uFÎõÜÎ‰7âis˜›Mê×WMo­Ò’Õ†O76¦üf>As´õ5oß¾İĞ…ÿ”¨ßØàeÛ"®J¢º×äãì {—œ(-?>”]ÄU›=cà%Î¹ï¶ËÆëĞ§Ì•ÈÓâRÂ±Â•¨N9¶ZfcíÈÂâ®¸Jnz·~Ö¸-&_,ó†‰¿TÄøjnUÖäëĞELx’ìcê£…[î3ëÉd•G#“ób©?_öæ€åÚ±ØpŒfŸ
-mu.™Y6~ÎÚoEc]|Ğsæ¦©×¾E÷}êÁ^K¡*[dui$RZo˜w†¢,C£E!¤u|/7jfâ¢K¸¢»i|ƒìB°¦‰C©pàc°´nĞ-#söÀ4`#[Ïz…J¯e¶3# ~ÊÓÚĞ­èG*ë„…ú§%ÄÏ}Øë‡ÌÛ³®¤ÄÚí¤Å¬Ù[ùßÿ·¿RG½p£ ùÃÏšÊãÂí³rÅ”: }-‰''\@Xœ—µñİH€rƒgÎ
-­ÄÃiŠç”+¤ÕçGR¸Á+Ôä.Ë©qƒ¿P_z<*­ñ¬ªéi…—@aÌÕô½ä~.÷u÷CØ3  ˆÜq¤ô¶=ŒsUïÜa´SdlÎ”ãe­÷ŠjÇG¼yo\Ê%;´<³sÉÈ‹ÊZ‹Œ¢HÌı[§(ªœE´‚‚öÂvS}Nˆ]©y¢ J\“T“6<i!7”w‚G¡oĞå›o×°eé5kÆ#áK²PK¶Ib%M¢Ö¯~Kijœsåù§`”ªFÑP5)°Ò}ÕÔßÂŸh„óà£ÁVH»‹shG©†zèwt[š„J•aÜ÷´Bfä‡é‘$4`–Óæ*ìğíà'`â¬ó(-!ÒRÕú$=˜BÍÂŠQéå·Nğ)SÑÁ¯%dh4a'µFlR5$ÃÜNº—"vÒGÚêÒÆ+óyq+K‚ÃH`„aŒ©Æ§ã=©¼ŞuŞõ
-Al¶Œ#;ÍdßášVbÉ !*_	Z™dw±Ë2.yl.n
-:]râä½S±qä=)†õ¹G6¡Tª1¡PªÓ¿bêİÑÁ£Èó{›ËTP \ò‡cLÁ±÷Eˆ›97[IBßøë$}šè	IZ¡§'JØ;6g¡ŞHzT‹ye…Öı{î¥<_Ğ…Ë^â,7((qß\øÓ,VspÖJ
-¾òqdK£ŸÔÆéÅÊU´ÏÅ˜ß‰¥qöî¹/À¿ïY³`†ÃnÖKYÄ%—õÒê5†G®XèÜwİ ú­š>U0ôNË’çpSyù¢D™KÄ,®¦P§‹AÍ]•ÈS$¡ï¨×ûQù¥ö.Ù™{]Ñ+™¢c×Æ"rÙ°\7_è„ïˆP$mFoé`Ut·¹-’I]¾6ıAú!·eÓ¸©;âïÿúïĞXØİâD-Gj/¡A¸G0ÿÑ>¤É7?“¢|•XS•@£íÉ*HÚõÚŞıÓ¼Á)Oì°ÊŞáÿE¼Z½ÿ  ÿÿì}[WI¶æûüŠ(ºº$Nƒ@\˜¼0ØUœö…cpÕéññ*'R‚²-)u2S5ÍZ½æá<Ïš™—™·9ÿbşNı’Ù;.™‘qK/U]¹ºË(/‘‘;vìë·ÏÅ¬Ğpuz­Jc¬úcÉzo:¼.jsÃë.ñE‰‘{Í)Ñ—ÒXñOA¤Æ0ÁÆërã€° PRqœ£¬`‘­«RNˆ0¦ş€¹‰&7ÂM>L¯Êf~ä¡h¸2JÇphA(Ó¦±-ï,·TóºNN3¼µ”¾çáíš„>˜±ŠÌ›×°´#á@ªv¥÷Úæp$SáùX€2IJ¡¹A5™
-à{²árS’ì©Y&8 ÷•ó„‚ß"¼vî9Íåt{R&$(~!Ô‚„öázœ„¤ÜÅd{‡8ØâÂ½ûb£DÑ&
-ñ©iÑò,¸¾êºš"K a²˜C]Z,jØ&
-Š²€(„F_Â?;ìsñ=•·)½uBjjº7˜òòæwñEÅ=¬?÷`³âZsQQÅD2×ÕjŞÏÒÑÕa(Õİ²®+dğeí¸ƒ¢ˆúCî(eIpTı6'™¾¡¦zÁ†Q“¼¬ŞöÖïß9.xŞd+‹3â©.×°¨^0ÔJ@âÑç±/¢›A•Åc¸ÁâAİÁZÂv1Ëúç–°:GîØm¥ Mìüé9°ö‹8/~r'€t¦ƒGƒ½;ÛºdK]OV„‰IB7m‘cÄëıYït{Ë²ÜC?öô¥1g -Ş;º	61pG|‹x&k€¸)<İ7íGéÕ„V”ã¸îôûùId ›Ëøjİ¸×•fAÊl
-Í#şj[ÅÒşúÖÎÆrò££àŞ0éÅ­ĞÈk)w8J", D~0z.îÌe±ÖÆ"|¶w\Vf1Z–ÎhJöîs…ePÆ ÍdQÅºªĞº¥}šûÆÒOKòzJÁøX‚9é4ü 5£†¥ã£bb‹·¾W5˜*ŸÇ1'¹6•\/&dh«…ß°Lj:‰;¾Ï¸7\w«Pûé
-\å†I1³ÔDgdòÚ8:™ÙœSŠ¼Ã…‘Rös”0 šªUóª¶8O+ğr9#Õ˜ºÂïaÉ¨h!³ÕŠ,û¶6JÜovGÚï®Í,ÀŠüú§¢.ó¡DÅŒlLv@!ñÙÏ÷ïau~‹	@Uåãd4¢ïvZHüo®s]–ØOÅÅ®#XÙ}½-Š\ÑS¢óTf¸€÷­=²rËY™-íÿùåëW„§uòDÎE·Ò1ÆŞ®…oÊœÍ/cÆô­/³¯$ş, 8~ë+—t:Œ²˜í®e.©ÏÕ³Hï&.º÷û]D7õ`Œ¢…wÚàüeşÊKáy"Ë×©)EU’GX¶+øF©2™XÀˆá2!tşlìyzíÍÌğsspá®,µJŞL¯öPMD—³‚ÌÉoÖâc~º—ÄÏÿçÿbv_Šƒ„kØI½î0~zw?‚ÜèRÃ
-NÎSàÄ"F®H^D’Kfå{L&×„îš²]¬n£»OÄr2OËxn
-ˆ™gÚ2û¤kˆ/·å~¹W²É^ÒÆÒ‰x†ş»Jº‰CÉÙÙ;ùx‡â|â¿sSŒK=¶İ$ùQ©T«£ºeGµ–Ô–b©âècQ§ªŸÿã¿“¬ ™ÎrJ5"3-St¶•å6œU—hOf£Ñ§š™Í-Å¼Šõ‘¾ÕÁñğdwë£Î Ş£I?‘oÈ“ëDOÔµÌÙí1®´]²ñ±VšiŸdY%,k—y»c-†mËˆT²ÿxşB4`T3ş( Eù¬Ä.£Ò!éÚ°íŸY\Ì²‰éšiCµp“? 7©7aØ’U2ŞRÉø‘Œ›”W¼
-÷ÁTLXÂ~r}¦:é?ÿÇÿf1JùµOL£_Õ±8:E–ŒÛËM(3ŸÆ}LŠ3íº'úÓú*×í¸CÕ+÷¾T6[Õ±ØÚ¸ïíW Ÿò\°úlÈéòu~Í³æ•ZXÚ9Óæ+@BàÔÛd°ôúF­ Üh¡õÔäêŸ÷IJõ÷ôŠ¢LÓ—‰¶Ñä¡ÑINŸdz$Ãµ)Ín)ö=§´¹Ù:¸Šà›'—J’!Ëáåé~N‡F«r¬±2oô"h¤–5m•<ä[Eù)ı âv…¼Ñ,Ë+BXà×Š¿™]m…$ù/O¢d€çéSÇôO%†OÈ€Ê+„Jw*§‹Ö]1¤ôÜK~s½dÒ
-Nz¿Îñ^CEújŠ?N+‚1JgØÎ·R±Lú‰ù“3> ô¢~²´6ğ?chEEà?ÅËMáo Ã£†‡Sf#"{d–ÇÏãqÚ–÷OºIß½Ì·‚Â;ãõô?¬Aj‰:@[Ò#dĞ)Ò×¨œÂV$ 'Ù9Ç‘L‹“çHÔ´°;Q‡#»Ói??hQ0Båš@EÉlÚR^'b¾N¬ãë„+F{•ã¿ˆ>…ß%ÀYkÀ§¦XùT4Ç×oFÅgÑymhiÃ»ãzNúÆGÚ8¹ŸãJ“?z‡¼yË?bm¥Xğ|“>éÏáîQŸ$é4ÄV!|([»ÊX•¥½BKÜ“Ÿë€&7ëÇív>ÃòWÄA$è7Ò¤­OÎ„O€ ĞÅğ‹ê?FY<ı9ÆÇõ7|Ğ€‚" ³á7œ±½œQğ·2ó³õ¶“Lú£Ù ÎÛ)ŸsE‚ãë
-º:Ü"}&?ñÓUyf½”µ®š`W€Í®/×ÇîUü!Ìbd¤MÇíóª“i‡§-ŸÊë>£åHtÈÃØç¿Ä³(ŸS8Ce™	ééê*’NK«„Ÿ•9Ç4Ka`ŒòŠV¨½Ã¬ywq¬_”ŠÚmã×ôç$ØeÑÆşª–êìes2…:Í@dI2J/aıâldqt8Œ²BfSĞ]F²Ï£é*G°~ws
-9¼[zŒöá{nnÿ¨=Eûåˆ?%$ôåIÔ¶£i!Ó+kzı!´Cé»d'À€a°R¼=Å8¤#xş,©j²Å¶§¶óH_›ëêSø=§EFX£øë8¬Ã('†cõùóÕ£#ş„2boø“ot×r…Ò,ëÚ¥fÄÖZ©_t9‰«ôİÇYÑ	ö'ÊÂeÊDs8‹hK´T/¤‡6L	Iàâƒ?Â?û 9À¿««ËÚŒCÿ; óĞSôKş‘mRllQ¨8>})ğ¬Eõ‡³Öò›õ·ê¬{äbZÄGl$ğÉV<Y}}
-|è†ŒAŸ‚`’S†œ	z¿€A¾ê·$˜«r„:ÓY>lW¼Gx‡öp¥<Gß^ıncm~Ëy©îœR&ßÑf·v§è×m¹‚™GIì¶c&I,^K{íAyy‡D“ù›·Ò´«ŒÍ²Ô´Vô1I;äôa•6¶úõ[j·ïª/EUÇ½]¤KI1‚kïJ±†ËuÀ'ş}ç…Ô
-ì}¸ó ÇBAp#R%{›€?¡0ÌßŠ'‹~¼U§Rü]¶Bè—:2ŸáTîÈ2Vu=/æØÑ–†[©Vl©¹ÈZú.&&Ç•ÚÔ#òîëåTóQğqT&_¬´Ôv³øƒ¥Q
-şÜ64|XîÊrC­ıP‚Ã1tÑ[9Æz+ÅaNou:«„Ï¯oÊ1¼%Y:6’]ûë6$·Ë‹ØK,'[KÔ¨ßz|¯èdÉä«Úr.ö~©ê_\³>g¢Ã¶µşšÆ6óQæqÎbˆéO×øk>…­e‡ «õrá³@ Ã÷X3Äıf/¢vO·ÛÑ
-9§Âùy§ìw‡‚5ÅH¶ z·£êÊ²x;ŠğšÕ¥Ú¹Ø[^áfegá÷¥-yT.y×<8„:’çq”mwØ«…9`2“H*Û(ƒ†ByKûl{<±ŒF»kÃÖ¸±Xh:×êöè-¸…ıÍÜßÏ£	&|ƒ=Ân’!¥ØÔuä¬šƒ¿–8Á!c»¥±t“K{ö¢`r·B)}KeB-cµ•r.ºß¤éÜŠ‚.^k`ù§çÉ(¦©H;¤·ú´Ò‘½PDçjèB-pa°ÃsÜÌ•­ğ%¬ÕîhI	(z“åëù¼^/uŠ/Ú ˜İU^w ‘±gĞ±vët6G ş|(âŞÒöâ¸»æo‘A8 q ®ûô¼Â#§õµ5¥­ÕŞ.
-gšÀL#éÃ¹ÙŠêùF³¿^kŠ˜Á´e`z®l =G¾9)ô ;)h ª–§¸†0RÃ?xeTUŞLúµPTåÍ¾ÓœTá?
-ù}ìI5šÊİ=cöFš·MÎÂ_1ËCI-Æê¸}õ‹'è3RŞû‰Y7AËçôhÓŠ÷Èéì|•2ñv:ÍÉÕ˜¿ô£x7Ûg©Â›“$ç‘iñ@¯²xÓ¾Ûô-ûË³-E©! •cƒ}™—«bçÊ=ø"ÄÇõ¼![€D@DÓÙœQ8ııå¢å¢Œœª£/H¾z¥ümQQ²İ>Ã!›¹—Í™òBR*³sÌ	¡ë·ÕÑ¨ê^àÊÖÑ6\z†µ÷½ÒIå!úµÒIõ…at¢Öı”RY)Ú7&Ûÿç¢áüÕŠøÀ0:)mŸ‡H„‘h¤îz
-$SºvMÑîâü}‘NF
-İ²Avªs¯d°ãÑÁp»|P!\Ó\cÕb` f%7Ñ°B57pu¢5%ìƒºYR¡l˜‰Qéìvñ´‘.µ˜àyOb§JÊõÕ4¨5¡“‰œÜX6'VEÊ¨FİÅØ%©&Lï‹¥»õåRÎáH*1f£šòËŒjŠ–YóÎ˜%V 9y<Nè$4^¾ƒTn"=¼Å³TLÑµQP(Ír¥Æñ?áÊqÈ–¿†•ã,«•Sx•N|¦µcˆFµ-¡ò?çR‚Øä²Gµ2ï÷²ˆŒ"÷g\DV±ûW±†¬2wµ„JA[»?ÏâùWµ<©uİğÏú¬ËFŠál	¿fWÆûY/õ#x¹Tg4mÃ%âjÙE!.KÚ&h0ÿ2ƒåÅ”²¤ŸSŒ0İwToï2KÿƒØd9Òúx§úÙ#£Kéç&ÓdêÖ=ª=2±)ï±«j™Æ»i‚:®cM#0b7Ğ»ˆŞW¯ŞYÖe÷,c^Ä×SQºiÓìdC÷ÄçUQ5Œ0gÙ®¥j#ÿœçÁÀ¥Úê“æe›ÌJ³÷ÈàëR…eé{á]Ô‰yc¥¥ãèºİ]±…–ñ9ëË·¿ÁJjÂ½j<ùÅS	ˆBÇ”ıºgÚœ^±D/ão“ïiÖ‹ºqÒ7…õ×t]RµÛú:8€m#5nÚÆÔu=˜–Ìò²ÖQxæ/éù¯q-Hqe5ø=®‡ZYŒ/oYğ,
-ÂÂ|>ÂŠ@`'=_£`–‚—_°àåè:ÏÆO)Šu:9Âúùé‘Ûå;ì U˜S}İœ°¸&,sJhMa2….ş©^Äù©Æüû¤wÉHõ¥‘:W(@M¢S^æ¦cøúë°è	0·¿ÿ8ôk	f›òüÁÆƒF¢Ù=INÕjĞÎ‰HÀl¬[(ÊÄF 2!—Ké‘Å—VÀ
- ;7ôX4eAWnÔ&ÜPC@Šöü1ßoâÌÁ$ÍĞèv×†–W@u2&}HG³qLÒ2Îsš-Å“†$°’‰ˆú¤N+
-ZŸÿŞV=µ	¹Üh«ozÛt°2åæñ}çS lP™aä¢dı‚å^÷–`š¿D†ô+ø/Ë8•)`˜¡íİ”i1·°e—Édïæˆ)æ—­Œå½àŸ£øş‚?ÎSĞíÇğ'¹µJÚÄ¹¦1Ë¢ì»,P,p
-cŸflÂ—Èuwoi}‰ÌÙ?×=öşñ`³æè¾L/.ò†a†ObË{K¿Û¼Ø|o±s/ÀŞÍz§»uë†˜T}Øêz×Õ*"nÊ#à€,sä.[Eœ'Ñä;ä3y‘¥ïã£Ö{–Eó½¥²±„Eƒ¤ñ½ŠŠËoƒ_t/¶.º*'ÿëÁu’SBùSíÑ¬¨¥ª‡›ÑÆùö]È§eÉkxÛ{„*)_BN®œ°¿ğÏô…w~Ál’ÀT½¿t}ÛYšŠdê¨ /¥y«óQŒ‹âÕ%å·;¤õ»õ‹î·½¨µÂÙí+˜Çˆn­îƒéuy3ÑÒ	æÓRêÆç...Z.4@:Æå;ñÃäÉg-t 5µ±}>¸Øv´fÿxäŒo~¯æùŠ¯Â	eNœ	·ß_.Ks_‘=ø‘²¡›Ş-…H,—A—ıŞ[še£öï¤¾l™İµ’C™ù¬ŞIre8|47ù$‰KÛ¡¿ˆÙ]EÜZ9;â¸½Ä}ÓõŸÓsñµÏ“kÛ~¶›%˜ğ{>£’ì¦‘Hâ»J³÷"£Í¸_Z¶Å }rUğÉîÂOaÜ/njéà5§jeî†!©D«oõ"EcB^É<.)¯~[>4„m]QÕ-=É
-owÀ R~¡fZ’ÑhçLR»ÄÉ3N¶ö†ÊeX¾Ádã‘ŞĞ]?¸İmğá]©^P÷ƒÈl}sãb+n¡¶ÄñV€ˆ\£oğºCF\ '¸vÿ$˜\×-sï-Éd"6©½›ë®¦³¢ºuÛyë4 Úu0¹ÄíjËuk¹¹Ğ¯¶wÕ%‰y	°9A5'†Sñm`IÙ|&”ïe?Züîa<1´øw˜S¹úõ}ôößOohƒÚO!rûî¬zO"’]Xss–ÀİÚRY¯Æ¥U*ŒÎsĞóYNÙl{†»,a»ÅO×{ï,9h{‡«6N€ù¼î§Ö¡TÜY´Œ1ĞŠ·,VµÆö§‘¬÷e¦° ÂiZŸÎPVüíéÎ~Ñ¥š¨ám"O†’ÒBs)š4Ïî«~ê¯g–$¬wš*÷òZUáån³dq(ÿ6Kê,‰‚eş)±ô÷°‚LÑ0‹5õ´¡+pr–ŒcZ àYzéµFß£å¸©æ‰fãM‹k§ç$«İï)¨Õ¼ö:™—r/Œ¹ªbôğ²ôh2 eĞ9Œ\m*êj±n5ĞQøU“"iT"ù(`LÏ¡NH4Ì,¾„¡Ad7.èç•bkÃ$g¡c04+¢¶í}“¢(€J¾ÉTr½ä4³,ôÚØQ>Á!ÓNP‰îÓË'Q²bÅğÿuxÙë§ÒºJ¨ ËKsJ8d(ëºywO£7Rsö9Š~~M?˜¢™¢óäA…ÛĞ¢Çbér9.]uUÒE3­>Ğ—£pMAÄåsZ$;o­ç,ÈaØ-V»Ä_I²ñÎæö7}Å„$^¶UU¤”ùÄÂı`¸év(xE}ı­YŸ¿œƒÇx4Ï¤­• Dæ•ëÕÊëé£ƒ0@îÊJöê ÚXĞjDjĞ¬Ü=óÏ£)Öõ‘‹RŞWŠ<äÒ­ß±H“šnæÑzğ­A£ĞYº×A=Øƒ_ÍşêèÖ·ê(ÛU<´´)>¨¼İòŠIz0p²›Êî1fÉˆLB‘èlC*Å½i–2MR‚q®›ßa×neºO›ğÖ¸EØCØò	V›¤z 55º Í·åË„Úd7™IPg·l2fÆ)Å,Ç©6Ğ:ÛÆÆ˜ár2Íı•7bø©Û™–³‡¿:·Ì/¿ <×-Ÿëšº“*ğy-ƒ½†ÓºÉ3XgÓÕ4ÆåXU¤Ú@eÌ [&,!k†d°Kp½ÏÁ*Mò2GÖïjBC`5B‘Õ‰1‚9ùßcI2ƒûÌ.»oØÃx‚•xşQ¦¨"ŞÎ!¬¼É ÊÄşºY¯:^¹=Z¼¹ˆ¬ÔÆ·å¸"àBÖVÉ·ùóßÿsñ¶Ê®P¼ÒE-öi`K?pTÇ5,˜¯ÁDh²¡ ¶Jo$ÔÆ0Íh«÷Ó q¸-JF	öıÓa:ù$`úz¢Ó`w¾ÓH0XÆŒ‘ÊÒÉ¥¥¡ji
-9„>öˆ–1F°¦ÖëIé)_#“9CCná¸Ñ†÷@{TÚKµˆĞ( ªGôÒ7z”ı·*cE/h´±Z!_)GÖÁm©ÀÍ7¤	o¨±»j®«±è(š³Ö>ÎJu¡Âò[ï>lU‘E‡­ìşq†L$™ÚÌ”A+<XÂß|Ä,ƒâ.,ì¯f	auÛ»2jÓA
-)qUÖ¤–Õ‚Å
-P±Ã6ş|1‹ß=È²ôêàã3²íÆíUyæ‰JÍ«Y)T€"WÑ©òš±à”Rş©V~ÊTJGCÖJ@©úòJ=%EÁ†\ÑÓğEiª·´5ë0—åSXv­yRÖi’ñ 8„»¸ÖŠ‚[(%ˆ¡oÿŠ¾*àÇƒ¼3Œòv‚`ğ4
-"éäé,ësûmU¼7TõšÀX¦j;mº}C:NÂ¿æx°C‹C‘ˆßb&ÅßØ‰Ûe¥B½ûG½ç¼Ö›¿OjÚ©Ö=g•d8Ï¤XUU›ú5©"SIf®O§Xû·œf—ë²F#ñ¥oàIuâV°1Ã°(58xzŠhE4¨ŒJ¢|‚¹N2¿%¬Õ=o«ô?kkä;´V”­3²$çs"@Ú©o	»’^	ŠŞıx^Ö±ÛS»YV+Šúız³‚“o?‰FX~k…\Å-`£Ñ‡¸z=–d'ˆ5=ŒiR=ıT¸½ñ8¥OÏ°*-£¤l„Jpóñ‘ğñ:*üZ­uøúôlµ…%‰è‹’AÓ%° ÛAÑ^_&¿'[JqYZy>íMÕÌÛe¢JuıCæ§ã"îà îpcYÛèæªVtGÔÏÃq~óv_ Èâ¿oßÿ}äwÚ{Iœ’×6õ]‚x§‰iåã´$Ò”‰¥_F•tàR^¡¾aş—c¾—¾È3â¸±Tveå¶•ÅÖáxM÷VÀÊØ=ÉxIUE˜Ã“˜B›\Ä¹ZîÚCèùr}¬&PÕ¿ØXLVıHn]je`q4ƒàU|‘ÅùğğJ‚Óù¤œê<›fsï ëŸÒêz4Ç…·èv×˜ÀI´˜Ù–`²CZ,>°üˆ*ĞYİßÊPçÖÉ9Õ
-ÂMùLçæ¤H;+0Ÿp†ÚZ¯ÔV5_‰¥XuAŞ/µPW¶öúÒx-½_ @8:ÀJÜ!78”Y@Õ—ç®ó>çmmc[ÖºEåì×Ó£ôj¢un:Ë@ÕÖzÇO:»w” s.ĞOÎ°ÀVÕ¯²Xİçy¹ yŸ¯„#½ŸÔò£õPBû«zX*âZyD3¾Ú4 \±}é™šÛöháÈ¾]…¬Ò6&…â©‡(QìRÍ;s_I±f/Œ)*„;a¾¾¡#s~y+şäñÜM<0¶İr<>»ñ¬aĞ3ókĞï djµyÚ‚âQe(bÓxÚ†¨Gc˜\2uŞ:€rIñŞVY2RÁÒ&RDMÈsW9Q³ÀM‚›h¼ä¨ä_fñ,”÷¦×ÙÊâñÛ€ÅUF}1(`o.;†&xË´/ëM’jÖŒ!ä›„¨îJl^
-rE&‚´ M‡aAƒ l‚¥¥kÚíÎü7äq”õ‡Æ„	ÌôÂ-Òéjw­GXŒ¯9=¡»¬`yåË¬nm3Ó±4TltÉvË&d’ËŞï9³+t:Ö‡d¢aŞ4»›¸zÚN:+0Ü–U|`§Pı¢1¬å
-¹h­·N®V7·ÍF¼&94f¸N	.ĞmşDbƒÅ“­ 1BMk%¦D3C¨,$PdÇq/ã²EMkØÆ	Üˆñ‹FÌY9ĞÒ>Êœ„×†ß]+†_P×@™nÒ¿°~RƒİÖ)–gş…uê Ïğöl‚+Æô8|Â²´v‹ót ÇÃò‡~¬Î	ÿÃ™oƒAÙòäCÓåìˆâ,¨`œ‚ ²w£z—Å ‹hwOmÍ´šÓù¨Ù¥–¦îhML¡å›Øæ¶Ò]ş×s9ÂyCŠ-JMèDÌ”Z¤Â&j“)ÛôÄé®nk§$—;¨z75˜#7tæ«"cgê³*ãW³D­©Æ(ªğä<>Î9HRu2Ò«úÕŠŸ°ÅÏÙÛQ"é*©¸Iœ¿ÆMè¬–ãÅëè#åí(,g6c¤éG y/Iõ÷¤Ó·†~ÈşI©Á^öA*¹r=Z‚…­'‹³“t”`¶ù$]§–xVÀ1¶-kœÎ¼€rdİ$^¿ÿËİax¦h\6(è
-pâyßáÀ.ã‘ñt:™Æ6I¯²hª«M<dd4J¦y’óò¤oº[Ø0È$G;¤\_a#æ¿É{‹‹½Ğë÷³&½Aš[n]ß3lÜ¸«Y¿dÀ<_+:9ĞuÜ^_!Û¼v5B+­iÿ}ËMÃŸmk8ã¹ìÑ=W.¢Tfy†’Á#«V»0€L×«¦+Hä[ëº×B×ÁÌå•ÄáÌ…bÇÔ÷N‘¾Fâqñ	ugÏ|²•¡J:îÄYg³bxKN¥]>˜?™¡ÅİªË‡º“> ¥…½Ï£‘›Ş5+à.Lqâ‹h6*~@«%ß(–oóÂ#<Í²½›vl-¶f j#ÿÈ™FY?¥QÑ2²Ë˜PuØêõ9'0œ/Úğ”À†1Š@ús¥W[{2k’ ›ÆØkÊaQ†d:˜ÒsúÃ>FŸËÄ#`şá=Y[#¯ig´#ºy˜ü=I„wæÉHmÁÍæqA…ãö4‹?à|ã¿Uh	çP6É?¸¤6¹â(n87·À
-“åàgs28g¸] 	/‹>„DÓ¤ÃæGŸ1>º›Ú Õá·0·xÜŸiÖn=L¡å…5B?Q|Uk…ÀmM¾(di…ßr—sO…`Z–öİ·«ĞæCÅáz¶K´Êå‘ğs™DÉ@Fµ8ı—I?©PPùG¸]DY– qü‚Ê…¶MVÈ×¿y)Œ.“­d¶,ƒvï[Ùicî`?Í§“Ãa4¹ŒËL“—5–Îx¥«)‰¨$öÚ*$·ô´ïk–o:¥™l¤–xÂÒ>ÿcw]oÜĞÁUzúä²ŠªÃˆ \8Kûåµ±”|‰1zÍÂ†Ó¿ä¤}b™o%dü]†GŠ¯f0,Ì"\¼¿†áC/é¿w[ŒİIÇTú¹p£ÇrÆL8 Ã—/Ü\Õ±´_şÚl?”Ãyïs‡ÔW‡\®aKu2ÛC~×,Í¢TÛ­ÿ’0<Jm<Ğ¢Ôº~~jô £2/®P5ÿ /Ò+õÃ5 ßu'áÀnÎ®å”§M‡vĞ]br¯Rh€ƒÕZ@!#ßÏÎ9aŸ9¨B¯l
-©¨¢è–Xşš6Ø¡A>`c9¬˜o“"^·´O#ãañèÁğ4Hv"ÂŒ<n/kÁ<W¶"w”Úx\"‚€&±54ÑéÄkŠFe#qºÏd _šË‡Æt÷¬ÙT¢¶Ve°¹ÀÚE‘ô9Şşí›·,»¦-…ó¯Té4%$ßªz\õœ®> &H«7='ÇP0­ø"ê-ju—ò ¡šbçİmT@[5ì‰«ø‹³\ŠÒ-¥Ü‚>'=àİı:vs¨	A½;D&­}¾¡¯‹Ú\A™Êb(K÷°ô%*p	‡¸û²'A¢û yÓ!i
-üVW’-‡À
-¡wÈ…0ÓĞ1&nñ¬1@3­P'¦o©j3P „€b
-`Ê6´(>iÄmf'rÂ›n×j¾{à!ÑM‚W« •Ş[WğK½á$’kš´ŸÄûK³¼Ë;ã^v4ğÅ@Ëê[k­j†U‚®ÎĞ”XNçQ&GI»¤m2“Aî®$ÕšìÒ—´üùªÒ*+_7•½ËÀZŒ¨]g5•àß©$uRweLâ!¶Æ-Æ,Sz%vÜ¨«oú+íBõÂgÑ<&!Úÿ¾É£°´–ëBì›ÖA·züAşwƒşwÿû˜LÏ?¦çÓó‡ôü!=HÏn¶X>Ê_Ñ„ja+;Á»^åSŒwÉÿ}†pj‚Ÿ¬©*K)ïğÊj0Fk¬¿?Ëò¤²”%Ù¹¢ AF²÷mªAEòV+bCÓÈ¸ÎN‚P°¶şA>`t¬j³ã…µòÀ¸¦8"´ ˆ{°ù{ò²5Y¥&kö6QÖìlÉ…EQyøƒ¹İ7Ğ•·"«éÖqDép³DeDp™&ìªkórErú.V£0V ´‚œÙa2ªœ»Ó>,³ÇQÖOXµ‹åÌ±„ƒ*i®Ên$jö£¹xHÕúwñ?'.“gËW<MFñ´¥¼¤LÔUï‹¸ë›9yóò-‡Ñ¨?ƒÁM3å=–ZÙŞ·<¹¦Y¡¤ò;U^á(Aì}ÍiŒ’uWßòLIµÇ›[BNÓ”oS#;X ÛæéŒì!CB#;,iìˆ!¿Q`ÌÀjG«.¿QQë+“qÍâ¼µ¾¶˜ş½é	Ãuà[SŒj-1Dû–÷(
-Õ¹Úí*=¦^¤ÙØñµ+M‘çÆ§ô˜Qî,¤ÛŒ}ÿ( ~!¥>déDåy ÚÍFÌn¦‚Ñ:Jæ9p{ê4zÛ@F÷m’Ï$\®åã/°Q€ôÚ“åÕSĞÇ·»ÍWZ9TÖ¬—ö_Äñ€ãÑ”\%Å$‚Õ!tÈ(Eøı¤Ÿ?"´¶Q¿  3g–ŸnXcŠ”íÀuS„2%ƒl ÿ‚ˆSùâa59l‘ae5‚2â@x°ª•Ÿ54(Šg"ã-Ó©ĞU€¥@ÌY@¹#æ‰)wÙ™(­ÌÓ,$ëÉ¼ä%bW‹t5#pëê §Tê R‰¹½\í’é*¾Œ½Q*o°´VçMz~´Ñ¬y{'Ñ‡ä¾å,m·°8GÍïjMä6 eIA‘¥¶ÈUé=ê(şÄWä hÒ zÖÓ6ƒ:ê´èËò®'ÜĞ‘àÕÖó*¢|ƒ9x…t`B?Êhh¡6ˆ¨BŠV„îŞ;ñÍ7ZÖ)
-<oEÓöƒ
-´‰×Á,ûñ¨Jñ¤@¹ëo#ë±D?5ÛâàsšCl©ˆ#ÿy÷€!…Ÿdqé”¦}ó¦wÕ97Ô9¹À0_‘Íí‰ ¹ 1—´ šã_'Eó×™,V«4	œĞ`øm9ä
-6Ê!óFı%¹¸ˆ¯WÓ#ÈLà=tKóÀÔTùÊ2ÎÉ¢§X	šá"Vóiş|˜!FüC/¬(2÷”\O`Ìvƒ2¡«\b,§+Õ9f7Kó
-ÀÉ`Æ”qVuË“f£0ï¼Uw©dêª¶ÚW,Òòp«I–XYì¤|exaßÜ
-qcÛİfKû?ÿ·ÿW6:Í`¿¸%?ÿı?Iy›ü	†7qp[ämÙkd¬`kîh0X‡£ø{¤™Guœ‰>qMeîÔyh¿_“;¢İÑÚ7öø4œ›eŸ\±ß,‚òÕñv<@'©ºŸştÜN×fu;ıi¯/Ãì ?ğè¾yõdí’í·+B¶İ°¬\’)eãZ¶ïv@´[ùÖµ®%ŞÍªFŸŒf¹anÕJn°†BMª>à òg-Êç±iĞTÓ1£:È3eõJ±¢ 2ûƒ1»ÜR»¨C`ÔËãè’ş¶î“òB$*®!b³Öj|Z×¥F—r1Ãä4ú×™r˜ö_Süµy? Ô¡«å0!Lu~Vg­W•Ï»æ;äG
-C:Å¾Ç¸x‹!†Aée\QüII§Ğâš^ÒóhDÇ‘şJÓ¡µ}À°ÛTa³‡Åz$¼v
-•èsqJ‹_BÔF'|±öÃbdx=I.’x€ÙÀ˜ó8ÄvªdØ¿É(Æ’!bmáÅ9/×t…‰gSJ7˜9†Ui®¥yÎ¬mìíÃh2ÅHvªiƒçû	-çk™«c‚±f u0û?´€šéE©Û‰ó¨3²´MÖ®îTJŸaÛeÛ¬ÜiÛªÔ‡*ïı®VVû P4w÷\dÑe2’^ù”¨îH&RØ_Ğï©î;–OWw‡²÷yuß+v¢ºc
-z5¨Í1C·©n<QÎKïg{}ù^üù:ñë°/#Ñ .-î`”ÛG‡Òp¶[-Ó%·g¾(†­İ5]å#Ö¾ˆF¹ñµÊPi¯x}8²3¾’–ğQ´\c"_æÿàJég)bN‰XÏQ‚ØÛ,	m0¨–:. :–z¸œY¤Q^tòY3WÚï–¾¾‘Iõv	[dÙŒsÆË«şJtb€ o¨åZ•¸ü”,ÎÎÇIÁscğ–‹d`'ì¼“$øh¬Ì›ÎŠv»æ\RV_ÅPÿ¨“Ó×OŠ­Y°àÎã!°nêãÊÇiZ¢!Pñ2ÂÈÕ{Ì`;+OÔÒfßÖp&¾ª>í·¬ó«Ãt:?`j|‹c©³«èë„;Ş}}óãÁ«'ß¿|}úä§ƒ££WONO™võo“ƒ¢˜ Lƒˆ!«àÕpÕô`^dq\X.¢<£c~F/ı5™ÚÚC[B6‡«gè¥4İÂJÿ¼ÃÆ÷à4ë ‘ö<²Aç*ZÇÁhKS´:[©‹Q„1&lºÊ&¿KKŸŸœU8à…!ö=;Ê+tråvDÕ,%g¤,D¯ÂÏGæ¨ı2¼9è`Y”¦y«ò=ËÊg'9ò'ãi1‡æL\C0 GMë/X‹ ù.R>YÚJ8>ÛÔ.D”kô=2‰³¬€DÎçxë‹øŠú#´xÄĞÃ¯4š©‚ıvè¡è}?¾¡Ş!ı…ÊLòò“,Z˜Oe9uÆı@‰?ŞìJ/YdXª—à'”•÷3Â¦,eBy@Ë²ùl,•e€_eí¾€å²®¯İ³ÇGæ–éŠånŒ«Jî\oXŸ@öÕİD¢V›+9‘M)v«ªw÷åããgOÈËÏşL~8~ò#yúò9zõò„¼|ú”œşéà»'¤]2óe­­=ìpó-·Ú¯^Dƒ4œºoûyzbØQ–N_^\<m½fz0ly{Æ}°ö$¥7mÈıærüŞÿ£~ˆÅ œ±›ª¿ë÷	Œ½ñ—ñ²¨½¯üU¿W*Ñƒ_Zş¨ß)`0önÄ_†ïœ&X`6©_©ôà½›êoC$©hO•‘Lßy¨Ü®°·ÎVLÕşÔ™šü¯¼Ãö”®LUïgœoª3œ´¿kÕËø	ç»Ê‡êçìoRÔ•ê}Êiç[µlWì=àÚNõn~ÂùÖò¡ú9û›T¥³z¡zŞù^½	ë%ÇˆsıMl~Æ=Îåc†“ú“š×–mûìàä™öıñqÎ¾‘3nXgï§`QXmmJG“	è¨Ù¾r(Ç9åà60êiJÍ¥å0
-º5Å¬ÌZ”Õù	¡	
-W«0ÖşS†:o©.:4xùûšş>Í2¬Ò°´o¶²»MÃnhıƒÖW\&wVhšˆåödBAZl	Du[i-ü<ê¿ ¥¬ÒÑ¨ÕT,2”<°Qeƒ¬)„N|Íw£ô<Vü$ä;f`	¬ä'ókŒÃa•4•uÚ:R¥oiPâ(êAdî=v‘YÜÍA™üûi~òÁd~5ù˜G8­ìÂ
-³€r/*ÎXEÌßøëÓŞnÇ<Hzi*qÁV¡jCC!š#‚ã6ë	~€Ä¼$KŞ‡(g&œÈŒ¥XúÈpv.\‡x…À`$sVüê"Í ™{œ™â˜Kb4·|¼É5m£Ûå+›èËÛ‚ÍkãÇóezé¦Z©ÉÑcó’.çÖ
-UÔ‡“ãè¯?àûŸ’é{fU³øiÅ§×UË Èc«ä»4äUÛ§hßÿD6Zl–%q–ûºGZ{vEƒ	zwaë¬Şr8¢
-‡(oFËÈú^p2Š&±ÔôUrQ`ñ<œxV‰‰7~”dˆ‹%‚ƒ4ÍZf¸5S#"ê-I¶?¶eØiêñaâ-ÃªkÀ–¶çnîRµ6Qó·å ìs‘*1GÚ¦)TÉÌxÃö²4U[!$›„1NÖ­LÜÎÃù –­z± q÷ŞíêãàAe<,<q›Ólq“ç7äUŒq×,©&uÕ; —ÍéÚëæõ]©¶fëºèşiOIwG†ãßpˆìµŞsS¤ˆÉíEpb<ÂÎİÒĞè‡qHQ+CèC­ŒŸ'?~÷y4=I¼Õ¯Ø½Îœi(ƒ)UÁú­>‚Jp#	–Óˆ¾¦zk$_€ƒ2$VF
-ÒÇ%a9_ê¸)Ù;ß¡\e	É'æh%KDLˆŠ¨(tOş’Ù¬™¨ù²ìX6%j“ˆ š©œÎ¡G>hÑï54ƒjkT–±°C†I1¢@|Ó¹ 1ÛÍ,+ú¸·Ü“;#‰^·¨d®J>pû©¯Eiğíúlÿ]Š­˜LQe'Ø,Y#ÇG¾šõn¸S\mP²JŒ6_çû}(îÎ)rNÃGšˆSêÛ­¸£sÌz—3ÏêM¾[‰–Ï6^‡I1_£±Gkÿ,?şxq»İ¿nq¯ßµ—à?9Ó8d¡ÍEã!ç1‹³ÿnŞTj¤A)„+tRò·]§7u×µño‚Şî1Ö‚¯~å-…gQ`”ûzgË¡¹™e)İ£SöÁÖ-IˆİI–’³dºÃIä`tÍs’Lú£Ù fØñi»Ú°ì´Áe.DsÖÒãY2ÂÎ¯Î0Q†PÛÈxÑ‡4‘‹›ƒ’?‚.­:ÄfØ!ª±ÓL©õv¸S<é§cì‡@üGĞ‰êĞCwV‰*ùÏ¥2ğA–âæ¿tµH¦Şû{×‹N²$êxKtZ‘HÁ&/"Ú‡<ÍVõ]Ô£ ’óÄ¶'\X÷»Ôôºã…”:pÃ£y«GqŞÏ’)+pH_äèˆ·¶L@QX<Ğ €pŞÚ­*>¿®€Iz*{ºäJ2y9º®Ô´;—²uMSª£­“¬ÈWÈ³h
-ú$–¹u4Åqÿİa
-ÕQƒü×Cµ:4ö¶| ´ÛXY„ø?ù‹ú§¢'aU&¾p’&ŒFOöY+n”r2}òá¢Rµpzõ¦ëU¨ohiŸıµ¯5!JKûâ¯…šy>A?ZÚgÿ.ÔÄÁ_’>ş»Ğã/æï#è ıg±‘H²¼8Ìæ0ü¯ÅF"ó!|ûw¡&^bÖÕÒ>ı'¤í„†f—ÏË®ènMÃoHûõ«gäå”¬-‡p°€¢p[÷ÏéÜœMÙ¾‡E1ÍwÖÖ<ûtÚÃ§äÃÅ	Ë”š<Ğ=»¨±ÀbáÿÕmõ"Š*êÉhÔQ2ÂÂ¿-rñ¤\Öd	2×S9îäwÍV’;bS>œËIIûkêK#pàBÎ^3‰É™ç¢LaÒÀòDZö³)EòyT;ãèºİ]©EJ“UÒµ#e‹Cñ\nhÁ(J‚t-(ÅÙ²{ĞµLB ÊûÃ
-ô•{mTêµÎ¢`t$D2"‘HVæ>¾"H°Ç§«‡‹”$bæºğMÆ½phÿ DûÅÒlZGy{ ÉŞÅ1ÔÌ<!Cäª¬‹î®¯×6_³G¤œ3eÅÕ¤Â‘*N¯{Ÿ=$.—ıÂû”›e›²š—‹}
-õ†ŸDsju}‘	ÚTšºĞä09Öì·ğêq·ÃOrŒ·œò¡å›`ò-Ï9%ç1\ÄğšxÎê¥ÆeƒVä2·ã^ñ¯'Ó(#ãhNâkØ§DãNtîH)P~Ú<8t<c¨Ó]Qá¬*÷Xm,o5ÕE§E"QqËÃVLâr6,Ë<§$úC^8Á='†“¬ÀíhÎ
-Ò^8?E9Æ@‚ÙÂd:œçIŸŞš•µò`¬ió¬nºØªyõÅÇsn{xXÃh§ƒ!›Pƒ$Gg°wóU˜Y…‰¸¶‡¬6ü0XZ]ùÚUıZî§{é=¢èáæâ¦,¦–ûM2Nyéæ®Ds^b’øyéU<hY›»}g|5É?
-Ú$yba¨¬tæÚ‹}®`ËéÚùÒ?¼±CNgãq”ÍÉ7ä)ÇÖ0:†ÃÜÂÂÛØpï¦ÒaDo^ÍZ„qj/œöqÒ¦BwvIKáN§4Íq8L²ş(îıB¼Òè•¦°0Ş»[ú0\$Ù˜Ê}Ü°˜h€BˆPÜï?J·&\¯>(É+°.™H9kz¸”ºöÂ·oŒĞQ¿/AÀ¯š@*îRp‚Û’³ÁÈÑfb^†+jß
-mFk`j¸¦ŞeVmÍCxÍšŞ¦Ñ †í¨Cğ¢Å¡Z ²kûQK…Â”Yú>ş1CĞN®× }®dUpuÇ\k´+•-)jî;chKå{ÓÛBQ˜¹ar·²=xa"+s±Ìfdá'Èe0¿Y‚³à©g°ì•Ü,QíjŸ½ÈgÓ,šë‘ôsÃëPW`™sæJ8cİò#u³cDKŸ9o‘ ½+dí• D[vHĞŞ wÙ€@—JqÄP7¼ø1ÕB0€şº©ÎL½|,G_/!×÷¿/d«€JDyø&v0kŞ†RyCÍÔ .À%(U­µVÁ§º‘-›ÏYl·fÎ¡„™~C¢yİY¦f!S50†‹—’!Éê"¶7¤ÒšzğUC½ß¶[û¬q½z”Ã­Ó°Ö›c¦ë‡OkV7[·H]µî[6Uƒ5ògÕ$Z‡`¸sL}FÒL8ój­}4¶õš¹XCz°6ÈÌ=”™×¥
-5Û­¹la¥
-XØqP©ø–üK1ùgÕªzû*>ª½BFí=«ëîQĞ4L^O'îDĞ'ûÿÜàaõ®¾ª#
-Öí=ôÁ#L#+vLß÷Æ9ŒÏ”P÷4w—a‡·js¸#Kš2cö„ª–‚¤NÿÎ¹ÚeÕB†ù Q‰7G7ËÅA,`e°›ªLH=ƒ™‡ñfÍÄCÑSHöx2xäİMªÄw”¬.Í´C!à1!{Zf `¡¹ófp|9
-/ßË“	ˆc“b4G”xêgŠF.Eø	0Dà.¥í(ŸOú¤gl8y	Jù£bN•Š\Uø–Á›¦²›Òá¾*ğ
-Ûˆ¿¯ÅYizüåc¡ô6„‡ÒétPûÄS;{õ6àé’¸oÒK}Õï8•xíºSZ¾5¸â*³¦~%ãùW%V¯õ@¨oóØ¡¨ĞŒ´„¹ì#EBM(íªÒú­”Ğ\‰-<tÜÁ?„•ÿ-ì‚ûÔ*XŞ±CŞğ¿ßzFÒĞëãöš	ê!LF6»‘è*J
-Íì0ï(Ä©6{ùŠ@”h´¡¨èIôšMæ]f›â<˜fíwO£dÄà­YÇØô}}ÃºtK¹t¹tŞ­x¬3òfØSÿMŞ[<78/»Í<ª Ö]GImË_’CÛê*×ŒVŸ'¤<(Ëãex»¼:ØÃ-‡Ã½WÂ–ªh¤•ƒï”§Û¹¶2¦Ä"fOSU·°²?¾b¦x¢ú¥ëí2q3Ğ¤ğP­Bó×7ûiÉ H-ôDËgz­Û*)ÖTfùÆˆ¯m¶Ÿ8Ü²2~e¨_¶¡Ÿ„ÿİ4Å·*ÌgTƒ6°WÙíãuGˆläğÑÓÙ(%ŸN<ë«şO“d,ù?*ôªWñ Î“Ë	z+N²ôÒSdÅ>Ü*ãˆ^ÄXï¦‹îx"í–FXÇ,IıC<J§èmİ{€Â¯ˆâÉâŸ%@H´6ÀÂéêúée<¿ÚÍ¯¤á‡ß?9zıì	99>üÓë²J^¾€ˆKûôå«ç±öàÙ3rôä‡ãÃ'§–äwÏ„20qÖG#–¸8ärèkÚ»ÑÏØ÷¢R”7œ´·À
-‰ `q†Ä7êoç›O´Gk§|o}"jç	ìlãé€>Ô²]qµ5¢î|öØuÕÏ9ûrjlÂp:´X¨FïkĞÑ„á´½¦û‰{OGi‘ïİNúæ÷(.@NÌ)Ê¼~&`VåÇ'}og[mõwÀK”ø“€§XË´üºxığşúÛ÷&°$ŞåE@+[/ÔÏøçVÏ„ºµ«	,OÍ Ô€é¬£Yú!ÄÒ½Ï`åd´’®é‚»7¶Æì×|cSU8„'X¢¦#Ã¥€±26èºêhs˜Zš3_pókcÖkîQm^@\«â¸êí££Y÷ö–‡Q^>ÈKw(USêŞlÍ+j,±Y1¾êYGônp1qÈ¢„*XØŸÑ°xœ¦èŒy…—êoûs¡%<Ä!p¯_aFœ}égØSaô´'é)ÿÓGIN1º¤§ËS¾¥ÿC<Lú£X–—¤SK]iÀtÖ+8a,Å%ü"$±‡Ôß¾7NcŒÏ?äE6£U6ËÈp) Æ]WmF‚–ÏRàâ¬NIı¤›u1é	¿õ,=:—û"¶µâÖ'­ºÌÑ“Ó?a½Zjãèøôàñ³'Gäøyzğ¨1/Ÿ’Óãß=“Õ—:S€7£(×µ°o¾©i2ä+¸aËîµ¨hìÃ¾#4@ˆÚ®WI1,•[ªòªh¶¯áßc3KÎ(™½
-y›ıvÙVÀSs•ôf›z_ÿºº±^™ÿ¦4Jéƒs!åhFY_¯nc‰Šm‡cşñíÑÊ”«cê¦Œ–ø8!ì†à"Œiíj)ïró0ƒÍ_’‹ˆ4ÃtĞº³*PŞs·#y/l›Ûw	eu¼ÄPpÃd½‘J¹kÑB ù$NÜÖêì­Æ`VWìºÃ\3:ĞÕ½…&J¾÷îÅ*;¤­×­¤n6SİÂel£*Ó]VvÕ&ùNƒ.Å£ºY¯†E{keq¹e¯ÀY z<; £ä}Ìdµ1h…r…·§³Ñ€ô±ŞB=4%;ã¾ç`]‹ëÙYÉº'ƒ¤ÅFC˜XØâìÙãjõÍ&c¶1WK…¼Dr˜yğ*
-PPá×^¶Bz¨'U­àsôÜFõ×KƒÛ¬cIAOmUOÎm©˜AÊ¢ù
-I×æªlèhmÓ§lµ«qy›{óÂCö' ¿íh 4Ò`Æê2P¦àLĞÃÃÂ`³/¬˜ƒ–¦$‡‚êéF°Ây-#{—qS¨Ş¦\†aWî«/,YvKÏ´ç âaÏÄÃò©ƒİ¼c‘^5 [ìœæq©4¢Ï”Ôwj§f-îëí©c®fÙ¸FıÖä!“XŸ¬Æ‹kô=ájN1ÁÖ<S?kgnL[°]·oÎaé%aåbäètû¤—9e5
-	íiš}‚½¥ÌfåaÄrYşBqİ\ÆÜ(~Œ¹æ…ÎØ›‡czÍÃê»ä­b&1KÚ07Eå)ÂëÒ¾˜™Üvç«Z›¡B`ç¢ÉœË— ’«hÂĞ ¢KŠf“–â -YGåÏ!ˆÙ÷ˆÎR(Ãõœ?¨=XJ‹XÄö€¥h7‚àˆà¥áñ91Ó¨ÒîC32¡ŸaÑP†ĞHPn]!§ ’Ä¹l†ĞÀì¸?€`vx³”üÔ_=?É,¢H1GÚï/Càÿho‘u ÎÖ/°»G©"qh¤ës­‹ÃE¼¬Å€½î…Œæ7`³°£1B;>?NïG0Z;>f;î¹…n½­ÇrAùD.¤?Krw
-óıA¬Ù­!hbİáñ%´‹]ê¶Yı©İf¡ZÍ½sJÔ½FBlïõ¢¿4Î¡½y¶|Èªš7ÉÙÕùI¾¼´©Åãğ!æÅ‹L ¦!Ã]÷W`€iw½N˜wÊ…KR=ŒFñde
-ÇğCHœÏi!İç©µÕD
-«\Tã½õÍ¬=P*ôÖ‚_ÚÔ|:Zì,*ôó…3NêdÈ·ÜW‚â?ærPkÃş
-çÂ¡Õ­]p­L šô1G Ù¬;@ê¡-†È(uóS®‡€„]w¦îb‰º()=O ë—ÆJ>¥,÷|ÃìbZ+·ƒ$šû»º–
-cº‡(«çn4Èı'“Õ!¼%„$ğXºÌX%E/ÀLúÆÚ–_Q¢	6]Ñüşj@	Ì¦–¶MA»b‹ş*H.´¥‹à€2–ƒ Z×«Ñ¬H¸ÎŸÑüÊ,³Xõ:ÇÔ•xĞav\PK©y–sÑ©ÏüûÂWÀÆrk.ˆƒEôˆ‚|”üW?÷ºãTÀß@u0,œéŞµ©;ú'ôh¤ñ¹Ó¿Bõ©-5‚eƒDËg­”Q1š5Áil¢¥÷iñËé¾ÜD;XbùÕ^ /I;.-€¯X¾¶³Øí}LœÅòÅZBßvdÃ²:¡§*Và<.< $`
-ü@R¶ÃbÏEúø{CqúØ€ÖÇfßõé­ûğöØaíƒ‡ícG#ÆèPĞ¬Nd
-Zç·ÄiwÅ(v¶öYõEÚ!P-Li¤O†)â«ƒ;4Ü²«o& S#m+ø=n0ÿæ! ê¡c•Í`•æäç¿ÿ'¿Â`ıoÉûËĞş†)¿æ%üÆ0ï;îaÉ­dˆ²²¨å±ôsˆ0Aš#XòÇ‚p,Ù!€Zìğyüü›¨+ä×_º¡Ñ¥p„Ş{¡r ¡JSçú÷Ÿş½{ÀöĞ“,Îiq´9 {¦WY »C~Ä˜mtS8&e1ÇAÄ.PÓ9´süy×mè”Hpw_ÂÃ®k½,.†,,~Ä×Iaxßªï…§À§E8'âo¸Ô”G«Î(¶r.—¨aµ3Šz‡ˆæ^uÎ;{ïŠŸÛ6WÉ±§¸T¥ª—n#qhÙ`OÄ=ø$µ˜¥ı ñ©ü–>¹A‰-$ë­Ïğan"\‘åÏ»$KS–‘Å1‘-í38m‹§á‚§·n¬"¿ÙH¹p&§Ôn%É`‡´€H4Dsf i­¤¬p3·1mèqt©†c8²D,¯x†ÁHkOgì³,®Şñ8½¾kÛÏ“kQ	Ci7ÎïÚòQÚŸQüªİ§˜ƒ
-$¢5Ø2K‰¡ë5È^ ±K3I1ø1®•ãûµrqÀŞ5Š¿GY·GİßYï­9î®a6¥µ³h*µµŞy¸İ¬‘zÙH*§Í?3P·`‡$&×¨õ˜/‡ÕM
-`ágDİ Î=$rL>TP!*ÙñïSÉªãË2	ÑSƒÖ¶;ì›õŸÖê@üSvyµ{›Wºİ­•^oe½ÓİZ~y&;e¯*‚æ§0•Ú¥aŞ™&¾(5ùWùu8f*ÌZí…òÁl‡Çƒ½%¤ĞUìÂê%Ğ_ˆ¾+¦jÉVßêºdš¶nÔšñ<ŒêCófìJAC†ç§UF,K—Jó×Õ W>øÖĞwA¸znõãxBl¹xTÒRA¬‰ö¹åælc_ l¨¡úÃ¨EóÍÌo¿,Á÷`:ÍÒkºàD– ("·é~d`­’¿r’z4—Ÿaby1Œ&d‹¼¿lU9Îµƒ8ïË²á
-ÉÇ(L£¬àg
-$KGå2¹((À¹$?j
-foAÉtÃ¡{ëjW•“¼›§E„Á‘ˆN8ĞAfÈùæ:fİ¥˜CV›V—¢ïÚÓç¬z0ŒŸŞİúŞçïãèÃãæ/S¼;Cád6zOF³ËK;ÚåñlT$ÓQ, ä¥N+p½äóŸR8ÿĞP2gÙ3ì]MvÛ/_¢o&›@ŸÚ8˜aèØõv4œËæm5úvUñØ2,ó)º´, a×9xÙ&nĞî> [ğBŠˆ4èTÂığy‘-³"ò›b¨Ï£‡|`]ùM	9~ªHr¬ğÈ(Ùqë¼Lä÷)9JgÜ^ıh]Ç“ CîÂÅJã›1»p!gFYéObóôÏÄn(FzaÄ±šM°.®òÕ:ÂÛÀa0¶@‹Tƒ¡bu–8›–2Ä@ëœhè“QèI>‹Fœ&³ˆ‡æ¤i$‘- _¨Üçı1>³NÕãş6íğm»ñÖ[ß|7Ö«˜¨&{j Mı¸×C,>†âk4 ’Ì›±i<±êE¬6ÁÆ	qà:K
-ÄàÎ~Ú\–P8ã;òö»˜¸¶',µàÈRíM°A`Îö¨‘™Éò~"ÍõprËvhD_zqÓ77œî_¾Eİ7°š"„?Ğë›¨{»EòÇıšßi¤SÊ^ómƒ:‘»Ç“‹TÄùSc¤ƒÒİX‡hÀäŸÓÙÏÿßTêÇ¸²"2Í’~Lb®“óøí3ravòóßÿ™¤dÍÑò%*”†m—}m3j\;Ò·<±™4*´æQu¼Ä`-Ve$¹øîx°Bª\š<WŠ¨_0”$e#^Ã`YÇ§q…°O–€3H°Æa_[šƒƒÙ7|H}7bÃr Ã—Ò‚;CECI•v/Ğ¾¨ğbæ,p\2ì.‰H+$¶]/ï2
-Ä¹¿¨ÓCèy2Á/KË¤4²{eéÕ+º5d'MÂQ=şhU{‚WÙÃ°HĞŞ8(íUÌªƒÆÍ#!{÷	éœÃß"!‹„kçK„l©ò™ã M,â·ĞGùùXÜ9â{ŒãÁXš+-ÎüQ”îYUé¼`YÑX`“#õŸGº4âp°¡ôuõašs3ß«Z; {d_Ñ¦Ph”î"^ü6EÅ ½z­4†,Zo<øÆµ5r|zFhõašB=ğã°|LÃ/¹Œh	‹¢Á—4÷ç±F&é•<®¼o¼*wÑÇÒ«t{]ùiK'şšNâ— Â¥" A¬¯7zQ³lRõ_	¯Ø -­C“[-o}jé¸mN4Å:PÕ˜7ª²ìıi‘agÚb§HO_ÂXİíåN>%E»uÖZ~³RÓ™Mhï€°ÊÇ9£»CØsZ<‰R}y¡]¢9=9B}KN“5Ò}¸ØøëñãO°Ui‘]yXşö7R­lº¥‹X›LÂ÷ !æ@Mû{Ğ›3|#'¹&&ÈİÆÑ<¡üäfÖÅ
-¤±Ûf-Ôã{ëe%VÛ¬qÙO=è¥óETÇ5AŠ6Šı5¨yİæ–z‰2‘–ÈSÜ4á0¶±æµV³%ı0şõ”{Ó<õ^4ûúñ‰]ğÍœğÍÜğ$_üãÒşÍ xñ³İrœá KnÅ“Õ×§­r"nü~×™7+ZävùÖ]Ú7zLíÈ÷ø]äøì1Ü;¼ãG‡Û7ÄÌÑo¿cø—¨PáğÇdÚèt„ZºT>®…Š†ôA5`¬:}öòì´sİkçtÿ©öıº`¾Ì ™QP¡·¹áş™™ğÇ'“ûqsıMî·ŸQîÿÇTF1ö‚éÑ(o°@•hôiYÀ_nD¨eGŠlÖ ·$†~Ûº£*Í:ÄfiªÇóhºC^Å}€vs:9+„¡ëïC›	 ­‡?ÿıv»äàyk‡<ö¦Ïv»ø0¨eğl·Ûôaxvƒ?»ÑğÙxv‹?»ÕğÙ-xö[şì·Ÿı}ÈŸ}ØàÑK_L4Õ{QÑ„)å“ş7‡­
-£ÚZ¶ŞŒ^$8"ïü"õäPÈãêUäûW)—ÇNİA3¦îÒéõj/H–Ó\ĞsÓqí:®‰©z	ÅçúMc£wÚ<Á*[“ ;$Û˜7ºá#JtõzŸ"xCö×±Xµ´Å  ­ZLÇıEm„/¤A«øÉ1ä1¬–@ªl²0>'½l||zyÓ{ûË÷	'9ä‡Ãâß%â§!…Ö
-øxÁAehĞF‰$?à%xl!Aæ€ W@PP8P_ìñ¸q^%æU|a§à2vhÃN‹F-7´XÔĞ‚1CŸ*bˆ‡	¬‹ÕŞ¦m¨Äy¯¡C÷8ô‹ÒŠÔM÷÷¾·q¼(÷‹I
-ÀKYxsp¡§»âÚ‡;‹Î	SNÒ¬¤==¯.!Ë;S¥¼¹7ÙMËÚrx‚ºÑ‰ÏŒ@»Å˜kË#§×Ü»TzÜ ´^S6!Ô/"úõİ©ö%¬öÿ¿¦UN7äóõ%Ú©ø§ÖßRtK)è.¥Ù=‹Ga]Ê$H·#¶r!Ğ´ŸféØ×Täï“Óë â'¿¢•?é›r¿¥ç±J¸½²…”Ô{–Şv}[„! ôA`mÇ7ojZŠ"´ dSÌ†åìoÕŞ#ıúôÇt}?Å,”¥ÁMŸ#²CíB¯ó8£éõ&¼öR¤ ¬õK8§Ÿ3§'Ôï[Z@—¬ÍF%ÎÙa®=é²pÓªĞª ¬†–)öD•$¯qâZ^ç8‡B)"ı„²mš“†UBÛàe¥ÙR«‡ÎSaé“²•¦5ÑÙ˜ntæ„ò¶/—œ‘’XuîOÈtÃü‚Œ öİã¥ı?<ì61æ/ÆF¿ñ¥¸üúê ¹L€¨Òód´_ ”ÊÆÑõ3Z¨
-6õ…¹IÓĞ(è/Ù#*×éd1ŠöÚ¿­]®V«ALz¾¡Qtkwt×—+&G‡o¸o;õ'ça¨»ğÉÊ%ŸŒA&­j½²É;1IĞG“Ñç•š0DÆc@†øëd‡6!‰d”ÂÚT˜#%À°µm—™h#‹M÷U«ùÎpá&5åÁ+ª¡Şa^L¿Ôe¤,¢ïû•¼HWÈãY2ĞèÁÓ"‹ã‚ê­!í)ˆóîNNÛ!zû:âmµo:Òú
-aÍïh2BH<Gh"ó]†¨ôĞ/X…9LŠyÕ¥ñşÖÀğëZ‘ÚšÄ^`ïK¹wİÂKù‰›/¼ûÛŞ¾èU‚Uí™û>Á2ùÿ   ÿÿì}ërÛÈ’æ«”µ=MjZ¤HJòEÇ–W–ä¶Îø¢c©»Ï9^G"!mà %µFóc"66v7bfşíDLÄşÚGØy~GØÌ¬PU¨
-e»û˜İA P—¬¼Uæ—¿ÍmB3}ƒ}’¤Îi®sÊ(hÿËN±«yû/A]}Ù,c³àdïÀdß`¿üÌnq·@ëŸv¯üÊ¦Ã™?¼íOA7>"ù4°œğe^ì{¿k(ƒ¸ïIÕœ›ÛFÛÓK–à´CDÏç•<9.àãÆF’X+y©nf)lîXet5<‹c˜<‡tCÎÕ÷¬°(h¾Ñ[¥à¥*ò·ÂZã½R,e5	4¡	zò*ÃÀyÁh7©ØX
-Q¦íqtá(‰‚0ïƒßáäÒI£Î,Nœ=şÊU§Õ=¹–ĞKõã¥m™/Bç¯×İÈ2tfQ@¾7oˆ&ÒÓİÃÙÀD(£H_Šø ç—0‡åÆŠ= ^¹(’óòq:	ŸF±u¹ìI1‹¿'Aÿ
- S}¶y)±EÇã?œ–}Yˆt0e“Kh9I£	´)ú9ßabYz™NKæxÆ’`œšœsô”
-+Æáø0?~,:…!V)¬
-áûËtRrş9¢Ã…Ñé)\…ñj+Ì
-K`l×uÕõ¬Ó]êº¨%7.än-®71wDª¾âßC,2…0mqôÔ&Eå+‡tQÌjîë¼z¿Nğ;AÛX}`JÏ%:ÕÁEukèZnÄğ‘İ‹yëHóÖ¡ùÂ+ïÓhæÂZëù>ŸœïË0Ê9ÛÏæºga÷ùCN]Êx½ -÷‡7—Şãvœìğ.È'Ê¢Wn§½¨e™;ßÎw<8æØÙ3Îçâiä%i7˜Dí¥?Eg°Ù¦ùFCF&o6"š.ûÁoi`Õu:TÕ¹»äŠ¾ìp—Ãq¸‹™¦ÉÔú=á,^ï—©¹©8İg£hÚJÙ{„+ÑgıÒOØ½“\pÔ²-û©6~“^QÂÎß±ó‘sÚ˜êıÂ{›!è»åÂ¬•àêİ´YÛ»VDZ^kGázÎU7*ª8(ĞóÉôìÔY­YØNvÔ_š Æ×ßèpª{3`/‡Iï ¥ñ%ksåÁ—+„ÂRå»ÜƒqKs,‚0áğ±Ÿ–ãTÜ«a|`Ô¾€A*Î2Wõ
-Î‰À}’ØWç,ó€¼+=ğg5¹3ÃÚ#îÕéÇ‘D9İ!§wT»ûHjVrÍJWW˜xÛ|.Zü¸Ã7\í¼úîåÑëı½CÂW6+Ç
-ôq“„pZ†×Ù¯·®°Œÿµš„óÁD$Jv&|›q
-éø°°0'­Òá%È°³¼àËÒS‹HsãCPI?ÄÑt7:ŸÎµ…u¹Qı—z?Cza0ÌP±¸Š ]6öÃYÂÎ’¢ÈM&AYŒ×äÕ¥p²Øÿøç®5m¿Yo­SSó([‹J·1µİìT‘Z¸MIûšW5Š›¦Ş˜†ÖX¢~òêB£h{üÌ‘ŠƒŸßfœ)ÿ(‡A9MÑ ›dåàÇ*Å±µ&™:ø¹‘ Ï^8¿$oPRö–äÂ¯„ûPZÁ'`?<×èWÈ{Ü³}ğó—Çz2'Àx!ìgÖ$?7â=ô¶_-ã¹9·+ƒú8ì‰Ò>²·áS%ÛĞËò¥æI7øùír%3Oâ©7í(s_-À³á»'áàçF,‰Ş5?KrFXûËâ1LŒfŒæÓ üš÷§M<ypå\Ú¶=óâ”j÷b¥á¹²‡å}*ò³Ã@û7GpØ¬òçİ³MRráe™3ÈÔögfç(ÇÍrƒ¨os‰ã†ŠßŞ>×vº¾‹8XpÎÂÏÍNæÎ%ÂÏ¢…ï¯jÇ5Í3¢Î}ÙrŞrrğcİsr‘ğs£Mwƒ¼$üüÅíº?ï°UvÁ…féJÔµ/{n{× Ši¼°A"~¬›îç`†-}¤m'Şöùl¼ß ­)¢i¾„ĞÔ}~m^ª/A5ÆÏ— šòı_‚jn~ãÃÚNŞ8-¥²®—½:›á*	~”6ƒ/¿1ö­SäMƒB+îØÓü3WQSA–Sì¿Èİo£pÓŞ¹IÁ÷+Ÿı¬®2*ÊÌ¾÷Â`Äõ,~ağ\1°aw9µ91w
-ÈZöwÇîHH•Òw[Êğº“Œ÷c°_ù:häMsp| ¸İ:}TH1Ó3
-‘cÿoÏÌCÔ€ìO?%ÙŒÍâhèû˜+ĞuÇ¯äu—­Ãç\šãóÎ#Œ9ßœĞjñÊ£l»“4ıo˜†—Ğ*#àÒäSº±ÿÖ¸â¯¼<•{”ËRÉü`îÒT®,³NYq‰©ıuÊu{½”/â]ù|ïÖÏ_„øu—:7ŞUøùì9õg<ew,Y²î3&mSØ¶DÖ¥°JËorƒåm#•Š,¿	s“"ŞÎÛJ–èB¥E´eÌdgKû”£À~ğ–šà´7¡W:p§IxFîS[´%Z:ŠvÛL¹7öë_TXË§©
-ûšrÀ>íµj­Ü
-Ú~¬«ÁZ[u}3›&J›;"<iX†uıÆeXóºªÖbŸ_êª.¢®ê—Rª¯”*aÄìñ0ô¿‚‚ª6ğéë¨Ğ"î;É³4Ğ¹«cf³f¯§š¿Ï-è³&œt Aò"LÎ'ÜÎ‡NÖœëæôK[û¸Ó¨Ëo7¾‘ aÄ96Fò5k‹+ßûã ¶]\v~qÃX¥O3—Â°=£ô6ft
-Ûw¾¶ùq«?6\Zî¦øøí0Å“şvËŸv¾;l­°+ŒûıÈ!×JÆQœÂµ	¼g,}ç¿‚©éÇÁ°Å®—¯™—²+õUGÁÄ¿şm­ÙOØ»½@©Ã¬ıÍƒ>SÊ{İíË½–ÔAPDdK•aïƒâìv`9»lôVî§ëM–ô–6¢Z©¸Á».r^ùw’Â„jà âòco­6ËÃã¸IZo©Š_)7‘¬¬£_GôğÆoÜŸÏ}Zl3wªÿ´Äf«.ÜˆŞn§ÎƒVj¾ßˆYC6˜R„˜Y•Çšõ³¬‰}	; Ó¶(\-‡«ë«X–÷³¯oúıbÎIgµ@Ú54×Ğ! ˆdÂÊhz›ÍLƒZšù3õ|äÆG`FoÂIğ“‘aÄ,‹ñìûÜ‹ı1Õ•0¨t8vƒ¨+>öÈ<tT÷5€  (ÎáØv²(¼Šx@±:M2åñ#~{#>ã$5ÿ‘…qs¸ĞY¬pËå„ñ]JzâbšTE^9£{¦8óõ¡iˆjCBl™yà.ö	nÅÄ­ªj“ ÎÅÚÂJa…k‹¹I`*.q;š‘¥4CG«½}ÏÛ3Ğg.8„Û”>ÛËİ\`D¯Úîçã¡Ÿb1‘|: xÄú.Ç+ôw‘?´áúP¼ ùy4ö¦ƒ<wâ…‰ÿ;—âx8›‰»ë•µn0†g@ÁíÖsú)tm´–ñ²î~nt?2k<ÏôPÓyfìšù0¯NCŞÀ“ AÏm¸¾ãÄltœÛÄôçFÇQ§qĞ[ø<"YsÒqx7·[½oæ×¡jtæü”¶¡!ûæÖuLê~‚ª6¼Æ<aôk{µı_Fß,¯:ŸÉãêÒ“M¢
-ä*î3/NüıiÊ[yÓ{»‚+î!òr½ğÒ1Œã¢İ_¡Ö;Ì-]´$-!>ı|üHƒÊ´‡ìÃç§e ÑÙ²šl"Ø$yzÌ°Ë¨ø+÷ZÎpP_#êå½o±ñ¾Áó&Áä£n€„H#Eë»âÓzNb.ëôù‹`ú‡³ˆú^ĞÇ_Ópšşü…w‘·“SGÖsCĞ…llĞÜ½¿fm}>Va6İè?ÛÔZãYŸ+wnıH)„îÊ›«·¢Œ¡#¯AÇyÓŞ…¡élytnİæBv€åüN).f?Ã+
-‹™«Š¹Â¸œ{xäÜ“zs7³½Õ`—£h
-ÏÉKˆãæÉ(ûK¼ ™«K$µÕn#mÍ|¤ßÈ©¸ØƒRëã’ík{…&f÷ÁF¯8•µ(WÇ: »ºÔÚÜ¯y*×À»¯–tCÿßì¢3@OjÉ‰Za­6óRäLøºs•3Òë+EıyÌZß´Ø&kµ®ÙûÓFŞ‹fÑ†~4ƒW{ ï¹c˜ôQ‹@³›¯ŞÀJ!•Ğk6õ¿üÃ¿_eL¼›FOƒÔ,£'ªøÉ»².Ë-®I%+ÙŞ™ÛviŒŸ+EY¸şÈÄPáS6{ÓùpoêVJ2û<"±hŠà,ÓÖR#Õ,:yKãQìµNåîı¥-\h¼ızõı)Ìİ¿EhöÚä1ŒÅ¤:3ç\Õá¡Ja0	R|—´Ñî”¶2ìØ&>ü+]1Ùb½&î;±F’ñ'~ì…#Qµ,s†ñ#€9N¤`ıëÿaYõ\½ã×•+´Aşè•UÑö’4#Ãæ“”ù×[>jğ‚f¢úÜ½êäõr»:WœĞ/xà]æà†ìĞ'ß§“GĞ¢'f”V©%f7İPM¬T‹,FGt®¨[Nw5Tİ	Ü‰Ê ‹jX6EùêaAüò÷ÿÂK5ó3Ë¿%ãhÃ‹ãàƒº+eæ:`Jî	Ñ0÷ÙÙËˆÍD¿§ÑyË„ÅrïA«y±0>ªn
-_/ùp|*„*Îd™w‚‹Oa™*¥0ÚOQ.ÌÙ»§qñhÓî]W¬<§ÚÑ¶R¡sBuwîÃî½_oß…§õ{·á¶…Ş<N÷sÌ‘»ÎÆÛÍjó”k/f¶Q­6OÁğæ±Ó30F²x »À¤pbYk½::@e…—V"?¥»È*;º‰›¨pÏ 3'Ôœ[´æš½ä¦€ü62‹]1˜ö@fÑANÔæšO</=€õ7
-ıÃáØ…b™ç[8‘F%DÕ¿{3 ”^³ñT¶ƒó%+Š›Å¶•c¶ØÚâ–õJ–W`Jû:	â	{Â9Ö‡Áéó)ÛÀ©È›0Zv²µä”»ğ¦ÚdŠºt°*æ–§„mlfcG70Î˜JVÜœ¶Q)ùRÂŠœ0kÖ³&…%êYW6*™™%7L<Ş¯|Ö” æúŞ9ÓÄt)™lbáßÉhímƒÂ><AÅ‚ßiÔ9f'q4{¤nÎW1E~·³ì>ÜsOÎ-+—k¥®d_ìëe§]¤¾h2ÃÚ8Ï@í†>l‡>Ø_UÆŸQ
-Cåg…ş£sÅ¢ƒëUŞe^EÍÑ‚äÓpÜ¤lAInN›„>Ò&È°^„K¤ïDîôQÍÛu4oiéáË]üwŒÿj„—ÆœòRßÉşEâSìá(ÿºnV±Òùôã“"oOzÙê Š›°z¡aJë[8¤õÕófq§‹ ¸A¶êQ_Œ¼VNä€¹â¤Aö|Ë‡qn0s´P£“Åí«4@Ğ€Ø¥r™Ewfgaâ;ßÉåÛ×Œ+ËµØÅ—÷p<0À¡¿×ÇRøn6§)9x5'5]t˜A<xŸ¬¨òùqw{&‚9Ã=î&³0HÛ-ÖZ~Ó£C|IzÜšïi¥c?ö[×wØüÛÿø¯µ6ÔNWÙM”ƒ„ÜOœø“€Œƒ,¼vÈõ2†‹Ø$Àî¸Æ<ê²W¹c®GSîX÷.ïÔªÆàtÍ‹½±Y+‰yÁm‹òûœãÖ%y- qÕºW`×®ŞíI,ÖO:˜„„áJ(úñ;Vi/IS¶Ù%.~35¢îtÅ‰Ö„÷–NçT¢QËìki+S‚_û'@ïÓ¡ïàf0tÅØ÷öSCeßs^JH~²M#R¿‚§¢ÓĞgÜªêŞFuâıætílË6öjˆˆØ#V?Òz?†ÅAknAqSïCpê¥QÜ†Áì8òâQ÷<†t‹HÍ¸8V8TOr6úIÒnå„Åöwax³ äì üw\pwê–´‰J7£ «Ã37ï¥Àé Ãlê'W¾ë,÷4HCèËN4»,¶ŞMu6lLøR] ê­öâ ¹stM¦ì[Ì½mbé”’uÃS)Y·Ï³uïËfO%©ø	{úÿöÏÿ}ûİşîŞá
-ÛûãÁŞÎÑöÑş«—‡ 6í¾ÚùîÅŞË£CÖ&à=>¢åšC;}<Ğı<¿Ãà¡òGìøc/Å-ÅÅ¦§SHûY?cfw¸ÂV<¼d^œNaé˜M#$ç DşïOfé%ïSİ°Ê3á…,^#Y\|ÇÓBËùŞ+b¢åO€»²íºz|'ıbà¤e•ÏN€¶şÀf	ÊìEüÜ'£œSóB]Q¢ÜÎÏ€,À3ÕàX7¬´À4‹Ò/m©4^ÙâØã†ÔS‡ ğ§u¡ºâ=i .êÍ‡¼bè0ÜdKä‰ì/­pq¶IËßÉAÛæ×†p-ak½I–ü*Î”»p#W+6)ìŸ]¯4îÁ@ê øšQ@¬`ÑÌôò +ü8ø^9©ÒÔ_D/Ö¤^òC¶Ã(N•. U÷K¼™aZ¤ Ë= |¦yº°.uãR½í/…âRîÃ%›84t–yÌ€¹½#ÍĞÚn¼¥Rmd+,Xv-™AÔMu2‚kÃ¹4q¨Õ¶.4¹J®«Ü/©[H¹A”)Xºå%®ÌMÕ´nB¨iH.—lrÜ,;ÓV¶àlÌO¼,Ì%5z £gÑùÕ“L]˜F« İhÂy…3ÓEjo·Õ0R]‘«wçd¸ó;Åøp…TüÊ=í‡Ñ*wù6s¯E„ŸÇ¬Uåø]W½(í3üÉ¼Ø&¿m¯Õ¬?›Ô.oĞµ^¯åÜÒõ»[‹›7äKîÀ‰îÌœÉôìti‹ÓqÔÛ\²‡Ii>9÷«ÑbvÖMdï®½tÒ¨‘tqU8Ä4¡±Ï0š+ƒT€é~x!ãà8@ø	ÂHc‡À’:Ç—ü—µÿEèW¦œo6·JÕdTÂcª×›j~¶Œ®>âÒÍÎIŞ_Gñ¥dáàuäºëMÌ›j™êh²ÌÕi5“PøÍ[ºÆ^ÂÆŸÄ[°”°á&ùEŸ""2ô¢y]¬&lh«	GRm2•)ŞÅljÔõ9(+£r×€E'ƒˆnÌ5ïı]d[Ñ	C‡˜dy£±¯°èËÄß½Ï ˜CzÂMó×Ş	ä‚øã0XèP¼ú0˜ÌBÌ_H(}akIó5ØB`’ë's½ö{¬nÇ‹ûâRo|€¹·º?ıÁÈÊ±8}z„É1ÅóCLŠ‰Dæzùkè£m“-a<{Ñ…§¨§¡NŸø#™ƒ1¥c,1
-“ äkš‡à’KÌÂâEÃ&~lF1$ÕNşâÑZ¥Z7Ébøàş][”Õ“ÌÙ+1N3äb¨à!÷Œ!Å6†Z–iâÌÌù¨Rêğáñù)Ò`²ƒ7O ¦ó~ÃtœZµ6ãİoúZJ–AË2nªäšº‘é¯Å»×´wßíe+U¥ÕŠ5ÑgEwn)MÇ­g³§›ôÊ’‚¼(­2¿ğgßJz%ığE±¬R,iŠ„f)æñTKj¹‘nI¡GqàMOCÿ³S0i<Õ¦Nû!úå¶sæ)šÇ~|Jv")^ÑÑbï2ÁkÑc¾SøÔ®`zz“	i^a :ùh>ÅkÇKÆğòßûç~*¾åŠl^²i”úğRèf€)ºçì4
-Gğ=Qa;ÕÔy^C€äa8ÏÅ0ò¼šùÓUEšx£l”p`°'#/ˆ/±Ïèl8§æùÌûÙ‹GÑY‚ˆĞ/”z°=™œM^¸:Œ€Š¡éåÜ±—âİØÿbF	ºÿNÎü°¡ÚÙÔÑŸ›és¸ã-z'mëO xfrJb.7Q=3n;¯îùGÛú¡wæœ|ÎUS7éF®‡ÎãHıù‹R<]ºÛôØ‹ñ¨ó8JÓh‚ş‡ óÎ›zjUÖ:O;(0óëÃ1\SÀæH„íìÅüøy:;K·*f"èÍ?ŠÚ­q¤Q|éV	Î”zØw}ò¹Û×‚@v}t?ÉpğìKÿœ¿½MgÅNMœS`ùİdGa£î­0œ/‡lIC¦ä&™\j‰ÎÈ´õ0;$õôr]•v¸¡¹)µ0>)Ò¨fôûÿ€Ÿğ+éÎì{,Gôâ’½ÂÖe\:×jûÌ·¨‡_ö˜ásó=&Û¿Ù¹J‘sÉÁV|Š¼>øİ–’tË[K:œá%/Ç¶[©Lòİ¼L2Ş<"\Èv»iu0‡ÀÔÿõßÿßÿıŸlçÕËÃWÏ÷w·övÙï÷Ÿ>İû#;<zõz>{up°ÿò[¶ÿòhïÛ×¶ÊÚ¼¤¾í°C"F4Ün·ºî\(¬ÎÍ¥&ÌQö†ø»/:èIiŸZ±@)¼#(úf×WutÒ˜G• f>î¼Ù¸O±9ï¿İåßŠÄPT])r7ĞIÇÁh­iâˆşc—èÔ†ÂÜ·!LmP¼÷N‰gsE>­7ø°õŞÕâqtºûÛô8¬n°ÇòÜM'”2ï»%
-j©6‚–‹ÏNÔ9¨´n©{ù`E^ÕO’h¥+i®s„9mÉ“JxƒIú³GLÇú¾hEÓ	jäi]3„úİ3%kr¹Üá8šñzSS<| 'šã(ÆkõÎ
--ÓéåsÂ»ÈZ#šfj#~æTÁğÓ&O<–ÉİdåĞ•{*k±Ä6A\ÊŸs/™QÇÒõ5³èdÔ+Î¥§ÑyìÍ?ò©¹Øï4SÇú¤ú>ÛC'º\(ÌˆCôŸ^‘I÷]5‡"œ¢å#¨Ä+’v£! 4·¦#_6„[\1â¥ÀärôÌzè(r¤ÕŞE¸(¹‚(˜gRÖukz‚°^g£Ew£`B·g„Øyàa1-'$Clã0k_—ñ2—CbÙ®”¯.{—¶Ô#ò6&İ“ „­Ò/İ¡-ápèû£¤;ö’vĞFn@oD>º¸<º,Lİ!€?«]¨o£Öqí~˜ıµÚhJÇFÕÃ#	ùy6™xñ¥Ãò&6è&@ÃCŸpsZ4º¢çØ'¼úÓS :gDÖ2¼Şš¤«°ÔbÚ™Š:(óf‘Ê¼à˜›Òy[ß%mÍZPÏŠ”1¿Ò|ŞA<”õD…Iw®_’®XÀ¥­_şõŸ›é¯œ@ƒ©J»O¢‹MGÍ¨.X3ù¹ /æÄD|"ÓÑ³QV3ãùg1{®ıvÛævğ'û†Á"d‘ªyô—Q«ºæ‹¼à¹¾Í(øŠqì—LüQ”AFŸÏná_rÜ‡Yì¬©/f!è¼9áÂ`Îófñ4#4³ù…>+A‹/´ŞA¦»ŠãĞ›Ö[ÀÙ9âÄÙt_–¶ò©@Ì—ÆíÖL®Úiçz	È¥P/ò>dÛèc#Å[Ü(ÍÁ[3Rä¦©“Ÿ‘q÷<+_ÓÖç‚³”e¢œ âoºP&&}w£'ó×¯ŠÎ¨†[ÿnuõnë¨zi®†s–×¡0g±-9ŠN}†åmäzZ1tLöRJ#/¤uìq `$ñÍÚı¡gu
-¨©_µo]àûUş$ıá¦µn¯ØıåFuSz*o#°knO–êË‚YåîÊº‘3ËÙ¥;´ÖQXs—”íZ8¼òCÅÅ(û¸.Tô=7—Å«¥¹¾,ß öh‘\	’Ò¢³ƒA½KGÒl€™¼ÀØ¢	áĞÆü‡œÕ?;àFZ:ÿpu›ã!Ä~‚Já†Ş*·AE"l.Œ2Ìï:˜ß²×Àôs8ïšsËBŒA«°•8Tiîõh„,ªá•«¹n%9Ì0ÉöXÅœP¸%ÛdÆÛ×ğöç†»	Cü·
-D©ª¬;¹7•ò(NpŠÉx5’Û>=­§0Çz^_ûIyÂ¶?x9dŸ»zw[§²Eà ›xˆş(€Q¾K6ø ¤WßpëĞ;Á¾ÇªŞFx2I%2x]¡',LªoÖ¬8IÅ„ ,ØpŒ ì£ÇX¼ä<¢ t*\Â† ¦ÅÙÔß¼pËsÙË¼éeL|W°Ö2H:7˜NQú„×6Iº7^1Z á%Avò¯Q2uK†^v:ByÿÀŸÃørFU„ kş4ÉLdY—¼Ô
-Ï´qpô<{òk'/9úÆx¡C÷[Û˜ŞYLŞ¯Æ8ˆSâ=Õ`N@y™äo$”Ò³ı»ì‹ÃPíD+Â°µúÎR?Ñq‹j°BM¬d
-?ZEå	Ë¥f÷=TœúË°½&¡Ú“<fÎcN1	µû>Hˆ‡Àªâü¥Şq²Â@×`	V;	†XäX¬¬öˆt'/TÄáÕö3sÉtàÄI¶C;Hğ,``â4(J	~¹f…´‡×S<İò².X!C€ë}%»­N6q*ByÖ{½²ßêê±$ÕİC]ÌØuLi»_âXf™cŠ0Õ_ÌİZK[Ä%0:„×	X†#şZnK%_xSN¥aee™x¶xÌó¼GDï,0³ÛÌHôó‡ò”Ô+Ù.1WNª®ñs·"¨Ø(]°ÒŞ,ô.i‚5;.)¦2f/˜ÜãûF÷¸…?TÙPê­bÌ²ef­g5lâ£'»¢Ò4È$rkˆú›Ù”ˆ‚íª·E©W>Ï7Ó…‰ói—4v©nd™)=6èèÕ;ºJw²@'É‡ibò%-|€õğ=£@§eµšxE*¬D¾Ş»Fq½÷FéøÑUß’ÈdRåŒ¢,‡z*P!|PÓ†§u°0Ôü%VikdM0~0|¶G#ÁĞã@ åäE–”+j^¦~€âsê§ŒL'dë(½³.8^óğbìª‡,¼ÒigZ·ÙYÚ¨Ğ[È“§¤¬‘ÈO)\ÃªÏT9‰Å8¾+³Z`nÖ´¬K[‡¦Uóòe†/<&FÈ4Û"ºg$oT›êYB–ja„ hQnn	}”‰/@¥Æ=hv#›xhşP†‹i2³ÁÀï³Â7Öê4ßYúd mTFlo§J'Y™“y}	²ô™\ğT— ØÆÅGªz=ûÒ»èPÖèRUGiój-0]'Ó(¥:!ŞÙ
-®´z¥²›bSqÂ â“	tÑaN·hƒÍ¼`T˜¼SÔe}^¥3ñ=Ñ	ß†|Sûa^Ü3Û˜(}tP€ñ†(ï&İ°Âü²³fûBZ2×úâñl¢ã›Ï†ÍqU¶xÈ2QÄÛ3ò'HR7‰&~Û#…¯‚&=KÄ	Kö¢YFÊoØ ôà;Ñ¦İÁxÇh#¹3Œú´
-„=.Ù^C¢y,şÃ£øLÁùÑ{"U–§¸P}ñ¬$cßbW¥§dó¯!Èğf)hÿ£‹šˆÇâV–ênğÿAM…+Ka·ËÚÒXò†Ñùê
-Æqı®êfi¥ôŒ{¹i©bm.BŠ¸Ïe*
-VUzËÉĞÃ §x4· ¼Å”<3J[¬ûÔ8h?ÈÙDÄ¯K¼õÕ"˜Üäõñ—áÑ‚µsŸìxñ>H\i{³ı]×ã2SÉ¾´u»c¦Q³Òõ–e<<EY´ú*UD«G¨N\*uÑtr¦º L[+.ûhÖh=C?	½|‰"gÔò1EZG>™æ
-1Ã(Œâd¹¬G±—ŒMĞJ›»Ú€#ÏuAõµ#æv]Ë¥83!ƒ6TâAZTŸ%uµ¶´%t6Q>Ùëf V®õÓrÜ¡MhKãí#¹4{µ¾æÖ¬Sà:RÄ.ä2~T“ï[,³Î°s­wî	m·3™;^èOG^ü)&ó^>™Ö(ZÑíš£Ë/mıİ¢Z»›wOX?òÊJ¨[Mö…7;ÜöÏñœ{m5§@5ˆN¤8øıí’ƒ1%IJ~3Ã.,~Êˆ8Z¶ëÆs†r‰K·¢Îâ-‹ ²n'	¯<Fá#n¢‘S²x—12òÔO“…Dç†íãO¿Çø¢F8¢:I;Ç¿j’yĞ»¼Ğ&‘Õ&[*w+Y÷š²¬YBÆM_ké6¾ğƒ?†¡ÿ’PÇ›¼ÙM:–ø0RÔ×–ÆAc÷pTEaKù`ØYi‘kÄ‘€ñ-Lqi4‡İúäc÷iøH…N~VÅK¬?Îâ„ıÅïÑÿ6Ÿi‘×ÌB	ç®ˆ¬Úô“(<ÃdYş=ôO ó„]!®¤’˜øÂñ‹ïç+DüxÚHâ8ãğ^i¥î¶y4˜^í‚Èx(LĞyÆ(Šàg10wø"Ä%	£Ë®ÀV7wŒ9‚ÒİyÅÙ™ÊŞÑ9
-Æ\Q"¼ğ,Á> ïR/dÉĞE‰o8<¸,z¶Ãğ,Äš¼Í»´+^@ufRqQ¸¨ ßˆ§¢¼>EıÃsKŠŞÈs.Yo³FÖ0×—›‘°»ÀÔö@NäNŞUa^-·Y)¯5Ğ<ÜÈeÆÓã´Ô°bKğ,1qs¨ÖêØZåE¦¬§¾!ë©\€ŞØ‰ÕY4ºäª}4·kmâBmj‚u<sœY~´7Ëk	_²CÉe>¹$âı“GWù¹+=øÚ?¹6I9›ÏMœ€>foğß· ’¼ic+¬õCÖtë-?şÊ’ËlÉO¼†9¿‹ãS‚è¬¹jüOKb“ñâê*;ÄàVc†àzû'âÀG!Ô$WgCˆ>ÎÙD„p Ú'T\§¥=ÈŠE#¼GÆWciucLŒœ|']ÖÃb­g¾öbí±ŸÅÓªÇ"ë›:¡Õõ¼oš4F”H†1 ¤’ßJ<‰ìMiNBı‘»*cIèîZ1L	=Ş8®¤DÒùqu½&¸˜0ü”CM`g©ä &ä{Œ"ùEüm¨±ÚêdÇ˜@Áeq¢PçÀX¬ˆ;”Ó(² •„Tµ,Å`:â:T"G¨d%„kÄ@¥»Iöš…]Y<çkÌPnYô–³ÁşÍ˜à3D”âñ|Và=ç>iÁ4cfÀÖrfÎuUó5•qpƒ>¾ÂôÄ}y'X÷8ÓÆQ·XÛĞáåÚÎÒ¿w
-1¢ô”™—ƒË*.dÉ­òÈ0fŒ|j7¼ı1Ë‚r7Ù®—zˆÒeY2îàÙ íu-=€®e}wKã£­îîV}o{Ç~híMVÑ.ê%Ù™s+êÿ9Á5Æë+Ğ7cçjD]¥ s‘Q*¾zgˆ†úêJZ©ëæÑPï®+YDtJHï•´"U™U|ÿJ^£B«Ò²¸—ÍyÕê‚ø~_öA™]µ`T)o×é%Gí%AêL2U4VªÔˆFx'!A]2ÍåŸ.õHÎ¥˜è†¼ÙZ“‡h)İ<	0Y+Ï¨Ëòø€¿Û:–¶rlyq®q›r²Â®›ï˜ûJ•h{’^ëEp¼Ã%ÑYZs“=B¯_h‡Ÿ¹£ôğÃ} ˜X„øM57Kó[‚Ñç1w	+ÛáĞ¨PÛ•²Ağ€ò]çÓá0!t¦pÉê¸˜†AN¢<½I|-ÁĞsüòµ%F¥{%©İ¿÷+WK•|]ôNUñm®œŠ:%Bæñî¹Mˆİ*œ¡…ùëObï4+2yJ(q3Î—‚tÄÄO(6zÆó
-¨åx–Ó.Ø^*éò&]½Ï4S=>.’Ÿòiqô‚¹;!6‰½ÏùòãªÛ_ü<Ys.lušĞP´JÜBW*ÏØÍBWi‘%E«XÓ\0¨*ó›'Àãæ‡XÀ‚¸¶»à “°:İWÖ`dû¾R¡Î†DœwN—Wê·èz`ÕY7š³)1ƒ¹Ã\ç0†Æ½ñ6¢â\‘…šĞõĞµ«¼”äwßE~ßÊ.0 ¬o}ª%;@ÀÁ¹÷F}òwÈR~èhCİ!ŠûåşCÑ‰çWéğsC'º†Iä²DÏQ÷ËÕíFïşØE ë·Síf°+´fØuó¸)¿·!@œu%³‹ö, w”øsAÂİyS6ùâ# Œˆ„îº-+š¡o‰}-zá°±c¶–¥CZizLEß]ÎGÒ ºW@	¶ó+GÂØTQ›&÷ş7šO'ÕäÀwÌÑ“İEm—yua‰*n¤Ï‡ß¿6F4!Ñ¢%~ãxÒ¹Ù‹ªI»©tw¤¯ÏNÒ.Tí¼’ûCz9§»IÉµãÃY9‹*×|Àì£årÿ<:šÿ DM[x]WX§ïÈPñ£D=`ĞÃ]&CêïMª=åi‡±Oˆ ü;5ˆWÈÖ4ù0û¸Ëµ‡/‚éY"·îqo€oé~£ĞÖJ‘j¥Ô¨˜À›A¥D_•õˆ†àí·Ib7§°ÂÅ¡û?æ"1éy‰ÌDá²@dáÇ 13ş‘şq7>?#Šı„~KMƒ_´ëçsQå)›}Á.M×âbÂ%”’×ÒY²bşßÌoRr÷—‘˜ªì(¡/ó;XU0ƒ©MG
-¼ŞÛÙÛÿ~o×™+Ü’«ia"S!,Ë9Ÿ˜ReíS7®›´ìºd¸gÒ6¤€Ì…‹„Û¯ÿ¦ùº7‘Ÿ¡£ïcòÕùm›µÏÊ¥ÎMìí	ñ¢LlcPîGñ©qß†A¯Úè\AÎtbê’.Ymè:z)3A¢É^åC&–Ë‡‰9$ƒnnYtƒKÍagè1g¦»ˆ¬ÏÚú|!Ú}ü>¹¹ÂÙğÊTöÊ\+³ÁÊéÈÈĞ0'/š£!İÎ9
- ÒC°
-@ØB<²¨êVDKˆ™XyP[T¦>}Šš©
-¬´@ª ûMqÏ×Æ7Ù°¸¸²juˆÕ%Å</Ì‚íş„6JÂ:rpü”½¸ä…wSï˜µ‰½,2À$Ôe%½J*œ6£–v´ÜˆQ•6BŠô¤ßBúy%›dÛ^ÆÆn¿
-V¯FÏêØ›B?+×d£69$œ^ßGxµãûjÊR¡¯¨qBvJkâ1z<2ò+{%1Cæ˜iÁ)‡¤b=f­Ü9èéèæYı¬i”â8¢s*pNc™FS¿UÑğ&5l6+LfC9ZtĞ³µoƒ¦´1“+}²¬ı~lß60S;<'šÇNÓ‰qF:-s&
-Ÿˆ¶ÈcA˜j&{[8N§¸½ÓˆYƒznÇ@û¯él¦ û´	Y`_¨Dl¡( åÒú#KtLDñ¤eùUBşæÌTºæZ¬#<•õ8;®Cè4·”s*FR[Ö«¨T;øş’RÍMy¸¦
- U@%¿¯V;@¥&#¯2O†õ4V±ú›ù·QèÕTª‘¤ªl–õ<?³E±»Ó9êæõAì=±—mø$ó–[/dâ*¸µòˆí™ª‚$öuã)-hİ®Ù&İeİ”$	Û<™—s+€$`.)eÄcSªMyËaF™'Éqè³h¸#¸s¶C¶,ßó1QSÄjiW{;šVß²¤”Ïf „ï€€DüIta„]0èÄ÷kTb3ë3d[Nµ°u‚B.ºoË!1`ÕÁÃÃ`:;KmJJz9}_²İ¤0ôÇ@~ühidÔ$ºõ~­s<;* ­)¹	6‰«×–¥¤ÎáY²	ê5 :+.!aõêâ‹¢”J°YÆÎÚt#a’¨Ìú¨Š²Œ§î_ Š\‹„¡˜VAq«Ú[ãNÚ¯Åù«¸Kú¬÷kJYÚè>ô¹åüË3¼ğ'Q[®Ã-ãè"`×ÆpÑG¨lOö=ƒ™É&ü”‘î';°<§h†r¨âúÅ·ÃÊÌºCùº~óïLú^<­Æd/âvç~¼ûº½Ü¦Ãğöt;¡ÛşpæÇ—ê-ËÆV_S
-"‡v'ùŸØUÑOÎc·Š_Í­xy+ùŸ¥V¿f­ˆlm}ş0)_uq!ï°tIiôzYd†#ÄK§F§Á.ùM·ÛÕ/¿í‚I›‚ğYaÇJ¹îä<ÀrômüùÉ¥Œ¸B¶E#í€ÜÚÌç‰áwØ1ÿëwÆgÆ ‚çyæ‡:^2”ßCt’D/ûícº¸l|Qšä7÷ÌóÀ=}˜"ÇÉÿ´<¦4Î+=7òO¼³0Íoîe?]«kÍ©Q7lÍSŠ%k"‚äEt„~±Î%x‡ü™ÇHlKa ®”¯2{ì ğá¦âoùG@cÚõîôĞğ@é¢úLÎ9ğŞüK©]å6ù»|§7¡÷èJü!ÿÆO'hÊø=Úù^Òiù£:ãèü)íZœ×â‹Ş[å6å»|gÆİ]eií¼Èo¾(-&-ˆ¿ôò¤/Ê=ÄR˜ÿÕÇ‘ı˜ı©ÏÅïƒ““ËÃ³ÓSĞë€ùœhsS~Ìx]~²¨k÷èªø[Y{iÇ=*Ó‘ï$Ì'ÙÁ½êw­¿ûb7¾ğ§g¯f>ï¬~±x¦P„`Y¦Û=óãè0P|ÄÚËe±şF8åè¦ìÂtá-ç/€á·{šxMğ’.yd?mµø„P%=vøctÂöAôĞÑG˜I»Q# Ş’á˜œg?İ;<Úÿ~½ŞŞİ?ÚõòP¹3ƒ¶<KÇXyÒË÷Ód…Í¢è'o­BG:N@ü˜'Ì?Ö¸Gh$tÙŞX/à'ØOÑeŞÏ);Aòøà…	;G¬&x˜ª/ƒèè*=ãñ;<NÓY²¹º×º§QtúHXaa‡Ñdu´Ú÷¶¿ÿiï?şy4=ûÓÁ½ñwÏ½ş{ÉîƒËW?^ü|0+-ƒABÓRB88Ë÷ŸÂïˆ*#iĞOÖ§#ñèÒß•§OAÌÁóRòyé–coDÃ{JÓágĞrÊ=
-¹Ï§!ÏŠœp	ÓD!~|,›½æ‚ç[Z(ËÙƒÉ«úqLœ6"ÙùîõöÑŞ.ûvÿéÑşËoMdMÆ½XU¤6ƒ¿éÜ!¾	J±Ü_3
-9÷â	şÔe/¼÷¢vx"põ&mw6æc1zºÓá»5JoKn@.£‹ç—ÑŸv~ÚØ;8ùÃÁÆdöàhïû‹‹ãg;.Ï×:­ —8Jüù¨…¬$º£‚V¤•ƒÅõF—‹ –AB±bji¿?¶QÆÑöáÑ{õ”={õbÏDß¢YûÉxEZ6ÎD¨¨"N‚Ø§:ğÛD/î²§ø÷‹(ØpŒğ¹!hQ„|ío¼ŸÎà`Q¯ ĞØ11@¢›ïVªG/…ï¥EYÏ‘`‚7 ‘ïŞÿş‰÷û§ß?èŸM?ÜûéOûêç{úÓƒ~|ïÏ¯ŞØûŒ9
-Î>ì¶œ‡/‚JÀåòå€äÀ^‚èZÇ1^M}v€®Õì¿Ş?únû9{¶lk$¢€QpéÑB£(L~ùûA	q™Åš³©OpI1ƒu?Ã÷{Çqä›€¶ ÿe%à7 ƒWŸOtf"‰´ÊéìÛ'/Ÿ£'?Ì†G/N7¦ß:¯öF?¼şáäß>İ»¬ ”Ô÷Âùè„¬$º£‚Jó	*ÖÒPÄ_os45˜”½”8mU#Ê¬´Bğs z¡O¤AéN¦«Jíö”ãŒ±o0ó¯„–$%+óz…İëõzÒ•üÌ +½r‚!’w‰º)·˜+ªZ÷v9zÙ¶³á ÛÊ¾YãgzWtÄ1ˆX»ï¬*ÆúĞñªâ{¸ÍáŸ€ ö¥yËŠğÍµFÀOòuO´”ª(eDŸ*ßæ_i]S…Ûïq©G`V>ï.á?ûÓWgéRùiw0
-ëôTïjéÄ–“—ºÜİ|+˜¿“S“ƒ9‰‡Ìí1Æ{ajy†#r©+Â‰ ®ø˜ÿÿ›´3DRd?ëSÁ?±âÃkãƒ(†—–¦ ·ˆKåÛK>iKlëá€áºSì“Sdè01Ô©9Ñ4]Ç§×•né0—­×"”‹wbûê $º¢z¬S3\Òç7÷øçYú…úZC}ÏâÎ›ş=ËòÎQNªıºSCÌNaX9û¹3èe”TB|OKE÷€W)Á³,c3mbô¿Û	}–øu‰­<°øÌ‹À7'öÆé`ºñ‰î ê‡zC–gí‘%úÏÎ‘ú¨‹×ŸÜPky–á¶ømıJã–İÀÕ¡ëE@ßôºk(/m5i„¼OëQg^ükaÈyöŸ)²µa£S»¤Íl‘ÑÔÃ‰«™`ùîAÏPL5»a½×k6±˜ØˆL#«ErÎ¹q‰ÙÍöì¸o°›·®õb÷ìšã¥UÙ@•nÄ#èïi‘Ù¢¤(q`é3¸XX¤oG¡6ßêF7™…AÚn­dõÇaŸ¤.õT¾ö½aÚEøB*,
-ªTÇt_aë×WDp{ÏòóJìŞûğ8†M[şpUí•½7ö ğœDş*ãBÌ¿‰‡­Á¡óQî\tk¡Úuû†€œ
-Ô˜—*°¨5(ËHTÆ2ûÙ×,ABï§_„§E0K½ûÍ&Ø–ÓáºÓE%ùÕŞ`…­­°uQnÉ1XÊ+•èUm˜K¹u5ØæÏıå_îgÿUñîº½Ã×A€£5G¦Û»Ìıtg±÷ÁK½¸;®‚¢şîyô°­o€>®A_G³m	ã°k ë0­€ZÏ3}RØ¼[5FÌm
-¿Ùx?¯.Põ£)gÒVúq]*3E"´
-œßy(À'²0Ç¥­£¦xÚñ%KñÃ›²¨^!‡Š#.¬DòéÈ5Ù|¸uZ‘]àèÓ$ˆÌ3Êzg¹5'9TBmõçç›Tf¹Úƒv±É6šóPÑBŸoÎMAÙ\Ff‡Qö1¾}ÉğÎf«°ıoÆr‹ÊpÜ¯±®û5€¢Èœ[SèóÅ±bˆÍ´@;~³Î½‡h)¬tsˆ1‹Rövx3û©¯fjŠËù|Qo;³9»øg—ÿÔ9¾ìOZ—L›#É“j±Xÿ˜ê:Ë³TŒ©+Êä•&hŒ°noğÖUĞÈñÆ?Öt'îát¹”2cnúájÉó,ıŠñÎÈ‡X[2Ñ­[CÔüì#+?I…ïˆş¬Ã¯™d˜)yOPWW~´™2"¶4+Bq)]×’§M	uúF`È50"¥°fëÙòn´'kÓc@¡éhÚ‚–O˜“1æd“å­IF[€i¤‹d."JŸ8ïĞK!§‚å××™x×ï§&¥E²gCW¯ât|”æ!IÜ’”}ïµ®Í¥©ƒ}C¿1£À½\À,}Í”ÄI”våâH}¨Å3I³^-[—eªê3o3¾ËmÇu`ÖÚ*V¬®kÑ&¼ì¼s¯œ|ğPD›¸1œõü äú×@+ªğlÙR^Cé7%¡Ats–—w»å>xá™oÅäà]coz
-·µ}â^jHfÛï‚©sê§]jÌ`“(f×#CJÖ¹_s yŒ¹ƒ^OËp®Ë`JF…Æ·²ä3­£Ú
-˜Ü3T¬¹ßš$PFÛw¤8ÓÊ™,üí8{†:9Ú˜mpİ š˜¹Ô-Œ·Ïùïä!øyT>¿dT5xš÷OÁÉ	ìá(F¢"6_kõúšğF+W[f½gy+µ¹äd ”­c*õÂ’³ÁäY?Ãbµì*,›#¦Ğ–5vÕ®ŸØeNHÉ2E¡:æ‚U™DE¦/mÙ:S"?[f•–#²RŒ¸i-3~T
-@Î>FfDw×ó!õğ{6æM‡‚G KZGôø	XRyjd+ (ÆÙ¤â5÷hF±|R—N|¤>–Ğ~*şz¸Êïpx8Ï:YÚ"jÜdÏA§{œ·ƒùyCØ¶6h(ËNYÚÂõÜdÛ?7}ÄÙãîl7x¼ÈNYÚâ™½óÎ‡”°R4å4#°oi~ÙûâhºOZ
-LpVS˜ ºÿÃm‰€—¤²‡eÕÅ!÷Î¬­ZuÊ5ÙµKGERªA¦*‹º%ø†²éVhNEÆwdÃ÷
-³°ÌÙxÈ”—…@K¡Á·¹*†ÊA&íGAh·gïšuSâ!NH…Ìù>Pçò¹¸P^O³¿ò»†åf²cq²Ÿr~M¾R''™¤~¥ÇUòµ[é­TÆĞ)ŞÕì™ÖÂn­Tè!zÎo’6¦vòÒØO±4“qÌ¥J°kE#KI`ìÉIJIÊµHQŸ²æ¬‡TÎ¸¾bBAµ–íÊ^“R×şåş}ùá*5ß àÁ
-d÷åV¥Ûg†é”JİYSè5õEPZğâ#”AS¾œú1)…Y¦fIÃtˆæÓUÇŠs5ƒ-›³^g…QÊÿo˜ùßĞ·[¥B°™¤ÛXtï¢~Ñé‹êÇ¸èâ©¿èEoŠ;RÉì@£®èvÂã­ìI0c§¬WvA˜r­ÌVÉ.ëifÙo…+ŠšqO©*Í(–Jøp¸”1®]ñW':9¡C¹fg|¯Aâ§Œl?.á-k¹(4Û!¦¡X’:½N¢*!¿kì"”¾®ì•˜ ¢à•~E­\¸:Ë',<±dèÅé>UéY<'°²í o…€ø„h„_@,kK§;j&qwì%í apµsşn|áÂ>³Gy?+ˆ[=õ1åK)oD¬A•h)N–H6Fcán°œìêĞCeêñåôÊÜÆúÛ¹ÛH-W¯VêĞüsULÿ4‡ 5‹aÈâê”]ş‘”ë"\¡Z­æŸL¹nö:“İöşznıÓ©÷yç>#@”î$4àÿäk	„¬µ0ë”³ô†ñ~ùRÖÄ÷YdAÌWp½üıØSA–s˜ãR²– e³ÅGŒå»;PLƒÌ}®Š‡)7G>-åÑı~¯&ò€êûV8e½¨¤µÆ¿Ö¤‚ùáí-P].å`Û·{%T×¨E=Ég2ÃAº)¶²ÉğÜ`¬¾ˆex=º]Q[TäÔ”˜Âµ¢µaZæ'#ëó$F+U¥83p&½ÓhH¨<CŞòÜ›P÷²Wówa˜’
-s_ Í™û>³ÕvPMíÂ›w™ûgyÕÀY¥ù„á.G¹¸¬‚toPqB®hc©6^±¸a:òb	}u‹ “³ìÙñåfÅ8ì±îv€óÛ­<“´ƒ~§y*ë°)…t¨«\+ôŸ!K•v·BL‹g¼™,¬»ªpÊ>ä¨}U]T`J§ò^©~à\P¼Jğ5ÍøÉ²¯kIòŠÌ[©|¢D†ÅÓåVÑÒõJ¦¶Q÷³OyIÚMÎ†C?IÚï–¾R9ã®€?Ê1#P‰¿ó®¢E·Ü".[ñ’Ï­}i.îûjô¦„ov²Ï‘(•Ã¬WÔáÈ³ªsb¦ZŞT6vååº.§ëœ%‡íÎ¢Ÿ=¹³g–ãï)vĞSKn6[ÜÉ±E=ŠÈÀcø²¬÷ÜÎèJŠ…ŠªkBí}åñEpŒÅ¤@Ä¯$r`÷z#i†ÓÂÃ‘X³Ä’Ûû]ƒv´¹2:‹ªœKÕçºÃ¨˜$¾sQ½	»ƒÀ¾ ³¨
-ÎT÷Ö`LíÓ0òh3„vÈqßŸPè,{}@¤”çŞ´ùÕ]?yÿ²ïÿ\	Â­2¸¯H9`òàáûH$'a’ÆêS±9bŒ¾–¤³·e^õõsÁ¡›^–7ËqÈ›½Gx¢u¬iö×æJö¼J'CÒ4Ş‡°á7šwÑ›Ç£$¹>@ßWr‡19Mr\ªN)£êl±ù+Õl<©Ød­d†ŞõÖ
-y“üµÉ+Xáäd
-‚“aµªê‚îYÀù}o®†Q\d@ĞÃa8ı_u1¬ı[©Š~´Ÿ;oîm¼Õƒ+Hï­wz•+@¼ùO½ıµ·JéDô÷H¾;!òßô~Äª®?®ãÿâÓc¯ı`eĞ_ÙX[éu×—Méòº¥jÉ‰Ğ“ÑİMáòAdwƒç×Ñ mªÚ9¸QJG¨2‚µ“ÿ*‹GàVl6m–ñPO0<é‰ª#	uÈ^¸*›«AZ[óB­–Jª.)ÿtèœ§İÑ½?¥bPue÷®4Yé‚uîf®äøi,‡;[çĞ™ª'…ÈJiõÏêj'¢7C^ åO;û/««¡ÖMXEryq˜z'LÇíç^×Šõ2”k&NZL?ÂŠöñp5µ0¸©dÃâJ&Ü4¨Á–ÆÃ?ÎÖyQÛn¡]XehƒÊw“a…!<p…®S’fÇşÚ‰bR“(JÇ-BŸ67ãâ÷òß(³ò”Ë
-Í^Ôªè”s‘ØƒÅ3ïö1[¸¦AT›ÒÉHrñÃNx˜5©¬õœ©\Æª¿¦øÜ“4Şû7ko™­8²“§İšùNtU#·­˜öÄ;Cí¿Bë/?Xaoô8Àß{E€M¯ä¹+y$ûŠœN°’y¶VtĞî¦Æ[Éà„Œó&Õ5[1U¬2Gm?òWìè«>‰"$ä×ş	¼C =¯˜ğ W¤­¾¢AK˜?n<¦^$U]•÷;R÷«@àu)©‘°gŸ€æ–¸[lû™’âš•+dm‡¸N«Ò±!Ìá~z)™ÇrT«£COØz9éŸF9Àx<(	Ãµª²eK[°Zg±ŸÛÇWÇ¥Å
-?†f²´ubş8t7¯¬G¾°üHd¢ç^^Íğ‚—ü™wI8ˆš}"èHøEÆÁÒİ FˆÉıñ<:¦Gq [#>$cV^ïïwY6İö"!Êe|æ—]!åsÉãtÚ¦kaI{:ƒ¶ä¸-öaOI•áV·•+Ü§I=ğ.*(sW—Ù)Kğºƒ\]W}yZÆ†¹$§&oeÿ¬ëÔ<!
-HÎUÎ€1”ş¯†ÅÌç’9;)B] W†S‹Ôvä•ßs¯Ó#Î8÷G 2Š¿ºtä™ü¤ãvëğ‡N]³y¿xI§#û€ŠªòÊK¡‹y±ÖéG”¶>‹0LÈô
-D£BÀj`tŠN€öÔ$aÆNéàİyğPıàrW.*°Áˆ/—i&8 ¶RrÌE=]Õ·muâbt®aˆ€©d,ƒu,ë2æ]¾Ïä3Ñ¹œè<‡(u'ˆ‡¡ŸU¿«ŸlX¡ãÁMÒi½Z:i
-à•iov(„{íÿí†Kˆz±şèšg2Ãİ¼¦zKë@H C~ózG+p¨‹Æ:'¿KßKzïcöîO²Øâæ#‚İÖ’?åaÅ#–äı/»¢4èşî&ûêJğ—ëwåÖ7Eë\ñ)n­nıÖ>-³j¤ì¶+n­Ê[j¶Z—qÌ^r\~ÛÌRQãf0`+Y#y@ã"ÆkÁ<0ì4w´í†ís/ CüWVV˜ Jï:ı°w’ ¿l×»LZÆ SJ›â'zò†rGcHüI@¥ûæİK5ûB&Yøõ4H(X¶‹˜ü WaV±qª¶"D_tÂULNw¼Ğ;m¤Ä€ rƒ!›õP´– å¶'*Á§Øíó Õ(¤d`z;Ñ¥ªøbAÒ…%nãkGgTØaFÒ—FÖ‚æbèc©—½’—¿ğ'^€°Ia›|
-›VéMî=.ämií|´™âã- 4`^†¤ÈÇ{>ÆŠ¸cŸŸÎà¸ºŸi|À‹)±¾| xZ´2RLŞçÔ÷&ÙM“(F^f¢ëDÑCĞ÷	hÔÛ+|»pëuAn´ïU†e¥ÆÚóóqVùäqõ¯Ù°¹h"u'äôşÂÅ„¿³Ë£aa¾İlG~øÏÕ%28Ï•ÍúŠß"%­ÀŞµ€ò“]½»¡pşüÈ#çğk92f®²åb ÌÕÒ­:ËÌ^ü`£WÀÕ5(Õı°`£:ïËšÆ4	¡éufga’§
-LaŒ½„‡ÙaêÏ6Ù¡Åi‰Ä‘¿®äı*×5ğã‹D·ÊšñcF<ò‡ı¡Í5Å\t3/M#ú{èßÀÆgÇ]öƒß‚M†ö}f›lHT
-S2’oÀÈˆÏÈ[”t§ÀËCTşš¸Ëº¥y°ÅC”FâàÍ–­àsİ¶R?äCs¤}âÁÛîyÅ•ª6@Ûî94ï:Û3Õg³2vmÍ	.Û¹-.“®¹î­!_¨_Åà÷@g8ßºÙÎŞ<(gy•ik%ûï"Îöh#/ûåÿ©D®a#*ª!¸­Â’=cÂ)9¡Jƒ’iNˆôD•î+œñ•ŞŒ·4"·ªR!ôÔHm°º¦y„,5”-Ş cñdåÕ®æß·T+×ŞHË¥ón=S¬KWƒÛÌN¬ªiî‹A%‘«OÜ	¥+%-Wt¸˜å[oÅv~=äGT+.g?>¦ş†İöüİ¬µ¼L®îyôXH7t®qÿÍc¶‹ÂÅ²•Ã;´ŠÅ|ÿµ^Tä¨†S´Ÿbpı ?:Üî¯êĞÿWòXªhÃYà¬gHfòK¶°Â“ùPo5Q®¤¼$ĞÍu[¬86’W©İ·œÉ^3øRÃÆäŞt˜µiÃÕÊ×Fèn›+7V-Qg<É¹ğ
-\Ø²¤ÔwEM5€‘)­gŸ“"\…4c„İĞ¸›1Òµì«r¿iE–¶PŒ°¯zÛ¬FøqÛî9*õRæä‡+Ó~°˜³ï¨³_]•ö
-ü6@Ï¼v}®¯Áõş5úÖtK6MÍÒ¦Liz%]·„7kÒ8!¾f#ZNIuÂÈWÍtXµ^*¥@eœhÌRö3	åâûFëZä0U†ÜÉ~úš…6'a)k·üK&e8Ò+#«|,ÕÎïd	Ùi}<6ãFAB±%—ƒÔo^/n~í“!ó5ÚU>³Q<³MÁâÖ©á-Ìà‚ú7(nªtåíkÅí™Ñlø7¸¨³’XÄdvX•«Zú^FÒ5Êîˆ³è‘öì–õIK(1~Šbüáë’®Qä¥µ&o¸óÎ=6†ÿæHP~Óï—¡€eÁe„¾Â<EÜJŠr(4~ØãÖ
-¦`‹Û%u&phaK›-ÛIôzÏ r….1~Äb	–|ÏÌPHwnØï\Ëï´ålÛ£a-HÎl@Î<×u’7•V(±Ä+UtLmµ€¹âÄÅMõmP8Ï3é´óm3Ô0g¶lÉÖÉJÕÉÉÏSª²]m9L‚igÜy³FåuÛ@4Æú›ŒGğœ›H»šàE²êÍ+:`UÄ¸côtµcnêœ|;cî 0D=Ôª%¥Şs¥íÚõ¼lR…`¥¹5§p[È¤,ˆ`©vƒdz—,@"€~–E	Ÿ§¾d¦ù6×MèÄ›æ˜İ«Âç…²Œ GQMóiïÄÁÚåÀNÆcÑEnŠ‹öxq{VKP\nJ9°TExóÙ°Ö¨•†‘£U¨
-ºĞ §b¼	ş1×‰•:™%_<ñN%f;êYåËæ¾7ğ–Î)âÔ#c<¯ ÛÁ…-é2ÇqÀCï|	¬è–”mK­<ÛÒÖ0Ëêªœ‡vÍ~ùûÿ-~àÙâh2~%_è¦ÑSL’j–:áJÊ£'»­ªn6¯ç¤–›Òf©@ °N&s”rïä®7ï©õ'¼œ­.‰KqÍ¤Óh.4Ñ÷ibÁWwLaóD¾©>O	yË>nçÿ¦4àóVIPS•W;á´QB.¿+Äç3ØçÑYHs îŞ#M~°^œt?67š^‚A«ÁÔ¬@šjAzüB[‹<¬Ä?@%·ÛU/b;ÍæÎyü÷Èş˜£§ÁÅV«äOT7ÕgyƒÃÃ³1ØÈY7ğ‹ËSåó`êƒêŒ‹?/;"öıôZ¿ìaíQ
- ›`…µØ7Ìvå@½«îÏaU[ÀkÕOánõõÇèbõs?³hTz.×ôCÕx£E¥êÌFÿØS•¡0®ŞÉºb®*–‚ÅË†ºcØ-šÛ¼IIA?–€6É ÓùQ«Œ}*®›¥&¢<u7*³nÙ&AhÕ*fÉîÒ¨v4T˜·b(ß†Ñ±_åĞWî®.9‡V€n{ŒWŠØä’‚ªê*q×üìê³ouR|v¤Ğ«ó „0ßÁ¥¬¨ˆŒÓcDäáÔi_ŸHLÉ!v®Bê‡í×{Ï^}w¸÷ãöîîë½ÃÃÏÉÃúÂ~çèö˜Ï0´x?!ûyBÁŸ"vŒ°R-Ÿ€ÏÕ†²Š1‘«"hõ,©ÑO6oèµÙÊzÉƒÌ9¯R«zx'Â§æÅ¿ÌÚ}%<vÎ1ùA½y‡ëŞ„>úñ06ã.¸§œ¢×4Æ¥äe¿éuÜ[[gÈÆv,ÙhùlTe=;ÍT^ÅEa>uXa3â«æÖx #íéù&¶ÈrI¹²óNºí¨Cj7Y–ÅóË?ş1O~U
-l™æÆ¾R–4t¢¸Ùû?(Ş¾ë§`ã•w[Éı?øâş¯qÿÃ¬îb¢;Wá³®<hâ¾7œ#/©zåìJH¹`
-/M^ãyÄ&!B7,m=E/5¶[]:¥²
-†T‘ÓvË(H¼c‡œô l,™˜V¹æS©
-Eãút%/t6¹~RqQKø³@÷˜næI²·(ñágÌ?óPu»]ÑÊŠäRKzèGÅG)GòšûûâVÂrj0À¼­–““oĞêæl¼Sn}¯ì¡_®rŸÔí”l¯‡¯¢\Ìb¶Ëo`Ã”¶ÍœKQœÊ#¼®®ÛEÛ0ôôö/<Œ’è£R%İì3øÙgFõäW~øÿ  ÿÿì}İr¹’æı<¬éiR3$ER’-ke÷‘%¹­·­c©ÛsÆáq—È’Xc’ÅSEZÖÑQÄÆFìÜMÌFÌíFLÄŞmÄ>Àîí>ÊyGØÌP  T‘¢äŸcFt[,V( ‘ÈŸ/3—AõÓğÍ/Bódæ¿1ÍgÁ‚4¯ˆ	_”‘Zrq¦/Af’B<zPXç›àt÷‚“êÂº¡ğ¤{Ã ÉcÖ`OfÑKöŞ‡½ˆáÇË£ºşŸß²M/—tx6Î·EùÛ­7>O¸wÁãià«–š0±Ç²¤¦oT¾•.€"nLìx° µ1Ü½ ô¥ÿ€¡eqÿÛ6ºÛm¤ëº­óët×76ïWŞxmsãM—¡vªn»¯âäØã˜£2¢ç™f¾tîÖ•FûêbŸé›KB%V•N=Àô½—?¿8yuxpLğşv»ó€‚ñ÷®å[ô®Ã;kü×Ç´.'•åx’}˜İOîMöùH;xB?;/óŸşù¿‘§ù=Ì.ô’Œü%Fiú0ĞO©iÕd{R/¨Z·z•
-õ;—á”âLpA(£´¤;±,v&IœÔWD¦â3„t fW­¯¸EßpC8ìSj¦I÷Â°ßZñ`®xX¨3½ãºx×]‰¾fï>÷×c&5KnüÜ¢«~};@ ¸c
-.ûõo.û—=Î._´Iş\}öN\™èæó`v? oDù…Âƒio@ï:€`7Òé®Ÿ¾øñİşî‰)I[Êçû/Oÿ	˜ü8¼ ÑÑSN^ç	€/QVmT”eÇ^|ucŠı±’o‘Ò÷|¬«ÁìÔ¤î€}îi fa×ü£&$Bkä}„•Ãiµ±0x¾¤EúVæº1%{=© 7,Â	ßõ‰Ál©õ_“ÀÈ“•fÚô–Ÿ+¤ñBõ¢~xÌ†ÓZƒ]±t4Ø¦$[É´Vˆ 7¼Z±ÃYyL; •N†Ñ´^kÖVßtß^/Ö°2UÙª”®Âü íÜs•ºÃ÷ıàrIsäañã‚æ©µüÅê/‹ 9ÿõûìm|Õ8Øïz÷‚òF–|áûp[ÜºñMR.‘”éOBÆEâY/g£Q\":½_5…5§;œ¹D†¶-/*DcŞ|íµ\ÑÉÖ6+O!·pEïˆµª€2üuOú	^£—‚|MéJÊ´Ùë dÆeQÎ&|mË?°PÉÁÛxéLİ«Œ°«K™Ji LV–öïW¨f½1ú}K)Ú«ZŞƒ
-óe×·¬ÕŸóĞ­¢”:?âyif1Â}ñ‹}”mŸÑËlô1–?v«|$˜üœB±EæÌmû¥¡ƒ”F-ëæ¯‹ã\ƒ†|-•ê–ói§JJ_Ê•k$l¼Ëõ_•Ğ°Ú^“*©âU%<ñ´_„v×Ëôëî¼B¶õA* xGü'ÇÚ‹Óå°Dœã^¡y:5XÄ…ÅÙˆÊ«	PF”…™Á¢yG\´¾ÌéÎÉ:PÚ,Ú†ˆï¼,#A{ù™Ç]ËgRÕ¨×ıB,(…lP :^µW¥)¬„í'Ÿzhù…
-iÄ³	jä×µÉK-P¤Øç¦’©#}ÖV»½¶EU%]æ‰«{Áôÿ°/ÆàNOµˆïºÌ{ıp1ç5y­q´àB.+Ü-q^Şª@=¼÷‚Ï)§Ï£«MŸÁ"s÷èõğíqşgr·q=”:éŞ@]w¿ùçvæ¶¾
-œŠ0õµ7ÿ¸Ûü‡vóáÛµó«ÕlI”ÔM€ßÒxÍÇ>ŠÇ±5Ÿ²Ú5Ä[TAµ <­—æ¹·™ØÑÎ @Iª Oğ£Ã_îlúî÷°{«[ó§~£`sdyÀH€¾7¬€kĞPkšD£úª¾ô¾Üø¡ğ²M™—Šò3û¤½ìeU¯§Ø±ØÍPYø1 j.›¬7`‹O©şUé¨Êœòã§^9g#tŠğü»4D¬Ç9îs,D¯EãÅ3$›†J“vO´:ï4ıªNÓÊwWY¯×+Xç*@Wsë×;›#õeZQz0&,ÌÒ_‹›®îğ½Ğn§|%I¸ğÓ#p˜œüæÏæ„CfÏ7~({›Òyá³-
-meóS­f[œö÷Ø1iKùïí‚½|ú´tA<™^ğ£ŸÖD#–~¬ËÃ rá^óãW.}l½ÄMP¢$ù$EOÍr£)ŠkĞÚkW4ü±«¥BõKBv	\Mub•Æ•#?;èAB×¤MN”’&ÑJ£ıj%ÉR¥·ü®zÏuŠ³—öŒ)¨Õü	™¼ûÍî”+Šf¹„Û«Ã¥­v±¬¼³|ûêU8Š?˜eäòOÙ¦Z~eqŸuXi•V—]v®b¬¤sÃëî	Ù«Û[›¶ÔH\tÃ£n“YÒÔë~
-¦ƒh"õvƒ›ßĞîÁš¬ùkV÷î@a>[EÆ•=UÂuîlê>CV,9CHÅ	ù¢‚)×ççJÖjc¿÷ôšÍL×w¢Îªå`Í](n7œ¾ŸÂé î»­z|~}ß›ºÎæ>#âª×f“¨6ªÆŠ/Í!çÊDşİÕD7áˆ–ŸNn><ÊEó!Àv—`•”p^‰+ÏŞüóÑá‚Ğ»£T{n¾ÄÛ2oªü40`?¿}%l>ôÛ®øih€ø±pÅÊããø|"i0Ê?p6ğÛtÔ`»ãK†}Ãá^Òë¼óvõëhÈÊ]4Ñá»©¹xsR®íoAª½ß¶íz•ä~Î§ºÚsĞk%Ioöp<¾\šK`I½ éf<‰†ô1¥\Â\'åhg/	ûÑ”°jêÈÏ“-ñÁgÚOá_õ’™Ó/Q4@zÃšò¸ìÀ’FáÇ/ŠU¢Öå2#Şå§ãFŞ¿¢xû*øCœÀû°Òû	íeÏÂ!–ÏûqœÃ;Dm/:Bœ 2•! 7H—H<˜‰0+Ù;Õê¢¬‚nçr~ğìÎñ$HŞÃTòƒn±ØˆBRF5ôµÇ¶I¥Ùô,âœå=òí+ßUì_ ²œa$£`8à$f§—è‰EjÒp¬ÑgÃhMñ—ìíjiş~6áQFìíªcVö¦3Ís‡Šš¨Bã@Wî7_{˜½|æ%´Nƒ¬}â[üaôx'&ñø\—·A­ä—ÙŞ á]İnz!×’Ú`œîvÈmQápôÍTÍ"Î}“[ºR\y<…ùF;kØô=„8D,7ïî17äŠ!cXfÈY@õíy½4!Rƒ[;k0S'òE8=Æ¨*³(bdxñGV§`ìã'‡«”ø|îAƒjoËÛ£“¹†¹8œ.=:V•‘ş‹MÎ/Ãòn–s£Óé°ö?±²<[üŞ/¿8fH÷}®<ît×Å<•ÌÈÎÚÌ•½He§ÑÙbÒÈmÆ%vy£ZQÆmTÛá€×ú'²òìEIov9Ò…$¹ÏËTi–¤;»œ“ï±TÉ~ÿ¹Áq˜gqÂ«`UvY¡`„Ó¢øIàÈĞÁzfÃeñYßàCšˆ+m¸óŒpYáš+%øI˜kœ¢U
-ùLfãAóá‡‰PıkŞÔìCéÉ%xö(eDü*gœ'!Õ3B§Ÿ×Ù"Lée‰™ÆÀUğç+şımtv~,Nÿ=bO”İÖ³^qÓ€`ögáU2 ê†O# a…¨IB ™|æ¶–—èØeÅ˜€Æ/şROƒ…“­Û,öš%p³(Q„/¸_…¿Ÿpà
-Üfª•ßÉg¡å#D‰À†ºr<¬òLïÎG·Ù¯x÷÷Lm ±—k¿ãÜğ›Û^³º˜7„t”ÆÏXŠ²WŠŸÉ4²³ ‚<%N9 +ûáxHçnó‘(òŠ]>é‚rr¿(Ìè¡¶”'ZqĞàé@,Ì¨Z)œG]ÒiL…Uï°9*\À­h°h6Íß¯mèÊ¥M'”¾s»>ì´E´êvÕ]J">*c®£1 íğÑ<>W“êˆÓi0uÚ:ÜŞ54>½%!½/_í€úòÅÓÃW?ì;%'/ˆxĞ-	×r˜©è¶gp'pŠ¼OÙÎkş £}YmõM›"+j{@ÀÏ’Úõ=·¨Û½‘¨»iA˜Ö nêt¾Ğ<‡~€mÿEÜùÉ`t.$ü\ÀÒéìİş„ í3Âµ¿lyƒ×·Eã$vs.ãoÌ*i^¹º:Ì!3mºüÏÈ„*•C–ğÎ·Š¬ÃÃÅæ¡™­ƒó{<ß—¯¼:x±wÀ÷}%<–­´©ÌU»–®L½÷Ñ/ÍşaŸöÛñ³f»İíl,‘.J¤Ë9 L›„gì³ÚNs$NZ½a49áÜn]$@S'0‹uhÒƒlÒá‹5.,½Ê‚8÷a`Ä-ºáQNh”ªZğ 	5mE&+ Ó¢¬ø´q8ÛU0Sî5\JÅºf£@‹×{´aØoe´½ZÇ|›OV™¦‘åˆp!Vv*­Ñî€Ú’®*©t`p(Æö+/9z,8EÈ®h=ßàÛ½€ÖÆç,û•í&Iô+‡Â1Ôé6;› ş§ a•§à2õ.¹•Û,e7Ÿ"·ò;i¶ÒNë(…?Ï#ô†ı{‰LAî£BFö¬Ùiƒ]„¼VF'SË)~%cÑ#IúáŠµ,_Şõz†<ìhê‡Af%C¥NTës#,·Y•ˆ6¯ ´"_rºZåeÉ~FÅƒŠÑĞ3nÒ~_‡ }PÖ‰Ş_øjù(¦a0âƒè)…WóJàJÅUœoß]©é‹®[óhÓ–SÕgaËkÁ¢úrÂÍuGI<šLíÆ¶+	µÇøS|É2a´Vµ¬;2İ*Z­ê¼íªŞ[VÚ3lñ&—’]<”P@²ûp}9lsşå2À?(znÅ‰¸é)zpR™ÆÄ²G¥³²üíšì_‡5Ø
-è¹‹†r+ôHñ‚—ÄF >U+,™‘O/m±CÁ70Ç%ñ‘r_ØíõnéÑŒ¯,!
-1/<‰ë
-I{d»4œgúõ³ ÖÕçK.s–¡ç©°±u¯ùŸ¬"$Ê¼Ã˜¦cNSª*(ÚÓ3—a¾Km,!TYl47;‘´¹"/T¹,!Óåóù1ÆÍ:€Ó<N.í¦=·6cÒ©ı¤V‰Tt$j¿·@ŸÎÛtâtŞ67eZ©ÒJ‘šcä¡J‘
-ÏÖiQ±å«Ì}¾`*Ûª»„V¾¼?]r“wJ’ê/˜SˆkuÏÄrXVİAbvÃ¶ówí«˜oA‰Fz:o£>œzBZköÄ{41çåŠ'f‡Ï·ó¯ë´S·öoåp;ÜÙDÙøJf%×ÜTÙw×–ûÕº)pô§Óq3{ƒSÌì§İbV?Ö¨šÄ*? 9É™:²“Ç!N(†ÏCeúêî€’_<GF[h¨É{oR'4$„v(]ÒŸpœLİE}ÜTÀ¤»]5xŞ
-œ·¢^•Ó«±†œĞ÷Ù3à/}3cHÕâRŠtÊå¿5¿b(ìç	(°~ÍiÜLØÈ«ZäeÜüÅÃpJß&ÍûEÉQ"r¯
-‘)³ä »9Ğ_Ò]O`ÚıdzÉ­¶ÌÏ•Ù‹\F[o]-Ä
-Tq±:öD˜ö‹¦Øş‘—B|à¤.ˆîĞ|?‰'ĞˆsNîl"3C€ĞæÊ‡U¸¤±Lƒ`³tCŠšéJA}Uw­WıáJcm•’ÎäirDRÇ¬í {»5ê¾#/œÓ.å´FÍikKhI¼—ÑÃ–³Ö‡—ÛÎ	hï=€WÂ-e™uR%ÉuTŞrÖZSûÙƒhxWà,\Û/Bí¬ïû<¿ˆlJ‚&ÓY^Åfğ²ïT«Áßæ¨r‚€Öôb Û„€?ÁX¨hÇ9«Ï-„hmùÜÓƒYÍÍÓø<„?“èAõ5ó¢±D&ë#8½x²ÑËüíI¸(Ø¬0ƒe:™©ZÃÒ’É£~AÈ±ÙséĞã{½ÃSÙã»©¯%Õ§#¿‚¨ï“·‰ô%å+„â?¦sr(„ô°i`«×Uø–ëYÌŒÁyšZxXá¢V~Â:C­÷âT|óâÛÅn²Úü£øU~+øy2wş
-Q±¸Ø¯µa6™]õµ)*ÂÛäå:²AÉ¯¾Æô:šş)w·Â‹
-ŸÆëî§Du¶âcôƒû¹¬ÀTñIñ“g¤²èe°ü'š±Ÿw]æ`W‘k‚Ö»\ª¼)İİ¸  _¿»âÏîf¥`°Êêµy9˜€äBötĞt¬Æş†¹nØÆJ€¿V#¾]¥ MEÂÛUkÖT&ºİ¼°Mb«Ê~nŠ²^5\¼™”¢–¾bsÇo‰å£1m~ËjÁ˜ ÌôK:
-,¤sˆËÀt9}_%Áœk›ª{•J›u˜Záì>evqbWæ(¸ mÛXmÑ£.o5€[9ödtê,:R¥9’µËÓ¨t#c[+Ad²ØÇŠ@kíÈ‡Äc ØçòpÈÚ<Âu²åq”G2ÎokâY½Ñ?oÙÜåÑªöD…Ø3İåÉ‚!TŠK÷ú¥	…Lïd¥ªÊì¾ppí<6gdxi¨måÎ­Q·]xñnÁªk±n@ÔüqN^§ªG¯$4‘téx4Ô9îâ·Tt£èœ±c—f D<ÌåÓs:Š±À —O­)c3®ÀhöCZPÜ…\v&ÿãßÿí¿VÛ<@ıøÛ2`0síóíIõ‰~È‹B]ÍªÅà7Y1&7>¶TÔi0^;f<…IÔÃê1¸	/À<ãrêÄ”ÌÆ=,²Œ/ü/ó¼ğIœ¿®_ƒ+T<DyöÇR$µë†íyªg¨<+¿×° ºóíÈÂ$”ıî6; Î´;i|:5Ÿ;ÓoCÑ7W—ÎöôÃNE¤`‹‰Úœ]ÛXÀi8Œ/Z_…0+fü›8ûg,Î
-¸Uö§`r?g‘Öà~w.Î
-–”uÿ5É³*…}‰Vvÿç Ó
-X³O"m ˆ[`q‚ˆÎh‚.fÆš€œ"í$3’J¾l‘öOÿı_şßÿş×yd¼Q”“6e6Wb[V•0]l`åñSÄËfE¢é@BûÓ?ÿÛÒ¼õÜ›ÃƒÔÄØİËx¥pC‡˜§‚¥İOJ3÷ëİWÏ^ş||ğnwÿÕÁñq5¹ĞgĞ4çîë°fæËñMü3–\ûmŠ9ãùŒ%As£ß\TáÇUdÁg³SönK_— hÙ'õ ¯^|Æ3ç¹…¦”Û¦ €â0Âzƒó°#„JN‚my"lèËÿãßÿõÍ#Â~Ì-~Ñ‚œâ·ou¢o h*D£bñr0/f;,½hC)*ßP•&Å§(é~¯ Û¤ÇçQ¯ P¬‚CÔQˆT+/BÑ4‚¿g‰³;šy¼ŠŞÕBÊøEó”l9ò”xÅ
-=h«í‹Ó¯&dØ„”ò%‡fèÌ<ùIÔÄä¾,<‰¼í#ĞJ¡°ÖSdœş+UJäjRªô5ÚwQ.1;ı½<{w'´á%c`Ç„U9¡†2ª“ÕïØóÒ`—a]1YeJ¦9eVQ…*ñ–ÔèÅÄä×®á•ÜŞá±{P0Õõªí¼òÅ’V¹èˆÄó¦© CßÈKÂõÙh|×k´:/,@Ô,¡]¹WÃ¢ÒV†?PÔ6;†¸Û.&pPaÈF"@3wCü¨R/J²+,½-œ©xâaBÎOtb)•*ÇV–cÑ†²ï¶>¯òìñŸò´²—'[Şae*°ŸğÀÊ&›]$ÖÛ=¦\b0ûÓşv” ˜Vá´Llµı" ‘ó&	¨rÑW+M‰¾t©ïylgW7lµ]Á–9V–’
-C/ÚìlI¿Åì© -ÂË‹à©°±+İîÛ7ç‚<.=Qø,Í&“’õQÄNåbÕùr*ü»F¹Aæpíg§w¶ù¥´„¢—E„µæ§²ÇÍëJs$ ş¢ğ£»SÉ¶‘‡W9¬.K›%İmÅèD,N×‹c±ô•ĞcÅúêt»Ê¡èù’xÆÄ§8åØ‚·.7/®í2ë+uµ]·ô£” 7*m£9²>èiñ\‚ÎYÔ¼MŠ®ú%#Æ¶^±Zw[•¢²‹ºÊ•VGÔ7qa®wËË‚‡2Q³Œãhµd|LC	İĞk„_;i%³3@råí/`µÕ{í{·L©Wrc*¥è”odš2¥ù¹!Š¨ …”ıMø1Àš Ş¾ê¤¦%ğĞo´©|Ú¤ ±Ò¦<»)óä!k/f£SWŸù)ô“É RrÂØ:Öù&Ü.«Œ7$f=&r!š>&e½ÁÌ"Ò=ì)¼{;Ò~vŒÃßHövI–¬67#U=»‰â
-!ÄøÑD¼ıFK%H]FÄBgîúÆæıŠì1!â§"g±ÙÕÈø³£Î=î,ó'w~#½ìcòB>‰7e‡2d¿)¹L_W{/~qòêğà¸5
-&õv¹s_ÔûğòÑUïZ¿wışÛYã¿>vt´³Æ×ÿ¦Øfµ—VÌ£k/…ú Z)Toê&éşn9­Š;‡ã³X"7ÜÅR|ˆ½jcÇÃL7%KÏm”2øJ	h	°?”è}zc_!Œ9ìÏ¾!q°<Ëò¨‚~8¥=Í“,i1	ğçxÓi¨dYrw±ÍjR™$aó,"¾ ³â‰|ÔF°B–¯i÷£³Kè3ıŒÃ°İ8‰|¾”ë…Íb‡âk©Ù”q×–2·:TæòììÃpÜ’Ò„füØĞ^ßÂ*¬YÌü–ô.KG…¬Vv,öÕñ³Ã££Ã?¾Ûß=<‘R”[tø0üu8ˆ‡bvo”×;VòSçN!WØ(ÈµtÍ|ÂUº¢Üç@ ´­	Ú°Vwáòuï±³6}U¤¼/ƒ¤Ìy¿]Vİé*ƒ>õ5°“:õÃ³`6œjP'ŒíG Ó_×k™)q,²~S³¶ú¦ûÖ¤RöçNØ¼ZÕ-e…lúñš²Ş€Ê¬–éôZƒÁD¤|ÌÎ¦hJì*¥iãEìätj®Xi¥ÈuÄpøhêµÙ$ª•Vîts
-áI…)İ †4QGÁE
-É" 's©ÑsÑì ¾¿Ó5 BJÊ÷R¨
-+2+]DroˆQåx!­ğy^3}d¦Ç\yücŸC$Ø7[…ü65Øîø’a»“É‚fdÉhØfÓ˜]ÀŞ(»|î“ié¾í<+‰&qöå	ÉX™îqFŒ”•ˆsÌìb»¿ì3Ùş4”O¾ÿsPÖbÛå±z48 i…Ëg ¼#àûá)ü‹=.…ü¥Aƒı`M&\Øü£ğã°ë+‘Ğ²¶=ïìÓíûÊ•‚p¿²À•Is+ózÁÄ¦–&òI%–m†+ÿ+LŒP¬î15î¤”«dË[·×°ë“"-E]W+5¥e"!ÊÎÀÕÑ½øÆ£)•ğçĞu#´!akªÔ(…¾„]pÅ,z»1© ²Tz­%@údC25”òŒ'ó¾”•İHŸïĞL™¶ìGR
-È-Ôôj†yZ)Åƒ¹ÆÁ0«¹ÆË›…¬¦[O6ŸıæxàU]O2îÌ¾“•g6É%,H?<ôŠ¾J"ºë„ìg1ÊEm	·.ì ŞûKXY½„	Î^ä¥jğTšÌ6é
-ÊV—ÕI-Bó©¨îP…Ê°éÕîzËŠu¼áïgœ§,Á
-ÌTƒ‹é$‡û%ˆ£^˜‘ßy81 ¶Ï‚3
-¥Ëbw$Å2†yşöÌIUiÈFŠ öYÊâ3µŞ`4.§Úî‘¬2 ûb€“ê%4'uYh„,ŞÊB]t	O­ÑQ²¡qy›Îî2­ÏWhb=3@9Ë['V†7œÄSX{²/£è†Îğ|åñ•Y#ãº¬£Û4“È’,‚¯Íi½p1Çj{x£Ú‹…|EC§s­¤©ÒKÊ¸šb‹¼ÁÖ4~»©wW¯Ù{OZ†Êh®e½vf]¯Ü‘«K™†?ı—ÿsUW¦‚ı5ÆºñN_ÁHÓ7F¿T’¾Ó^]U'm»ªû2ñ*×ı(¥^@Aÿ(“NöÅ/öáµİ!Ì&³¶»àÅi†”cé[d¢\•yãi€'Ë£¼“¿.qšq·c”L+~ªÓf§iV,Ièä*×èÖx›ë¿ò®ÚZ‰“&¨­‰g}ºó\	ñÅÌbU@k2¨ÕºÕär[¼€Ú‹Óå0@œÜü™iÖëõt6j°ˆ›™f#ö7¬µ&	
-K¸¯VğßM7>HNÉî„lM(¶‰HÙ »ZB~â‘²R×áÑ²ŞÒg;'fRT©œ¸kæ¥ö³aF^V/Ûçª’€'1ÈstÕWRÜ³¶êŸ²°òl‚af“É0â^wö„Ô;[F¹â`ÌB—Ó‚´ˆÉ^@"u¯îØØ£)ê4®ş¥˜â+x\²*Ö…u­Œªw+qÖ.å¢MŸÕ71=IW½8,Û›1ûâÅc„/ôÜ ½÷‚ÏI˜}tµér”òDÑ‹â{â üÏäX©z(MÙ{zuÌægœë=˜ëú*°)ÂÖ×ŞüãnóÚÍ‡o×Î¬V³ùKÕC·QunÍ1=ŠÇ±ÕE­XÏe4#7s6Ï“øBÇ¢Ù´¤¦M7n"M1»÷âaœ¤*²¶Æ?:öåşÁ¦ÿ~¬ZÉ×°‰ûí²I´ä{Æ“Ó•Ô°æõS¹æ5ÿp‘ª¤´7?bu¶¦I4ª¯êDå.bÍ?(6fmÊrˆ÷€Soº%Gåe)iG˜$qR_\[c£Ê–!?½)pŒM²¸Áß ø·VJG%Å“²ûüûBÎÙ(˜âa›ÍXÚ:ÂäğÂ^‹Æ‹gS6•&íhuŞiúU¦•ï®²^¯WĞÆ3D}Ì\ÖC,´>…IŒàñ_ïlÖÔ×kEé·
-/ùEE‘- ht"È¾!âXÕó×S\L~z•–³Òó–K“C;È7~({›ÒyÑ“ÁÊ™‡IWÇó.„&îDgÏå=vLjZ~sA©a/Ÿ>åêaé9KÜó2dÎ‰[>–pIıpS¼efæÎ9ıt5ro0§ÄíáVÍ‡›Ynß}'#9óÒw¦x€RòÅeÚ,jÙcsÛ-5÷[{­ãÊ·I9s5ƒêœ¹b]ùfıRâ	¥áô°œ³O_É–¶äÌ/I¡êpY³®àLÃ’	iã€;YìÛÒ|®ÎÁ˜Y9×¥Â–Û?®4„s´ÌiW­¬aµ<ÏlI:Ü’ŸKÅ®ªB×\"Wá@[I	û³ˆü5WÒïlğyæ3M†JÂQŒæ!¿¸äe¸ª,j	¹ò§”¨îºÀ&µ¼&Ãó¢4ïu]¼¢WôĞ…Ÿ7ú˜Ÿ=}ŒçÌ—aQwºÕâÈ‚q4ÂY?TJì5b`Šé±dc–"#$·£éí³Şf…µ¶¢•lnóÌœ|—F=UªúÜ„OL-‚À6»#œšùí•]"Cu‘:–ŒÖÊ4ıL­Qğ±Şn°|›lEEy!{J[bÇÚ.Çh¸Âğ9o[k‚-t‘NƒdÊ0ô€ªì´aÔXªûECñ¦zEŒÉã'—¨¡EÉˆBÕÍœ'aˆ(®ÔŠşúqïïßM[¶ŠêÎÇú5{˜Hi:I?n›t¦Ù0$(‚Ànš·ZB$ÑÓêÎÒ«Á®2>“ùØÅ²”…DÊ˜5LRÀAA±F‰?¾³Ô‰°ÇÅ_J"dı`3'Ü
-P),õ¬¶Ç×™e’Wáïga:-†m35
-Á²½”Ö¸›»®`¸V­1sÛù#ß#XÚìõÚ yìz·âhÚÜÂ¤ç[”ç6ÌÄÎ`£BŠµ<)ºÓ{}cåñQ¢ÓÑ-0Ø(c Ò‚nS(®^½|vøäğä`ÿüï§ãV
-$"wİX¥ ,ä® ,ê‰‚¬ğ®ë
-:+!¼ûØÙ†Éô$‰‚1âàêùP€É\ò|4¢êÌÚ£#Ø†Cª4¹Ÿ‚É˜âdÿ…<M×óİ|vÙ®Jšvã‚öUùBróuƒ½Áõ°tØÏ24˜sÖ`‚¶Á—«¡úÅ•3¶Áú§ÇäÏUi<¦Vjéø†^Gû/òÉ+:Ê¨îeÄ†^:½¡Ô¸o¨çÅÛ…}Ü‡}|7{V_x¯ô§ø4bGdîŒëxN¦U¹Á4áAşNs§ëG‹öÓ`çñØ¸6>Dç0Ë'ñ[X—¿àVÆ`6<	'Í‹†Ç¿Àt¢qsĞL{	Js¥x\%N^ÙN;Øe˜tÕv¥0ÂZ˜yWÄ.ÛPk¾èß‰Û›ù2?Ïñ0xÄ‚ôrÜcªÆ¹W‹Ğ[
-/éhÇÛ	¨ı³®ô†aÀÁz<0šÊr€_VíCõ•ãƒs*yA·b¸q8ídVjp—ü	rÅ–˜gıÍÛü
-éi—äcŠŒ+S¹ñËaú#q?1ÔÏ‚aæ?Ñ”/×‘hxÜŒÔXïä¿=-ùIãğ*<+t%üéğë‹ğ‚·`vz<ˆÅ/â0„‘Cí.¹<İé˜—7ò='qD¬äñl ¢¨â|üR¸&1k»4'A4e©¸­…DŞ÷Ê)vÆVV“$7¬÷h·†­‹ ×kf?êHÈÄ¾]kà²ÉüÔ4¢é<Ñb­&×"±]~AdË/è™òë<ıMş(N½åQ‘9"²$oÚoù×ù©Ì.=ÏÁ¬l"êˆŒêó¿Ú;İçqÿ'Ái]&=/Ş’g³ÿ2gGªm¹£ü±\RÆ,8‡Ÿ@ÜˆÒAáä'—¼Q$}E‰™nü%DÀƒø½Ï1#nÜdïÏ÷OÂ^›&3ªå“Z·Ss'—õìÕ‹(³ƒ³38‰‹Àº!ïósÜ3€=¡ú&Jş [°üôÛY0ÂªlKşö4	ÎáÌ5y’üù£¶y
->kã¯€¨’÷ú<’`c¶ù’‹9‹ä¼•¨›—ŠÉ~kÏ"¬ŸtYÃãLÿú?™gÚnŠ¼h÷œãÅÁ&¤ªmÜ¥¤Çç´/é6ĞÏàµÙ	i¦œ*Ãä]L’ğC‡WjqyFøjc|0!Š4QÑcfÍŸ—CÓÚú¡Ğ¸Ã>ı,ŸÒ¸u0‰Z³	Æ¸Ó#õLT¼Êõ)­•mşšˆCMF‰òŸı^œ~÷ü_|‘íü9ùXîèË`||yü—ëT@ÃÊ@[­VìË­Œ.Æ«\¬Ã »Ã4f|Be	‰´Æ¦¨‚cÄ€<ÛÄ^-ˆÓªÇY%Ûª‰?_6Mƒ¨òVHŸªKWõºæÇµî×ì§Àôy¨’xqÅDñ1ğX|èW{’SúÊÔPjÏÃøœ^e—xãI,[S•ÒÚîññá/jê;É×-^ÃêÕ«Œ²®ÕËšJC§Õª	ú —ÿæŸ¨–f¹ÍíÙ«]³˜½N¶Qç~¥ıËKeÍ/–_¿ı—« ÔqT„B$œ ·ÔD9FU“.ğJ.Ûqn¬©G^åtŸ7ùtëéîÓ=Í´ğ0sıŞ `˜qÅ“NQ“ÙuU¢’^ÁYØœÆşÇi<Ålõh—;ÆÍÍŞ0šdÊ.r,ßßìI û[2»ºWÜûè‚É¯¢‚Ê¯åä`±K“G–Éèğ29®-/KëÓ"ÑRÓñA'yóüĞI…ĞsxïìS©H£aWÎîxOÙœËû9E+2aoÙ1/”ÈP-Óƒ¯fáR§)Vûb©²ãª~…§~k0±|ÛŒä`¬‡&rrºïY§ƒújá8Ö¦ƒp\±Y€+³N¯XF7Û°CÒ–Ô½öËŒH”4[´ëY"{ô–Í—*xfÕ:D§ªğ¬¶±j¤¤^­¨¿´n5r¹ Ë- K¿©úUg¨¾Ş\ÑÖf)ò‰eùŒ´Ùƒ#‡M¢{w£aˆ7„ãt–„ì—Ã“ƒwÇ?í>Ù=>x÷ó«çdÛĞ¯î¾xùâİßü"±˜5œáT°ó”]Õ×®ÙÁøC”ÄüXı%H"0Ò–öB‡¥0³p*¼
-¨…Ïİ$Xı˜SWNµ3à¿«Öä<zµÍş€Ìç"+¾J®¬¤ˆš{?[N‡³¤9Ê<#5îû?ÀC¢È!áÇş)ÿÍpM[¸ (ó¢‡ÜnhÉ¶PT‡è0ôn;w„˜¬Ç<h‚Í‹æt¹}ä©JMqö4g;Çƒ(öK+)rwµœ‡ÏÙ™ı¬˜bdŸ7ÄU$o‘8Ø©ùZv•ÍÉ¯¬Û*¿ BBúK‘Eãû~”¢E+ºT‡*RØn‡Es¡æ=¬¹­Ön:‚:yzƒ7íwİÉÇwü_sş—œŸõÎf£»ŞØè6Ú­öÆê[fì8JÛo;Ã{NÉót´ÿŞgÃsüw8l`½š’t9²ç{!I`_$ÁÄ Rœ5n0gäÂ@Ã.k²—ãá%û¥ª4T‚áÆ&á+-“Øòß˜ 9ê÷˜‚pYlr×ò¼§5!¾UI7é”ç¤[C¡×qÃ.İ°ªóëâ!Ë‘Éû®ŞPğõöF7ØqÇ™Aãuœ¼ç*»¥–·i)ÉÇ«Ş«šI”õ…-0!"ÁÊt·Ü ù €°¸»
-Ä·¦ïQàV¶îÀi&&Âu…¿aÔN†ê8½ååâpgÎí"¼oW‡N“âHêã¾:‹•wC%Èßíˆ[ŞóíŠŠûbay-°"…QqKt(!*²lJÆ‘˜¶87÷”ÉÃB¥öxBà0y×?D½ĞYÎ’x€:Fm–?š²}8µàğ;â]ÄÍ?
-‰K	Ì… ŒÇ?!º„2«‰Yñ…‹JUg°˜hèy|Ëâå9“¡ú“ÏZ³ËÚú¾—Z®zBàÔÌ]RêQ@‚.ı0k¥Z©	09¥¾Röx4%MÍÎ’„}@pÄ¬¤ïw>ˆq=&y¾·S*‹›ßøA–à-ş¢”ĞõtD˜!¨şãs¨I¼™¸²‰Ç¼Ml‹&rø„ıàÄMªî¨ ‡•®´ä»J‡Îş\yx}hbI1Î°^ûĞ÷qÓÚp3@>9ĞŸä îÏ:tIÿîÊF8¿I<%±xKh^ùû×Œ¹Ûà‰ÜÜq –rÃ.‡+%aŠ÷¬Ø‡ëÄ7‹æG1e#æ%‰hs]]IkÀ6k7ü¿ÿP\h
-Q$ĞZCj(o§SÖHø1šZ†²5×Hr
-À¦äÒã³ Î04`ÀZâ?/gpÔ”4¦âKNÓx8U|Af²NJP§ıÖlÎ‘:XÑ¹HßZ¿oÓ·¶@ß9	Ø•‘~\ä™íÍæÙ2…Õ? ÜˆÔªÅ£ªDÈÎùªK*œKVôŸm¥!„¥±¥†”j7%«Vk‚ÒâÛ¸¥f<O‚>V*hNcPÊùe,)³ÖÜN·pÒâ_s¤+ÿÎÙuöãÔ8ß9©™½(³øsÂÄç'š¢Z’§;ÕvÄyş†EkW©jtŠ(ï²lf³¬´­ş¢XÕÔË<bv³~5Û«[hÉ¶jwãa£ƒû7kwsõ­7¶MÌ¦ì@¤à“àÜ®_¦Ó$~6ßt[İ·Ìz”©cçÕı’ø7êº<îÌ•f,Ô«Á¿ùËN§³Õ}ğ6³9Å3L’ÏxÖŠÂü+²EÑ¾Æs›|OPëòl<Ö¡«‡µ¤5áú1“øñN>b2Ä'³K^ÛãpÜ2hŸ‡Sv>ŒOƒ¡¬réIø¨Ny‰ n»}~«C¡|Ÿ¯‚á
-Og5†›—óùZ®½ÌÆıÛ`¸JÛKg¸6´İ>œƒß$³Ü)qN«¬9²‰/ßÊ¥Ù´ó[‘ÊJ$pº[ûÈ"˜o?Áhºïy`ü½ÜÄÑ\õ…q]E±ÿ3a¼JÌUÎ›§øjY¯’í¼W|éÌWm|éÜ·s¿ÑÙÚltæb¿Gb/‹Ñ¶7¿>Ş‹{½<;cbºî–ùŠÜ"$¥%!e{á«y.éùx¯ïÜ2å¾ÏS«’İÌ& ÔÈmğ|•£Ó’»ê˜Ü¹Ûa­6ÌË|Ì­Ç·` ·Û	7Oõ?råVòÓÚâkk0›~akÌÇüå¬ñëÁ%ûÛèììàïïtiSX8ùÒWúËYŞc>âÖ¶Ü-ìÌ†UÙsÉÃ`~;ƒ/¿ÅÓ.WqM®XHÂXy'…(2˜n—4m•¸"ƒY~ñG=£/`BicUÉ<¯T¨Ip£j²#ú?šÜj¬‘6Å´ËV‚uIÒî³¦ÑÜ—:Ïl¿:òYà-j,¦¢D\`uù#)/|æ"-+?‘XEœ¥¨‹ÇWÉO2²4*W™Ö"ÓÊ³	œÁJsI#ìu9]`™L×š^„§#ª.öm]ïz]÷‚i0ŒÏokeıçÁ<«zå\YÁU.SË­.ºZ­¸ê|.
-«®˜òeWmÃÁ2'‘Áéokñ«CÀÜİ%râ'ÛßIğSîp!ä<tŞ•..5&õÇD^†µ¡ñ“¥ LUeù3ó"Â»•55VŞ-ÜSGTJÒã§1…zmIer”ùj“JG4Mº Rmiæ9 è‹æ&ö ¹Yiµ˜oì1k{vÓ~•Ák02±ÙaM*‘†F5Í¯dæ~ó-\Í6P,Ö¾SjaU2øé»PÔXuC²Š…I‚^§"b‚oT›¾·~/R
-P½ªPâ6n¹ml©wŞ]&ƒùã„cèjd¿ªÛÍQÙÂµ cKÔ@GPëÆjM¸a±™Tnà€•¶hñŒ´jqÇÈ*ÔV¡¦Æ;øIÑ/®r˜²RmÎLl6…=(2 :¯ù è]y {û›ÌSBÙLÚ	gw®@gDêÛùùÆ  ôVEØÖÛFÕ÷Ÿ£t²ˆí ò±yíxîKiÜ§’¹ĞÌğ4yÖˆ(ç;áÑ
-oò<¾o¢ï½Vz«c‚³i{[oÁt¬ AÂòB…q—ÖŞò@ĞíÃÎZ
-ï–	É£dH~j° 7t´sN ¢8P)úYa(6¾‘C ‰'ø@Î%öª çâ0¼VØì†5kXâ-ŸçüÆˆæ*hfïlÒ
-G$İpñHTkQÍRğºXU›o7Ç w¢ü*ªb~Œ…ß¾W(·%ò5d5·Œ(Tè§şÚ –v{zş*,Ec™£S^ˆë˜ÒË @¤ÖúµŞÑèŠŸÎ'@j÷(5ö@éI®½]•x²+qôùìèÔk%€¸?ÔÄbhÑ¢Ïx²*4¨¸…4§±%ÿ“»Â³¬!ÒñâZ±\»*W£±í†¨‘ÁKÑÇÖ³¬Øò=ïz¡&–°¬ ö`"»oËªÎ+NZÔ$[×]>[7^X›ïC~ìYúÅsŞ\ı›”ª¿ƒqú]/èÆİ~9E¨IM¼Z¿	-•„d>ŒTø…Êtâ]=xYLªQéæ/=5Ëëj”Ál…R©Íz&ÙyÀf†‡‰ˆÆ' ×œ‡Éq<Kza½ÖÏ‚ÙPå(tOûJæ è‰0úaHù)BUotëëB?'‹-¦¤@aˆ§¦Ø`“¯¢ÇaCKŞj›4S(WUP*ì0—§¹HƒÖò&OÚ(Úş6¸íoC³ıÕ$‹DÄ{8vi>.ÒÕÒà2³xX3(TKã1WŞÑg*qš·ªïj†i‡YÚofZ¾aÚj†¶’`¹	ºÄè<§É¹ÄàŒ6arÉ¼|Fç­;7:ßŠÉÙmœ°Õpï[s?äUÚ›_
-{ó!ì0ä;‚ú‹¶çRË³gãÜ•ÑP¨>›¶< …äjåGçŠ}Î§5çYeî.…©-xämY[•'wÊ.åŠ²	~
-Ç3¶ŸFF¸2#Ù•,ó€¼œ„VÓ˜Ï æ0ƒñÔ-ğ§m1f/ùLBkØ¼ÍÜåíI—8Äùk/DƒşğÌ¼UËaYTÛ‘ŸÓ1ÒÅ]ÒbÍZç•Fåt™´\¥_ÔÔRFj©-WY4—hQ3Ï|Ú+kì>Ï]®“g¹fVÀN¨EÙ0İ&¬ĞáÙÔ[ŠÈvå‡"ôA=ÜÀîA»æ¡Ê%fòâoÖcyáUõR9©6î
-…*×«-`kÅPîh"+;ùœs¦º²G8/F–Ë"L—‰¡@°2Ğ­R¬×H¯…Æ¶¹ÑAuZJ,7ZH5hòYË|ÈŸp9P;¾ fdÙB+ê+ Z¼øI˜×(Nu}bj+‹ÛºsŠâqXÇ¾¬Ûæ"ës[#ÚêÎW¦$zê¶W%CÇ~nëR€ÇŞùÊTG,ÃU -I\¨¹‘C‹²éj|ºBÌÍT™Tõ³RŒ ‰;U(ú…íéà4’ş­©£a¾­îRWWÄÀ°Ÿ‚1H?Éí®î²Uş9£b>«5×bÔ=ØåVVİ ³ÀŠßº•g®€X÷”-Yx¾JsÕÔì27Š-x¯\‘¯„‰«TÏ¢kwÚ»V·,vuîÕ­bqœ¢±qš‹¶Q‡jtu¯ÆO=Î-ŞÀşc¡q%¯ÎRÑ­o[wH4=÷‹9íÀHŞkÅåvrÓ•øÕÅ­şØi«çG<Yª‚Û-äö§s¢Öåi‡/è¹òX€®ÊÓÙØ£ó;è)»›¢Óc~0¸»W,B“wµ)Ë¿ñMeøR—%S?Fİ2#\ã¬¶$ö…!RáPüsÇÆG9ìÛVzùgN«0C.Âº|”ê2–ze•.ólW#…å‚Ró•º#Pªó±å`F[Ô¢Œá\E@Tl9u„$An@Ñ‰A“à©òc O:$Ûêlëe7‚Õ 
-:!;k°ëå×5^ø/Ãh>#ˆÆXdsŠJÀ^·"ê,õË@¬h#€şèjqš&«ÆŠ;ÊÈcO(€6·mÊ¿|ln¨÷m»ªŒÀ¡)"zéÙ2¶¨GeÂ!@ ÖBÅìvíb…gQÅó5OÅ-,^?‹ÆÁˆ»PÅ„¿ÏVáúvaŠåiX 1ŞÄ}Ë/…Fò‚Q.³»¶g,”Ïûß°hÙ¦ßºí¬ Ã
-{ BŠ4p/#1¤ãºXÚâr‘Š¿(k[ü1'@ã‡|	‹¿e‹c_&šÉ)·<“Yªw€,ş„ŸÙápãUä‘J…D¯0~a£¸Ç@uh«÷áå£|5tèFìpQ CóVGxa³Ø¨»"JW¿Õ€ŸÙNø3øã˜×–¾ö>‘ÓİÎ.ş)ÒÅöœp~âsä‡¬úœBÎ°;Ûÿ<Î¢°cÑF½v$°"ş¦túw·ö:,øä\É´-™ş‹ÒC_LñèŠş± ÷&T}¶p+ÙU®X0x9{¤êh¶;¹+{áÃ>>Q¸hS¿øØüâI81˜ß”ÿ]¼o6éÃæÀß~+Îğ…k®ö±l¶ÖIv¡ø—)©¨-Ğ­4’ÊïÅûsıâÑUşwñ>âœGIÜŸõp´¯Å»ÉÌÒ¤öávı»¥õA<Ù£bõQŸöøË	ßõ,-ÙÎÑˆó·b;|'Z›qşd}ŸíF*ùK¯c¹îz{®Ÿ,”Ï&p®Àp8 1¬ıî™¯¹zJeöı=DD¿ÃR¿ZÇ±«?`^1Ÿ1T
-´:yßj	ÇÃQyõhjSb}/”+{¤ù[Pÿ«şry6Tgm–
-£dûË2ëXö8Äı*ş°Îô‰¼)ÿÛÆ‰Î@›|ş~¦x¯şİÚî+ã‘Â¥²5,™ãL–#vXé\×Ä¼§âK¥'U!pOÂhTñ<nÎGSåPÎîgÅs.#ĞéÄ‰uØ!Ï|æ˜Ÿƒ¶æ&-ıÀ¼‡u<ŞMSPè©‚¬<“”K–ÖÏE»çö‘ˆ[²?-l	³ó8‰BäLÙßv¶§Üª}µ‰0Ç°(ğ¿X‚ l9¿qlÙİÊ÷s³xW¬Ï¼K›ıi½ëËkò/ÛªşL"µ÷Oƒé,•’q¹Âó¯ye^óy~ùÓ°$[Ó×€ò¨¢b"
-|¯„=ª_¿ş€qÅİÃ~”’	Té%»äíI}Ğru‘ã>RE€°Îîîl+¬à`œCĞ]¿ØiÕÙŒçÇ›?¹êOmVS+…ßÎºùKÄÎAŒ’ãj—§(ùæÍnuÚ3àö k¦Î§q<ÕÂÏvÎøk)yMÊ–®˜Ih2mvî£´»Ás)dÆÒ?47Th‚éK,ÚRJ§Jş•‡iut/´Ù(ÜÙDSw/nuoÛô§Íû/u±äyÁÛi1bÛòe\şöé¨PEd(ŒáwXcš !ÁMÃÇššÀÆFÃ0Me•BÉµ¨za&71ŠvFQ¼Å^c ÀÔ€³K6ŒÏAşŠz)Ü€u7à´C³@°@ÿXËæ›¢‚§³4CG-ãÅµF…y0Ë˜¢ÁÆ\¹”|õw`Ùöâ¬ıåÎÚ`Ãèg6ÔBË)aÁes£¸ÒÃè±tBUÊìYb{¾™B	 =ëwêã«Œ§À÷2ÇÌÎŒ¬ú`ƒa˜Lë5y
-±#Ğr{—päŒğ[Çã{·8x£Û¾ÄQ}`ğwûz¯WØY›«î€yqÅ³ô=“!bÌ=3Ç®ñ®âÃÅoF%œÊC›Uù³Ë”ma5¿=*Í]öl?œÑ0]Êåx˜Û¹/úbÆLÊ‹åZ·’İŞĞUÛ›¾M~fáhzPÉ­ë²,æíŸë2øöNê /jºèÑèš½=n‚0	"úK3%fƒ	nQ‰'Ëç-óq4J°½`Ø›A{q²¸¸a|CûqE±(nmOGƒ~Fƒ–¡¬OÃéEhË¤¥oJ§r´!õ °_×H]ıÿ'ë¶»÷Ù\ïyi2 ›ÃÉŞk±]™(7e¨"'Â~K›ºÉ|Cú˜*©ÂÔàC‰sÃ6aúÎ†gÑ>FB&¬üóhóÕŸ{Ä•”ZSŸ•Ôî~Y…”s¨¢¥véÎñ xI³#É–ØåO ‚¸|üûY•®}»cgÛ@4C‰`Ğ{ƒNF²(k²Wä0î“¾-\aêƒyhÈ¨¢´ šÛp‘©xX1¹8á'Ò£IÏÑc-¼bê…å>RÊb›íÜ\'êÚ}ø'i?‰)B"Áİô‡æ›Îzûmy„„¹W5Ü‹i'sÀ[ò×¨‹ì"skÛa/vàK…ŞôŒÅLÙà{œ)úLà?•,Ù
-Ø:–³p¶+EßÇJÑ”¬;BKÉ[øW¤zµŠt•2Ñ÷%·ée»¨CƒâŒÏ‡r»¬w-àQ;
-s°^Ø³İ,ZÆ¡rEL‘$…æhŒlùHÅ¸õBG>[™ÑæV	»ÅÏî˜;¿ûáX”JûïğG4#j±}nü‚©…e¿°àEÌ&ğ‚ ’‚^ÁŸÿ¡h#.lpÓ)@ÓÅİ\(Xy|xÆ.Ã´ÁÛ¾À>OC¹)liôkN<	<¨oGfKşğ,Æõ¬Ûè¦z68Ë-èÛ§SPı‘ta{’ÆÏ®Ù#VàtöâöÑÏeˆ,?½êè)ÕÕ¾Œ¬ØËeyédÔÙ¢iP-éÜïp‰ˆˆåbÒn(N·]}!rHK>¹õ+šğmF x.r›a(¯œ(ş]—dÍñ˜úL 2ly¹bêº…˜ºjú"n€Gg1¸Ö5ƒ6»¼ZnÜšÍˆÅÏ¢÷4!)Öóù=ş°1.röoá¸ßøvÜ.Ç=†dûEŒ|eG=ßB†şáNÎyĞèà‰?äÙÍ·?`S‘Ù¬/¥„ã~`'øsÀ]ÅğÄ8âAkÃVaÖ>İQÇéY”Œøüòé_K‚³¤Àupj|Âu?<—á}]sgàÇy"jTr[Gá^½ò_Ê1÷waˆy?Ÿs|3óê´¹Cg¾ÃÏ®öİœ]ª*Sñ»ˆ¦¸¹ìõmiÊ«û:‰™(…¯ê`Ï&b×fçyáÄÓmm&áè­zÄãİƒæè±Wbû0hvá–Õ·†Ó›n¸°],jABpÛÀ6áå;m”2ÚÃZ{¨ñ¬M…gUKT_ÊË`“vÛy–
-y˜ÿŞ¼êdlff	‚ÒÑ6ÊoÙÒ\r6­YG °ši/‰‡ÃÓ ±¹F£†äQD Ù*Ø¤eıÔzğS›&²h_eÆy³AïºVùš£¿×½²œ‘»Â:Ö«aÁ‰/b›D\¥!ØbPıOaŞC¸ë)%	îËqÈğÔñ4œĞCµ×á°Ö…ÙÜšDÌ®u2Šb&–úe5[L4ÚkÊ¥ÍŠ³à°S`Ö?Qt7NX/	ÑŒ™€Ô&ÃprÀUöP¬-m¸tİú%LFİEÀŞ¨l„Nşƒ¿•í*¯g¡c-%ğ\¡â\
-‰ÇÇ³ÚÊ€ŸR“Ã+N{T|y>³cxcÔ§lF"`Ğ?¢Šp€÷ñ»­÷¡Šw-Ÿ@’«ûÚ=Lé>`ûaİi¤r¶{-—ÖÖ¢uQ8’°ZM€vE8™sD°ÁQO”˜˜ÖøÜ&“/Jy¢ÂGŒ¦A	øÍ?ÑÎlÕÖlË'K¬x^¯.Û
-Çıôu4Ôk-2Øªm®b¨µÚ©yƒkEÄ]&C[ŞB›I…0å²Aì»Rƒ")¿Á’ëêÖõ˜Êş#	­Bt ±QàS¬wz9î’xÏR¹—¹…
-vãxKÓ²:ò[¶¹jí‹¯utØÏVÿö+]z÷İ•m9“Œæõµ7ÿ4ÿĞn>|»vŞ`µwµÕë_Sˆ‘şÈµ[gÅp¹ÚV‡ódHs_kÈ±4˜²{‘Dø¤½pí¹
-Ó±Ø*+œ…?Ù{+\»®f‚Y®ºv\’‡ùG¸á"¸d' ıa¬5vˆ²É˜¨Ô²=pz  RÁœêèD´½ wÿ«Õó,ÓóMá»+…ÏT÷=.Oæã×èp/=£Ô1¬öâ„÷_,\eÒy
-³NŒ4+tÏË¹2öæAéë¢Ò×UMËó)xš!ÚYÜ:·Y–±~µ‚’]psj-E«ó<Iö$›;LÓYhµ8S/Vu ›€2£ñåıWtŞÙŞ™2„¡ áXÄ€âp#!×VúĞ¡ûğØî7Î˜UWÁâdˆçS”óQd¤)¬2î¸çÈá¸å’?z¶§8UáuÚ(œ‹¾¬2î.y4D‚Oèé%Ğğˆ3)—øa•…¢Ï‚SØÌ¦yŞ1Ç¥;IÎ¢]C·!YÍH™¬<~_°‹xT†¾Šaô\rü‡ıl|ë;p¶ÄÓ&°Î6;Fˆ³S_¨G>E/Å--VÏN² EHæóñsY{¢rG ÏÃû’—û´.·×Á›ƒÊßÆD„õ•# Øñ>}nrâšV«µÒ@HA›­ÀMÑó
-»vøù©“äÒ38Ë0Çó¿DİÓ¾| ÔQ”¦umdŞçJ…÷Ã×“İ°:ìß/>8şm·úÊS¶Ã¾fŸàîQ±N¸8¾æ\I÷„`îÿÂSdïÑ‘ıÏ–÷oCóğˆS;KÁìÈ²¹¶i/'® 2¿iõ´Ÿ…7›ØN‡M±(+±’ËĞY³TnÈªÆf	·İ¥y'Aò~¦ŠáW½W“ÏXOÉrİU'…ş„ÃaäL.ëILh3×ÎQM™9›Ç˜!;Ÿõ—6³5,Î-®I!íÖæÊãW tF˜ê‚£OO¸µ†}ÏöÃQìëÙm)Î,íşƒ¥»Zã%ÛGØg/{é*şãdáíÎ¹U4>‹á©˜
-†¼ÖPNùÍlÕĞ2äoòK”$l OÃ›œìë†,£ Ï4Kæ×\ŠØZ€M,ŸA8½ßÕy„cÜ»pM–S²Jx+µÒÍşÍ“„ÿóÑ![Ë‰w{Œßßl·I¼µÍşär†©!0¥1DàV÷ûú6{=¦éîdÂdy"Ç^¬#$áÙ£•Át:I·×Ö.‚Ö(\{Øy¸Ùî>ØÜêt:öÄ· ÷‡ÓG+ï`êÇïí÷€†òheZÂˆ$¶2÷øù7%Wp–¿5e“lsªuNİ²ïµÅ_|š=*Bä3Z–ô{³-ªÍea“ÂñÄ>D‡GÁ°Á§I4	xÄ wÀÒy ´„Éb[5¸‘™ÀšêÃõŞ*™O>6ïÔ“³3‘•¤$Œ,A´YŞï¦vRüèU&6©Ê„^vF-[z]?Í2Ó\J‚¬Æ’BğQa0¶%ÜÆi±:Ì'm•Yïe&Ft·,`¼¯„@Şü†@¶ 3<RCW‡!Ï	JªŒ[‘±›¾µíëy!ÂÄ£	GÀiÍnŸ;Ä¡H¸ÕØ…)uË0©j\Ã*å%+.mœ6\“Í²¬*hŞE>K´—şüNÛÃÚê›ª
-†ŞT¸ó"b^¤zÑ¦E…¢Ñ^³5™J*¯Ëüš›³ÚÆ½"ZÄ™­aåñUîp¿v6ì‘ql$+çæk ”£œúB¨DÑ/f%Y*™üÍÃ¤B3òV,#ù)˜E_
-KÁñ»ı>ã‡X|ù_ª!/ñ#èIŒ •N“0œ^WLG¦ÊØ¯öëg‚$Õj×³YóŠWÿYƒnøê|£ls${äÚı2û8‹;ÆÓå–i8{Ó°Ï7Ï>üpÍ‚)3®ŸD79L—K…=K„f€qÈq¾â\sšø]¼ËÂïŞØlÙÜtûÂ4‘bºûÜs„ÅçŠ{»ULuÎjoB¡{QÒ†]©Ã¤*ö=“Ôîµ[~›cıÑÔœxÆ>6ãíÊ’Æd)U+ÏâRecvĞl¥ğ<!ŠS~i™XOQOæIƒ¸OPU´è?	T;àU]+üÇ?²ú›šÌL\k°ákko[Ñ¸7œc¬«‰y¶Jx¨V[ÕA¿ğÑG…\SYÎ$n@:¥6ñÜ?CCdÊ(Œ]ÒI°éÜvI±«Ş´ß5·&ß­Ã)ğ.9?êÍFw½±Ñm´[íû«oÑõ°ıs§ÁYèÍ#¬Ù:âú6%ìİäc¡(îÕÓ$K€?¬Á†Ái8„¯Ïø×¨‡…˜ğ»nØäÅò'OÄwşèq$½óáqxñ¦KiàExÁ³Pdg)ü>N·)o†³=™÷6oí8»"Ş%N8ûq6"ÓcæìfWx#™¦­³‰·­Q0©Së!Ãëôà#Z­6g2µH‹^ØŸIÂé,[KÒú¼ÜTŒ·lÉ¯ŸùIX(Z'¬bé©rØéÇ¼ï¸!tÎ}%ŞvqÿU†fnbĞâs¤20cÒì´*œÙª)5VW^ÁG2Ü¨ímG£¸õ“Å@Ô¹¯¡]@W‰ß‡Í7ëo=¥’ı+{ì-èÎ¦I¬b6"·¶EÔL»Ô­ù¸+‹VğH›¿H¼`U—1E´NÙ>ï¥
-ÿP,x)ï-–zÌ2É–×‹İ›Ãv²7)c•˜GÎÜŒqÃ·<¸”Ùø1{JœŒ/Òâ”ì/€ã‹Ö…Ç®0¼™|,§á Z‹<w(X­æDz.’ÑiùL±‚ñûê×	íAµª°®.ÈúŒä©Ì¾s,·ÜÉµ”çœ­Ói{ÂIk†Äm“³má ZåRmÊÙb·Õu1F71¢¨¹>G´(Ú”M½eu²Y|}cÎÉ+áÂn|•ÑR)E<ì(hš†Áe<›öá,§¶¸²Hÿfªu³¶É RîoaÒ‚ØOíÂA®Ş®¦õz¦ÓËIˆ€ğIËºÒÀ~ggX¦b›­oé#,E ß,>Zş±EEu[Sº6j·¸3®^[Ô¸L>g¿¿gûIp¡—nñ»õU±±Ì¡ojfj\zîM?³¡ëÀ Ÿ=­€7ùâó4ûóŠ“Ç5öãA¡vî­©Ì¼î
-èÀµâ>?®ÁÓ†«e[«»©í;”®}pˆCp2v0µfpAW5Ö_ïºs'l£¨:A¤iJN¢£¤É
-™El°
-?ª‚Ç€Ä*d¶¢,Ld¿è`Šw´G3t]ÆgŒò>À„G³‘FM³lücu54B¡Ì“G¦äcUµ2ÚÌ~»y]Ô´•°ß¹É¶’kA€¯j<Šâ×;íbì
-¦Ú,Ø³sì…ã˜®ÉXo)(ÅĞø;NEwç$™å*[¾DºË)ƒºİWzì f(3ÑÈè Ívî‹bû1È¢˜ !OY£½›<wK¬mµ3ëëôè!n÷› ƒùª†é}xépG9}NN˜9nä}<ã³³;ÙÊÿ  ÿÿ <ºéxœìWÛnÛF}÷WÔvÓ”eË©UI@â<4SÄMQyX’Kqë%—Ø]šRıˆ~a¿¤³¼HâÍFRçb táj9;sfÎ™á¥ô©¼ qº®è“_v ã“6'š^‰ı½ŒHŠTÑ½Í‹}‘*O
-Îñh‘Œap .ÑcØS‘:ÜƒÛN#··‹'J½&Z§`šFÊöh¬©„9Iì0o)ÒØ§¾=\ppç6¨$Ü·Gp…	¶üZÿq4@(n¨oíÆEïĞ’ÄŠi&b›pš.´Íi !³ƒ”s«åå¬Ãï‰Ïn¶Ïì£!„æ£rµîé):”Ÿ”…"´cı+UšËêR…’Å×ö Şüê×V4V—gèÛâ]“9Å>Òéj8¼§3ƒè®ÇtxRK™ˆµQIâ
-îª¨ø®ü<¡Ÿ/¥Hà2€hø£ªµ‰ô“lŸ’›[¨ºÙg˜ÌŸi{p8²foC–ÀR¤’2x-À\†©«şıûŸŒ‚O9ÃŠ âJAü‰“|&ÇMµñl§õ×Êy
-oC^bj
-:í:Ÿwwœ'âsÎ¼ëéjÿ	Lg°ê„CQ'd¯ivùÉÌVZÈGÂj¹Há§‹å£×K_Ï•Åæu$}\6¥•°xş‚Ì¿-ŸOs6çå¾9ç)"xûŒ|«-2£ıÜf.f×/l¨x‰àáÉÿÇÛ›«=´m¶ŸmnÔJÌ”§	ú’¥}|82¦8·^íÅÒ°ª¹â!Û.Í<sõ¤ÕiA<ê7Vá³ØdEªs{”·pêÂoâDÂtØÀ¼‘„5çyÌ"Œâ¤Šâ1kä˜^—q
-Ï=ÃÓğ[ŠPÃKI2$ÒF\'-Õ1+…É(ï6¹€İ]ØßöªAõÈ‡Ì÷i[PXŒ	E®~´ßÀ¤!àÈÕbWƒ¨ÆãX—¾épMíŸlp’,ÆÜ>]­@`]3½Dİm«))¢¬m;jo£¦ï3Õ]µ[@õíTÄU‚§¨xFëê<CŸâu‰„íòTbÖËÌi0,ÇN`=E¨%”ê»ğë‡£µ/?Yw¢×I…Û66<2õ2¡¸W%(èsë |uÃpt Fóƒ˜*…—ƒÓºtóøJÓ²ğK²yX"[4—ŠäÚ~?<I}¨z‡i›‰×ô©²[êêÇZHê9h)_OãƒšğTNŠµ°IŠãUäÚ§V+©m“¹"•0¿§C—Ããv‹¨TÙß’¾3Ó-ÿ4Ã]Y¼Øy;löwÂéâ¨¾GÖì‚Äfdô©&Œ+Òd-æ™!jÙÑizÚF#ş¹d>˜Û\!´f:î@!W¿åZù¾ø@Ùæşıó$)îy%:Ãæ¢=R–ëµ.»YûêCeyôÃ=#nbé+WT¾ò°º¾éLYú™•›Âÿ¬A²4Õ˜$ß1š•…Rf¬¨8nÆÈDÒ€J3=¨}ÄPòIP}Ÿ.õì…¯GFá_‹4~W.Êş	|•÷aó¼!b8a*ZĞ÷¾î|Gô_ò9ğş‰úÇc`¹Ş÷8¹D~$¢½-Ô ’4ÎÈ^x.¸@-K~}ÊÑíÎ   ÿÿ ¾…B
+                                This is a scheduled pickup from home. The item list will be finalized and updated once our agent collects and measures your items at our hub.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {selectedOrderForInvoice.items.map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
+                                      {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
+                                        <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
+                                        <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
+                                        <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
+                                        <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-sm font-bold text-slate-900">
+                                    {item.price ? `â‚¹${item.price}` : '-'}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="bg-slate-900 rounded-2xl p-6 text-white mb-4">
+                          {isPendingInvoice ? (
+                            <div className="text-center py-4 font-sans">
+                              <span className="text-indigo-400 text-[10px] font-black uppercase tracking-widest block mb-1">Invoice Notification</span>
+                              <div className="text-sm font-bold text-slate-200 max-w-md mx-auto leading-relaxed">
+                                Invoice will be displayed once the items are picked and billed.
+                              </div>
+                              <span className="inline-block mt-3.5 px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[9px] font-bold uppercase tracking-widest">
+                                Awaiting Pick & Bill
+                              </span>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Weight</span>
+                                <span className="font-bold">{getSafeOrderTotalWeight(selectedOrderForInvoice)} kg</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Grand Total</span>
+                                  <div className="text-3xl font-black">â‚¹{Math.round(Number(selectedOrderForInvoice.totalCost || selectedOrderForInvoice.total_cost || 0))}</div>
+                                </div>
+                                <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
+                                  {selectedOrderForInvoice.paymentStatus}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+
+                  <div className="mt-8 flex gap-4">
+                    <button className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                      <Printer size={18} /> Print
+                    </button>
+                    <button className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                      <Share size={18} /> Share
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* Details Modal (when Clicking Order ID) */}
+          <AnimatePresence>
+            {selectedOrderForDetails && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                  className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
+                >
+                  <div className="flex justify-between items-start mb-8">
+                    <div>
+                      <h2 className="text-2xl font-black text-slate-900">Order Details</h2>
+                      <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {selectedOrderForDetails.id}</p>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedOrderForDetails(null)}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                    >
+                      <XCircle size={24} className="text-slate-400" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-8 mb-8">
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
+                      <div className="text-sm font-bold text-slate-900">
+                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
+                          ? ((selectedOrderForDetails as any).pickupAddress?.fullName || selectedOrderForDetails.customerName || 'Customer Residence')
+                          : 'JiffEX Warehouse'
+                        }
+                      </div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType ? (
+                          <>
+                            {((selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || '').split(',').slice(0, 2).join(',')}<br />
+                            {((selectedOrderForDetails as any).pickupAddress?.city || selectedOrderForDetails.destination?.city || '')} {((selectedOrderForDetails as any).pickupAddress?.state || selectedOrderForDetails.destination?.state || '')}<br />
+                            {((selectedOrderForDetails as any).pickupAddress?.zipCode || (selectedOrderForDetails as any).pickupAddress?.zip || selectedOrderForDetails.destination?.zipCode || '')} India
+                          </>
+                        ) : (
+                          <>
+                            {WAREHOUSE_ADDRESS.street}<br />
+                            {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
+                            {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
+                      <div className="text-sm font-bold text-slate-900">
+                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
+                          ? (selectedOrderForDetails.destination?.fullName || 'Receiver Location')
+                          : (selectedOrderForDetails.destination?.fullName || currentUser?.name || 'Receiver Location')
+                        }
+                      </div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {selectedOrderForDetails.destination?.addressLine1 || 'N/A'}<br />
+                        {selectedOrderForDetails.destination?.city || ''} {selectedOrderForDetails.destination?.state || ''}<br />
+                        {selectedOrderForDetails.destination?.zipCode || ''} {selectedOrderForDetails.destination?.country || ''}
+                      </div>
+                    </div>
+                  </div>
+
+                  {(selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType) && (
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 mb-6 text-slate-700">
+                      <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-3 flex items-center gap-1.5 pb-2 border-b border-indigo-100/60">
+                        <Calendar size={14} className="text-indigo-600" /> Home Pickup Scheduled Details
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4 text-xs font-sans">
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pickup Date</div>
+                          <div className="font-bold text-slate-800">{selectedOrderForDetails.shippingDate || (selectedOrderForDetails as any).shipping_date || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Preferred Time</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).time || (selectedOrderForDetails as any).destination?.time || 'General Slot'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Assigned Agent</div>
+                          <div className="font-bold text-slate-800">
+                            {selectedOrderForDetails.assignedAgent?.name || (selectedOrderForDetails as any).assignedAgent?.name || (selectedOrderForDetails as any).destination?.assignedAgent?.name || 'Assigning soon...'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Language Preference</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).languagePreference || (selectedOrderForDetails as any).destination?.languagePreference || 'English'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Item Category</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).itemType || (selectedOrderForDetails as any).destination?.itemType || 'General Cargo'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Vehicle Type</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).vehicleType || (selectedOrderForDetails as any).destination?.vehicleType || 'Two-Wheeler'}</div>
+                        </div>
+                        <div className="col-span-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Full Pickup Address (From)</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || 'N/A'}</div>
+                        </div>
+                        <div className="col-span-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Destination Delivery Address (To)</div>
+                          <div className="font-bold text-slate-800">
+                            {selectedOrderForDetails.destination?.addressLine1}, {selectedOrderForDetails.destination?.city}, {selectedOrderForDetails.destination?.state} - {selectedOrderForDetails.destination?.zipCode}, {selectedOrderForDetails.destination?.country}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border-t border-slate-100 pt-6 mb-6">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
+                    <div className="space-y-3">
+                      {(selectedOrderForDetails.items || []).map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
+                              {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium font-sans">
+                                <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
+                                <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
+                                <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
+                                <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-sm font-bold text-slate-900">
+                              {item.price ? `â‚¹${item.price}` : '-'}
+                            </div>
+                            <div className="mt-1.5">
+                              <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[9px] font-extrabold rounded-md uppercase tracking-wider">
+                                {item.status || selectedOrderForDetails.status}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-200 pt-5 space-y-3">
+                    <div className="flex justify-between items-center text-sm font-semibold text-slate-600">
+                      <span>Total Weight:</span>
+                      <span className="text-slate-900 font-extrabold text-base">{getSafeOrderTotalWeight(selectedOrderForDetails)} kg</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm font-semibold text-slate-600 border-t border-slate-100 pt-3">
+                      <div>
+                        <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">Grand Total</span>
+                        <div className="text-2xl font-black text-slate-950 mt-1">â‚¹{Math.round(Number(selectedOrderForDetails.totalCost || selectedOrderForDetails.total_cost || 0))}</div>
+                      </div>
+                      <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold rounded-xl text-xs uppercase tracking-widest">
+                        {selectedOrderForDetails.paymentStatus || selectedOrderForDetails.payment_status || 'Paid'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 flex justify-end pt-2">
+                    <button 
+                      onClick={() => setSelectedOrderForDetails(null)}
+                      className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-all text-sm shadow-sm cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-8">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={goBack}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 font-bold transition-all shadow-sm group cursor-pointer"
+          >
+            <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform text-slate-500 group-hover:text-indigo-600" />
+            <span>Back</span>
+          </button>
+          <h2 className="text-3xl font-black text-slate-900">My Orders</h2>
+        </div>
+        
+        {(() => {
+          const completedOrdersList = unifiedHistory.filter(o => o.status === 'Delivered' && o.items && o.items.length > 0);
+          if (completedOrdersList.length === 0) return null;
+          
+          const allCompletedActive = unifiedHistory.filter(o => o.status !== 'Cancelled').every(o => o.status === 'Delivered');
+          
+          return (
+            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border border-indigo-100 rounded-3xl p-6 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+                <FileText size={120} className="text-indigo-600" />
+              </div>
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="p-1.5 bg-indigo-600 text-white rounded-lg flex items-center justify-center">
+                      <FileText size={16} />
+                    </span>
+                    <span className="text-xs font-black text-indigo-700 uppercase tracking-widest">CONSOLIDATED TAX INVOICE</span>
+                  </div>
+                  <h4 className="text-lg font-black text-slate-900">
+                    {allCompletedActive 
+                      ? 'All Shipments Completed!' 
+                      : `${completedOrdersList.length} of ${unifiedHistory.filter(o => o.status !== 'Cancelled').length} Shipments Completed`}
+                  </h4>
+                  <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
+                    To keep your billing clean and reduce duplicate files, JiffEX generates a single consolidated invoice grouping all completed orders.
+                  </p>
+                </div>
+                
+                <div className="flex gap-3 shrink-0">
+                  <button 
+                    onClick={() => setSelectedOrdersForConsolidatedInvoice(completedOrdersList)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3 px-5 rounded-xl transition shadow-md shadow-indigo-100 flex items-center gap-1.5 cursor-pointer border-0"
+                  >
+                    <Search size={16} />
+                    <span>View Consolidated Invoice</span>
+                  </button>
+                  
+                  <button 
+                    onClick={async () => {
+                      const promise = api.sendConsolidatedInvoicePDF(currentUser.email, completedOrdersList, COMPANY_DETAILS);
+                      toast.promise(promise, {
+                        loading: 'Sending consolidated invoice...',
+                        success: 'Single consolidated invoice sent to your email!',
+                        error: 'Could not send consolidated invoice via Email.'
+                      });
+                    }}
+                    className="bg-white hover:bg-indigo-50 text-indigo-600 border border-indigo-200 text-xs font-bold py-3 px-5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Share size={16} />
+                    <span>Email Invoice</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+          <div className="grid grid-cols-1 gap-6">
+            {unifiedHistory.length === 0 ? (
+              <div className="col-span-full text-center py-12 text-slate-400">
+                <Package size={48} className="mx-auto mb-4 opacity-20" />
+                <p>You have no active shipments.</p>
+                <button onClick={() => navigateTo('home')} className="mt-4 text-indigo-600 font-bold hover:underline">Start a shipment</button>
+              </div>
+            ) : (
+              unifiedHistory.map(order => (
+                <div key={order.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-200 hover:border-indigo-300 transition-all group">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex-1 min-w-0">
+                      <button 
+                        onClick={() => setSelectedOrderForDetails(order)}
+                        className="text-left group-hover:text-indigo-600 transition-colors w-full"
+                      >
+                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Order ID</div>
+                        <div className="text-lg font-black flex items-center flex-wrap gap-2 text-slate-900 group-hover:text-indigo-600 transition-colors">
+                          {order.id}
+                          {(order.id.startsWith('PH-') || (order as any).pickupType) && (
+                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] font-black uppercase tracking-wider rounded-md">
+                              Home Pickup Scheduled
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                      {(order.id.startsWith('PH-') || (order as any).pickupType) && (
+                        <div className="mt-2.5 text-xs bg-indigo-50/50 border border-indigo-100/60 rounded-xl p-3 text-slate-700 font-sans space-y-1 font-medium transition-all group-hover:bg-indigo-50 max-w-2xl">
+                          <div className="font-extrabold flex items-center gap-1.5 text-slate-900 text-xs pb-1.5 mb-1.5 border-b border-indigo-100/40">
+                            <Calendar size={13} className="text-indigo-600 font-bold" /> Scheduled Pickup Details
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                            <div><span className="text-slate-400">Date:</span> <strong className="text-slate-800">{order.shippingDate || (order as any).shipping_date || 'N/A'}</strong></div>
+                            <div><span className="text-slate-400">Time:</span> <strong className="text-slate-800">{(order as any).time || (order as any).destination?.time || 'General Slot'}</strong></div>
+                            <div><span className="text-slate-400">Address:</span> <strong className="text-slate-800">{order.destination?.addressLine1 || (order as any).destination?.addressLine1 || 'N/A'}</strong></div>
+                            <div><span className="text-slate-400">Weight Est:</span> <strong className="text-slate-800">{order.totalWeight || (order as any).total_weight || 0} kg</strong></div>
+                            <div><span className="text-slate-400">Assigned Agent:</span> <strong className="text-slate-800">{order.assignedAgent?.name || (order as any).assignedAgent?.name || (order as any).destination?.assignedAgent?.name || 'Assigning soon...'}</strong></div>
+                            <div><span className="text-slate-400">Item Type:</span> <strong className="text-slate-800">{(order as any).itemType || (order as any).destination?.itemType || 'General Store Goods'}</strong></div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                      order.status === 'Picked Up' || order.status === 'Order Picked Up'
+                        ? 'bg-emerald-100 text-emerald-700' 
+                        : 'bg-indigo-100 text-indigo-700'
+                    }`}>
+                      {order.status === 'Picked Up' || order.status === 'Order Picked Up' ? 'Order Picked Up' : order.status}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4 bg-white p-4 rounded-xl border border-slate-100">
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Source Country</div>
+                      <div className="text-sm font-bold flex items-center gap-1.5">
+                        <span className="text-base leading-none">ğŸ‡®ğŸ‡³</span>
+                        <span>India</span>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Destination</div>
+                      <div className="text-sm font-bold text-slate-800">{order.destination?.country || 'N/A'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Items Shipped</div>
+                      <div className="text-sm font-bold text-slate-800">{order.items?.length || 0} items</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Weight</div>
+                      <div className="text-sm font-bold text-slate-800">{getSafeOrderTotalWeight(order)} kg</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Paid</div>
+                      <div className="text-sm font-bold text-indigo-600">â‚¹{order.totalCost || order.total_cost || 0}</div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-slate-100 pt-4">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-slate-200 w-fit">
+                      <Clock size={14} className="text-indigo-600" />
+                      <div className="text-xs text-slate-600 font-medium">
+                        <span className="text-slate-400 mr-1.5 uppercase tracking-widest text-[9px] font-black">Placed:</span>
+                        {new Date(order.createdAt || order.created_at || Date.now()).toLocaleString(undefined, {
+                          dateStyle: 'medium',
+                          timeStyle: 'short'
+                        })}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button 
+                        onClick={() => {
+                          setTrackingId(order.id);
+                          setActiveTab('track');
+                        }}
+                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 border border-indigo-100"
+                      >
+                        <Search size={12} /> Track Shipment
+                      </button>
+                      
+                      <button 
+                        onClick={async () => {
+                          const promise = api.shareInvoice(order);
+                          toast.promise(promise, {
+                            loading: 'Sending invoice...',
+                            success: 'Invoice sent to your email!',
+                            error: 'Could not send invoice via Email.'
+                          });
+
+                          const summary = `JiffEX Invoice\nOrder ID: ${order.id}\nDestination: ${order.destination.fullName || ''}, ${order.destination.country}\nTotal Weight: ${order.totalWeight || order.total_weight || 0} kg\nTotal Cost: â‚¹${order.totalCost || order.total_cost || 0}`;
+                          if (navigator.share) {
+                            try {
+                              await navigator.share({
+                                title: `JiffEX Invoice - ${order.id}`,
+                                text: summary,
+                              });
+                            } catch (e) {
+                              console.warn('Native share dismissed or failed', e);
+                            }
+                          } else {
+                            try {
+                              await navigator.clipboard.writeText(summary);
+                              toast.success('Invoice summary copied to clipboard!');
+                            } catch (e) {
+                              toast.error('Could not copy to clipboard.');
+                            }
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 border border-emerald-100"
+                      >
+                        <Share size={12} /> Share Invoice
+                      </button>
+
+                      {order.status !== 'Delivered' && order.status !== 'Cancelled' && (
+                        <button 
+                          onClick={() => cancelPickup(order.id)}
+                          className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 border border-red-100"
+                        >
+                          <Trash2 size={12} /> Cancel
+                        </button>
+                      )}
+                      
+                      {order.status === 'Received at Warehouse' && (
+                        <button 
+                          onClick={() => simulateNotification('Shipment dispatched', `Your shipment ${order.id} has been dispatched to ${order.destination.country}.`)}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors"
+                        >
+                          Dispatch
+                        </button>
+                      )}
+
+                      <button 
+                        onClick={() => setSelectedOrderForInvoice(order)}
+                        className="px-3 py-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 hover:underline"
+                      >
+                        View Invoice <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Invoice Modal */}
+        <AnimatePresence>
+          {selectedOrderForInvoice && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
+              >
+                <div className="flex justify-between items-start mb-8">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Logo iconSize={18} />
+                    </div>
+                    <h2 className="text-2xl font-black text-slate-900">Tax Invoice</h2>
+                    <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {selectedOrderForInvoice.id}</p>
+                  </div>
+                  <button 
+                    onClick={() => setSelectedOrderForInvoice(null)}
+                    className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                  >
+                    <XCircle size={24} className="text-slate-400" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-8 mb-8">
+                  <div>
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
+                    <div className="text-sm font-bold text-slate-900">JiffEX Warehouse</div>
+                    <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                      {WAREHOUSE_ADDRESS.street}<br />
+                      {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
+                      {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
+                    <div className="text-sm font-bold text-slate-900">{selectedOrderForInvoice.destination.fullName}</div>
+                    <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                      {selectedOrderForInvoice.destination.addressLine1}<br />
+                      {selectedOrderForInvoice.destination.city}, {selectedOrderForInvoice.destination.state}<br />
+                      {selectedOrderForInvoice.destination.zipCode}, {selectedOrderForInvoice.destination.country}
+                    </div>
+                  </div>
+                </div>
+
+                {(() => {
+                  const isPendingInvoice = (selectedOrderForInvoice.status === 'Scheduled' || selectedOrderForInvoice.status === 'Pending Pickup') && (!selectedOrderForInvoice.items || selectedOrderForInvoice.items.length === 0);
+                  return (
+                    <>
+                      <div className="border-t border-slate-100 pt-6 mb-8">
+                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
+                        {isPendingInvoice ? (
+                          <div className="bg-indigo-50/50 border border-indigo-100/60 text-indigo-900 rounded-2xl p-6 text-center">
+                            <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                              <Clock size={20} />
+                            </div>
+                            <p className="text-sm font-bold text-slate-800">No items picked or billed yet</p>
+                            <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                              This is a scheduled pickup from home. The item list will be finalized and updated once our agent collects and measures your items at our hub.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {selectedOrderForInvoice.items.map((item, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
+                                    {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                                  </div>
+                                  <div>
+                                    <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
+                                      <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
+                                      <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
+                                      <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
+                                      <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-sm font-bold text-slate-900">
+                                  {item.price ? `â‚¹${item.price}` : '-'}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="bg-slate-900 rounded-2xl p-6 text-white mb-4">
+                        {isPendingInvoice ? (
+                          <div className="text-center py-4 font-sans">
+                            <span className="text-indigo-400 text-[10px] font-black uppercase tracking-widest block mb-1">Invoice Notification</span>
+                            <div className="text-sm font-bold text-slate-200 max-w-md mx-auto leading-relaxed">
+                              Invoice will be displayed once the items are picked and billed.
+                            </div>
+                            <span className="inline-block mt-3.5 px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[9px] font-bold uppercase tracking-widest">
+                              Awaiting Pick & Bill
+                            </span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
+                              <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Weight</span>
+                              <span className="font-bold">{getSafeOrderTotalWeight(selectedOrderForInvoice)} kg</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Grand Total</span>
+                                <div className="text-3xl font-black">â‚¹{selectedOrderForInvoice.totalCost}</div>
+                              </div>
+                              <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
+                                {selectedOrderForInvoice.paymentStatus}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+
+                <div className="mt-8 flex gap-4">
+                  <button className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
+                    <Printer size={18} /> Print
+                  </button>
+                  <button className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
+                    <Share size={18} /> Share
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+          {/* Details Modal (when Clicking Order ID) */}
+          <AnimatePresence>
+            {selectedOrderForDetails && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                  className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
+                >
+                  <div className="flex justify-between items-start mb-8">
+                    <div>
+                      <h2 className="text-2xl font-black text-slate-900">Order Details</h2>
+                      <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {selectedOrderForDetails.id}</p>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedOrderForDetails(null)}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                    >
+                      <XCircle size={24} className="text-slate-400" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-8 mb-8">
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
+                      <div className="text-sm font-bold text-slate-900">
+                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
+                          ? ((selectedOrderForDetails as any).pickupAddress?.fullName || selectedOrderForDetails.customerName || 'Customer Residence')
+                          : 'JiffEX Warehouse'
+                        }
+                      </div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType ? (
+                          <>
+                            {((selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || '').split(',').slice(0, 2).join(',')}<br />
+                            {((selectedOrderForDetails as any).pickupAddress?.city || selectedOrderForDetails.destination?.city || '')} {((selectedOrderForDetails as any).pickupAddress?.state || selectedOrderForDetails.destination?.state || '')}<br />
+                            {((selectedOrderForDetails as any).pickupAddress?.zipCode || (selectedOrderForDetails as any).pickupAddress?.zip || selectedOrderForDetails.destination?.zipCode || '')} India
+                          </>
+                        ) : (
+                          <>
+                            {WAREHOUSE_ADDRESS.street}<br />
+                            {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
+                            {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
+                      <div className="text-sm font-bold text-slate-900">
+                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
+                          ? (selectedOrderForDetails.destination?.fullName || 'Receiver Location')
+                          : (selectedOrderForDetails.destination?.fullName || currentUser?.name || 'Receiver Location')
+                        }
+                      </div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {selectedOrderForDetails.destination?.addressLine1 || 'N/A'}<br />
+                        {selectedOrderForDetails.destination?.city || ''} {selectedOrderForDetails.destination?.state || ''}<br />
+                        {selectedOrderForDetails.destination?.zipCode || ''} {selectedOrderForDetails.destination?.country || ''}
+                      </div>
+                    </div>
+                  </div>
+
+                  {(selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType) && (
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 mb-6 text-slate-700">
+                      <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-3 flex items-center gap-1.5 pb-2 border-b border-indigo-100/60">
+                        <Calendar size={14} className="text-indigo-600" /> Home Pickup Scheduled Details
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4 text-xs font-sans">
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Pickup Date</div>
+                          <div className="font-bold text-slate-800">{selectedOrderForDetails.shippingDate || (selectedOrderForDetails as any).shipping_date || 'N/A'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Preferred Time</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).time || (selectedOrderForDetails as any).destination?.time || 'General Slot'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Assigned Agent</div>
+                          <div className="font-bold text-slate-800">
+                            {selectedOrderForDetails.assignedAgent?.name || (selectedOrderForDetails as any).assignedAgent?.name || (selectedOrderForDetails as any).destination?.assignedAgent?.name || 'Assigning soon...'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Language Preference</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).languagePreference || (selectedOrderForDetails as any).destination?.languagePreference || 'English'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Item Category</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).itemType || (selectedOrderForDetails as any).destination?.itemType || 'General Cargo'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Vehicle Type</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).vehicleType || (selectedOrderForDetails as any).destination?.vehicleType || 'Two-Wheeler'}</div>
+                        </div>
+                        <div className="col-span-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Full Pickup Address (From)</div>
+                          <div className="font-bold text-slate-800">{(selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || 'N/A'}</div>
+                        </div>
+                        <div className="col-span-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Destination Delivery Address (To)</div>
+                          <div className="font-bold text-slate-800">
+                            {selectedOrderForDetails.destination?.addressLine1}, {selectedOrderForDetails.destination?.city}, {selectedOrderForDetails.destination?.state} - {selectedOrderForDetails.destination?.zipCode}, {selectedOrderForDetails.destination?.country}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border-t border-slate-100 pt-6 mb-6">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
+                    <div className="space-y-3">
+                      {(selectedOrderForDetails.items || []).map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
+                              {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium font-sans">
+                                <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
+                                <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
+                                <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
+                                <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-sm font-bold text-slate-900">
+                              {item.price ? `â‚¹${item.price}` : '-'}
+                            </div>
+                            <div className="mt-1.5">
+                              <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[9px] font-extrabold rounded-md uppercase tracking-wider">
+                                {item.status || selectedOrderForDetails.status}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Total weight and grand total in TEXT format (No black box) */}
+                  <div className="border-t border-slate-200 pt-5 space-y-3">
+                    <div className="flex justify-between items-center text-sm font-semibold text-slate-600">
+                      <span>Total Weight:</span>
+                      <span className="text-slate-900 font-extrabold text-base">{getSafeOrderTotalWeight(selectedOrderForDetails)} kg</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm font-semibold text-slate-600 border-t border-slate-100 pt-3">
+                      <div>
+                        <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">Grand Total</span>
+                        <div className="text-2xl font-black text-slate-950 mt-1">â‚¹{selectedOrderForDetails.totalCost || selectedOrderForDetails.total_cost || 0}</div>
+                      </div>
+                      <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold rounded-xl text-xs uppercase tracking-widest">
+                        {selectedOrderForDetails.paymentStatus || selectedOrderForDetails.payment_status || 'Paid'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 flex justify-end pt-2">
+                    <button 
+                      onClick={() => setSelectedOrderForDetails(null)}
+                      className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-all text-sm shadow-sm"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          {/* Consolidated Invoice Modal */}
+          <AnimatePresence>
+            {selectedOrdersForConsolidatedInvoice && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                  className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
+                >
+                  <div className="flex justify-between items-start mb-8">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Logo iconSize={18} />
+                      </div>
+                      <h2 className="text-2xl font-black text-slate-900">Consolidated Tax Invoice</h2>
+                      <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">
+                        Invoice ID: CONSOL-{currentUser.name?.slice(0, 3).toUpperCase() || 'USR'}-{new Date().getTime().toString().slice(-4)}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedOrdersForConsolidatedInvoice(null)}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
+                    >
+                      <XCircle size={24} className="text-slate-400" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-8 mb-8">
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
+                      <div className="text-sm font-bold text-slate-900">JiffEX Warehouse</div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {WAREHOUSE_ADDRESS.street}<br />
+                        {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
+                        {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
+                      <div className="text-sm font-bold text-slate-900">{selectedOrdersForConsolidatedInvoice[0]?.destination?.fullName}</div>
+                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                        {selectedOrdersForConsolidatedInvoice[0]?.destination?.addressLine1}<br />
+                        {selectedOrdersForConsolidatedInvoice[0]?.destination?.city}, {selectedOrdersForConsolidatedInvoice[0]?.destination?.state}<br />
+                        {selectedOrdersForConsolidatedInvoice[0]?.destination?.zipCode}, {selectedOrdersForConsolidatedInvoice[0]?.destination?.country}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-6 mb-8">
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Consolidated Item Details</h4>
+                    <div className="space-y-3">
+                      {selectedOrdersForConsolidatedInvoice.flatMap(order => 
+                        (order.items || []).map((item, idx) => ({ ...item, orderId: order.id }))
+                      ).map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
+                              {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
+                                <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
+                                <span className="text-indigo-600 font-bold text-[9px]">Order: {item.orderId}</span>
+                                <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
+                                <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-sm font-bold text-slate-900">
+                            {item.price ? `â‚¹${item.price}` : '-'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900 rounded-2xl p-6 text-white mb-4">
+                    <div className="flex justify-between items-center mb-3 pb-3 border-b border-white/10">
+                      <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Completed Orders Included</span>
+                      <span className="font-bold text-xs text-indigo-400">{selectedOrdersForConsolidatedInvoice.map(o => o.id).join(', ')}</span>
+                    </div>
+                    <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
+                      <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Consolidated Total Weight</span>
+                      <span className="font-bold">
+                        {selectedOrdersForConsolidatedInvoice.reduce((sum, o) => sum + getSafeOrderTotalWeight(o), 0).toFixed(2)} kg
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Consolidated Grand Total</span>
+                        <div className="text-3xl font-black">
+                          â‚¹{Math.round(selectedOrdersForConsolidatedInvoice.reduce((sum, o) => sum + Number(o.totalCost || o.total_cost || 0), 0))}
+                        </div>
+                      </div>
+                      <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
+                        PAID
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 flex gap-4">
+                    <button 
+                      onClick={() => window.print()}
+                      className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer border-0"
+                    >
+                      <Printer size={18} /> Print
+                    </button>
+                    <button 
+                      onClick={async () => {
+                        const promise = api.sendConsolidatedInvoicePDF(currentUser.email, selectedOrdersForConsolidatedInvoice, COMPANY_DETAILS);
+                        toast.promise(promise, {
+                          loading: 'Sending consolidated invoice...',
+                          success: 'Single consolidated invoice sent to your email!',
+                          error: 'Could not send consolidated invoice via Email.'
+                        });
+                      }}
+                      className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer border-0"
+                    >
+                      <Share size={18} /> Share to Email
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+        </div>
+      );
+    }, [orders, appointments, currentUser, setActiveTab, selectedOrderForInvoice, selectedOrderForDetails, selectedOrdersForConsolidatedInvoice, isMobile]);
+
+
+  const WorkOrderSection = useMemo(() => {
+    if (!currentUser) return null;
+    if (!activeWorkOrder) return null;
+
+    const woTotalWeight = woItems.reduce((s, i) => s + (i.weight * (i.quantity || 1)), 0);
+    const woRate = shippingRates[woAddress.country] || 10;
+    const woRawShippingCost = woTotalWeight * woRate;
+    const woDiscountPercent = shippingDiscounts[woAddress.country] || 0;
+    const woDiscountAmount = woRawShippingCost * (woDiscountPercent / 100);
+    const woTotalCost = Math.max(0, woRawShippingCost - woDiscountAmount);
+
+    if (isWOPaid) {
+      return (
+        <div className="max-w-3xl mx-auto space-y-6">
+          <div className="bg-emerald-600 text-white p-8 rounded-3xl shadow-xl text-center space-y-4">
+            <div className="w-16 h-16 bg-white/20 backdrop-blur rounded-full flex items-center justify-center mx-auto">
+              <CheckCircle2 size={32} />
+            </div>
+            <div>
+              <h2 className="text-3xl font-black">Payment Successful!</h2>
+              <p className="opacity-80">Work Order {activeWorkOrder.id} has been processed and paid.</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 space-y-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-xl font-black text-slate-900">Invoice Summary</h3>
+                <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {woOrderId}</p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button 
+                  onClick={() => {
+                    const message = `*JiffEX Work Order Invoice*\n\nOrder ID: ${woOrderId}\nCustomer: ${woAddress.fullName}\nTotal Amount: â‚¹${woTotalCost.toFixed(2)}\nDestination: ${woAddress.country}\nStatus: Processed & Paid\n\nThank you for choosing JiffEX!`;
+                    sendWhatsApp(woAddress.phone, message);
+                  }}
+                  className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors flex items-center gap-1.5 text-xs font-bold font-sans"
+                  title="WhatsApp Invoice"
+                >
+                  <MessageCircle size={18} />
+                  <span>WhatsApp Invoice</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    const summary = `JiffEX Invoice\nOrder ID: ${woOrderId}\nDestination: ${woAddress.fullName}, ${woAddress.country}\nTotal Weight: ${woTotalWeight.toFixed(1)} kg\nTotal: â‚¹${woTotalCost.toFixed(2)}`;
+                    if (navigator.share) {
+                      navigator.share({
+                        title: 'JiffEX Invoice',
+                        text: summary,
+                      }).catch(console.error);
+                    } else {
+                      navigator.clipboard.writeText(summary);
+                      toast.success('Invoice Summary copied to clipboard!');
+                    }
+                  }}
+                  className="p-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 transition-colors rounded-xl flex items-center gap-1.5 text-xs font-bold font-sans"
+                  title="Share Summary"
+                >
+                  <Share size={18} />
+                  <span>Share Summary</span>
+                </button>
+                <button 
+                  onClick={() => window.print()}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors rounded-xl"
+                  title="Print Invoice"
+                >
+                  <Printer size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <MapPin size={12} className="text-red-500" /> Destination Address
+                  </h4>
+                  <div className="text-sm font-bold text-slate-900">{woAddress.fullName}</div>
+                  <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                    {woAddress.addressLine1}, {woAddress.city}<br />
+                    {woAddress.country}<br />
+                    <span className="font-medium">Email: {woAddress.email}</span><br />
+                    <span className="font-medium">Phone: {woAddress.phone}</span>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <Calendar size={12} className="text-indigo-600" /> Shipment Details
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-[9px] text-slate-400 font-bold uppercase">Shipping Date</div>
+                      <div className="text-xs font-bold text-slate-900">{woShippingDate}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-slate-400 font-bold uppercase">Payment Method</div>
+                      <div className="text-xs font-bold text-slate-900 uppercase">{woPaymentMethod}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <Package size={12} className="text-indigo-600" /> Items List
+                  </h4>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                    {woItems.map(item => (
+                      <div key={item.id} className="flex justify-between items-center text-xs">
+                        <span className="text-slate-600 font-medium">{item.name} <span className="text-[10px] text-slate-400 font-bold ml-1">x{item.quantity || 1}</span></span>
+                        <span className="text-slate-400">{(item.weight * (item.quantity || 1)).toFixed(1)} kg</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="h-px bg-slate-200 my-3" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-slate-900">Total Weight</span>
+                    <span className="text-sm font-black text-slate-900">{woItems.reduce((s, i) => s + (i.weight * (i.quantity || 1)), 0).toFixed(1)} kg</span>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-900 text-white rounded-2xl space-y-2">
+                  <div className="flex justify-between items-center text-xs text-slate-400">
+                    <span>Base Shipping Cost</span>
+                    <span>â‚¹{woRawShippingCost.toFixed(2)}</span>
+                  </div>
+                  {woDiscountPercent > 0 && (
+                    <div className="flex justify-between items-center text-xs text-rose-400">
+                      <span>Shipping Discount ({woDiscountPercent}%)</span>
+                      <span>-â‚¹{woDiscountAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="h-px bg-slate-800 my-1" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-bold">Total Amount Paid</span>
+                    <span className="text-2xl font-black text-indigo-400">â‚¹{woTotalCost.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4 max-w-lg mx-auto w-full">
+              <button 
+                onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
+                className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black transition-all text-sm shadow-md cursor-pointer text-center"
+              >
+                Process New Order
+              </button>
+              <button 
+                onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
+                className="flex-1 py-4 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl font-black transition-all text-sm shadow-xs cursor-pointer text-center"
+              >
+                Go Home
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="max-w-4xl mx-auto space-y-6 text-slate-800">
+        {/* Header Block with Back Button & Steps Tracker */}
+        <div className="bg-white p-3.5 sm:p-8 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100">
+          <div className="flex items-center justify-between mb-4 sm:mb-6 pb-2.5 sm:pb-4 border-b border-slate-100">
+            <button 
+              type="button"
+              onClick={() => setActiveWorkOrder(null)}
+              className="text-slate-400 hover:text-slate-900 flex items-center gap-1 text-xs sm:text-sm font-bold transition-all cursor-pointer"
+            >
+              <ChevronRight size={14} className="rotate-180 sm:w-4 sm:h-4" /> Exit
+            </button>
+            <div className="text-right">
+              <h2 className="text-sm sm:text-lg font-black text-slate-900 leading-tight">Order: {activeWorkOrder.id}</h2>
+              <p className="hidden sm:block text-[10px] text-slate-500 uppercase font-black tracking-widest mt-0.5">Pickup & Shipping Wizard</p>
+              {/* Customer Name on mobile view only to save space */}
+              <p className="block sm:hidden text-[10px] text-slate-600 font-extrabold mt-0.5 uppercase tracking-tight">
+                Cust: {activeWorkOrder.customerName || 'Walk-in'}
+              </p>
+            </div>
+          </div>
+ 
+          {/* Context Banner - Only shown on Desktop / larger screens as requested */}
+          <div className="hidden sm:flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 p-2.5 sm:p-4 mb-4 sm:mb-6 bg-indigo-50/40 border border-indigo-100/50 rounded-xl sm:rounded-2xl">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[7px] sm:text-[8px] font-black uppercase text-indigo-600 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 tracking-wider shrink-0">Active Pickup</span>
+                <h4 className="text-xs font-black text-slate-800 truncate">Customer: {activeWorkOrder.customerName || 'Walk-in'}</h4>
+              </div>
+              <p className="text-[10px] text-slate-500 truncate mt-1">ğŸ“ {activeWorkOrder.address}</p>
+            </div>
+            <div className="text-[10px] font-black text-slate-600 shrink-0 bg-white px-3 py-1.5 rounded-xl border border-slate-100 flex items-center gap-1">
+              <span>ğŸ“ {activeWorkOrder.phone}</span>
+            </div>
+          </div>
+ 
+          {/* Stepper Progress Bar (Line-based, like home pickup style, clickable) */}
+          <div className="mb-4 sm:mb-8 select-none">
+            <div className="flex items-center gap-1.5 sm:gap-3 w-full">
+              {[
+                { step: 1, label: 'Cargo', desc: 'Add items' },
+                { step: 2, label: 'KYC Docs', desc: 'Verify ID' },
+                { step: 3, label: 'Destination', desc: 'Recipient' },
+                { step: 4, label: 'Payment', desc: 'Settle cost' }
+              ].map((s) => (
+                <button
+                  key={s.step}
+                  type="button"
+                  onClick={() => {
+                    if (s.step < woStep || woItems.length > 0) {
+                      setWoStep(s.step);
+                    }
+                  }}
+                  className="flex-1 flex flex-col gap-2 text-left focus:outline-none cursor-pointer group"
+                >
+                  <div 
+                    className={`h-1.5 rounded-full transition-all duration-500 w-full ${
+                      woStep === s.step 
+                        ? 'bg-indigo-600 shadow-sm shadow-indigo-200/50' 
+                        : s.step < woStep 
+                          ? 'bg-emerald-500 shadow-xs' 
+                          : 'bg-slate-200'
+                    }`}
+                  />
+                  <div className="flex flex-col min-w-0">
+                    <span className={`text-[10px] uppercase font-black tracking-tight transition-colors truncate ${
+                      woStep === s.step 
+                        ? 'text-indigo-600 font-black' 
+                        : s.step < woStep 
+                          ? 'text-emerald-500 font-extrabold' 
+                          : 'text-slate-400 group-hover:text-slate-600'
+                    }`}>
+                      {s.label}
+                    </span>
+                    <span className={`text-[8px] sm:text-[9px] font-bold text-slate-400 truncate mt-0.5 transition-colors ${
+                      woStep === s.step ? 'text-slate-600' : 'text-slate-400/80'
+                    }`}>
+                      {s.desc}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* STEP 1: CARGO COLLECTION */}
+          {woStep === 1 && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                  <Package className="text-indigo-600 animate-pulse" size={20} /> 1. Cargo Collection
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">Specify items, quantity, weights and snap real-world condition photos.</p>
+              </div>
+
+              {/* Hidden universal file camera input */}
+              <input 
+                type="file" 
+                id="universal-wo-camera" 
+                accept="image/*" 
+                capture="environment" 
+                className="hidden" 
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const imgData = reader.result as string;
+                      if (capturingItemId === 'new') {
+                        setWoItemImage(imgData);
+                        toast.success("Photo captured for new item!");
+                      } else if (capturingItemId) {
+                        setWoItems(prev => prev.map(item => item.id === capturingItemId ? { ...item, image: imgData } : item));
+                        toast.success("Photo updated in the item list!");
+                      }
+                      setCapturingItemId(null);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+
+              {/* Item input box */}
+              <div className="bg-slate-50 border border-slate-200/50 p-3 sm:p-5 rounded-2xl space-y-3">
+                <div className="space-y-3">
+                  {/* Row 1: Item Name */}
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Cargo Item Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g., File bundle, Parcel box, Clothes..."
+                      className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-xs font-semibold placeholder:text-slate-350"
+                      value={woItemName}
+                      onChange={(e) => setWoItemName(e.target.value)}
+                    />
+                  </div>
+                  
+                  {/* Row 2: Weight, Quantity, Snap in a single line */}
+                  <div className="grid grid-cols-3 gap-2 sm:gap-4 items-end">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 truncate">Weight (kg)</label>
+                      <input 
+                        type="number" 
+                        placeholder="e.g., 2.5"
+                        step="any"
+                        className="w-full p-2.5 bg-white text-slate-950 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-xs font-semibold text-center"
+                        value={woItemWeight || ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? 0 : Number(e.target.value);
+                          setWoItemWeight(val);
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 truncate text-center">Quantity</label>
+                      <div className="flex items-center bg-white border border-slate-200 rounded-xl px-1 sm:px-1.5 h-[38px] justify-between">
+                        <button
+                          type="button"
+                          onClick={() => setWoItemQuantity(q => Math.max(1, q - 1))}
+                          className="w-6 h-6 sm:w-7 sm:h-7 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700 cursor-pointer active:scale-95 transition-transform"
+                        >
+                          -
+                        </button>
+                        <input 
+                          type="number" 
+                          placeholder="Qty"
+                          className="w-10 sm:w-12 text-center bg-transparent border-0 font-bold text-sm sm:text-base p-0 focus:ring-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          value={woItemQuantity || ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value, 10));
+                            setWoItemQuantity(val === '' ? 1 : val);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setWoItemQuantity(q => q + 1)}
+                          className="w-6 h-6 sm:w-7 sm:h-7 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 flex items-center justify-center text-xs font-black text-slate-700 cursor-pointer active:scale-95 transition-transform"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-center font-black text-slate-400 uppercase tracking-widest mb-1 truncate">Snap Photo</label>
+                      <div className="flex gap-1.5 items-center justify-center w-full">
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setCapturingItemId('new');
+                            document.getElementById('universal-wo-camera')?.click();
+                          }}
+                          className={`flex-1 h-[38px] rounded-xl flex items-center justify-center border transition-all cursor-pointer relative ${
+                            woItemImage 
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-600 ring-2 ring-emerald-100' 
+                              : 'bg-white border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-300'
+                          }`}
+                        >
+                          <Camera size={14} className={!woItemImage ? "text-indigo-600" : ""} />
+                          {woItemImage && (
+                            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border border-white flex items-center justify-center text-[8px] text-white">âœ“</span>
+                          )}
+                        </button>
+                        {woItemImage && (
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setWoItemImage('');
+                              toast.info("Cleared item photo!");
+                            }}
+                            className="w-8 h-8 bg-rose-50 hover:bg-rose-100 border border-rose-100 text-rose-500 rounded-xl flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-2.5 border-t border-slate-150">
+                  <span className="text-[10px] font-bold text-slate-400">Add collected items representing cargo.</span>
+                  <button 
+                    type="button"
+                    onClick={addWOItem}
+                    disabled={!woItemName}
+                    className={`px-6 py-2 rounded-xl font-bold transition-all text-xs cursor-pointer shadow-xs ${
+                      woItemName 
+                        ? 'bg-slate-900 text-white hover:bg-black hover:shadow-sm' 
+                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Total Summary of Cargo: Items Count, Total Weight, Shipping Rate */}
+              {(() => {
+                const totalWoItemsCount = woItems.reduce((acc, item) => acc + (item.quantity || 1), 0);
+                const totalWoWeightCalculated = woItems.reduce((acc, item) => acc + (item.weight * (item.quantity || 1)), 0);
+                const woRate = shippingRates[woAddress.country] || 10;
+                return (
+                  <div className="grid grid-cols-3 gap-3 p-4 bg-indigo-50/45 border border-indigo-100/70 rounded-2xl">
+                    <div className="text-center">
+                      <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">Total Qty</span>
+                      <span className="text-sm sm:text-base font-black text-indigo-950 mt-0.5 block">{totalWoItemsCount} {totalWoItemsCount === 1 ? 'item' : 'items'}</span>
+                    </div>
+                    <div className="text-center border-x border-indigo-100/80 font-sans">
+                      <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">Total Weight</span>
+                      <span className="text-sm sm:text-base font-black text-indigo-950 mt-0.5 block">{totalWoWeightCalculated.toFixed(1)} kg</span>
+                    </div>
+                    <div className="text-center">
+                      <span className="block text-[8px] font-black text-slate-400 uppercase tracking-widest">Shipping Rate</span>
+                      <span className="text-sm sm:text-base font-black text-emerald-600 mt-0.5 block">â‚¹{woRate.toFixed(2)}/kg</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Collected List items list */}
+              <div className="mt-5 space-y-2">
+                <div className="flex items-center justify-between pb-1">
+                  <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest flex items-center gap-1.5">
+                    <Boxes size={12} className="text-indigo-600/70" /> Collected Items List
+                  </span>
+                  {woItems.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setWoIsEditingItems(!woIsEditingItems)}
+                      className={`px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 text-[10px] font-extrabold cursor-pointer h-7 ${
+                        woIsEditingItems 
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' 
+                          : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                      id="wo-edit-list-btn"
+                    >
+                      <Pencil size={10} />
+                      <span>{woIsEditingItems ? 'Done' : 'Edit'}</span>
+                    </button>
+                  )}
+                </div>
+
+                {woItems.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 font-medium text-xs bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
+                    No items added yet. Enter items details above to start collecting.
+                  </div>
+                ) : (
+                  woItems.map(item => (
+                    <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white rounded-2xl border border-slate-150 shadow-xs hover:border-slate-350 transition-all gap-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div 
+                          onClick={() => {
+                            if (woIsEditingItems) {
+                              setCapturingItemId(item.id);
+                              document.getElementById('universal-wo-camera')?.click();
+                            }
+                          }}
+                          className={`w-10 h-10 rounded-xl bg-slate-50 border overflow-hidden shrink-0 flex items-center justify-center transition-all ${
+                            woIsEditingItems 
+                              ? 'border-dashed border-slate-250 cursor-pointer hover:border-indigo-400 group relative' 
+                              : 'border-slate-150'
+                          }`}
+                        >
+                          {item.image ? (
+                            <>
+                              <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              {woIsEditingItems && (
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <Camera size={14} className="text-white" />
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center text-slate-400">
+                              {woIsEditingItems ? (
+                                <>
+                                  <Camera size={14} className="text-indigo-500 animate-pulse" />
+                                  <span className="text-[6px] text-slate-400 font-extrabold tracking-tighter uppercase mt-0.5">SNAP</span>
+                                </>
+                              ) : (
+                                <Package size={16} className="text-slate-300" />
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-row flex-wrap md:flex-nowrap items-center gap-y-2 gap-x-4 flex-1 min-w-0">
+                          {/* Item Name */}
+                          <div className="text-xs sm:text-sm font-bold text-slate-900 truncate flex-1 min-w-[100px] sm:min-w-[140px]" title={item.name}>
+                            {item.name}
+                          </div>
+                          
+                          {/* Item Values/Controls in single line */}
+                          <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-xs font-semibold text-slate-600 shrink-0">
+                            {/* Quantity Control */}
+                            {woIsEditingItems ? (
+                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
+                                <span className="text-[9px] font-black uppercase text-slate-400">Qty</span>
+                                <input
+                                  type="number"
+                                  value={item.quantity || 1}
+                                  onChange={(e) => {
+                                    const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                                    setWoItems(woItems.map(i => i.id === item.id ? { ...i, quantity: val } : i));
+                                  }}
+                                  className="w-10 text-center bg-white border border-slate-200 rounded font-bold text-xs p-0.5 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 bg-slate-50/70 border border-slate-150 rounded-lg px-2 py-0.5 text-xs">
+                                <span className="text-[8px] font-extrabold uppercase text-slate-450">Qty:</span>
+                                <span className="font-bold text-slate-800">{item.quantity || 1}</span>
+                              </div>
+                            )}
+
+                            {/* Weight Control */}
+                            {woIsEditingItems ? (
+                              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
+                                <span className="text-[9px] font-black uppercase text-slate-400">Wt</span>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={item.weight}
+                                  onChange={(e) => {
+                                    const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                    setWoItems(woItems.map(i => i.id === item.id ? { ...i, weight: val } : i));
+                                  }}
+                                  className="w-14 text-center bg-white border border-slate-200 rounded font-bold text-xs p-0.5 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                />
+                                <span className="text-[9px] font-bold text-slate-400">kg</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 bg-slate-50/70 border border-slate-150 rounded-lg px-2 py-0.5 text-xs">
+                                <span className="text-[8px] font-extrabold uppercase text-slate-450">Wt:</span>
+                                <span className="font-bold text-slate-800">{item.weight} kg</span>
+                              </div>
+                            )}
+
+                            {/* Total calculated field */}
+                            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100/30 whitespace-nowrap">
+                              Total: {(item.weight * (item.quantity || 1)).toFixed(1)} kg
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 justify-end shrink-0">
+                        {woIsEditingItems ? (
+                          <>
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                setCapturingItemId(item.id);
+                                document.getElementById('universal-wo-camera')?.click();
+                              }}
+                              className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-all cursor-pointer"
+                              title="Snap Photo"
+                            >
+                              <Camera size={14} />
+                            </button>
+                            
+                            <button 
+                              type="button"
+                              onClick={() => setWoItems(woItems.filter(i => i.id !== item.id))}
+                              className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 flex items-center justify-center transition-all cursor-pointer"
+                              title="Delete Item"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                )}
+                {woItems.length > 0 && (
+                  <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-100">
+                    <span className="text-[10px] text-slate-400 font-bold">Keep cargo list synchronized with servers.</span>
+                    <button
+                      type="button"
+                      onClick={handleWOSaveDetails}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer animate-pulse hover:animate-none"
+                    >
+                      <Save size={14} /> Save Collected Cargo List
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: KYC VERIFICATION DOCUMENTS */}
+          {woStep === 2 && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                    <ShieldCheck className="text-indigo-600" size={20} /> 2. KYC Verification Proof
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">Collect customer identity verification scans or bill copies for outbound clearances.</p>
+                </div>
+                <span className="px-2 py-0.5 bg-amber-50 text-amber-700 text-[8px] font-black rounded border border-amber-100 uppercase tracking-widest leading-none shrink-0">
+                  KYC MANDATORY
+                </span>
+              </div>
+
+              {/* Document Camera/File Selector */}
+              <input 
+                type="file" 
+                id="universal-wo-doc-camera" 
+                accept="image/*" 
+                capture="environment" 
+                className="hidden" 
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const imgData = reader.result as string;
+                      setWoDocImage(imgData);
+                      toast.success("Document photo loaded successfully!");
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+
+              {/* Upload Panel */}
+              <div className="bg-slate-50 border border-slate-205 p-4 sm:p-5 rounded-2xl space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                  <div className="sm:col-span-4 border-none">
+                    <label className="block text-[10px] font-black text-slate-505 uppercase tracking-widest mb-1.5">Document Type</label>
+                    <select
+                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-semibold"
+                      value={woDocType}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setWoDocType(val);
+                        // Set default names
+                        if (val === 'Aadhar Card') setWoDocName('Customer Aadhar Card');
+                        else if (val === 'Passport') setWoDocName('Customer Passport');
+                        else if (val === 'PAN Card') setWoDocName('Customer PAN Card');
+                        else if (val === 'Customs Declaration') setWoDocName('Signed Customs Declaration');
+                        else if (val === 'Invoice Copy') setWoDocName('Commercial Invoice / Bill');
+                        else setWoDocName('');
+                      }}
+                    >
+                      <option value="Aadhar Card">Aadhar Card</option>
+                      <option value="Passport">Passport Copy</option>
+                      <option value="PAN Card">PAN Card</option>
+                      <option value="Customs Declaration">Customs Declaration form</option>
+                      <option value="Invoice Copy">Commercial Invoice / Invoice copy</option>
+                      <option value="Other">Other Document Copy</option>
+                    </select>
+                  </div>
+                  
+                  <div className="sm:col-span-5">
+                    <label className="block text-[10px] font-black text-slate-505 uppercase tracking-widest mb-1.5">Document Description/Name</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g., Aadhar card number or custom label"
+                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-xs font-semibold placeholder:text-slate-350"
+                      value={woDocName}
+                      onChange={(e) => setWoDocName(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="sm:col-span-3">
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('universal-wo-doc-camera')?.click()}
+                      className={`w-full py-2.5 px-3 rounded-xl border-2 border-dashed font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        woDocImage 
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
+                          : 'border-indigo-200 hover:border-indigo-400 bg-white text-indigo-700'
+                      }`}
+                    >
+                      <Camera size={14} />
+                      {woDocImage ? 'Change Photo' : 'Take Picture'}
+                    </button>
+                  </div>
+                </div>
+
+                {woDocImage && (
+                  <div className="flex flex-col items-center justify-center py-2">
+                    <div className="relative w-full max-w-[200px] h-32 bg-slate-100 rounded-xl overflow-hidden border border-slate-200">
+                      <img 
+                        src={woDocImage} 
+                        alt="Document Preview" 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setWoDocImage('')}
+                        className="absolute top-1 right-1 w-6 h-6 rounded-full bg-slate-900/60 hover:bg-slate-900 text-white flex items-center justify-center transition-colors"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const finalName = woDocName || `${woDocType} Copy`;
+                      if (!woDocImage) {
+                        toast.error('Please snap or upload a copy of the document first.');
+                        return;
+                      }
+                      const newDoc = {
+                        id: 'doc_' + Date.now(),
+                        name: finalName,
+                        type: woDocType,
+                        image: woDocImage,
+                        uploadedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      };
+                      setWoDocuments([...woDocuments, newDoc]);
+                      setWoDocName('');
+                      setWoDocImage('');
+                      toast.success(`${woDocType} added to intermediate collected checklist!`);
+                    }}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl cursor-pointer flex items-center gap-1 shadow-sm"
+                  >
+                    <Plus size={14} /> Add Document
+                  </button>
+                </div>
+              </div>
+
+              {/* Added Documents list */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Collected Documents Database</h4>
+                {woDocuments.length === 0 ? (
+                  <div className="p-6 text-center border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
+                    <FileText className="mx-auto text-slate-350 mb-2" size={32} />
+                    <p className="text-xs text-slate-400 font-medium">No documents captured yet.</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Ask customer for ID copy, choose type and tap "Take Picture" to log copy.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {woDocuments.map(doc => (
+                      <div key={doc.id} className="p-4 bg-slate-50 hover:bg-slate-100/75 transition-all border border-slate-200/60 rounded-2xl flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-12 h-12 bg-white rounded-xl border border-slate-200 overflow-hidden shrink-0">
+                            <img 
+                              src={doc.image} 
+                              alt={doc.name} 
+                              className="w-full h-full object-cover cursor-zoom-in"
+                              onClick={() => {
+                                const w = window.open();
+                                if (w) {
+                                  w.document.write(`<img src="${doc.image}" style="max-width:100%; height:auto;" />`);
+                                } else {
+                                  toast.info("Check screen for document preview.");
+                                }
+                              }}
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-black text-slate-900 truncate">{doc.name}</div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-[8px] font-bold rounded border border-indigo-100">
+                                {doc.type}
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-medium">{doc.uploadedAt}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setWoDocuments(woDocuments.filter(d => d.id !== doc.id));
+                            toast.info(`${doc.name} removed.`);
+                          }}
+                          className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-500 flex items-center justify-center cursor-pointer hover:scale-110 transition-all"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-100 mt-4">
+                <span className="text-[10px] text-slate-400 font-bold">Keep KYC documents synchronized with servers.</span>
+                <button
+                  type="button"
+                  onClick={handleWOSaveDetails}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer"
+                >
+                  <Save size={14} /> Save KYC Progress
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: DESTINATION ADDRESS */}
+          {woStep === 3 && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                  <MapPin className="text-red-500 animate-bounce" size={20} /> 3. Destination Address Details
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">Provide strict destination parameters for duty computation of custom layers.</p>
+              </div>
+
+              <div className="space-y-4 max-w-xl">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Recipient Full Name</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
+                    value={woAddress.fullName}
+                    onChange={e => setWoAddress({...woAddress, fullName: e.target.value})}
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Email ID</label>
+                    <input 
+                      type="email" 
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
+                      value={woAddress.email}
+                      onChange={e => setWoAddress({...woAddress, email: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Recipient Phone</label>
+                    <input 
+                      type="tel" 
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
+                      value={woAddress.phone}
+                      onChange={e => setWoAddress({...woAddress, phone: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Address Line 1</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
+                    value={woAddress.addressLine1}
+                    onChange={e => setWoAddress({...woAddress, addressLine1: e.target.value})}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">City</label>
+                    <input 
+                      type="text" 
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
+                      value={woAddress.city}
+                      onChange={e => setWoAddress({...woAddress, city: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Zip Code</label>
+                    <input 
+                      type="text" 
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
+                      value={woAddress.zipCode}
+                      onChange={e => setWoAddress({...woAddress, zipCode: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Destination Country</label>
+                  <select 
+                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
+                    value={woAddress.country}
+                    onChange={e => setWoAddress({...woAddress, country: e.target.value})}
+                  >
+                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-100 mt-6 max-w-xl">
+                <span className="text-[10px] text-slate-400 font-bold">Keep destination parameters synchronized with servers.</span>
+                <button
+                  type="button"
+                  onClick={handleWOSaveDetails}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer"
+                >
+                  <Save size={14} /> Save Destination Details
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: SCHEDULE & PAY */}
+          {woStep === 4 && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-sans relative">
+              <div className="lg:col-span-7 space-y-6">
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                    <Calendar className="text-indigo-600" size={20} /> 4. Shipping Schedule & Status
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">Review the designated ship dates, apply localized status rules and configure payment gateway channels.</p>
+                </div>
+
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Calendar size={12} className="text-indigo-600" /> Select Shipping Date</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {SHIPPING_DATES.map(date => (
+                      <button 
+                        type="button"
+                        key={date}
+                        onClick={() => setWoShippingDate(date)}
+                        className={`p-3 rounded-xl border-2 transition-all text-center cursor-pointer ${woShippingDate === date ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}
+                      >
+                        <div className="text-[8px] font-bold uppercase opacity-60 mb-1">March</div>
+                        <div className="text-base font-black">{date.split('-')[2]}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ğŸ”’ CUSTOMER AUTHORIZATION (OTP via WhatsApp) */}
+                <div className="p-5 rounded-2xl border border-emerald-150 bg-emerald-50/10 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <MessageCircle size={18} className="text-emerald-600 shrink-0" /> WhatsApp Cargo Authorization
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Send the collected items list and secure authorization OTP directly as a text message to the customer's WhatsApp in one click.
+                      </p>
+                    </div>
+                    {woOtpVerified ? (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 flex items-center gap-1 shrink-0">
+                        <Check size={12} strokeWidth={3} /> Authorized
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 animate-pulse shrink-0">
+                        Pending OTP
+                      </span>
+                    )}
+                  </div>
+
+                  {/* One-Click Send WhatsApp Action */}
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const code = Math.floor(100000 + Math.random() * 900000).toString();
+                        setWoOtpCode(code);
+                        setWoOtpSent(true);
+                        setWoOtpVerified(false);
+                        setWoOtpInput('');
+                        
+                        // Build plain text items list
+                        const itemsListText = woItems.map((item, index) => 
+                          `â€¢ ${item.name} (${item.quantity || 1}x) - ${(item.weight * (item.quantity || 1)).toFixed(1)} kg`
+                        ).join('\n');
+
+                        const customerPhoneNumber = (woAddress.phone || activeWorkOrder?.phone || '').replace(/\D/g, '');
+                        
+                        const whatsappMsg = `ğŸ“Œ *CARGO COLLECTION AUTHORIZATION*\n\n` +
+                          `*Work Order:* ${activeWorkOrder?.id || 'NEW'}\n` +
+                          `*Customer Name:* ${woAddress.fullName}\n\n` +
+                          `*Collected Items:*\n${itemsListText}\n\n` +
+                          `--------------------------------\n` +
+                          `*Total Weight:* ${woTotalWeight.toFixed(1)} kg\n` +
+                          `*Estimated Cost:* â‚¹${woTotalCost.toFixed(2)}\n` +
+                          `--------------------------------\n\n` +
+                          `ğŸ”‘ *SECURE AUTHORIZATION OTP PIN:* *${code}*\n\n` +
+                          `Please tell this 6-digit PIN code to our field agent to authorize the cargo collection. Thank you!`;
+
+                        const whatsappUrl = `https://api.whatsapp.com/send?phone=${encodeURIComponent(customerPhoneNumber)}&text=${encodeURIComponent(whatsappMsg)}`;
+                        
+                        // Instantly open the WhatsApp API URL to send
+                        window.open(whatsappUrl, '_blank');
+                        
+                        toast.success(`OTP [${code}] generated! Opening WhatsApp chat for: ${woAddress.fullName || 'Customer'}`);
+                      }}
+                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer transition-all border border-emerald-500"
+                    >
+                      <MessageCircle size={14} /> Send Items List + OTP to Customer WhatsApp (1-Click)
+                    </button>
+                  </div>
+
+                  {woOtpSent && (
+                    <div className="space-y-3 pt-3 border-t border-slate-150">
+                      <div className="text-xs font-bold text-slate-700 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+                        <span className="flex items-center gap-1.5"><Lock size={12} className="text-indigo-600" /> Enter Customer Authorization OTP:</span>
+                        <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded w-max">Simulated Code: {woOtpCode}</span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          maxLength={6}
+                          placeholder="Enter 6-digit OTP code"
+                          value={woOtpInput}
+                          onChange={(e) => setWoOtpInput(e.target.value.replace(/\D/g, ''))}
+                          disabled={woOtpVerified}
+                          className="w-full sm:flex-1 px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-center font-bold tracking-widest outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-emerald-750 disabled:border-emerald-300 text-sm"
+                        />
+                        <button
+                          type="button"
+                          disabled={woOtpVerified || !woOtpInput}
+                          onClick={() => {
+                            if (woOtpInput === woOtpCode) {
+                              setWoOtpVerified(true);
+                              toast.success("Customer cargo authorization verified successfully!");
+                              confetti({ particleCount: 30, spread: 50 });
+                            } else {
+                              toast.error("Invalid secure OTP code. Please retry or get a new OTP.");
+                            }
+                          }}
+                          className={`w-full sm:w-auto px-6 py-2.5 font-black rounded-xl text-xs cursor-pointer transition-all shrink-0 ${
+                            woOtpVerified 
+                              ? 'bg-emerald-600 text-white' 
+                              : 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50'
+                          }`}
+                        >
+                          {woOtpVerified ? 'Verified âœ“' : 'Verify'}
+                        </button>
+                      </div>
+                      
+                      {!woOtpVerified && (
+                        <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                          Ask your customer for the 6-digit PIN that was sent to their WhatsApp. Verify to confirm authorized collection.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Shipping cost payment setup */}
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><CreditCard size={11} className="text-emerald-600" /> Payment Method</h4>
+                  
+                  {!woOtpVerified ? (
+                    <div className="p-6 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50 flex flex-col items-center justify-center text-center py-8">
+                      <Lock size={20} className="text-slate-400 mb-1.5 animate-bounce" />
+                      <div className="text-xs font-bold text-slate-700">Payment Unlocked via Customer OTP</div>
+                      <p className="text-[10px] text-slate-400 max-w-xs mt-1">Please complete customer WhatsApp verification above to configure the localized payment gateway channel.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div 
+                        onClick={() => setWoPaymentMethod('cash')}
+                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
+                        id="wo-payment-cash"
+                      >
+                        <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center text-white shrink-0">
+                          <Banknote size={18} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm font-bold">Cash On Delivery (Cash)</div>
+                          <div className="text-[10px] text-slate-500">Pay cash at doorstep</div>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                          {woPaymentMethod === 'cash' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                        </div>
+                      </div>
+
+                      <div 
+                        onClick={() => setWoPaymentMethod('upi')}
+                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
+                      >
+                        <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0">UPI</div>
+                        <div className="flex-1">
+                          <div className="text-sm font-bold">UPI</div>
+                          <div className="text-[10px] text-slate-500">Pay via UPI QR / ID</div>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                          {woPaymentMethod === 'upi' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                        </div>
+                      </div>
+
+                      <div 
+                        onClick={() => setWoPaymentMethod('card')}
+                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${woPaymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100 bg-white'}`}
+                      >
+                        <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center text-white shrink-0"><CreditCard size={18} /></div>
+                        <div className="flex-1">
+                          <div className="text-sm font-bold">Credit / Debit Card</div>
+                          <div className="text-[10px] text-slate-500">Visa, Mastercard</div>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${woPaymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                          {woPaymentMethod === 'card' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Price list sidebar inside Step 4 */}
+              <div className="lg:col-span-5 bg-slate-900 text-white rounded-3xl p-5 space-y-4 shadow-xl">
+                <span className="text-[8px] font-black uppercase text-indigo-400 bg-slate-850 border border-slate-700/60 rounded px-2 py-0.5 tracking-wider inline-block font-mono">Consolidated Pricing</span>
+                
+                <div className="space-y-2 pt-2 text-xs">
+                  <div className="flex justify-between items-center text-[11px] text-slate-400">
+                    <span>Total Weight</span>
+                    <span className="text-white font-bold">{woTotalWeight.toFixed(1)} kg</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[11px] text-slate-400">
+                    <span>Shipping Rate</span>
+                    <span className="text-white font-bold">â‚¹{woRate}/kg</span>
+                  </div>
+                  {woDiscountPercent > 0 && (
+                    <div className="flex justify-between items-center text-[11px] text-rose-400 font-bold">
+                      <span>Discount ({woDiscountPercent}%)</span>
+                      <span>-â‚¹{woDiscountAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="h-px bg-slate-800 my-2" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-black">Total Cost</span>
+                    <span className="text-base sm:text-lg font-black text-indigo-400">â‚¹{woTotalCost.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* Interactive Simulated Smartphone - WhatsApp Customer View */}
+                {showSimulatedWhatsapp && woOtpCode && (
+                  <div className="border border-slate-800 bg-slate-950 rounded-2xl overflow-hidden mt-6 text-slate-900 shadow-2xl transition-all duration-300 transform scale-100">
+                    <div className="bg-emerald-600 text-white p-3 flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-ping shrink-0" />
+                        <div className="leading-tight">
+                          <div className="text-[8px] font-bold uppercase tracking-wider text-emerald-100 opacity-90">Simulation View</div>
+                          <div className="text-xs font-black">Customer's WhatsApp Phone</div>
+                        </div>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => setShowSimulatedWhatsapp(false)} 
+                        className="text-[9px] uppercase font-bold tracking-wider text-emerald-100 hover:text-white bg-emerald-700/60 px-2 py-0.5 rounded cursor-pointer"
+                      >
+                        Hide Screen
+                      </button>
+                    </div>
+
+                    <div className="p-3.5 bg-[#efeae2] h-64 overflow-y-auto space-y-3 custom-scrollbar flex flex-col justify-end">
+                      {/* Document Attachment Message Card */}
+                      <div className="bg-white rounded-lg p-2 max-w-[85%] self-start shadow-xs text-[11px] space-y-1.5 border border-slate-200">
+                        <div className="flex items-center gap-2 bg-emerald-50 p-2 rounded-md border border-emerald-100">
+                          <FileText size={16} className="text-rose-500 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold text-slate-800 truncate">Cargo_Manifest_{activeWorkOrder?.id || 'NEW'}.pdf</p>
+                            <p className="text-[8px] text-slate-550 font-bold">PDF Document â€¢ {(woItems.length * 0.12).toFixed(2)} MB</p>
+                          </div>
+                          <div className="w-6 h-6 bg-emerald-600 rounded-full flex items-center justify-center text-white ml-auto shrink-0 shadow-xs cursor-pointer hover:bg-emerald-700">
+                            <Download size={10} />
+                          </div>
+                        </div>
+                        <div className="text-[9px] text-slate-400 flex items-center justify-between">
+                          <span>Manifest Attachment list</span>
+                          <span className="text-[8px]">05:36 PM âœ“âœ“</span>
+                        </div>
+                      </div>
+
+                      {/* Text Dialog with OTP block */}
+                      <div className="bg-white rounded-lg p-2.5 max-w-[85%] self-start shadow-xs text-[11px] space-y-2 border border-slate-200">
+                        <div className="text-[10px] leading-relaxed text-slate-800 space-y-1">
+                          <p className="font-extrabold text-indigo-700">ğŸ“Œ Cargo Picked Up Manifest</p>
+                          <p className="text-[9px] text-slate-600 font-mono">ID: {activeWorkOrder?.id}</p>
+                          <div className="border-t border-dashed my-1 border-slate-200" />
+                          <p className="font-bold underline text-slate-700">Items Shipped:</p>
+                          <ul className="list-disc list-inside space-y-0.5 text-[8px] text-slate-600 font-mono">
+                            {woItems.map(item => (
+                              <li key={item.id} className="truncate">
+                                {item.name} ({item.quantity || 1}x, {item.weight} kg)
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="border-t border-dashed my-1 border-slate-200" />
+                          <p className="text-[9px] text-slate-700">Total weight: <b>{woTotalWeight.toFixed(1)} kg</b></p>
+                          <p className="text-[9px] text-slate-750">Estimated Bill: <b>â‚¹{woTotalCost.toFixed(2)}</b></p>
+                          <div className="bg-amber-50 p-1.5 rounded-md border border-amber-250 mt-2 text-center text-slate-800">
+                            <p className="text-[7px] font-black text-slate-500 uppercase tracking-wider">YOUR SECURE OTP PIN</p>
+                            <p className="text-sm font-black tracking-widest text-indigo-950 my-0.5 select-all">{woOtpCode}</p>
+                            <p className="text-[7px] text-slate-400 font-medium">Share with agent to confirm cargo collection</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between mt-1 text-[8px] text-slate-400">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setWoOtpInput(woOtpCode);
+                              toast.info("OTP Pin filled in Agent input box!");
+                            }}
+                            className="text-[9px] text-indigo-650 font-black hover:underline cursor-pointer bg-slate-50 px-1.5 py-0.5 rounded border border-indigo-100"
+                          >
+                            âš¡ Autofill PIN
+                          </button>
+                          <span>05:36 PM âœ“âœ“</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Stepper Navigation Buttons */}
+          <div className="mt-8 pt-6 border-t border-slate-150 flex items-center justify-between gap-4 select-none">
+            {woStep > 1 ? (
+              <button
+                type="button"
+                onClick={() => setWoStep(prev => prev - 1)}
+                className="px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                â† Previous Step
+              </button>
+            ) : (
+              <button 
+                type="button"
+                onClick={() => setActiveWorkOrder(null)}
+                className="px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl border border-slate-200 text-slate-450 hover:text-red-700 hover:border-red-150 font-bold hover:bg-slate-50 transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                Cancel & Exit
+              </button>
+            )}
+
+            {woStep < 3 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (woStep === 1 && woItems.length === 0) {
+                    toast.error("Please add at least 1 collected item to the cargo list first.");
+                    return;
+                  }
+                  setWoStep(prev => prev + 1);
+                }}
+                className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all text-xs flex items-center gap-1.5 cursor-pointer shadow-sm shadow-indigo-100"
+              >
+                Next Step â†’
+              </button>
+            ) : woStep === 3 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!woAddress.fullName.trim()) {
+                    toast.error("Please specify Recipient Full Name.");
+                    return;
+                  }
+                  if (!woAddress.addressLine1.trim()) {
+                    toast.error("Please specify Address Line 1.");
+                    return;
+                  }
+                  setWoStep(4);
+                }}
+                className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all text-xs flex items-center gap-1.5 cursor-pointer shadow-sm shadow-indigo-100"
+              >
+                Next Step â†’
+              </button>
+            ) : (
+              <button 
+                type="button"
+                onClick={handleWOComplete}
+                disabled={woItems.length === 0 || !woAddress.email || !woAddress.fullName || !woOtpVerified}
+                className="px-5 py-2.5 sm:px-6 sm:py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-250 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 size={15} className="shrink-0" /> {!woOtpVerified ? 'Awaiting Customer OTP Verification...' : 'Collect Payment & Complete'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, woAddress, address, currentUser, handleWOSaveDetails, woStatusInput, setWoStatusInput, woStep, setWoStep, woIsEditingItems, setWoIsEditingItems, woOtpCode, woOtpSent, woOtpVerified, woOtpInput, showSimulatedWhatsapp]);
+
+  const AgentSection = useMemo(() => {
+    if (!currentUser) return null;
+    
+    const agentId = currentUser.id.toUpperCase();
+    const scheduledApts = appointments.filter(a => a.status === 'Scheduled' || a.status === 'Pending Pickup');
+    const completedApts = appointments.filter(a => a.status === 'Completed' || a.status === 'Picked Up');
+    const canceledApts = appointments.filter(a => a.status === 'Cancelled');
+
+    const displayedApts = 
+      agentActiveTab === 'Scheduled' ? scheduledApts : 
+      agentActiveTab === 'Completed' ? completedApts : 
+      agentActiveTab === 'Canceled' ? canceledApts : [];
+
+    // Real dynamic stats calculation
+    const agentOrders = orders;
+
+    const totalWeightCollected = agentOrders.reduce((sum, o) => {
+      if (['Picked Up', 'Delivered', 'Received at Warehouse', 'In Warehouse', 'Ready to Ship', 'In Transit', 'Out for Delivery'].includes(o.status)) {
+        return sum + (o.totalWeight || o.total_weight || 0);
+      }
+      return sum;
+    }, 0);
+
+    const totalRevenuePaid = agentOrders.reduce((sum, o) => {
+      if (['Delivered', 'Received at Warehouse', 'In Warehouse', 'Ready to Ship', 'In Transit', 'Out for Delivery'].includes(o.status) && o.paymentStatus === 'Paid') {
+        return sum + (o.totalCost || o.total_cost || 0);
+      }
+      return sum;
+    }, 0);
+
+    const totalTasksCount = scheduledApts.length + completedApts.length + canceledApts.length;
+    const productivityRate = totalTasksCount > 0 
+      ? Math.round((completedApts.length / totalTasksCount) * 100) 
+      : 100;
+
+    // Daily historical collection logic for AreaChart
+    const dateWeightMap: Record<string, number> = {};
+    const dateCountMap: Record<string, number> = {};
+
+    completedApts.forEach(apt => {
+      const matchingOrder = orders.find(o => o.id === apt.id);
+      const weight = matchingOrder?.totalWeight || 0;
+      const dateStr = apt.date; // has YYYY-MM-DD
+      dateWeightMap[dateStr] = (dateWeightMap[dateStr] || 0) + weight;
+      dateCountMap[dateStr] = (dateCountMap[dateStr] || 0) + 1;
+    });
+
+    const chartData = [];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(today.getDate() - i);
+      const dStr = d.toISOString().split('T')[0];
+      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      chartData.push({
+        date: dStr,
+        label,
+        weight: dateWeightMap[dStr] || 0,
+        pickups: dateCountMap[dStr] || 0,
+      });
+    }
+
+    // Agent dynamic activities list
+    const agentActivities: any[] = [];
+    scheduledApts.forEach(apt => {
+      agentActivities.push({
+        id: `act-sched-${apt.id}`,
+        type: 'scheduled',
+        title: `Scheduled Pickup Request`,
+        desc: `Assigned for ${apt.customerName} [${apt.time}]`,
+        details: apt.address,
+        timeLabel: 'Scheduled',
+        style: 'text-indigo-600 bg-indigo-50 border-indigo-100'
+      });
+    });
+
+    completedApts.forEach(apt => {
+      const matchingOrder = orders.find(o => o.id === apt.id);
+      const weightStr = matchingOrder ? `${matchingOrder.totalWeight || 0} kg` : 'N/A';
+      const revStr = matchingOrder ? `â‚¹${(matchingOrder.totalCost || 0).toFixed(2)}` : 'N/A';
+      agentActivities.push({
+        id: `act-comp-${apt.id}`,
+        type: 'completed',
+        title: `Completed Pickup`,
+        desc: `Collected ${weightStr} from ${apt.customerName} (${revStr})`,
+        details: apt.address,
+        timeLabel: apt.date,
+        style: 'text-emerald-600 bg-emerald-50 border-emerald-100'
+      });
+    });
+
+    canceledApts.forEach(apt => {
+      agentActivities.push({
+        id: `act-cand-${apt.id}`,
+        type: 'cancelled',
+        title: `Cancelled Pickup`,
+        desc: `Pickup canceled for ${apt.customerName}`,
+        details: apt.address,
+        timeLabel: apt.date,
+        style: 'text-rose-600 bg-rose-50 border-rose-100'
+      });
+    });
+
+    // Sort: put latest first or keep structured
+    agentActivities.sort((a, b) => b.timeLabel.localeCompare(a.timeLabel));
+
+    if (activeWorkOrder) {
+      return WorkOrderSection;
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900">Agent Portal</h2>
+            <p className="text-xs sm:text-sm text-slate-500 max-w-xs sm:max-w-none">Manage & process home pickups.</p>
+          </div>
+          <div className="px-3 py-1.5 sm:px-4 sm:py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs sm:text-sm font-bold shrink-0 animate-pulse">
+            {scheduledApts.length} Pending
+          </div>
+        </div>
+
+        {/* Mobile View: 2-Level Navigation tabs */}
+        <div className="md:hidden space-y-4">
+          {/* Level 1: Main Tabs */}
+          <div className="flex border-b border-slate-100 p-0.5">
+            <button
+              onClick={() => {
+                setAgentMainTab('Summary');
+                setAgentActiveTab('Summary');
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 pb-3 border-b-2 font-black text-xs sm:text-sm transition-all relative ${
+                agentMainTab === 'Summary' && agentActiveTab === 'Summary'
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <BarChart3 size={15} />
+              <span>Summary</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setAgentMainTab('Home Pickup');
+                if (agentActiveTab === 'Summary') {
+                  setAgentActiveTab('Scheduled');
+                }
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 pb-3 border-b-2 font-black text-xs sm:text-sm transition-all relative ${
+                agentMainTab === 'Home Pickup' || agentActiveTab !== 'Summary'
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <Truck size={15} />
+              <span>Home Pickup</span>
+            </button>
+          </div>
+
+          {/* Level 2 Sub-Tabs (only when Home Pickup or active pickup lists is selected) */}
+          {(agentMainTab === 'Home Pickup' || agentActiveTab !== 'Summary') && (
+            <div className="flex bg-slate-100 p-1 rounded-xl gap-1 select-none animate-fadeIn">
+              <button
+                onClick={() => {
+                  setAgentActiveTab('Scheduled');
+                  setAgentMainTab('Home Pickup');
+                }}
+                className={`flex-1 py-1.5 text-[11px] font-black text-center rounded-lg transition-all ${
+                  agentActiveTab === 'Scheduled'
+                    ? 'bg-white text-slate-900 shadow-sm font-extrabold'
+                    : 'text-slate-500'
+                }`}
+              >
+                Scheduled ({scheduledApts.length})
+              </button>
+              <button
+                onClick={() => {
+                  setAgentActiveTab('Completed');
+                  setAgentMainTab('Home Pickup');
+                }}
+                className={`flex-1 py-1.5 text-[11px] font-black text-center rounded-lg transition-all ${
+                  agentActiveTab === 'Completed'
+                    ? 'bg-white text-emerald-600 shadow-sm font-extrabold'
+                    : 'text-slate-500'
+                }`}
+              >
+                Completed ({completedApts.length})
+              </button>
+              <button
+                onClick={() => {
+                  setAgentActiveTab('Canceled');
+                  setAgentMainTab('Home Pickup');
+                }}
+                className={`flex-1 py-1.5 text-[11px] font-black text-center rounded-lg transition-all ${
+                  agentActiveTab === 'Canceled'
+                    ? 'bg-white text-rose-600 shadow-sm font-extrabold'
+                    : 'text-slate-500'
+                }`}
+              >
+                Canceled ({canceledApts.length})
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop View Tabs Bar */}
+        <div className="hidden md:flex border-b border-slate-100 gap-6 overflow-x-auto">
+          <button
+            onClick={() => {
+              setAgentActiveTab('Summary');
+              setAgentMainTab('Summary');
+            }}
+            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
+              agentActiveTab === 'Summary'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <BarChart3 size={16} />
+            <span>Activity Summary</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setAgentActiveTab('Scheduled');
+              setAgentMainTab('Home Pickup');
+            }}
+            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
+              agentActiveTab === 'Scheduled'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <Clock size={16} />
+            <span>Scheduled</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+              agentActiveTab === 'Scheduled' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'
+            }`}>
+              {scheduledApts.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => {
+              setAgentActiveTab('Completed');
+              setAgentMainTab('Home Pickup');
+            }}
+            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
+              agentActiveTab === 'Completed'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <CheckCircle2 size={16} />
+            <span>Completed</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+              agentActiveTab === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+            }`}>
+              {completedApts.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => {
+              setAgentActiveTab('Canceled');
+              setAgentMainTab('Home Pickup');
+            }}
+            className={`flex items-center gap-2 pb-4 border-b-2 font-bold transition-all px-1 shrink-0 relative ${
+              agentActiveTab === 'Canceled'
+                ? 'border-rose-600 text-rose-600'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <XCircle size={16} />
+            <span>Canceled</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${
+              agentActiveTab === 'Canceled' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500'
+            }`}>
+              {canceledApts.length}
+            </span>
+          </button>
+        </div>
+
+        {agentActiveTab === 'Summary' ? (
+          <div className="space-y-6">
+            {/* Quick Metrics Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shrink-0">
+                  <TrendingUp size={24} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Completed Jobs</div>
+                  <div className="text-2xl font-black text-slate-900 mt-1">{completedApts.length}</div>
+                  <div className="text-[10px] text-emerald-500 font-bold mt-0.5">{(completedApts.length / Math.max(1, totalTasksCount) * 100).toFixed(0)}% completion</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shrink-0">
+                  <Box size={24} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Weight Handled</div>
+                  <div className="text-2xl font-black text-slate-900 mt-1">{totalWeightCollected.toFixed(1)} kg</div>
+                  <div className="text-[10px] text-indigo-500 font-bold mt-0.5">Average {(totalWeightCollected / Math.max(1, completedApts.length)).toFixed(1)} kg / job</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0">
+                  <CreditCard size={24} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Revenue Managed</div>
+                  <div className="text-2xl font-black text-slate-900 mt-1">â‚¹{totalRevenuePaid.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
+                  <div className="text-[10px] text-slate-500 font-bold mt-0.5">Processed & fully paid</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
+                <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center shrink-0">
+                  <Clock size={24} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest font-sans">Productivity Index</div>
+                  <div className="text-2xl font-black text-slate-900 mt-1">{productivityRate}%</div>
+                  <div className="text-[10px] text-slate-500 font-bold mt-0.5">{scheduledApts.length} pending operations</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">Weekly Weight Analytics</h3>
+                    <p className="text-xs text-slate-400">Total volume of physical weight collected in pickups over the week.</p>
+                  </div>
+                </div>
+                <div className="h-[280px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.15}/>
+                          <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.01}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="label" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} unit="kg" />
+                      <Tooltip 
+                        contentStyle={{ background: '#0f172a', borderRadius: '16px', border: 'none', color: '#fff' }}
+                        labelStyle={{ fontWeight: 'bold', color: '#38bdf8' }}
+                      />
+                      <Area type="monotone" dataKey="weight" name="Weight (kg)" stroke="#4f46e5" strokeWidth={2} fillOpacity={1} fill="url(#colorWeight)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Status Pie Metrics */}
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">Job Status Mix</h3>
+                  <p className="text-xs text-slate-400">Distribution of assigned work orders.</p>
+                </div>
+                
+                <div className="h-[200px] flex items-center justify-center relative">
+                  {totalTasksCount === 0 ? (
+                    <div className="text-sm text-slate-400 font-bold">No jobs assigned yet</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Scheduled', value: scheduledApts.length, color: '#4f46e5' },
+                            { name: 'Completed', value: completedApts.length, color: '#10b981' },
+                            { name: 'Canceled', value: canceledApts.length, color: '#f43f5e' }
+                          ].filter(x => x.value > 0)}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {[
+                            { color: '#4f46e5' },
+                            { color: '#10b981' },
+                            { color: '#f43f5e' }
+                          ].map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                  {totalTasksCount > 0 && (
+                    <div className="absolute flex flex-col items-center justify-center">
+                      <span className="text-2xl font-black text-slate-800">{totalTasksCount}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Jobs</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2 pt-4 border-t border-slate-50">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-600 font-sans">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                      <span>Scheduled Pickup Tasks</span>
+                    </div>
+                    <span>{scheduledApts.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-600 font-sans">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                      <span>Completed / Picked Up</span>
+                    </div>
+                    <span>{completedApts.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-600 font-sans">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                      <span>Canceled Tasks</span>
+                    </div>
+                    <span>{canceledApts.length}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Activities Timeline Log */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+              <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2 font-sans">
+                <History className="text-indigo-600" size={20} />
+                Recent Operations and Activity Log
+              </h3>
+              
+              {agentActivities.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 font-bold">
+                  No registered activities found for this agent.
+                </div>
+              ) : (
+                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                  {agentActivities.map((act) => (
+                    <div key={act.id} className="flex gap-4 p-4 hover:bg-slate-50 rounded-2xl border border-transparent hover:border-slate-100 transition-all">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${act.style}`}>
+                        {act.type === 'scheduled' ? <Clock size={20} /> : act.type === 'completed' ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-black text-slate-950 truncate font-sans">{act.title}</h4>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{act.timeLabel}</span>
+                        </div>
+                        <p className="text-slate-600 text-xs mt-0.5 font-medium leading-relaxed font-sans">{act.desc}</p>
+                        <p className="text-[10px] text-slate-400 mt-1 font-semibold flex items-center gap-1">
+                          <MapPin size={10} /> {act.details}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {displayedApts.length === 0 ? (
+              <div className="col-span-full text-center py-16 bg-white rounded-3xl border border-slate-100">
+                <CheckCircle2 size={64} className="mx-auto mb-4 text-slate-300 opacity-40" />
+                <h3 className="text-xl font-bold text-slate-900">No pickups found</h3>
+                <p className="text-slate-500">There are no {agentActiveTab.toLowerCase()} pickups assigned.</p>
+              </div>
+            ) : (
+              displayedApts.map(apt => (
+                <motion.div 
+                  key={apt.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center">
+                      <Truck size={24} />
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Work Order</div>
+                      <div className="text-sm font-black text-slate-900">{apt.id}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3 mb-6">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Calendar size={14} className="text-slate-400" />
+                      <span className="font-bold text-slate-700">{apt.date}</span>
+                      <span className="text-slate-400">â€¢</span>
+                      <span className="text-slate-500">{apt.time}</span>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm">
+                      <MapPin size={14} className="text-slate-400 mt-1" />
+                      <span className="text-slate-600 leading-tight">{apt.address}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <UserIcon size={14} className="text-slate-400" />
+                      <span className="font-bold text-indigo-600">{apt.phone}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                      <Truck size={14} className="text-slate-400" />
+                      <span>Agent: <strong className="text-slate-700">{apt.assignedAgent?.name || 'Unassigned / Any Agent'}</strong></span>
+                    </div>
+                  </div>
+
+                  {apt.status === 'Completed' ? (
+                    <div className="w-full py-3 bg-emerald-50 text-emerald-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-emerald-100">
+                      <CheckCircle2 size={16} /> Completed & Processed
+                    </div>
+                  ) : apt.status === 'Picked Up' ? (
+                    <div className="w-full py-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-indigo-100">
+                      <CheckCircle2 size={16} /> Picked Up
+                    </div>
+                  ) : apt.status === 'Cancelled' ? (
+                    <div className="w-full py-3 bg-rose-50 text-rose-700 rounded-xl font-bold flex items-center justify-center gap-2 text-md border border-rose-100">
+                      <XCircle size={16} /> Pickup Canceled
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => setActiveWorkOrder(apt)}
+                      className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2"
+                    >
+                      Process Pickup <ArrowRight size={18} />
+                    </button>
+                  )}
+                </motion.div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser, agentActiveTab, setAgentActiveTab, agentMainTab, setAgentMainTab, orders]);
+  const renderWarehouseManagementSection = () => {
+    const warehouseItems = items.filter(i => !orderedItemIds.has(i.id) && (i.source === 'Warehouse' || i.source === 'Pickup')).map(i => ({ ...i, orderId: null as string | null }));
+    const orderWarehouseItems = orders.flatMap(o => 
+      o.items.filter(i => (i.source === 'Warehouse' || i.source === 'Pickup') && o.status !== 'Delivered' && o.status !== 'Cancelled')
+        .map(i => ({ ...i, orderId: o.id }))
+    );
+    
+    const allItems = [...warehouseItems, ...orderWarehouseItems];
+    const pendingItems = allItems.filter(i => i.status !== 'Received at Warehouse');
+    const receivedItems = allItems.filter(i => i.status === 'Received at Warehouse');
+    
+    // Group received items by customer for consolidation
+    const itemsByCustomer = receivedItems.reduce((acc, item) => {
+      // In a real app, we'd have customer info on the item. 
+      // For this demo, we'll use a mock customer name or ID.
+      const customerId = 'CUST-' + (item.id.charCodeAt(0) % 5 + 1);
+      if (!acc[customerId]) acc[customerId] = [];
+      acc[customerId].push(item);
+      return acc;
+    }, {} as Record<string, ShippingItem[]>);
+
+    return (
+      <div className="space-y-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-black text-slate-900">Warehouse Operations</h2>
+            <p className="text-slate-500 mt-1">Operational control for receiving, consolidation, and processing.</p>
+          </div>
+          <div className="flex gap-3">
+            <button className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-2">
+              <Printer size={16} /> Print Manifest
+            </button>
+            <button className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center gap-2">
+              <RefreshCw size={16} /> Sync Inventory
+            </button>
+          </div>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[
+            { label: 'Total Inventory', value: warehouseItems.length, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50' },
+            { label: 'Pending Receiving', value: pendingItems.length, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+            { label: 'Ready for Consolidation', value: Object.keys(itemsByCustomer).length, icon: ArrowUpDown, color: 'text-purple-600', bg: 'bg-purple-50' },
+            { label: 'Dispatched Today', value: orders.filter(o => o.status === 'Delivered').length, icon: Truck, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+          ].map((stat, i) => {
+            const StatIcon = stat.icon;
+            return (
+              <div key={i} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                <div className="flex items-center justify-between mb-4">
+                  <div className={`w-12 h-12 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center`}>
+                    <StatIcon size={24} />
+                  </div>
+                  <span className="text-2xl font-black text-slate-900">{stat.value}</span>
+                </div>
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">{stat.label}</h4>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Operations Area */}
+          <div className="lg:col-span-2 space-y-8">
+            {/* Receiving Queue */}
+            <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <ArrowUpDown size={20} className="text-indigo-600" /> Receiving Queue
+                </h3>
+                <div className="flex gap-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input 
+                      type="text" 
+                      placeholder="Search items..." 
+                      className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 w-48"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/50">
+                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Item Details</th>
+                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Reference</th>
+                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Source</th>
+                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Weight</th>
+                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {pendingItems.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-8 py-12 text-center">
+                          <div className="flex flex-col items-center gap-3 text-slate-400">
+                            <Package size={48} className="opacity-20" />
+                            <p className="font-bold">No pending items to receive.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      pendingItems.map(item => (
+                        <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
+                          <td className="px-8 py-5">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-white transition-colors">
+                                {item.image ? <img src={item.image} className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" /> : <ImageIcon size={20} />}
+                              </div>
+                              <div>
+                                <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                                <div className="text-[10px] text-slate-500 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">ID: {item.id}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-8 py-5">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                              {item.orderId ? `Order: ${item.orderId.slice(0, 8)}` : 'Cart/Stock'}
+                            </div>
+                          </td>
+                          <td className="px-8 py-5">
+                            <span className={`text-[10px] font-black px-2 py-1 rounded-lg border ${
+                              item.source === 'Pickup' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'
+                            }`}>
+                              {item.source.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="px-8 py-5">
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center gap-1">
+                                <input 
+                                  type="number" 
+                                  className="w-16 p-1 text-xs border border-slate-200 rounded outline-none focus:ring-1 focus:ring-indigo-500"
+                                  defaultValue={item.weight}
+                                  onBlur={(e) => {
+                                    const val = parseFloat(e.target.value);
+                                    if (!isNaN(val) && val !== item.weight) {
+                                      if (item.orderId) {
+                                        updateOrderItemWeight(item.orderId, item.id, val);
+                                      } else {
+                                        // Update weight for items not in an order yet
+                                        setItems(prev => prev.map(i => i.id === item.id ? { ...i, weight: val } : i));
+                                        if (dbStatus.connected) {
+                                          api.updateItemWeight(item.id, val).catch(err => console.error('Failed to update item weight:', err));
+                                        }
+                                      }
+                                    }
+                                  }}
+                                />
+                                <span className="text-[10px] font-bold text-slate-400">kg</span>
+                              </div>
+                              <div className="text-[8px] text-amber-600 font-bold max-w-[80px] leading-tight">Official weight update after arrival</div>
+                            </div>
+                          </td>
+                          <td className="px-8 py-5">
+                            <div className="flex flex-col gap-2">
+                              <select 
+                                className="p-1 px-2 text-[10px] bg-white border border-slate-200 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
+                                value={item.status}
+                                onChange={(e) => item.orderId ? updateOrderItemStatus(item.orderId, item.id, e.target.value as ShippingStatus) : updateItemStatus(item.id, e.target.value as ShippingStatus)}
+                              >
+                                <option value="Pending">Pending</option>
+                                <option value="Awaiting Warehouse Arrival">Awaiting Arrival</option>
+                                <option value="Received at Warehouse">Received at Warehouse</option>
+                                <option value="Processing Order">Processing</option>
+                                <option value="Consolidating items">Consolidating</option>
+                                <option value="Packed">Packed</option>
+                                <option value="Ready to Ship">Ready to Ship</option>
+                                <option value="In Transit">In Transit</option>
+                                <option value="Delivered">Delivered</option>
+                              </select>
+                              <button 
+                                onClick={() => item.orderId ? updateOrderItemStatus(item.orderId, item.id, 'Received at Warehouse') : updateItemStatus(item.id, 'Received at Warehouse')}
+                                className="px-4 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100"
+                              >
+                                {item.status === 'Received at Warehouse' ? 'Received' : 'Receive Now'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Consolidation Hub */}
+            <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-8 border-b border-slate-50 bg-slate-50/50">
+                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <BarChart3 size={20} className="text-purple-600" /> Consolidation Hub
+                </h3>
+                <p className="text-xs text-slate-500 mt-1 font-medium italic">Grouped by customer for international dispatch.</p>
+              </div>
+              <div className="p-8 space-y-6">
+                {Object.entries(itemsByCustomer).length === 0 ? (
+                  <div className="text-center py-12 text-slate-400">
+                    <Package size={48} className="mx-auto mb-4 opacity-20" />
+                    <p className="font-bold">No items ready for consolidation.</p>
+                  </div>
+                ) : (
+                  (Object.entries(itemsByCustomer) as [string, ShippingItem[]][]).map(([customerId, customerItems]) => (
+                    <div key={customerId} className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 hover:border-purple-200 transition-all">
+                      <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-purple-600 shadow-sm">
+                            <UserIcon size={20} />
+                          </div>
+                          <div>
+                            <div className="text-sm font-black text-slate-900">Customer: {customerId}</div>
+                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{customerItems.length} Items Ready</div>
+                          </div>
+                        </div>
+                        <button className="px-4 py-2 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-purple-700 transition-all shadow-lg shadow-purple-100">
+                          Create Shipment
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        {customerItems.map(item => (
+                          <div key={item.id} className="px-3 py-2 bg-white rounded-xl border border-slate-200 flex items-center gap-2 text-[11px] font-bold text-slate-600">
+                            <span className="w-2 h-2 bg-emerald-500 rounded-full" />
+                            {item.name} ({item.weight}kg)
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Sidebar Operations */}
+          <div className="space-y-6">
+            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-10">
+                <Warehouse size={120} />
+              </div>
+              <h3 className="text-lg font-black mb-6 relative z-10">Warehouse Layout</h3>
+              <div className="grid grid-cols-4 gap-3 relative z-10">
+                {['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4'].map(zone => (
+                  <div key={zone} className="aspect-square bg-white/10 rounded-xl border border-white/10 flex items-center justify-center hover:bg-white/20 transition-all cursor-pointer group">
+                    <span className="text-[10px] font-black text-white/40 group-hover:text-white transition-colors">{zone}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8 pt-6 border-t border-white/10 flex items-center justify-between text-[10px] font-bold text-white/60">
+                <span>Capacity: 64% Full</span>
+                <div className="w-24 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div className="w-[64%] h-full bg-emerald-500 rounded-full" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm space-y-6">
+              <h3 className="text-lg font-black text-slate-900">Operational Tools</h3>
+              <div className="space-y-3">
+                {[
+                  { label: 'Scan Barcode', icon: Search, color: 'bg-blue-50 text-blue-600' },
+                  { label: 'Generate Manifest', icon: FileText, color: 'bg-purple-50 text-purple-600' },
+                  { label: 'Update Weights', icon: Calculator, color: 'bg-amber-50 text-amber-600' },
+                  { label: 'Export Inventory', icon: Share, color: 'bg-emerald-50 text-emerald-600' },
+                  { label: 'Security Logs', icon: Lock, color: 'bg-slate-50 text-slate-600' },
+                ].map((action, i) => {
+                  const ActionIcon = action.icon;
+                  return (
+                    <button key={i} className="w-full p-4 rounded-2xl border border-slate-50 hover:border-indigo-100 hover:bg-indigo-50/30 transition-all flex items-center gap-4 group">
+                      <div className={`w-10 h-10 ${action.color} rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                        <ActionIcon size={18} />
+                      </div>
+                      <span className="text-sm font-bold text-slate-700">{action.label}</span>
+                      <ChevronRight size={16} className="ml-auto text-slate-300" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="bg-indigo-600 rounded-[2.5rem] p-8 text-white shadow-xl shadow-indigo-200">
+              <h3 className="text-lg font-black mb-2">Warehouse Support</h3>
+              <p className="text-xs text-indigo-100 mb-6 leading-relaxed">Need help with inventory or logistics? Contact your regional manager.</p>
+              <button className="w-full py-3 bg-white text-indigo-600 rounded-xl font-bold text-sm hover:bg-indigo-50 transition-all flex items-center justify-center gap-2">
+                <Phone size={16} /> Call Manager
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderShopSidebar = () => {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xl font-black text-slate-900">
+            From our <span className="bg-gradient-to-r from-deep-blue to-indigo-600 bg-clip-text text-transparent">Shop</span>
+          </h4>
+          <button 
+            onClick={() => navigateTo('store')}
+            className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+          >
+            View All <ArrowRight size={12} />
+          </button>
+        </div>
+        <div className="grid grid-cols-1 gap-4">
+          {storeProducts.slice(0, 3).map(product => {
+            const cartItem = items.find(i => i.name === product.name && i.source === 'Store' && !orderedItemIds.has(i.id));
+            const itemCount = cartItem?.quantity || 0;
+            return (
+              <div key={product.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex gap-4 relative">
+                <AnimatePresence>
+                  {itemCount > 0 && (
+                    <motion.div 
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      className="absolute -top-1 -left-1 z-10 w-6 h-6 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg border-2 border-white"
+                    >
+                      {itemCount}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0">
+                  <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
+                  <div>
+                    <h5 className="text-sm font-bold text-slate-900 truncate">{product.name}</h5>
+                    <p className="text-[10px] text-slate-500">â‚¹{product.price} â€¢ {product.weight} kg</p>
+                  </div>
+                  <div className="flex justify-center mt-2">
+                    <motion.button 
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => addItem({ 
+                        name: product.name, 
+                        weight: product.weight, 
+                        price: product.price, 
+                        image: product.image,
+                        estimatedDelivery: product.estimatedDelivery 
+                      }, 'Store')}
+                      className="w-8 h-8 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-md shadow-deep-blue/10"
+                    >
+                      <Plus size={14} />
+                    </motion.button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="p-6 bg-indigo-600 rounded-[2rem] text-white shadow-xl shadow-indigo-200/50 relative overflow-hidden">
+          <div className="absolute -right-4 -bottom-4 opacity-10">
+            <ShoppingBag size={80} />
+          </div>
+          <div className="relative z-10 space-y-3">
+            <h5 className="font-black text-lg">Consolidate & Save</h5>
+            <p className="text-xs text-indigo-100 leading-relaxed">
+              Add items from our shop to your pickup or warehouse shipment. We'll pack everything together to save you on global shipping!
+            </p>
+            <button 
+              onClick={() => navigateTo('store')}
+              className="px-4 py-2 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-all"
+            >
+              Start Shopping
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderUnifiedCartSection = (mode?: 'Pickup' | 'Warehouse') => {
+    // States are now in App to prevent focus loss
+
+    const handleAdd = () => {
+      if (!cartItemName) return;
+      const unitWeight = typeof cartItemWeight === 'number' ? cartItemWeight : 0;
+      addItem({ 
+        name: cartItemName, 
+        weight: unitWeight * cartItemQuantity,
+        quantity: cartItemQuantity,
+        fragile: cartItemFragile,
+        invoiceNumber: cartItemInvoiceNumber,
+        remarks: cartItemRemarks,
+        purchaseSource: cartItemPurchaseSource,
+        image: cartItemImageUrl
+      }, mode || cartItemSource);
+      setCartItemName('');
+      setCartItemWeight('');
+      setCartItemQuantity(1);
+      setCartItemFragile(false);
+      setCartItemInvoiceNumber('');
+      setNavbarTrackingId('');
+      setCartItemRemarks('');
+      setCartItemImageUrl('');
+      
+      // Scroll to items list after adding
+      if (mode === 'Warehouse') {
+        toast.success(`"${cartItemName}" added to your shipment! Scroll down to review and click "Submit Order" to finalize.`);
+        setTimeout(() => {
+          warehouseItemsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      } else {
+        toast.success(`"${cartItemName}" added to your pickup list!`);
+      }
+    };
+
+    const handleCopyAddress = () => {
+      const addressText = `${WAREHOUSE_ADDRESS.name}\nAttn: ${customerWarehouseId}\n${WAREHOUSE_ADDRESS.street}\n${WAREHOUSE_ADDRESS.city}, ${WAREHOUSE_ADDRESS.state} ${WAREHOUSE_ADDRESS.zip}\n${WAREHOUSE_ADDRESS.country}\nTel: ${WAREHOUSE_ADDRESS.phone}`;
+      navigator.clipboard.writeText(addressText);
+      toast.success('Warehouse address copied to clipboard!');
+    };
+
+    const hasActivePickup = userAppointments.some(a => a.status === 'Scheduled');
+    const activePickup = userAppointments.find(a => a.status === 'Scheduled');
+    const hasCompletedPickup = userAppointments.some(a => a.status === 'Completed');
+
+    const isCartEmpty = mode === 'Warehouse' 
+      ? items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Warehouse' && !i.submitted).length === 0
+      : mode === 'Pickup'
+        ? items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Pickup' && !i.submitted).length === 0 && (isSchedulingNewPickup ? true : !hasActivePickup)
+        : items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true).length === 0 && !hasActivePickup;
+
+    const displayItems = mode 
+      ? (mode === 'Warehouse' 
+          ? items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Warehouse' && !i.submitted)
+          : items.filter(i => !orderedItemIds.has(i.id) && i.source === mode))
+      : items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
+
+    const displayWeight = displayItems.reduce((sum, item) => sum + (item.weight || 0), 0);
+    const hasTBDWeight = displayItems.some(i => i.weight === 0);
+
+    return (
+      <div className="space-y-6">
+        {activeTab === 'warehouse' ? (
+          <>
+            {/* MOBILE ONLY VIEW FOR DROP OFF PACKAGE (WAREHOUSE) */}
+            <div className="block md:hidden animate-fade-in">
+              <MobileDropOffFlow
+                customerWarehouseId={customerWarehouseId}
+                items={items}
+                addItem={addItem}
+                removeItem={removeItem}
+                setItems={setItems}
+                setActiveTab={setActiveTab}
+                currentUser={currentUser}
+                dbStatus={dbStatus}
+                api={api}
+                navigateTo={navigateTo}
+                cartItemName={cartItemName}
+                setCartItemName={setCartItemName}
+                cartItemWeight={cartItemWeight}
+                setCartItemWeight={setCartItemWeight}
+                cartItemQuantity={cartItemQuantity}
+                setCartItemQuantity={setCartItemQuantity}
+                cartItemFragile={cartItemFragile}
+                setCartItemFragile={setCartItemFragile}
+                cartItemInvoiceNumber={cartItemInvoiceNumber}
+                setCartItemInvoiceNumber={setCartItemInvoiceNumber}
+                cartItemRemarks={cartItemRemarks}
+                setCartItemRemarks={setCartItemRemarks}
+                cartItemPurchaseSource={cartItemPurchaseSource}
+                setCartItemPurchaseSource={setCartItemPurchaseSource}
+                cartItemImageUrl={cartItemImageUrl}
+                setCartItemImageUrl={setCartItemImageUrl}
+              />
+            </div>
+
+            {/* LAPTOP ONLY VIEW FOR DROP OFF PACKAGE (WAREHOUSE) */}
+            <div className="hidden md:block space-y-8">
+              {/* Value Prop Banner */}
+            <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-8 md:p-12 rounded-[2.5rem] shadow-xl relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
+               <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                 <div className="space-y-6">
+                   <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full backdrop-blur-md border border-white/10 text-xs font-black uppercase tracking-widest text-indigo-200">
+                     <Globe size={14} /> Global Shipping Solutions
+                   </div>
+                   <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
+                     Ship from <span className="text-indigo-400">Anywhere</span>,<br />
+                     Deliver to the <span className="text-indigo-400">USA</span>.
+                   </h2>
+                   <p className="text-slate-300 font-medium text-lg leading-relaxed max-w-md">
+                     Use our secure warehouse as your domestic shipping hub. We'll receive, verify, and forward your items globally.
+                   </p>
+                 </div>
+                 <div className="hidden lg:grid grid-cols-2 gap-4">
+                   {[
+                     { icon: ShoppingBag, label: 'Shop Online', desc: 'Amazon, eBay, Flipkart' },
+                     { icon: Box, label: 'Offline Goods', desc: 'Sent via local couriers' },
+                     { icon: ShieldCheck, label: 'Secure Storage', desc: 'Climate controlled' },
+                     { icon: Plane, label: 'Swift Forwarding', desc: 'Direct to your door' }
+                   ].map((item, i) => (
+                     <div key={i} className="p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors">
+                       <item.icon size={20} className="mb-2 text-indigo-400" />
+                       <h4 className="text-sm font-black">{item.label}</h4>
+                       <p className="text-[10px] text-slate-400">{item.desc}</p>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Left Column: Address & Registration */}
+              <div className="lg:col-span-12 space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Step 1: Warehouse Address Card */}
+                  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
+                    <div className="flex items-center gap-4">
+                       <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+                         <MapPin size={24} />
+                       </div>
+                       <div>
+                         <h3 className="text-xl font-black text-slate-900 leading-tight">Step 1: Use Our Address</h3>
+                         <p className="text-xs text-slate-500 font-medium">Use this at checkout or hand to your courier</p>
+                       </div>
+                    </div>
+                    
+                    <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-200 relative group">
+                      <button 
+                        onClick={handleCopyAddress}
+                        className="absolute top-4 right-4 p-3 bg-white hover:bg-indigo-600 hover:text-white rounded-xl shadow-sm transition-all border border-slate-200"
+                        title="Copy Address"
+                      >
+                        <Copy size={16} />
+                      </button>
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Recipient Name / ID</p>
+                          <p className="text-lg font-black text-slate-900">{WAREHOUSE_ADDRESS.name} - {customerWarehouseId}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Street Address</p>
+                            <p className="text-sm font-bold text-slate-700">{WAREHOUSE_ADDRESS.street}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">City/State/Zip</p>
+                            <p className="text-sm font-bold text-slate-700">{WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state} {WAREHOUSE_ADDRESS.zip}</p>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Country</p>
+                          <p className="text-sm font-bold text-slate-700">{WAREHOUSE_ADDRESS.country}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 text-emerald-700">
+                      <Info size={18} className="shrink-0 mt-0.5" />
+                      <p className="text-xs leading-relaxed font-medium">
+                        <span className="font-bold">Pro Tip:</span> Always include your ID (<span className="font-bold">{customerWarehouseId}</span>) in the "Building/Suite" line to avoid processing delays.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Step 2: Register Incoming Package */}
+                  <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
+                    <div className="flex items-center gap-4">
+                       <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-slate-200">
+                         <PackagePlus size={24} />
+                       </div>
+                       <div>
+                         <h3 className="text-xl font-black text-slate-900 leading-tight">Step 2: Register Package</h3>
+                         <p className="text-xs text-slate-500 font-medium">Pre-alert us about your shipment for faster sorting</p>
+                       </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Item Description</label>
+                        <input 
+                          type="text" 
+                          className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-medium"
+                          placeholder="e.g. 5x Cotton T-Shirts, Laptop..."
+                          value={cartItemName}
+                          onChange={(e) => setCartItemName(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Source</label>
+                          <select 
+                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-medium appearance-none"
+                            value={cartItemPurchaseSource}
+                            onChange={(e) => setCartItemPurchaseSource(e.target.value)}
+                          >
+                            <option value="Amazon">Amazon</option>
+                            <option value="Flipkart">Flipkart</option>
+                            <option value="Myntra">Myntra</option>
+                            <option value="Ajio">Ajio</option>
+                            <option value="Nykaa">Nykaa</option>
+                            <option value="FirstCry">FirstCry</option>
+                            <option value="Meesho">Meesho</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Item Image (URL Optional)</label>
+                          <input 
+                            type="text" 
+                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-medium"
+                            placeholder="https://..."
+                            value={cartItemImageUrl}
+                            onChange={(e) => setCartItemImageUrl(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tracking ID (if available)</label>
+                          <input 
+                            type="text" 
+                            className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white font-mono text-sm"
+                            placeholder="Courier tracking #"
+                            value={cartItemInvoiceNumber}
+                            onChange={(e) => setCartItemInvoiceNumber(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Quantity</label>
+                          <div className="flex items-center bg-slate-50 rounded-2xl border border-slate-200 p-1">
+                            <button 
+                              onClick={() => setCartItemQuantity(Math.max(1, cartItemQuantity - 1))}
+                              className="p-3 hover:bg-white rounded-xl transition-colors"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <input 
+                              type="number" 
+                              className="w-full bg-transparent text-center font-black outline-none"
+                              value={cartItemQuantity}
+                              onChange={(e) => setCartItemQuantity(Number(e.target.value))}
+                            />
+                            <button 
+                              onClick={() => setCartItemQuantity(cartItemQuantity + 1)}
+                              className="p-3 hover:bg-white rounded-xl transition-colors"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-start gap-3">
+                        <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
+                          <Info size={16} />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-bold text-amber-900">Payment Notice</p>
+                          <p className="text-[10px] text-amber-700 leading-relaxed">
+                            Please ensure payment for all items is completed before they arrive at our warehouse. 
+                            Unpaid items may experience delays in processing and forwarding.
+                          </p>
+                          <div className="pt-2 border-t border-amber-200 mt-2">
+                             <p className="text-[10px] text-amber-700 leading-relaxed font-bold italic">
+                               Note: The weight of each item will be officially updated by our team after it is physically received and weighed at the warehouse.
+                             </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={handleAdd}
+                        disabled={!cartItemName}
+                        className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all ${
+                          cartItemName 
+                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-200' 
+                            : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        }`}
+                      >
+                        <Plus size={20} /> Register Item
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 3: Summary & Finalize */}
+                <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm space-y-8" ref={warehouseItemsRef}>
+                  <div className="flex items-center justify-between border-b border-slate-50 pb-6">
+                    <div className="flex items-center gap-4">
+                       <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-100">
+                         <CheckCircle2 size={24} />
+                       </div>
+                       <div>
+                         <h3 className="text-xl font-black text-slate-900 leading-tight">Step 3: Review & Finalize</h3>
+                         <p className="text-xs text-slate-500 font-medium">Confirm expected items for tracking</p>
+                       </div>
+                    </div>
+                    <div className="px-6 py-3 bg-indigo-50 rounded-2xl text-xs font-black text-indigo-600 border border-indigo-100">
+                      {displayItems.reduce((acc, item) => acc + (item.quantity || 1), 0)} Registered Items
+                    </div>
+                  </div>
+
+                  {displayItems.length === 0 ? (
+                    <div className="py-20 flex flex-col items-center justify-center text-slate-400 space-y-4">
+                      <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center border-2 border-dashed border-slate-200">
+                        <Package size={40} strokeWidth={1} />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-bold text-slate-900">No items registered yet</p>
+                        <p className="text-sm max-w-[250px]">Items added in Step 2 will appear here for final confirmation.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {displayItems.map((item) => (
+                          <motion.div 
+                            layout
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            key={item.id}
+                            className="bg-slate-50 p-6 rounded-3xl border border-slate-100 hover:border-indigo-200 transition-all group relative"
+                          >
+                            <button 
+                              onClick={() => removeItem(item.id)}
+                              className="absolute top-4 right-4 p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                            <div className="flex items-start gap-4">
+                              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0 overflow-hidden">
+                                {item.image ? (
+                                  <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <Package size={24} />
+                                )}
+                              </div>
+                              <div className="space-y-1">
+                                <h4 className="font-black text-slate-900 line-clamp-1">{item.name}</h4>
+                                <div className="flex flex-wrap gap-2">
+                                  <span className="px-2 py-0.5 bg-white rounded-lg text-[10px] font-bold text-slate-500 border border-slate-100">
+                                    {item.quantity} Qty
+                                  </span>
+                                  {item.purchaseSource && (
+                                    <span className="px-2 py-0.5 bg-indigo-50 rounded-lg text-[10px] font-bold text-indigo-600 border border-indigo-100 uppercase tracking-tight">
+                                      {item.purchaseSource}
+                                    </span>
+                                  )}
+                                  {item.invoiceNumber && (
+                                    <span className="px-2 py-0.5 bg-indigo-50 rounded-lg text-[10px] font-bold text-indigo-600 border border-indigo-100">
+                                      Track: {item.invoiceNumber}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+
+                      <div className="bg-indigo-600 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl shadow-indigo-200">
+                         <div className="space-y-2 text-center md:text-left">
+                           <h4 className="text-2xl font-black text-white leading-tight">Ready to send?</h4>
+                           <p className="text-indigo-100 text-sm font-medium">Confirming this pre-alert helps us identify your package instantly on arrival.</p>
+                         </div>
+                         <button 
+                           onClick={async () => {
+                             const unsubmittedWarehouseItems = items.filter(i => i.source === 'Warehouse' && !i.submitted);
+                             
+                             setItems(prev => prev.map(i => 
+                               i.source === 'Warehouse' && !i.submitted 
+                                 ? { ...i, submitted: true } 
+                                 : i
+                             ));
+                             
+                             setActiveTab('cart');
+                             toast.success('Pre-alert submitted successfully!');
+
+                             if (dbStatus.checked && currentUser) {
+                               for (const item of unsubmittedWarehouseItems) {
+                                 const ids = item.ids && item.ids.length > 0 ? item.ids : [item.id];
+                                 for (const itemId of ids) {
+                                   try {
+                                     await api.updateItemSubmitted(itemId, true);
+                                   } catch (err: any) {
+                                     console.error(`Failed to update item ${itemId} to submitted:`, err.message);
+                                   }
+                                 }
+                               }
+                             }
+                           }}
+                           className="px-10 py-5 bg-white text-indigo-600 rounded-2xl font-black shadow-lg hover:bg-slate-50 transition-all flex items-center gap-3 active:scale-95"
+                         >
+                           <Send size={24} /> Finalize Shipment
+                         </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className={`${mode ? 'lg:col-span-3' : 'lg:col-span-2'} space-y-6`}>
+                {mode === 'Warehouse' ? (
+                  <div className="bg-white p-12 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col items-center justify-center text-center space-y-6">
+                    <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center text-indigo-600">
+                      <Package size={40} className="animate-pulse" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black text-slate-900">Warehouse Redesign in Progress</h3>
+                      <p className="text-slate-500 mt-2">New interface for shipments is being developed based on updated requirements.</p>
+                    </div>
+                  </div>
+                ) : mode === 'Pickup' ? (
+                  <>
+                    {/* SCHEDULE PICKUP - ONE PAGE FORM FOR ALL DEVICES */}
+                    <div>
+                      <MobilePickupFlow
+                        activePickupStep={activePickupStep}
+                        setActivePickupStep={setActivePickupStep}
+                        pickupItemType={pickupItemType}
+                        setPickupItemType={setPickupItemType}
+                        pickupEstimatedWeight={pickupEstimatedWeight}
+                        setPickupEstimatedWeight={setPickupEstimatedWeight}
+                        selectedPickupDate={selectedPickupDate}
+                        setSelectedPickupDate={setSelectedPickupDate}
+                        selectedPickupTime={selectedPickupTime}
+                        setSelectedPickupTime={setSelectedPickupTime}
+                        filteredPickupSlots={filteredPickupSlots}
+                        pickupDetailsTab={pickupDetailsTab}
+                        setPickupDetailsTab={setPickupDetailsTab}
+                        pickupName={pickupName}
+                        setPickupName={setPickupName}
+                        pickupPhone={pickupPhone}
+                        setPickupPhone={setPickupPhone}
+                        pickupAddress={pickupAddress}
+                        setPickupAddress={setPickupAddress}
+                        pickupDestination={pickupDestination}
+                        setPickupDestination={setPickupDestination}
+                        provideDestinationLater={provideDestinationLater}
+                        setProvideDestinationLater={setProvideDestinationLater}
+                        pickupConsolidationOption={pickupConsolidationOption}
+                        setPickupConsolidationOption={setPickupConsolidationOption}
+                        shopConsolidationOption={shopConsolidationOption}
+                        setShopConsolidationOption={setShopConsolidationOption}
+                        shopItemsShippingDestination={shopItemsShippingDestination}
+                        setShopItemsShippingDestination={setShopItemsShippingDestination}
+                        hasShopItems={items.some(i => i.source === 'Store')}
+                        handleSchedulePickup={handleSchedulePickup}
+                        currentUser={currentUser}
+                        activePickup={activePickup}
+                        lastBookingRef={lastBookingRef}
+                        navigateTo={navigateTo}
+                        shippingRates={shippingRates}
+                        shippingRateBands={shippingRateBands}
+                        shippingDiscounts={shippingDiscounts}
+                        pickupVehicleType={pickupVehicleType}
+                        setPickupVehicleType={setPickupVehicleType}
+                        pickupEmail={pickupEmail}
+                        setPickupEmail={setPickupEmail}
+                        pickupSpecialInstructions={pickupSpecialInstructions}
+                        setPickupSpecialInstructions={setPickupSpecialInstructions}
+                        savePickupToProfile={savePickupToProfile}
+                        setSavePickupToProfile={setSavePickupToProfile}
+                        savePickupProfileToDb={savePickupProfileToDb}
+                      />
+                    </div>
+
+                    {/* DESKTOP VIEW DISABLED IN FAVOR OF SINGLE PAGE FORM */}
+                    <div className="hidden">
+                  {mode === 'Pickup' && activePickupStep !== 5 && (
+                    <>
+                      {/* Header Section with Progress for Pickup */}
+                      <div 
+                        ref={pickupHeaderRef} 
+                        className="sticky top-[80px] z-30 bg-white pt-4 pb-3 border-b border-slate-100 -mx-8 px-8 flex flex-col md:flex-row md:items-center justify-between gap-6 scroll-mt-[100px]"
+                      >
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-deep-blue flex items-center justify-center text-jiffex-orange shadow-xl shadow-deep-blue/20">
+                        <Truck size={28} />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-black text-deep-blue tracking-tight">Schedule a Home Pickup</h2>
+                        <p className="text-sm text-slate-500 font-medium">
+                          {activePickupStep === 5 ? 'Booking Confirmed' : (hasActivePickup && !isSchedulingNewPickup) ? 'Add items to your scheduled pickup' : "Tell us what you're shipping, when you'd like pickup, and where we should collect it."}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Progress Indicator for Pickup */}
+                    <div className="flex items-center gap-2 w-full md:w-[450px]">
+                      {[
+                        { step: 1, label: 'Items' },
+                        { step: 2, label: 'Schedule' },
+                        { step: 3, label: 'Address' },
+                        { step: 4, label: 'Review' },
+                        { step: 5, label: 'Done' }
+                      ].map((s, idx) => (
+                        <div key={s.step} className="flex-1 flex flex-col gap-2">
+                          <div 
+                            className={`h-1.5 rounded-full transition-all duration-500 ${
+                              activePickupStep === 5 && s.step === 5 ? 'bg-emerald-500 shadow-sm shadow-emerald-100' :
+                              activePickupStep === s.step ? 'bg-jiffex-orange shadow-sm shadow-jiffex-orange/20' :
+                              activePickupStep > s.step ? 'bg-deep-blue' : 'bg-slate-100'
+                            }`}
+                          />
+                          <span className={`text-[9px] font-black uppercase tracking-tighter text-center transition-colors duration-500 ${
+                            activePickupStep === s.step ? 'text-jiffex-orange' : 
+                            activePickupStep > s.step ? 'text-deep-blue' : 'text-slate-400'
+                          }`}>
+                            {s.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {(hasActivePickup && activePickupStep !== 5 && !isSchedulingNewPickup) ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                      {/* Left Column: Sticky Add Item Form */}
+                      <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-8">
+                        <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-6">
+                          <div className="flex items-center gap-3 text-indigo-600">
+                            <PlusCircle size={24} />
+                            <h4 className="text-xl font-black">Add Items</h4>
+                          </div>
+                          <p className="text-sm text-slate-500 leading-relaxed">
+                            Add any items you want the agent to collect from your home.
+                          </p>
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Item Name</label>
+                              <input 
+                                type="text" 
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
+                                placeholder="e.g. Traditional Dress, Spices..."
+                                value={cartItemName}
+                                onChange={(e) => setCartItemName(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Est. Weight (kg)</label>
+                              <input 
+                                type="number" 
+                                className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all bg-white"
+                                placeholder="1.0"
+                                value={cartItemWeight}
+                                onChange={(e) => setCartItemWeight(Number(e.target.value))}
+                              />
+                            </div>
+                            <button 
+                              onClick={handleAdd}
+                              disabled={!cartItemName}
+                              className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all ${
+                                cartItemName 
+                                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-200' 
+                                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                              }`}
+                            >
+                              <Plus size={20} /> Add to Pickup List
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Pickup Details Summary */}
+                        {mode === 'Pickup' && (
+                          <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3 text-indigo-600">
+                                <Clock size={24} />
+                                <h4 className="text-xl font-black">Pickup Details</h4>
+                              </div>
+                            </div>
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                                  <Calendar size={20} />
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Scheduled For</p>
+                                  <p className="text-sm font-black text-slate-900">
+                                    {activePickup?.date} at {activePickup?.time}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl">
+                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                                  <MapPin size={20} />
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Address</p>
+                                  <p className="text-sm font-black text-slate-900 truncate max-w-[200px]">
+                                    {activePickup?.address}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Middle Column: Pickup Status & Items */}
+                      <div className="lg:col-span-8 space-y-6">
+                        {mode === 'Pickup' && (
+                          <div className="p-10 bg-indigo-50 rounded-[3rem] border border-indigo-100 text-center space-y-6 flex flex-col items-center justify-center min-h-[300px]">
+                            <div className="w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center text-indigo-600 shadow-xl shadow-indigo-200/50">
+                              <Truck size={48} />
+                            </div>
+                            <div className="space-y-2">
+                              <h4 className="text-2xl font-black text-slate-900">Pickup Scheduled!</h4>
+                              <p className="text-slate-600 max-w-sm mx-auto">
+                                Your agent is assigned. Add all your items here, and they will be collected during your scheduled slot.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Items List for Pickup */}
+                        <div className="p-8 bg-white rounded-[2.5rem] border border-slate-200 shadow-sm">
+                          <div className="flex items-center justify-between mb-8">
+                            <h4 className="text-xl font-black text-slate-900">Items in this Pickup</h4>
+                            <span className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-black text-indigo-600 border border-indigo-100">
+                              {displayItems.reduce((acc, item) => acc + (item.quantity || 1), 0)} Items
+                            </span>
+                          </div>
+                          
+                          {displayItems.length === 0 ? (
+                            <div className="py-12 flex flex-col items-center justify-center text-slate-400 space-y-4">
+                              <Package size={48} strokeWidth={1} />
+                              <p className="font-medium">No items added yet.</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {displayItems.map((item) => (
+                                <motion.div 
+                                  layout
+                                  initial={{ opacity: 0, x: 20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  key={item.id}
+                                  className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group"
+                                >
+                                  <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                                      <Package size={20} />
+                                    </div>
+                                    <div>
+                                      <h5 className="text-sm font-bold text-slate-900">{item.name}</h5>
+                                      <p className="text-[10px] text-slate-500 font-medium">
+                                        {item.quantity} units â€¢ {item.weight} kg
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button 
+                                    onClick={() => removeItem(item.id)}
+                                    className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </motion.div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                      <div className="lg:col-span-12 space-y-6 min-h-[600px]">
+                        <AnimatePresence mode="wait">
+                        {/* Step 1: What type of items are you sending? */}
+                      {activePickupStep === 1 && (
+                        <motion.div 
+                          key="step1"
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -20 }}
+                          transition={{ duration: 0.3 }}
+                          className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10">
+                                <Package size={24} />
+                              </div>
+                              <div>
+                                <h4 className="text-xl font-black text-deep-blue">What type of items are you sending?</h4>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="pt-8 space-y-8">
+                                  <div className="space-y-4">
+                                    <h5 className="text-sm font-black text-deep-blue uppercase tracking-wider">Select Item Type</h5>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                      {[
+                                        { id: 'Everyday Items', icon: <ShoppingBag size={20} /> },
+                                        { id: 'Large/Furniture', icon: <Box size={20} /> },
+                                        { id: 'Mixed Items', icon: <Boxes size={20} /> },
+                                        { id: 'Documents', icon: <FileText size={20} /> }
+                                      ].map(type => (
+                                        <motion.button
+                                          key={type.id}
+                                          whileHover={{ scale: 1.02, y: -2 }}
+                                          whileTap={{ scale: 0.98 }}
+                                          onClick={() => setPickupItemType(type.id)}
+                                          className={`p-6 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 text-center relative overflow-hidden ${
+                                            pickupItemType === type.id 
+                                              ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange shadow-[0_0_20px_rgba(249,115,22,0.15)]' 
+                                              : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
+                                          }`}
+                                        >
+                                          {pickupItemType === type.id && (
+                                            <motion.div 
+                                              layoutId="item-type-glow"
+                                              className="absolute inset-0 bg-jiffex-orange/5"
+                                              initial={{ opacity: 0 }}
+                                              animate={{ opacity: 1 }}
+                                              transition={{ duration: 0.2 }}
+                                            />
+                                          )}
+                                          <div className="relative z-10">
+                                            {type.icon}
+                                          </div>
+                                          <p className="text-[10px] font-black uppercase tracking-wider leading-tight relative z-10">{type.id}</p>
+                                        </motion.button>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <h5 className="text-sm font-black text-deep-blue uppercase tracking-wider">Approximate Weight of Items</h5>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                      {[
+                                        { id: 'Less than 5 kg', label: 'Less than 5 kg', desc: 'Documents, small parcels, or light gift packs', icon: <Package size={22} /> },
+                                        { id: '5 to 20 kg', label: '5 to 20 kg', desc: 'Standard suitcases, medium boxes, or household items', icon: <Box size={22} /> },
+                                        { id: 'More than 20 kg', label: 'More than 20 kg', desc: 'Heavy cargo, large bulk luggage, or multiple packages', icon: <Truck size={22} /> }
+                                      ].map(v => (
+                                        <motion.button
+                                          key={v.id}
+                                          type="button"
+                                          whileHover={{ scale: 1.02, y: -2 }}
+                                          whileTap={{ scale: 0.98 }}
+                                          onClick={() => {
+                                            setPickupVehicleType(v.id);
+                                            setPickupEstimatedWeight(v.id);
+                                          }}
+                                          className={`p-5 rounded-3xl border-2 transition-all flex flex-col justify-between text-left relative overflow-hidden h-full min-h-[160px] ${
+                                            pickupVehicleType === v.id 
+                                              ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange shadow-[0_0_25px_rgba(249,115,22,0.1)]' 
+                                              : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
+                                          }`}
+                                        >
+                                          {pickupVehicleType === v.id && (
+                                            <motion.div 
+                                              layoutId="vehicle-type-glow"
+                                              className="absolute inset-0 bg-jiffex-orange/5"
+                                              initial={{ opacity: 0 }}
+                                              animate={{ opacity: 1 }}
+                                              transition={{ duration: 0.2 }}
+                                            />
+                                          )}
+                                          
+                                          {/* Header with Icon and Radio Dot */}
+                                          <div className="flex items-center justify-between w-full relative z-10 mb-4">
+                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-200 ${pickupVehicleType === v.id ? 'bg-jiffex-orange text-white shadow-lg shadow-jiffex-orange/20 scale-105' : 'bg-white text-slate-400 border border-slate-100'}`}>
+                                              {v.icon}
+                                            </div>
+                                            
+                                            {/* Visual Radio Button Dot */}
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                                              pickupVehicleType === v.id 
+                                                ? 'border-jiffex-orange bg-jiffex-orange' 
+                                                : 'border-slate-300 bg-white'
+                                            }`}>
+                                              {pickupVehicleType === v.id && (
+                                                <div className="w-2 h-2 rounded-full bg-white" />
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          {/* Title and Description */}
+                                          <div className="relative z-10">
+                                            <p className="text-base font-black text-slate-900 leading-tight mb-1">{v.label}</p>
+                                            <p className="text-xs font-medium text-slate-500 leading-normal">{v.desc}</p>
+                                          </div>
+                                        </motion.button>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 space-y-3">
+                                    <div className="flex items-center gap-2 text-amber-700">
+                                      <Info size={18} />
+                                      <p className="text-sm font-black text-amber-900">Youâ€™ll receive a price estimate before confirmation â€” no payment required yet.</p>
+                                    </div>
+                                    <p className="text-xs text-amber-600 font-bold leading-relaxed">
+                                      Once your pickup is confirmed, our agent will contact you with a final price based on size, weight, and distance before collecting payment.
+                                    </p>
+                                  </div>
+
+                                  <button 
+                                    onClick={() => {
+                                      setActivePickupStep(2);
+                                    }}
+                                    className="w-full py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
+                                  >
+                                    Continue to Schedule <ArrowRight size={18} />
+                                  </button>
+                                </div>
+                        </motion.div>
+                      )}
+
+                      {/* Step 2: When should we arrive? */}
+                      {activePickupStep === 2 && (
+                        <motion.div 
+                          key="step2"
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -20 }}
+                          transition={{ duration: 0.3 }}
+                          className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10">
+                                <Clock size={24} />
+                              </div>
+                              <div>
+                                <h4 className="text-xl font-black text-deep-blue">When should we arrive?</h4>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="pt-8 space-y-8">
+                                  <div className="space-y-4">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Select Date</label>
+                                    <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide">
+                                      {filteredPickupSlots.map(slot => {
+                                        const d = new Date(slot.date);
+                                        const isSelected = selectedPickupDate === slot.date;
+                                        
+                                        // IST check for past dates
+                                        const getISTTime = () => {
+                                          const now = new Date();
+                                          const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+                                          return new Date(utc + (3600000 * 5.5));
+                                        };
+                                        const istNow = getISTTime();
+                                        const istDateStr = istNow.toISOString().split('T')[0];
+                                        
+                                        // A date is past if its last slot is past (last slot starts at 7 PM / 19:00)
+                                        const isDatePast = slot.date < istDateStr || (slot.date === istDateStr && istNow.getHours() >= 19);
+                                        
+                                        return (
+                                          <button
+                                            key={slot.date}
+                                            disabled={isDatePast}
+                                            onClick={() => setSelectedPickupDate(slot.date)}
+                                            className={`flex-shrink-0 w-20 h-24 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-1 ${
+                                              isDatePast ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-100 text-slate-300' :
+                                              isSelected ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange' : 
+                                              'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
+                                            }`}
+                                          >
+                                            <span className="text-[10px] font-black uppercase">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                                            <span className="text-xl font-black">{d.getDate()}</span>
+                                            <span className="text-[10px] font-bold">{d.toLocaleDateString('en-US', { month: 'short' })}</span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Select Time Window</label>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                      {PICKUP_SLOTS.find(s => s.date === selectedPickupDate)?.times.map(time => {
+                                        const isSelected = selectedPickupTime === time;
+                                        
+                                        // IST check for past slots
+                                        const getISTTime = () => {
+                                          const now = new Date();
+                                          const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+                                          return new Date(utc + (3600000 * 5.5));
+                                        };
+                                        
+                                        const istNow = getISTTime();
+                                        const istDateStr = istNow.toISOString().split('T')[0];
+                                        
+                                        let isPast = false;
+                                        if (selectedPickupDate < istDateStr) {
+                                          isPast = true;
+                                        } else if (selectedPickupDate === istDateStr) {
+                                          const hourMap: Record<string, number> = {
+                                            '9â€“11 AM': 9,
+                                            '11â€“1 PM': 11,
+                                            '1â€“3 PM': 13,
+                                            '3â€“5 PM': 15,
+                                            '5â€“7 PM': 17,
+                                            '7â€“9 PM': 19
+                                          };
+                                          const startHour = hourMap[time];
+                                          if (istNow.getHours() >= startHour) {
+                                            isPast = true;
+                                          }
+                                        }
+
+                                        return (
+                                          <button
+                                            key={time}
+                                            disabled={isPast}
+                                            onClick={() => setSelectedPickupTime(time)}
+                                            className={`py-4 px-2 rounded-2xl border-2 transition-all text-center ${
+                                              isPast ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-100 text-slate-300' :
+                                              isSelected ? 'border-jiffex-orange bg-jiffex-orange/5 text-jiffex-orange' : 
+                                              'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
+                                            }`}
+                                          >
+                                            <span className="text-xs font-black">{time}</span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex gap-4">
+                                    <button 
+                                      onClick={() => {
+                                        setActivePickupStep(1);
+                                      }}
+                                      className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                                    >
+                                      <ArrowLeft size={18} /> Back
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        setActivePickupStep(3);
+                                      }}
+                                      className="flex-[2] py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
+                                    >
+                                      Continue to Address <ArrowRight size={18} />
+                                    </button>
+                                  </div>
+                                </div>
+                        </motion.div>
+                      )}
+
+                    {/* Step 3: Pickup details */}
+                    {activePickupStep === 3 && (
+                      <motion.div 
+                        ref={pickupDetailsRef}
+                        key="step3"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.3 }}
+                        className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5 scroll-mt-24"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10">
+                              <MapPin size={24} />
+                            </div>
+                            <div>
+                              <h4 className="text-xl font-black text-deep-blue">Pickup & Destination Details</h4>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Tab Selector */}
+                        <div className="mt-6 flex bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => setPickupDetailsTab('pickup')}
+                            className={`flex-1 py-3 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+                              pickupDetailsTab === 'pickup' 
+                                ? 'bg-deep-blue text-white shadow-md shadow-deep-blue/20' 
+                                : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            <MapPin size={14} /> 1. Pickup Address (From)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPickupDetailsTab('destination')}
+                            className={`flex-1 py-3 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+                              pickupDetailsTab === 'destination' 
+                                ? 'bg-deep-blue text-white shadow-md shadow-deep-blue/20' 
+                                : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            <Globe size={14} /> 2. Destination Address (To)
+                          </button>
+                        </div>
+
+                        <div className="pt-6 space-y-6">
+                          {pickupDetailsTab === 'pickup' ? (
+                            <div className="space-y-6">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                                  <div className="relative">
+                                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                    <input 
+                                      type="text" 
+                                      className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                      placeholder="Enter your name"
+                                      value={pickupName}
+                                      onChange={(e) => setPickupName(e.target.value)}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                                  <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">+91</span>
+                                    <input 
+                                      type="tel" 
+                                      className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm"
+                                      placeholder="10-digit mobile"
+                                      value={pickupPhone}
+                                      maxLength={10}
+                                      onChange={(e) => {
+                                        const val = e.target.value.replace(/\D/g, '');
+                                        if (val.length <= 10) setPickupPhone(val);
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+                                <div className="relative">
+                                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                  <input 
+                                    type="email" 
+                                    className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-light"
+                                    placeholder="Enter email address for confirmation"
+                                    value={pickupEmail}
+                                    onChange={(e) => setPickupEmail(e.target.value)}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Pick up address</label>
+                                <input 
+                                  type="text" 
+                                  className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-light"
+                                  placeholder="Flat, House no., Building, Street / Landmark"
+                                  value={pickupAddress.street}
+                                  onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">City</label>
+                                  <input 
+                                    type="text" 
+                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-light"
+                                    placeholder="City"
+                                    value={pickupAddress.city}
+                                    onChange={(e) => setPickupAddress({...pickupAddress, city: e.target.value})}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">State</label>
+                                  <input 
+                                    type="text" 
+                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-light"
+                                    placeholder="State"
+                                    value={pickupAddress.state}
+                                    onChange={(e) => setPickupAddress({...pickupAddress, state: e.target.value})}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">PIN code</label>
+                                  <input 
+                                    type="text" 
+                                    className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-light"
+                                    placeholder="PIN Code"
+                                    value={pickupAddress.zip}
+                                    onChange={(e) => setPickupAddress({...pickupAddress, zip: e.target.value})}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Special Instructions</label>
+                                <textarea 
+                                  className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium min-h-[100px] text-sm placeholder:text-slate-300 placeholder:font-light"
+                                  placeholder="Any specific instructions for our agent? (Optional)"
+                                  value={pickupSpecialInstructions}
+                                  onChange={(e) => setPickupSpecialInstructions(e.target.value)}
+                                />
+                              </div>
+
+                              {currentUser && (
+                                <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50 flex items-start gap-3 mt-4 hover:bg-slate-50 transition-colors">
+                                  <input 
+                                    type="checkbox" 
+                                    id="save-pickup-to-profile"
+                                    className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 mt-0.5 cursor-pointer accent-indigo-600"
+                                    checked={savePickupToProfile}
+                                    onChange={(e) => setSavePickupToProfile(e.target.checked)}
+                                  />
+                                  <label htmlFor="save-pickup-to-profile" className="text-xs font-bold text-slate-700 leading-relaxed cursor-pointer select-none">
+                                    Save these details in my customer profile
+                                    <span className="block text-[10px] text-slate-400 font-medium normal-case mt-0.5">
+                                      These details will be securely stored and auto-filled next time when logged in with the same ID.
+                                    </span>
+                                  </label>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="space-y-6">
+                              {/* Option card to provide destination details later */}
+                              <div className="bg-amber-50/80 p-4 rounded-2xl border border-amber-200/90 flex items-center gap-3 transition-all">
+                                <input 
+                                  type="checkbox" 
+                                  id="provide-destination-later-desktop"
+                                  className="w-5 h-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500 cursor-pointer accent-amber-600"
+                                  checked={provideDestinationLater}
+                                  onChange={(e) => {
+                                    const isChecked = e.target.checked;
+                                    setProvideDestinationLater(isChecked);
+                                    if (isChecked) {
+                                      toast.info("You can provide the destination later. We'll contact you before shipping.");
+                                    }
+                                  }}
+                                />
+                                <label htmlFor="provide-destination-later-desktop" className="text-xs font-bold text-slate-800 cursor-pointer select-none">
+                                  I don't know the destination yet
+                                </label>
+                              </div>
+
+                              {provideDestinationLater ? (
+                                <div className="p-5 bg-amber-50/90 border border-amber-200/80 rounded-2xl space-y-3">
+                                  <div className="flex items-center gap-3 text-amber-900">
+                                    <Clock size={20} className="shrink-0 text-amber-600" />
+                                    <p className="text-xs font-bold leading-snug">
+                                      You can provide the destination later. We'll contact you before shipping.
+                                    </p>
+                                  </div>
+                                  
+                                  {/* Expected Destination Country (Optional) */}
+                                  <div className="pt-2 text-left space-y-2 max-w-sm mx-auto">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Expected Destination Country (Optional)</label>
+                                    <div className="relative">
+                                      <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10" size={18} />
+                                      <select 
+                                        className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-white transition-all font-medium text-sm appearance-none cursor-pointer pr-10"
+                                        value={pickupDestination.country}
+                                        onChange={(e) => setPickupDestination({...pickupDestination, country: e.target.value})}
+                                      >
+                                        {COUNTRIES.map(c => (
+                                          <option key={c} value={c}>{c}</option>
+                                        ))}
+                                      </select>
+                                      <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-slate-400">
+                                        <ChevronDown size={18} />
+                                      </div>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 font-medium italic">Selecting country helps us estimate shipping rates for your review.</p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Name</label>
+                                      <div className="relative">
+                                        <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                        <input 
+                                          type="text" 
+                                          className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-light"
+                                          placeholder="Enter receiver full name"
+                                          value={pickupDestination.fullName}
+                                          onChange={(e) => setPickupDestination({...pickupDestination, fullName: e.target.value})}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Phone</label>
+                                      <div className="relative">
+                                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                        <input 
+                                          type="tel" 
+                                          className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-light"
+                                          placeholder="Phone number with country code"
+                                          value={pickupDestination.phone}
+                                          onChange={(e) => setPickupDestination({...pickupDestination, phone: e.target.value})}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Receiver Email</label>
+                                    <div className="relative">
+                                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                      <input 
+                                        type="email" 
+                                        className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-light"
+                                        placeholder="Receiver email (optional)"
+                                        value={pickupDestination.email}
+                                        onChange={(e) => setPickupDestination({...pickupDestination, email: e.target.value})}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination Address</label>
+                                    <input 
+                                      type="text" 
+                                      className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-light"
+                                      placeholder="Street address, apartment, suite"
+                                      value={pickupDestination.addressLine1}
+                                      onChange={(e) => setPickupDestination({...pickupDestination, addressLine1: e.target.value})}
+                                    />
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div className="space-y-2">
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination City</label>
+                                      <input 
+                                        type="text" 
+                                        className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-light"
+                                        placeholder="City"
+                                        value={pickupDestination.city}
+                                        onChange={(e) => setPickupDestination({...pickupDestination, city: e.target.value})}
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination State</label>
+                                      <input 
+                                        type="text" 
+                                        className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-light"
+                                        placeholder="State / Region"
+                                        value={pickupDestination.state}
+                                        onChange={(e) => setPickupDestination({...pickupDestination, state: e.target.value})}
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">ZIP / Post Code</label>
+                                      <input 
+                                        type="text" 
+                                        className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm placeholder:text-slate-300 placeholder:font-light"
+                                        placeholder="ZIP / Postal Code"
+                                        value={pickupDestination.zipCode}
+                                        onChange={(e) => setPickupDestination({...pickupDestination, zipCode: e.target.value})}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Destination Country</label>
+                                    <div className="relative">
+                                      <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10" size={18} />
+                                      <select 
+                                        className="w-full p-4 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-jiffex-orange outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm appearance-none cursor-pointer pr-10"
+                                        value={pickupDestination.country}
+                                        onChange={(e) => setPickupDestination({...pickupDestination, country: e.target.value})}
+                                      >
+                                        {COUNTRIES.map(c => (
+                                          <option key={c} value={c}>{c}</option>
+                                        ))}
+                                      </select>
+                                      <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-slate-400">
+                                        <ChevronDown size={18} />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex gap-4 pt-4 border-t border-slate-100">
+                            {pickupDetailsTab === 'pickup' ? (
+                              <>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    setActivePickupStep(2);
+                                  }}
+                                  className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                                >
+                                  <ArrowLeft size={18} /> Back
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    // Local Validation before going to Destination Address Tab
+                                    if (!pickupName || !pickupPhone || !pickupAddress.street || !pickupAddress.city || !pickupAddress.state || !pickupAddress.zip) {
+                                      toast.error('Please fill in all required Pickup Address fields before proceeding.');
+                                      return;
+                                    }
+                                    if (pickupPhone.length !== 10) {
+                                      toast.error('Phone number must be exactly 10 digits');
+                                      return;
+                                    }
+                                    setPickupDetailsTab('destination');
+                                  }}
+                                  className="flex-[2] py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
+                                >
+                                  Continue to Destination <ArrowRight size={18} />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    setPickupDetailsTab('pickup');
+                                  }}
+                                  className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                                >
+                                  <ArrowLeft size={18} /> Back
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    if (!pickupName || !pickupPhone || !pickupAddress.street || !pickupAddress.city || !pickupAddress.state || !pickupAddress.zip) {
+                                      toast.error('Please fill in all required Pickup Address fields');
+                                      setPickupDetailsTab('pickup');
+                                      return;
+                                    }
+                                    if (pickupPhone.length !== 10) {
+                                      toast.error('Phone number must be 10 digits');
+                                      setPickupDetailsTab('pickup');
+                                      return;
+                                    }
+                                    if (!provideDestinationLater) {
+                                      if (!pickupDestination.fullName || !pickupDestination.phone || !pickupDestination.addressLine1 || !pickupDestination.city || !pickupDestination.state || !pickupDestination.zipCode) {
+                                        toast.error('Please fill in all required Destination fields or check "I will provide details later"');
+                                        return;
+                                      }
+                                    }
+                                    if (savePickupToProfile && currentUser) {
+                                      savePickupProfileToDb();
+                                    }
+                                    setActivePickupStep(4);
+                                  }}
+                                  className="flex-[2] py-4 bg-deep-blue text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 flex items-center justify-center gap-2"
+                                >
+                                  Continue to Review <ArrowRight size={18} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* Step 4: Review your booking */}
+                    {activePickupStep === 4 && (
+                      <motion.div 
+                        key="step4"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.3 }}
+                        className="p-8 rounded-[2.5rem] border bg-white border-jiffex-orange/30 shadow-xl shadow-jiffex-orange/5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-deep-blue text-jiffex-orange shadow-lg shadow-deep-blue/10">
+                              <CheckCircle2 size={24} />
+                            </div>
+                            <div>
+                              <h4 className="text-xl font-black text-deep-blue">Review your booking</h4>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-8 space-y-6">
+                                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                                  <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Items</p>
+                                      <p className="font-bold text-slate-900">{pickupItemType} ({pickupVehicleType})</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Slot</p>
+                                      <p className="font-bold text-slate-900">{new Date(selectedPickupDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at {selectedPickupTime}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact</p>
+                                      <p className="font-bold text-slate-900">{pickupName} (+91 {pickupPhone})</p>
+                                    </div>
+                                    <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-250/20">
+                                      <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Address (From)</p>
+                                        <p className="font-bold text-slate-900 text-xs mt-1 leading-relaxed">
+                                          {pickupAddress.street}<br />
+                                          {pickupAddress.city}, {pickupAddress.state} - {pickupAddress.zip}<br />
+                                          India
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Destination Address (To)</p>
+                                        {provideDestinationLater ? (
+                                          <div className="mt-1">
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-black border border-amber-200">
+                                              <Clock size={12} /> Provide Details Later
+                                            </span>
+                                            <p className="font-bold text-slate-700 text-xs mt-1.5 leading-relaxed">
+                                              Address will be collected before warehouse dispatch.
+                                              {pickupDestination.country && <span className="block text-[11px] text-slate-500 font-medium mt-0.5">Expected Country: {pickupDestination.country}</span>}
+                                            </p>
+                                          </div>
+                                        ) : (
+                                          <p className="font-bold text-slate-900 text-xs mt-1 leading-relaxed">
+                                            {pickupDestination.fullName} (+{pickupDestination.phone})<br />
+                                            {pickupDestination.addressLine1}<br />
+                                            {pickupDestination.city}, {pickupDestination.state} - {pickupDestination.zipCode}<br />
+                                            {pickupDestination.country}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {pickupSpecialInstructions && (
+                                      <div className="col-span-2">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instructions</p>
+                                        <p className="font-bold text-slate-900">{pickupSpecialInstructions}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Approximate Price Estimate */}
+                                {(() => {
+                                  let minWeight = 1;
+                                  let maxWeight = 5;
+                                  let isMoreThan20 = false;
+
+                                  if (pickupEstimatedWeight) {
+                                    if (pickupEstimatedWeight.includes('Less than 5') || pickupEstimatedWeight.includes('1-5')) {
+                                      minWeight = 1;
+                                      maxWeight = 5;
+                                    } else if (pickupEstimatedWeight.includes('5 to 20') || pickupEstimatedWeight.includes('5-15') || pickupEstimatedWeight.includes('5-20') || pickupEstimatedWeight.includes('5 to 15')) {
+                                      minWeight = 5;
+                                      maxWeight = 20;
+                                    } else if (pickupEstimatedWeight.includes('More than 20') || pickupEstimatedWeight.includes('15-50') || pickupEstimatedWeight.includes('20+')) {
+                                      minWeight = 20;
+                                      maxWeight = 50;
+                                      isMoreThan20 = true;
+                                    } else {
+                                      const match = pickupEstimatedWeight.match(/(\d+)/);
+                                      if (match) {
+                                        const val = parseInt(match[0], 10);
+                                        minWeight = Math.max(1, val - 2);
+                                        maxWeight = val + 2;
+                                      }
+                                    }
+                                  }
+
+                                  const targetCountry = pickupDestination.country || COUNTRIES[0];
+                                  const rate = shippingRates[targetCountry] || 10;
+                                  const discountPercent = shippingDiscounts[targetCountry] || 0;
+
+                                  const rawMinQuote = minWeight * rate;
+                                  const rawMaxQuote = maxWeight * rate;
+
+                                  const minDiscount = rawMinQuote * (discountPercent / 100);
+                                  const maxDiscount = rawMaxQuote * (discountPercent / 100);
+
+                                  const finalMin = Math.max(0, rawMinQuote - minDiscount);
+                                  const finalMax = Math.max(0, rawMaxQuote - maxDiscount);
+
+                                  return (
+                                    <div className="p-6 bg-indigo-50/50 rounded-3xl border border-indigo-100 flex items-start gap-4">
+                                      <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-200">
+                                        <Globe size={20} />
+                                      </div>
+                                      <div className="flex-1">
+                                        <div className="flex items-center justify-between">
+                                          <h5 className="font-extrabold text-indigo-950 text-sm">Approximate Price Estimate</h5>
+                                          <span className="text-xs font-black bg-indigo-100/80 text-indigo-700 px-2.5 py-1 rounded-full uppercase tracking-widest">
+                                            {minWeight}-{maxWeight}{isMoreThan20 ? '+' : ''} kg
+                                          </span>
+                                        </div>
+                                        <div className="mt-2 flex items-baseline gap-2">
+                                          <span className="text-2xl font-black text-indigo-600">
+                                            â‚¹{finalMin.toFixed(2)} - â‚¹{finalMax.toFixed(2)}{isMoreThan20 ? '+' : ''}
+                                          </span>
+                                          <span className="text-xs font-medium text-slate-500">to {targetCountry}</span>
+                                        </div>
+                                        <div className="text-[11px] text-slate-500 mt-1.5 leading-relaxed font-sans">
+                                          Based on standard rate of <strong className="text-slate-700">â‚¹{rate}/kg</strong> for {targetCountry} over the weight range limit of {minWeight} to {maxWeight} kg.
+                                          {discountPercent > 0 && (
+                                            <span className="text-emerald-600 font-bold block mt-1">
+                                              âœ¨ Special {discountPercent}% discount applied! Saved â‚¹{minDiscount.toFixed(2)} - â‚¹{maxDiscount.toFixed(2)}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* Payment Info Section */}
+                                <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100 flex items-start gap-4">
+                                  <div className="w-10 h-10 bg-emerald-500 text-white rounded-xl flex items-center justify-center flex-shrink-0">
+                                    <CreditCard size={20} />
+                                  </div>
+                                  <div>
+                                    <h5 className="font-bold text-emerald-900 text-sm">Payment â€” agent will quote on arrival</h5>
+                                    <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+                                      No payment now. Your agent will share the quote when they arrive and collect after your approval.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {!currentUser && (
+                                  <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center gap-3">
+                                    <div className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center shrink-0">
+                                      <LogIn size={16} />
+                                    </div>
+                                    <p className="text-xs font-bold text-indigo-900">
+                                      Continue as a guest. We'll verify your number via OTP to secure your booking.
+                                    </p>
+                                  </div>
+                                )}
+
+                                <div className="flex gap-4">
+                                  <button 
+                                    onClick={() => {
+                                      setActivePickupStep(3);
+                                    }}
+                                    className="flex-1 py-4 bg-white border border-slate-200 text-deep-blue rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                                  >
+                                    Edit Details
+                                  </button>
+                                  <button 
+                                    onClick={handleSchedulePickup}
+                                    className="flex-[2] py-5 bg-jiffex-orange text-white rounded-[2rem] text-lg font-black hover:bg-amber-600 transition-all shadow-2xl shadow-jiffex-orange/20 flex items-center justify-center gap-3"
+                                  >
+                                    {currentUser ? 'Confirm Booking' : 'Sign in (OTP-based)'}
+                                  </button>
+                                </div>
+                              </div>
+                        </motion.div>
+                      )}
+
+                      {/* Step 5: Booking confirmed */}
+                     {activePickupStep === 5 && (
+                       <motion.div 
+                         key="step5"
+                         initial={{ opacity: 0, scale: 0.95 }}
+                         animate={{ opacity: 1, scale: 1 }}
+                         exit={{ opacity: 0, scale: 0.95 }}
+                         transition={{ duration: 0.3 }}
+                         className="p-4 sm:p-5 md:p-6 rounded-[2rem] bg-gradient-to-b from-white via-slate-50/10 to-white border border-slate-150/70 shadow-xl text-left space-y-4 sm:space-y-5"
+                       >
+                        {/* Compact Header Alert */}
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b border-slate-100">
+                          <div className="flex items-center gap-4">
+                            <motion.div 
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-tr from-teal-500 via-emerald-500 to-emerald-400 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/25"
+                            >
+                              <CheckCircle2 size={32} />
+                            </motion.div>
+                            <div>
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 rounded-full text-[10px] uppercase font-black tracking-wider leading-none border border-emerald-200">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                Confirmed & Active
+                              </span>
+                              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1.5 leading-tight">
+                                Thanks, {activePickup?.customerName?.split(' ')[0] || currentUser?.name?.split(' ')[0] || 'there'}! ğŸ‰
+                              </h2>
+                              <p className="text-sm text-slate-600 font-semibold mt-0.5">
+                                Your home pickup is scheduled. Our agent is on the way!
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 bg-gradient-to-br from-indigo-50/80 via-indigo-50/40 to-white p-3.5 rounded-2xl border border-indigo-200/60 shrink-0 self-stretch sm:self-auto justify-between md:justify-start shadow-xs">
+                            <div>
+                              <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest leading-none">Booking Reference</p>
+                              <p className="text-lg sm:text-xl font-black text-indigo-900 tracking-wider mt-1 font-mono">
+                                {lastBookingRef || activePickup?.id}
+                              </p>
+                            </div>
+                            <button 
+                              onClick={() => {
+                                const ref = lastBookingRef || activePickup?.id;
+                                if (ref) {
+                                  navigator.clipboard.writeText(ref);
+                                  toast.success('Reference ID copied to clipboard!');
+                                }
+                              }}
+                              className="p-2.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl transition-all shadow-sm cursor-pointer"
+                              title="Copy Reference"
+                            >
+                              <Copy size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Two Column Grid */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                          
+                          {/* ğŸ“‹ GUIDES, EXPECTATIONS & DOCUMENTS (Left Column) */}
+                          <div className="lg:col-span-8 space-y-6">
+                            
+                            {/* What to Expect Timeline (Horizontal, evenly aligned with no trailing empty space) */}
+                            <div className="bg-gradient-to-b from-indigo-50/30 to-indigo-50/10 border border-indigo-100/30 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-indigo-200">
+                                  <Clock size={18} />
+                                </div>
+                                <h4 className="text-sm sm:text-base font-black text-indigo-950 uppercase tracking-wider">What to Expect</h4>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3.5">
+                                {[
+                                  { step: "Step 1", title: "Agent Call", desc: "Agent calls 30m before arrival.", active: true },
+                                  { step: "Step 2", title: "Pickup & Weighing", desc: "Instant quote given on-site.", active: true },
+                                  { step: "Step 3", title: "Secure Sorting", desc: "Packed safely at warehouse.", active: false },
+                                  { step: "Step 4", title: "Global Delivery", desc: "Pay online to dispatch package.", active: false }
+                                ].map((item, i) => (
+                                  <div key={i} className="p-4 bg-white/95 border border-slate-200/80 rounded-2xl flex flex-col justify-between shadow-xs hover:border-indigo-200 hover:shadow-md transition-all">
+                                    <div>
+                                      <div className="flex items-center justify-between gap-2 mb-2">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 font-mono bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100/50">
+                                          {item.step}
+                                        </span>
+                                        <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${
+                                          item.active 
+                                            ? 'bg-gradient-to-tr from-teal-400 to-emerald-500 border-teal-200 shadow-xs shadow-emerald-500/20' 
+                                            : 'bg-white border-slate-300'
+                                        }`} />
+                                      </div>
+                                      <p className="font-black text-sm text-slate-900 leading-snug">{item.title}</p>
+                                    </div>
+                                    <p className="text-xs text-slate-600 font-medium leading-relaxed mt-2">{item.desc}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Documents Required & Prohibited Items Side-by-Side (Zoomed in items) */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                              
+                              {/* Documents Required */}
+                              <div className="bg-gradient-to-b from-sky-50/40 to-sky-50/10 border border-sky-100/40 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm flex flex-col justify-between">
+                                <div>
+                                  <div className="flex items-center gap-2.5 mb-4">
+                                    <div className="w-9 h-9 bg-gradient-to-tr from-sky-600 to-sky-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-sky-200">
+                                      <FileText size={18} />
+                                    </div>
+                                    <h4 className="text-sm sm:text-base font-black text-sky-950 uppercase tracking-wider">Documents Required</h4>
+                                  </div>
+                                  
+                                  <div className="space-y-3">
+                                    {[
+                                      { title: "ID Proof Copy", desc: "Aadhar, Passport or Driving License Copy" },
+                                      { title: "Itemized Declaration", desc: "Simple list of contents & quantities" },
+                                      { title: "Value Statement", desc: "Bills/Invoices for branded or valuable garments" },
+                                      { title: "Receiver Address Info", desc: "Full overseas address with zip code & contact number" }
+                                    ].map((doc, i) => (
+                                      <div key={i} className="flex items-start gap-3.5 p-3.5 sm:p-4 rounded-2xl bg-white/95 border border-slate-200/80 shadow-xs hover:border-sky-300 hover:shadow-md transition-all">
+                                        <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200/60 mt-0.5">
+                                          <ShieldCheck size={18} />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="font-black text-sm sm:text-[15px] text-slate-900 leading-snug">{doc.title}</p>
+                                          <p className="text-xs sm:text-[13px] text-slate-600 mt-0.5 font-medium leading-relaxed">{doc.desc}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Prohibited Items */}
+                              <div className="bg-gradient-to-b from-rose-50/30 to-rose-50/10 border border-rose-100/40 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm flex flex-col justify-between">
+                                <div>
+                                  <div className="flex items-center gap-2.5 mb-4">
+                                    <div className="w-9 h-9 bg-gradient-to-tr from-rose-600 to-rose-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-md shadow-rose-200">
+                                      <AlertTriangle size={18} />
+                                    </div>
+                                    <h4 className="text-sm sm:text-base font-black text-rose-950 uppercase tracking-wider">Prohibited Items</h4>
+                                  </div>
+                                  
+                                  <div className="space-y-3">
+                                    {[
+                                      { title: "Aerosols & Perfumes", desc: "Body sprays, deodorants, or inflammable liquids" },
+                                      { title: "Cash & Jewellery", desc: "Currency notes, solid raw gold, silver bullion" },
+                                      { title: "Perishables & Liquids", desc: "Open/homemade liquid curries, raw dairy products" },
+                                      { title: "Hazardous Materials", desc: "Ammunition, loose lithium batteries, explosive fuel" }
+                                    ].map((item, i) => (
+                                      <div key={i} className="flex items-start gap-3.5 p-3.5 sm:p-4 bg-white/95 border border-slate-200/80 rounded-2xl shadow-xs hover:border-rose-300 hover:shadow-md transition-all">
+                                        <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 border border-rose-200/60 mt-0.5">
+                                          <XCircle size={18} />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="font-black text-sm sm:text-[15px] text-rose-950 leading-snug">{item.title}</p>
+                                          <p className="text-xs sm:text-[13px] text-slate-600 mt-0.5 leading-relaxed font-medium">{item.desc}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+
+                            </div>
+
+                            {/* Actions bar at bottom of info */}
+                            <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                              <button 
+                                onClick={() => {
+                                  clearPickupInputs();
+                                  navigateTo('history');
+                                  setActivePickupStep(1);
+                                  setLastBookingRef(null);
+                                  setIsSchedulingNewPickup(false);
+                                  window.scrollTo(0, 0);
+                                }}
+                                className="flex-1 px-6 py-4 bg-indigo-50/60 hover:bg-indigo-100/80 text-indigo-700 border border-indigo-100/40 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                              >
+                                <Package size={16} /> View My Orders
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  clearPickupInputs();
+                                  navigateTo('home');
+                                  setActivePickupStep(1);
+                                  setLastBookingRef(null);
+                                  setIsSchedulingNewPickup(false);
+                                  window.scrollTo(0, 0);
+                                }}
+                                className="flex-1 px-6 py-4 bg-gradient-to-r from-slate-900 to-indigo-950 hover:opacity-90 text-white rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-slate-950/10"
+                              >
+                                <ArrowLeft size={16} /> Back to Home
+                              </button>
+                            </div>
+                          </div>
+                          
+                          {/* ğŸ›ï¸ CONSOLIDATED JIFFEX STORE SHOPPING INTEGRATION (Right Column - Scrollable) */}
+                          <div className="lg:col-span-4 space-y-4">
+                            <div className="bg-gradient-to-br from-teal-50 via-teal-50/30 to-indigo-50/20 rounded-[2.5rem] border border-teal-500/15 p-5 sm:p-6 space-y-4 flex flex-col justify-between h-full min-h-[580px] max-h-[680px] shadow-xl relative overflow-hidden backdrop-blur-sm">
+                              
+                              <div className="space-y-3 flex-1 flex flex-col min-h-0">
+                                <div className="flex items-center justify-between gap-4 shrink-0">
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="px-2.5 py-0.5 bg-teal-500 text-white rounded-full text-[8px] uppercase font-black tracking-widest leading-none shadow-sm">
+                                        Co-Shipping Active
+                                      </span>
+                                      <span className="px-2.5 py-0.5 bg-indigo-50/80 text-indigo-700 rounded-full text-[8px] uppercase font-bold leading-none border border-indigo-100/30">
+                                        Zero Base Fees
+                                      </span>
+                                    </div>
+                                    <h3 className="text-[17px] font-black text-slate-900 mt-1">
+                                      Shop Indian Products
+                                    </h3>
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      navigateTo('store');
+                                      window.scrollTo(0, 0);
+                                    }}
+                                    className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-black rounded-lg flex items-center justify-center gap-1.5 shrink-0 cursor-pointer shadow transition-all border border-teal-500 whitespace-nowrap"
+                                  >
+                                    <ShoppingBag size={11} /> See All
+                                  </button>
+                                </div>
+                                <p className="text-xs text-slate-500 font-medium leading-relaxed shrink-0">
+                                  Delivered inside your same pickup box with <strong>no extra courier base fees</strong>.
+                                </p>
+
+                                {/* Scrollable Shop Items Grid with Infinite Auto-scrolling and Hover Pause */}
+                                <AutoScrollingShopProducts 
+                                  storeProducts={storeProducts}
+                                  items={items.filter(i => !orderedItemIds.has(i.id))}
+                                  addItem={addItem}
+                                  removeStoreItem={removeStoreItem}
+                                />
+                              </div>
+
+                              {/* Live Consolidated Cart Items Summary */}
+                              {items.filter(i => i.source === 'Store' && !orderedItemIds.has(i.id)).length > 0 && (
+                                <div className="p-3 bg-white border border-teal-500/12 rounded-2xl space-y-2 shrink-0 shadow-sm text-xs mt-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                                      <span className="w-4 h-4 rounded-full bg-teal-500 text-white flex items-center justify-center text-[8px] font-black">âœ“</span>
+                                      Items in Consolidated Box:
+                                    </span>
+                                    <span className="font-bold text-teal-700 bg-teal-50 border border-teal-100/30 px-2 py-0.5 rounded text-[10px] font-mono">
+                                      {items.filter(i => i.source === 'Store' && !orderedItemIds.has(i.id)).reduce((acc, i) => acc + (i.quantity || 1), 0)} items
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="divide-y divide-slate-100 max-h-[110px] overflow-y-auto pr-1">
+                                    {items.filter(i => i.source === 'Store' && !orderedItemIds.has(i.id)).map((storeIt) => (
+                                      <div key={storeIt.id} className="flex items-center justify-between py-1.5 text-[11px]">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <span className="font-medium text-slate-900 truncate">{storeIt.name}</span>
+                                          <span className="text-[9px] text-slate-400 font-semibold shrink-0">x{storeIt.quantity}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <span className="font-mono text-slate-400">{(storeIt.weight * (storeIt.quantity || 1)).toFixed(2)} kg</span>
+                                          <span className="font-bold text-teal-650 font-mono">${(storeIt.price * (storeIt.quantity || 1)).toFixed(2)}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <div className="border-t border-slate-100 pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                                    <div>
+                                      <p className="text-[10px] text-slate-500 font-bold">
+                                        Consolidated Est. Weight: <span className="font-mono text-indigo-600 font-black">
+                                          {(items.filter(i => i.source === 'Store' && !orderedItemIds.has(i.id)).reduce((acc, i) => acc + (i.weight * (i.quantity || 1)), 0) + 3.0).toFixed(1)} kg
+                                        </span>
+                                      </p>
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        navigateTo('cart');
+                                        window.scrollTo(0, 0);
+                                      }}
+                                      className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:opacity-95 text-white font-black rounded-xl text-[10px] flex items-center justify-center gap-1 shadow transition-all cursor-pointer border border-teal-500/20"
+                                    >
+                                      Checkout & Pay
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            
+                          </div>
+                        </div>
+                       </motion.div>
+                     )}
+                    </AnimatePresence>
+
+                    {/* Info Card */}
+                    {activePickupStep !== 5 && (
+                      <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex items-start gap-6">
+                        <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-deep-blue shadow-sm flex-shrink-0">
+                          {activePickupStep === 2 ? <Clock size={28} /> : activePickupStep === 3 ? <Lock size={28} /> : <ShieldCheck size={28} />}
+                        </div>
+                        <div>
+                          <h5 className="font-black text-deep-blue text-lg">
+                            {activePickupStep === 2 ? 'Flexible Rescheduling Available' : 
+                             activePickupStep === 3 ? 'Your data is Secure & private' : 
+                             'Safe & Verified Agents'}
+                          </h5>
+                          <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                            {activePickupStep === 2 ? 'Plans changed? No worries. You can reschedule your pickup window anytime up to 2 hours before our agent arrives.' : 
+                             activePickupStep === 3 ? 'Your privacy is our priority. We use end-to-end encryption to ensure your address and contact details remain strictly confidential.' : 
+                             'All our pickup agents are background-verified and follow strict safety protocols. They will call you 30 minutes before arrival.'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : null}
+
+        {/* Item List Card - Visible in all tabs, but specific parts are conditional */}
+        {!(mode === 'Pickup' && (isCartEmpty || activePickupStep === 5 || !hasActivePickup || isSchedulingNewPickup)) && (
+          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 min-h-[400px]">
+            {!mode && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+              <div>
+                <h3 className="text-2xl font-black text-slate-900">Your Shipment Items</h3>
+                <p className="text-sm text-slate-500">Manage items collected or received at our warehouse.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="px-4 py-2 bg-indigo-50 rounded-2xl text-xs font-bold text-indigo-600 border border-indigo-100">
+                  {displayItems.reduce((acc, item) => acc + (item.quantity || 1), 0)} Items
+                </div>
+                <div className="px-4 py-2 bg-emerald-50 rounded-2xl text-xs font-bold text-emerald-600 border border-emerald-100">
+                  {hasTBDWeight ? 'Est. ' : ''}{displayWeight.toFixed(2)} kg Total
+                </div>
+              </div>
+            </div>
+          )}
+            
+            {isCartEmpty ? (
+                <div className="flex flex-col items-center justify-center h-80 text-slate-400">
+                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                    <Package size={40} strokeWidth={1} />
+                  </div>
+                  <p className="font-medium">Your cart is empty.</p>
+                  {!mode && (
+                    <>
+                      <p className="text-sm mb-6">Add items from the store or schedule a pickup to get started.</p>
+                      <button 
+                        onClick={() => navigateTo('store')}
+                        className="btn-cta flex items-center gap-2"
+                      >
+                        <Store size={18} /> Visit Shop
+                      </button>
+                    </>
+                  )}
+                  {mode === 'Pickup' && (
+                    <p className="text-sm">Schedule a pickup to add items to your shipment.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-10">
+                  {/* Order Completed Message */}
+                  {!mode && hasCompletedPickup && (
+                    <div className="p-8 bg-emerald-50 rounded-[2rem] border border-emerald-100 text-center space-y-4 mb-8">
+                      <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-emerald-600 mx-auto shadow-sm">
+                        <CheckCircle2 size={32} />
+                      </div>
+                      <div className="max-w-md mx-auto">
+                        <h4 className="text-lg font-black text-slate-900">Order Completed</h4>
+                        <p className="text-sm text-slate-600 mt-2">
+                          Your agent pickup order has been completed and paid. You can now see the summary of your items below. Your shipment is being processed at our warehouse.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Scheduled Pickups */}
+                  {(mode === 'Pickup') && userAppointments.some(a => a.status === 'Scheduled' || a.status === 'Picked Up') && activePickupStep !== 5 && !isSchedulingNewPickup && (
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                        <Truck size={18} className="text-indigo-600" /> Scheduled Pickups
+                      </h4>
+                      {userAppointments.filter(a => a.status === 'Scheduled' || a.status === 'Picked Up').map((apt, idx) => (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          key={`apt-${idx}`}
+                          className="overflow-hidden rounded-3xl border border-indigo-100 bg-white shadow-xl shadow-indigo-500/5"
+                        >
+                          <div className="bg-indigo-600 p-6 text-white flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
+                                <Truck size={24} />
+                              </div>
+                              <div>
+                                <div className="text-[10px] font-bold uppercase tracking-widest opacity-80">Appointment ID</div>
+                                <div className="text-lg font-black">{apt.id}</div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="px-3 py-1 bg-white/20 backdrop-blur rounded-full text-[10px] font-black uppercase tracking-widest">
+                                {apt.status}
+                              </div>
+                              <button 
+                                onClick={() => cancelPickup(apt.id)}
+                                className="p-2 hover:bg-white/20 rounded-xl transition-colors"
+                              >
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="space-y-6">
+                              <div>
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Pickup Details</h4>
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-3 text-sm">
+                                    <UserIcon size={16} className="text-indigo-600" />
+                                    <span className="font-bold text-slate-900">{apt.customerName || 'Guest User'}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-sm">
+                                    <Calendar size={16} className="text-indigo-600" />
+                                    <span className="font-bold text-slate-700">{apt.date}</span>
+                                    <span className="text-slate-300">|</span>
+                                    <span className="text-slate-600">{apt.time}</span>
+                                  </div>
+                                  <div className="flex items-start gap-3 text-sm">
+                                    <MapPin size={16} className="text-indigo-600 mt-1" />
+                                    <span className="text-slate-600 leading-relaxed font-medium">{apt.address}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-sm">
+                                    <Phone size={16} className="text-indigo-600" />
+                                    <span className="font-bold text-slate-900">{apt.phone}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Assigned Agent</h4>
+                                {apt.assignedAgent ? (
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600">
+                                      <UserIcon size={20} />
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-bold text-slate-900">{apt.assignedAgent.name}</div>
+                                      <div className="text-[10px] text-slate-500">{apt.assignedAgent.vehicleNumber}</div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2 text-amber-600 text-xs font-bold">
+                                    <Clock size={14} /> Assigning Agent...
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="space-y-6">
+                              <div>
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Next Steps Workflow</h4>
+                                <div className="relative pl-6 space-y-6 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
+                                  {[
+                                    { title: "Agent Arrival", desc: "Agent will arrive at your door during the selected slot.", icon: Truck },
+                                    { title: "On-site Weighing", desc: "Items are weighed using digital scales for accuracy.", icon: Calculator },
+                                    { title: "Digital Receipt", desc: "Receive instant confirmation of collected items.", icon: CheckCircle2 }
+                                  ].map((step, i) => (
+                                    <div key={i} className="relative">
+                                      <div className="absolute -left-[23px] top-1 w-4 h-4 rounded-full bg-white border-2 border-indigo-600 z-10" />
+                                      <h5 className="text-xs font-bold text-slate-900">{step.title}</h5>
+                                      <p className="text-[11px] text-slate-500 leading-relaxed">{step.desc}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Grouped Items by Source */}
+                  <div ref={warehouseItemsRef} className="space-y-8">
+                    {(mode ? [mode] : ['Store', 'Warehouse']).map(source => {
+                    const sourceItems = displayItems.filter(i => i.source === source);
+                    
+                    // Special case: If Pickup from home is scheduled, show message instead of item list for Pickup source
+                    if (mode === 'Pickup' && source === 'Pickup' && hasActivePickup && !isSchedulingNewPickup) {
+                      return (
+                        <div key={source} className="p-8 bg-indigo-50 rounded-[2rem] border border-indigo-100 text-center space-y-4">
+                          <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-indigo-600 mx-auto shadow-sm">
+                            <Truck size={32} />
+                          </div>
+                          <div className="max-w-md mx-auto">
+                            <h4 className="text-lg font-black text-slate-900">Pickup from home Scheduled</h4>
+                            <p className="text-sm text-slate-600 mt-2">
+                              Your agent pickup is currently scheduled. The items list here will be updated automatically once our agent completes the pickup and weighs your items on-site.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (sourceItems.length === 0) return null;
+                    
+                    // Hide Store items if we are in Pickup or Warehouse mode
+                    if (mode && source === 'Store') return null;
+                    
+                    // Only show items matching the current mode (Pickup or Warehouse)
+                    if (mode && mode !== source) return null; 
+
+                    const SourceIcon = source === 'Store' ? Store : source === 'Pickup' ? Package : Database;
+                    const sourceColor = source === 'Store' ? 'text-emerald-600' : source === 'Pickup' ? 'text-indigo-600' : 'text-slate-600';
+                    const sourceLabel = source === 'Store' ? 'Shop Items' : source === 'Pickup' ? 'Items for Pickup from home' : 'Items sent to warehouse';
+
+                    return (
+                      <div key={source} className="space-y-4">
+                        <h4 className={`text-sm font-black ${sourceColor} uppercase tracking-widest flex items-center gap-2`}>
+                          <SourceIcon size={18} /> {sourceLabel}
+                        </h4>
+                        {source === 'Warehouse' && (
+                          <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 text-indigo-800 text-xs flex items-start gap-2.5">
+                            <Info size={16} className="text-indigo-600 shrink-0 mt-0.5" />
+                            <p className="leading-relaxed font-medium">
+                              The weights of the items will be updated once they are received at our warehouse. You can check the final verified details in <span className="font-bold">My Orders</span>.
+                            </p>
+                          </div>
+                        )}
+                        <div className="space-y-3">
+                          {sourceItems.map(item => (
+                            <motion.div 
+                              layout
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              key={item.id} 
+                              className="grid grid-cols-1 md:grid-cols-12 gap-6 p-5 rounded-2xl border border-slate-100 bg-white hover:shadow-xl hover:shadow-indigo-500/5 transition-all group items-center"
+                            >
+                              <div className={item.source === 'Store' ? "md:col-span-3" : item.source === 'Warehouse' ? "md:col-span-4" : "md:col-span-2"}>
+                                <h4 className="font-bold text-slate-900 truncate">{item.name}</h4>
+                                <div className="flex flex-wrap gap-2 mt-1">
+                                  {item.fragile && (
+                                    <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-600 text-[9px] font-black uppercase tracking-widest rounded-md border border-amber-100">
+                                      <AlertTriangle size={8} /> Fragile
+                                    </span>
+                                  )}
+                                  {item.invoiceNumber && (
+                                    <span className="flex items-center gap-1 px-2 py-0.5 bg-slate-50 text-slate-500 text-[9px] font-black uppercase tracking-widest rounded-md border border-slate-100">
+                                      <FileText size={8} /> {item.invoiceNumber}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {item.source === 'Warehouse' && (
+                                <div className="md:col-span-3">
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Source</div>
+                                  <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-xl border border-indigo-100/50 w-fit">
+                                    <ShoppingBag size={12} className="text-indigo-500" />
+                                    <span>{item.purchaseSource || 'Other'}</span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {item.source !== 'Warehouse' && (
+                                <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-1"}>
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 whitespace-nowrap">Unit Price</div>
+                                  <div className="text-xs font-bold text-emerald-600">
+                                    {item.price ? (
+                                      <span>â‚¹{(item.price / (item.quantity || 1)).toFixed(2)}</span>
+                                    ) : (
+                                      <span className="text-slate-400">N/A</span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className={item.source === 'Warehouse' ? "md:col-span-3" : item.source === 'Store' ? "md:col-span-2" : "md:col-span-2"}>
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                                  {item.source === 'Store' ? 'Unit Weight' : 'Weight'}
+                                </div>
+                                <div className="text-xs font-bold text-indigo-600">
+                                  {item.weight > 0 ? (
+                                    <div className="flex flex-col">
+                                      <span>{(item.weight / (item.quantity || 1)).toFixed(2)} kg</span>
+                                      {item.source !== 'Store' && (item.quantity || 1) > 1 && (
+                                        <span className="text-[9px] text-slate-400 font-medium whitespace-nowrap">
+                                          Total: {item.weight.toFixed(2)} kg
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : 'TBD'}
+                                </div>
+                              </div>
+
+                              {item.source === 'Store' && (
+                                <div className="md:col-span-2">
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Weight</div>
+                                  <div className="text-xs font-bold text-indigo-600">
+                                    {item.weight > 0 ? (
+                                      <span>{item.weight.toFixed(2)} kg</span>
+                                    ) : 'TBD'}
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-1"}>
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Qty</div>
+                                <div className="flex items-center gap-2">
+                                  {!mode && !hasCompletedPickup ? (
+                                    <>
+                                      <button 
+                                        onClick={() => updateItemQuantity(item.id, -1)}
+                                        className="w-6 h-6 bg-slate-100 text-slate-600 rounded-lg flex items-center justify-center hover:bg-red-50 hover:text-red-600 transition-colors"
+                                      >
+                                        <Minus size={12} />
+                                      </button>
+                                      <span className="text-xs font-black text-slate-900 min-w-[20px] text-center">{item.quantity || 1}</span>
+                                      <button 
+                                        onClick={() => updateItemQuantity(item.id, 1)}
+                                        className="w-6 h-6 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-colors"
+                                      >
+                                        <Plus size={12} />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <span className="text-xs font-black text-slate-900 min-w-[20px] text-center">{item.quantity || 1}</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {item.source !== 'Store' && item.source !== 'Warehouse' && (
+                                <div className="md:col-span-2">
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</div>
+                                  <div className="flex items-center gap-2">
+                                    {item.status === 'Received at Warehouse' ? (
+                                      <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 inline-block">
+                                        RECEIVED
+                                      </span>
+                                    ) : (
+                                      <button 
+                                        onClick={() => updateItemStatus(item.id, 'Received at Warehouse')}
+                                        className="text-[9px] bg-indigo-600 text-white px-2 py-1 rounded-lg font-black hover:bg-indigo-700 transition-colors shadow-sm"
+                                      >
+                                        MARK RECEIVED
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {item.source !== 'Store' && item.source !== 'Warehouse' && (
+                                <div className={item.source === 'Store' ? "md:col-span-2" : "md:col-span-3"}>
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 whitespace-nowrap">Total Amount</div>
+                                  <div className="text-xs font-black text-slate-900">
+                                    {item.price ? (
+                                      <span>â‚¹{item.price.toFixed(2)}</span>
+                                    ) : (
+                                      <span className="text-slate-400">N/A</span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="md:col-span-1 flex justify-end">
+                                {!mode && !hasCompletedPickup && (
+                                  <button onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors p-2">
+                                    <Trash2 size={18} />
+                                  </button>
+                                )}
+                              </div>
+                              
+                              {item.remarks && (
+                                <div className="md:col-span-12 mt-2 pt-2 border-t border-slate-50 text-[10px] text-slate-400 italic flex items-start gap-1">
+                                  <MessageSquare size={10} className="mt-0.5 shrink-0" /> {item.remarks}
+                                </div>
+                              )}
+                            </motion.div>
+                          ))}
+                        </div>
+
+                      </div>
+                    );
+                  })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+              
+              {/* Action Buttons - Only show in My Cart tab (!mode) */}
+              {!mode && (displayItems.length > 0 || hasActivePickup) && !hasCompletedPickup && (
+                <div className="mt-12 pt-8 border-t border-slate-100 flex flex-col gap-6">
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <button 
+                      onClick={handleCheckout}
+                      className={`flex-1 py-5 px-8 rounded-2xl font-bold transition-all shadow-2xl flex items-center justify-center gap-2 group ${
+                        hasActivePickup && displayItems.length === 0
+                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                          : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/20'
+                      }`}
+                    >
+                      {hasActivePickup 
+                        ? (displayItems.length > 0 ? 'Confirm Order' : 'Checkout')
+                        : (currentUser ? 'Checkout' : 'Sign in to Checkout')} 
+                      <ArrowRight size={20} className={hasActivePickup && displayItems.length === 0 ? '' : 'group-hover:translate-x-1 transition-transform'} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+          {!mode && (
+            <div className="lg:col-span-1 space-y-6">
+              {/* Order Summary Card */}
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm sticky top-8">
+                <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
+                  <Package size={20} className="text-indigo-600" /> Order Summary
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500 font-medium">Total Items</span>
+                    <span className="font-bold text-slate-900">{displayItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500 font-medium">Total Weight</span>
+                    <span className="font-bold text-slate-900">
+                      {hasTBDWeight ? 'Est. ' : ''}
+                      {displayWeight.toFixed(2)} kg
+                    </span>
+                  </div>
+                  <div className="pt-4 border-t border-slate-100">
+                    <div className="flex justify-between items-center">
+                      <span className="text-base font-bold text-slate-900">Estimated Total</span>
+                      <span className="text-xl font-black text-indigo-600">â‚¹{displayItems.reduce((acc, item) => acc + (item.price || 0), 0).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Apply Coupons Box */}
+                <div className="mt-8 pt-8 border-t border-slate-100">
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Apply Coupons</h4>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Enter code" 
+                      className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold"
+                    />
+                    <button className="px-4 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-black transition-all">
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          </div>
+        </>
+      )}
+    </div>
+    );
+  };
+
+  const StoreSection = useMemo(() => {
+    let filteredProducts = storeProducts.filter(p => {
+      const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
+      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesMinPrice = minPrice === '' || p.price >= minPrice;
+      const matchesMaxPrice = maxPrice === '' || p.price <= maxPrice;
+      return matchesCategory && matchesSearch && matchesMinPrice && matchesMaxPrice;
+    });
+
+    // Sorting logic
+    filteredProducts = [...filteredProducts].sort((a, b) => {
+      switch (sortBy) {
+        case 'price-low': return a.price - b.price;
+        case 'price-high': return b.price - a.price;
+        case 'name-asc': return a.name.localeCompare(b.name);
+        case 'name-desc': return b.name.localeCompare(a.name);
+        case 'weight-low': return a.weight - b.weight;
+        case 'weight-high': return b.weight - a.weight;
+        default: return 0;
+      }
+    });
+
+    const hasActivePickup = userAppointments.some(a => a.status === 'Scheduled');
+
+    if (isMobile) {
+      return (
+        <MobileStoreSection
+          storeProducts={storeProducts}
+          categories={categories}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          addItem={addItem}
+          removeStoreItem={removeStoreItem}
+          items={items}
+          showFilters={showFilters}
+          setShowFilters={setShowFilters}
+          minPrice={minPrice}
+          setMinPrice={setMinPrice}
+          maxPrice={maxPrice}
+          setMaxPrice={setMaxPrice}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+          showJiffySuggestion={showJiffySuggestion}
+          setShowJiffySuggestion={setShowJiffySuggestion}
+          navigateTo={navigateTo}
+          appointments={userAppointments}
+          orderedItemIds={orderedItemIds}
+          setIsMobileMenuOpen={setIsMobileMenuOpen}
+        />
+      );
+    }
+
+    const ShopHeroSlider = () => {
+      const [currentSlide, setCurrentSlide] = useState(0);
+      const slides = [
+        {
+          title: "Bring a Piece of India to Your Doorstep",
+          subtitle: "FESTIVE TRADITIONS",
+          desc: "Authentic sweets, pooja items, and gifts delivered worldwide. Experience the joy of Indian festivals wherever you are.",
+          image: "https://lh3.googleusercontent.com/d/1aAVjEX_ZdnuYP7hULa1_EsD9yO_xzPph",
+          accent: "text-amber-400",
+          bg: "from-slate-900 via-slate-900 to-amber-900/20",
+          glow: "bg-amber-500/20",
+          badge: "Festive Special",
+          fullImage: true
+        },
+        {
+          title: "Perfect Return Gifts for Every Celebration",
+          subtitle: "CURATED GIFTING",
+          desc: "Curated Indian gift packs for weddings, festivals & housewarmings. Make your special moments memorable with authentic Indian gifts.",
+          image: "https://lh3.googleusercontent.com/d/1dxLyoYCj5EPfQP5mp9TEVxxbHCvyw4jg",
+          accent: "text-rose-400",
+          bg: "from-slate-900 via-slate-900 to-rose-900/20",
+          glow: "bg-rose-500/20",
+          badge: "Celebration Ready",
+          fullImage: true
+        },
+        {
+          title: "Missing Indian Sweets?",
+          subtitle: "TASTE OF HOME",
+          desc: "Get fresh, authentic sweets shipped directly from India. From Moti choor laddoo to Kaju Katli, we bring your favorite treats to your doorstep.",
+          image: "https://lh3.googleusercontent.com/d/1UkJBaJFV91unv7jYqOXwEYY91r7ZOkvE",
+          accent: "text-amber-400",
+          bg: "from-slate-900 via-slate-900 to-amber-900/20",
+          glow: "bg-amber-500/20",
+          badge: "Fresh & Authentic",
+          fullImage: true
+        },
+        {
+          title: "All Your Pooja Essentials in One Place",
+          subtitle: "SPIRITUAL HERITAGE",
+          desc: "From diyas to idolsâ€”everything you need for rituals abroad. Maintain your spiritual traditions with authentic pooja items.",
+          image: "https://lh3.googleusercontent.com/d/1gpGBNFhoBWpcTMg5nV2-OEdWRWfQGFEy",
+          accent: "text-teal-400",
+          bg: "from-slate-900 via-slate-900 to-teal-900/20",
+          glow: "bg-teal-500/20",
+          badge: "Spiritual Essentials",
+          fullImage: true
+        }
+      ];
+
+      useEffect(() => {
+        const timer = setInterval(() => {
+          setCurrentSlide((prev) => (prev + 1) % slides.length);
+        }, 7000);
+        
+        return () => {
+          clearInterval(timer);
+        };
+      }, [slides.length]);
+
+      return (
+        <div className="relative overflow-hidden rounded-[3rem] bg-slate-900 text-white shadow-2xl mb-12 h-[500px] group">
+          <AnimatePresence>
+            <motion.div
+              key={currentSlide}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1, ease: "easeInOut" }}
+              className="absolute inset-0"
+            >
+              {slides[currentSlide].fullImage ? (
+                <img 
+                  src={slides[currentSlide].image} 
+                  alt={slides[currentSlide].title}
+                  className="absolute inset-0 w-full h-full object-cover z-0"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <>
+                  <div 
+                    className={`absolute inset-0 bg-gradient-to-r ${slides[currentSlide].bg} z-10`}
+                  />
+                  <div className={`absolute top-1/2 right-0 -translate-y-1/2 w-[700px] h-[700px] ${slides[currentSlide].glow} rounded-full blur-[150px] z-0`} />
+                </>
+              )}
+              
+              {!slides[currentSlide].fullImage && (
+                <div className="relative z-20 h-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center px-10 md:px-24">
+                  <div className="space-y-8">
+                    <div className="space-y-4">
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="flex items-center gap-3"
+                      >
+                        <div className={`px-4 py-1.5 bg-white/5 backdrop-blur-md border border-white/10 rounded-full ${slides[currentSlide].accent} text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 shadow-lg`}>
+                          <Sparkles size={12} /> {slides[currentSlide].subtitle}
+                        </div>
+                        <div className="px-4 py-1.5 bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 rounded-full text-emerald-400 text-[10px] font-black uppercase tracking-[0.2em]">
+                          {slides[currentSlide].badge}
+                        </div>
+                      </motion.div>
+                      <motion.h1 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9] drop-shadow-2xl"
+                      >
+                        {slides[currentSlide].title.split(',').map((part, i) => (
+                          <React.Fragment key={i}>
+                            {part}{i === 0 && slides[currentSlide].title.includes(',') && <br />}
+                          </React.Fragment>
+                        ))}
+                      </motion.h1 >
+                    </div>
+
+                    <motion.p 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.4 }}
+                      className="text-xl text-slate-400 font-medium leading-relaxed max-w-xl"
+                    >
+                      {slides[currentSlide].desc}
+                    </motion.p>
+
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5 }}
+                      className="flex items-center gap-8"
+                    >
+                      <div className="flex -space-x-4">
+                        {[1, 2, 3, 4].map((i) => (
+                          <div key={i} className="w-12 h-12 rounded-full border-4 border-slate-900 bg-slate-800 flex items-center justify-center overflow-hidden shadow-xl">
+                            <img src={`https://i.pravatar.cc/150?img=${i + 20}`} alt="User" />
+                          </div>
+                        ))}
+                        <div className="w-12 h-12 rounded-full border-4 border-slate-900 bg-indigo-600 flex items-center justify-center text-xs font-black shadow-xl">
+                          +5k
+                        </div>
+                      </div>
+                      <div className="text-sm font-bold text-slate-400 leading-tight">
+                        <span className="text-white text-base">Trusted by thousands</span> <br /> of Indians living abroad
+                      </div>
+                    </motion.div>
+                  </div>
+
+                  <div className="hidden lg:block relative h-full py-16">
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9, x: 50 }}
+                      animate={{ opacity: 1, scale: 1, x: 0 }}
+                      transition={{ delay: 0.3, duration: 1, ease: "easeOut" }}
+                      className="relative z-10 h-full group/img"
+                    >
+                      <div className="absolute -inset-4 bg-gradient-to-br from-white/10 to-transparent rounded-[4rem] blur-3xl opacity-50 group-hover/img:opacity-100 transition-opacity duration-700" />
+                      <img 
+                        src={slides[currentSlide].image} 
+                        alt={slides[currentSlide].title} 
+                        className="relative z-10 rounded-[4rem] shadow-2xl border border-white/10 object-cover w-full h-full transform transition-transform duration-700 group-hover/img:scale-[1.02]"
+                        referrerPolicy="no-referrer"
+                      />
+                    </motion.div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Indicators */}
+          <div className="absolute bottom-10 left-10 md:left-24 z-30 flex items-center gap-4">
+            {slides.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  setCurrentSlide(i);
+                }}
+                className="group flex items-center gap-2"
+              >
+                <div className={`h-2 rounded-full transition-all duration-500 ${
+                  currentSlide === i ? 'w-12 bg-white' : 'w-2 bg-white/20 group-hover:bg-white/40'
+                }`} />
+                <span className={`text-[10px] font-black tracking-widest transition-opacity duration-500 ${currentSlide === i ? 'opacity-100' : 'opacity-0'}`}>
+                  0{i + 1}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div className="space-y-8">
+        <ShopHeroSlider />
+        <div className="flex flex-col items-center justify-center gap-6">
+          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-4xl justify-center items-center">
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input 
+                type="text"
+                placeholder="Search products..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setShowFilters(!showFilters)}
+                className={`px-4 py-2.5 rounded-2xl border transition-all flex items-center gap-2 font-bold text-sm ${
+                  showFilters || minPrice !== '' || maxPrice !== ''
+                    ? 'bg-jiffex-orange/10 border-jiffex-orange/30 text-jiffex-orange' 
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <SlidersHorizontal size={18} />
+                <span>Filters</span>
+                {(minPrice !== '' || maxPrice !== '') && (
+                  <span className="w-2 h-2 bg-jiffex-orange rounded-full"></span>
+                )}
+              </button>
+              <div className="relative group">
+                <select 
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="appearance-none pl-4 pr-10 py-2.5 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold text-sm text-slate-600 cursor-pointer"
+                >
+                  <option value="featured">Featured</option>
+                  <option value="price-low">Price: Low to High</option>
+                  <option value="price-high">Price: High to Low</option>
+                  <option value="name-asc">Name: A-Z</option>
+                  <option value="name-desc">Name: Z-A</option>
+                  <option value="weight-low">Weight: Low to High</option>
+                  <option value="weight-high">Weight: High to Low</option>
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6 flex flex-col items-center">
+          <div className="flex flex-wrap gap-2 justify-center">
+            {['All', ...categories].map(cat => (
+              <button 
+                key={cat} 
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-2 rounded-xl border transition-all text-xs font-bold uppercase tracking-widest ${
+                  selectedCategory === cat 
+                    ? 'bg-deep-blue border-deep-blue text-white shadow-lg shadow-deep-blue/20' 
+                    : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Price Range (â‚¹)</label>
+                    <div className="flex items-center gap-3">
+                      <input 
+                        type="number" 
+                        placeholder="Min"
+                        value={minPrice}
+                        onChange={(e) => setMinPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <span className="text-slate-400">-</span>
+                      <input 
+                        type="number" 
+                        placeholder="Max"
+                        value={maxPrice}
+                        onChange={(e) => setMaxPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-end">
+                    <button 
+                      onClick={() => { setMinPrice(''); setMaxPrice(''); setSortBy('featured'); setSelectedCategory('All'); setSearchQuery(''); }}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-4"
+                    >
+                      Reset all filters
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredProducts.length > 0 ? filteredProducts.map(product => {
+            const cartItem = items.find(i => i.name === product.name && i.source === 'Store' && !orderedItemIds.has(i.id));
+            const itemCount = cartItem?.quantity || 0;
+            
+            return (
+              <motion.div 
+                layout
+                key={product.id} 
+                className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative flex flex-col"
+              >
+                <AnimatePresence>
+                  {itemCount > 0 && (
+                    <motion.div 
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      className="absolute top-4 right-4 z-10 w-8 h-8 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-xs font-bold shadow-lg border-2 border-white"
+                    >
+                      {itemCount}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <div className="aspect-square overflow-hidden relative">
+                  <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                  <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                    {product.category}
+                  </div>
+                </div>
+                <div className="p-5 flex-1 flex flex-col">
+                  <div className="flex justify-between items-start mb-1">
+                    <h3 className="font-bold text-deep-blue leading-tight truncate flex-1 mr-2">{product.name}</h3>
+                    <span className="text-jiffex-orange font-bold shrink-0">â‚¹{product.price}</span>
+                  </div>
+                  <div className="flex flex-col gap-1 mb-4">
+                    <p className="text-[10px] text-slate-500">Weight: {product.weight} kg</p>
+                    {product.estimatedDelivery && (
+                      <div className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                        <Calendar size={10} /> Ready to ship by: {product.estimatedDelivery}
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-auto">
+                    <div className="flex justify-center">
+                      <motion.button 
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => {
+                          addItem({ 
+                            name: product.name, 
+                            weight: product.weight, 
+                            price: product.price, 
+                            image: product.image,
+                            estimatedDelivery: product.estimatedDelivery 
+                          }, 'Store');
+                          toast.success(`"${product.name}" added to your cart!`);
+                        }}
+                        className="w-12 h-12 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/20"
+                      >
+                        <Plus size={24} />
+                      </motion.button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          }) : (
+            <div className="col-span-full py-20 text-center space-y-4">
+              <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                <Search size={40} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">No products found</h3>
+              <p className="text-slate-500">Try adjusting your search or category filter.</p>
+              <button 
+                onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }}
+                className="text-indigo-600 font-bold hover:underline"
+              >
+                Clear all filters
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Floating Checkout Sticky Bottom Bar for Laptop/Desktop View */}
+        <AnimatePresence>
+          {(() => {
+            const storeCartItems = items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Store');
+            const totalStoreCartCount = storeCartItems.reduce((acc, item) => acc + (item.quantity || 1), 0);
+            const storeCartTotal = storeCartItems.reduce((acc, item) => acc + (Number(item.price || 0) * (item.quantity || 1)), 0);
+
+            if (totalStoreCartCount <= 0) return null;
+
+            return (
+              <motion.div 
+                initial={{ y: 80, opacity: 0, scale: 0.95 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                exit={{ y: 80, opacity: 0, scale: 0.95 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-2xl z-[75] pointer-events-auto"
+              >
+                <div className="bg-[#091535] text-white p-4 rounded-2xl shadow-[0_20px_40px_rgba(9,21,53,0.4)] flex items-center justify-between border border-white/10 backdrop-blur-md">
+                  <div className="flex items-center gap-3.5 text-left">
+                    <div className="w-11 h-11 bg-orange-500 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md">
+                      <ShoppingCart size={22} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider opacity-60">In Cart</span>
+                        {storeCartTotal > 0 && (
+                          <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
+                            â‚¹{storeCartTotal.toLocaleString('en-IN')}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-sm font-black text-white">
+                        {totalStoreCartCount} Product{totalStoreCartCount > 1 ? 's' : ''} added
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        navigateTo('cart');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="px-5 py-2.5 bg-white text-[#091535] hover:bg-slate-100 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-1.5 active:scale-95 transition-all shadow-md cursor-pointer group"
+                    >
+                      <span>View Cart</span>
+                      <ArrowRight size={13} className="stroke-[3] group-hover:translate-x-0.5 transition-transform" />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })()}
+        </AnimatePresence>
+
+        {/* Action Buttons */}
+      </div>
+    );
+  }, [selectedCategory, searchQuery, sortBy, minPrice, maxPrice, showFilters, addItem, removeStoreItem, handleCheckout, items, storeProducts, currentUser, showJiffySuggestion, setActiveTab, appointments, lastBookingRef, isMobile, setIsMobileMenuOpen, navigateTo, orderedItemIds]);
+
+  const FinalizeSection = useMemo(() => {
+    if (!currentUser) {
+      return (
+        <div className="max-w-md mx-auto text-center space-y-6 bg-white p-10 rounded-[2.5rem] shadow-xl border border-slate-100 my-8">
+          <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto">
+            <Lock size={40} />
+          </div>
+          <h2 className="text-3xl font-black text-slate-900">Secure Checkout</h2>
+          <p className="text-slate-500 leading-relaxed">Please sign in to your account to securely complete your payment and finalize your shipment.</p>
+          <button 
+            onClick={() => { setLoginTriggerSource('checkout'); setShowLoginModal(true); }}
+            className="w-full btn-cta flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <UserIcon size={20} /> Sign In to Pay
+          </button>
+          <button 
+            onClick={() => navigateTo('cart')}
+            className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all cursor-pointer"
+          >
+            Back to Cart
+          </button>
+        </div>
+      );
+    }
+    const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
+    const isWarehouseCheckout = orderId ? orderId.startsWith('SW-') : cartItems.some(i => i.source === 'Warehouse');
+    const hasScheduledPickup = userAppointments.some(a => a.status === 'Scheduled');
+    const isPayAtHome = hasScheduledPickup && shippingPreference === 'International' && !cartItems.some(i => i.source === 'Store');
+
+    if (isPaid && !isMobile) {
+      
+      return (
+        <div className="max-w-2xl mx-auto text-center space-y-6 pb-12 pt-4">
+          <motion.div 
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto"
+          >
+            <CheckCircle2 size={64} />
+          </motion.div>
+          <div className="space-y-2">
+            <h2 className="text-4xl font-black text-slate-900">
+              {isWarehouseCheckout ? 'Shipment Request Confirmed!' : isPayAtHome ? 'Order Confirmed!' : 'Payment Successful!'}
+            </h2>
+            <p className="text-slate-500">
+              {isWarehouseCheckout 
+                ? `Your shipment request has been placed successfully. Order ID: ${orderId}` 
+                : `Your order ${orderId} has been placed successfully.`
+              }
+            </p>
+          </div>
+          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+              <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Status</span>
+              <span className="font-black text-indigo-600">{isWarehouseCheckout ? 'Awaiting Warehouse Arrival' : '12-15 Business Days'}</span>
+            </div>
+            <p className="text-sm text-slate-500 leading-relaxed font-semibold">
+              {isWarehouseCheckout 
+                ? "Your shipment request has been successfully registered. You can check the status of your order in My Orders."
+                : isPayAtHome 
+                  ? "Your order is confirmed. Our agent will collect your items and finalize the billing at your home during pickup. You'll receive a confirmation email shortly."
+                  : shippingPreference === 'LocalPickup'
+                    ? "Your payment is successful. Our agent will bring these items when they come for your scheduled home pickup. You'll receive a confirmation email shortly."
+                    : `We have received your payment. Our team will consolidate your items and ship them on ${selectedDate}. You can track your shipment in your history.`
+              }
+            </p>
+          </div>
+
+          {/* Custom consolidation guidance on payment success */}
+          {shopConsolidationOption === 'warehouse' && (
+            <div className="p-6 bg-emerald-50 border border-emerald-100/65 rounded-3xl text-left space-y-3 max-w-xl mx-auto shadow-sm">
+              <h4 className="font-black text-emerald-950 text-base flex items-center gap-2">
+                <Warehouse className="text-emerald-700 animate-pulse" size={20} />
+                Next Step: Send items to our Warehouse
+              </h4>
+              <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                You decided to mail more items directly to our forwarding hub. We've compiled your customized forwarding instructions. Click below to view them.
+              </p>
+              <button
+                onClick={() => {
+                  navigateTo('warehouse');
+                  setIsPaid(false);
+                  setOrderId(null);
+                  setShopConsolidationOption(null);
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow shadow-emerald-200"
+              >
+                Get Warehouse Mailing Address â†’
+              </button>
+            </div>
+          )}
+
+          <div className="flex justify-center pt-2">
+            <button 
+              onClick={() => { 
+                navigateTo('history'); 
+                setIsPaid(false); 
+                setOrderId(null); 
+                setShopConsolidationOption(null);
+              }}
+              className="w-full md:w-2/3 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-black transition-all"
+            >
+              {isWarehouseCheckout ? 'Go to My Orders' : 'View Order History'}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (isMobile) {
+      const hasHomePickupActive = (shopConsolidationOption === 'pickup' && (pickupConsolidationOption === 'shop_and_ship' || userAppointments.some(a => a.status === 'Scheduled' || a.status === 'Picked Up'))) && cartItems.some(i => i.source === 'Store');
+      const currentStep = isPaid ? 5 : activeCheckoutStep;
+      return (
+        <div className="max-w-md mx-auto space-y-6 pb-12 pt-4">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-2 text-[#0A142F]">
+            {currentStep !== 5 && (
+              <button 
+                onClick={() => {
+                  if (currentStep > 1) {
+                    if (hasHomePickupActive && currentStep === 4) {
+                      setActiveCheckoutStep(1);
+                    } else {
+                      setActiveCheckoutStep(currentStep - 1);
+                    }
+                  } else {
+                    goBack();
+                  }
+                }}
+                className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all shrink-0 cursor-pointer"
+              >
+                <ArrowLeft size={16} />
+              </button>
+            )}
+            <div>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight">Shop & Ship Checkout</h2>
+              {currentStep !== 5 && (
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                  {hasHomePickupActive 
+                    ? `Step ${currentStep === 4 ? 2 : currentStep === 5 ? 3 : 1} of 3`
+                    : `Step ${currentStep} of 5`
+                  }
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Stepper Progress Bar */}
+          {currentStep !== 5 && (
+            <div className={`grid ${hasHomePickupActive ? 'grid-cols-3' : 'grid-cols-5'} gap-1 items-center justify-between text-center py-3 border border-slate-100 bg-white rounded-xl shadow-sm`}>
+              {(hasHomePickupActive ? [
+                { step: 1, label: 'Items' },
+                { step: 4, label: 'Review & Pay' },
+                { step: 5, label: 'Done' }
+              ] : [
+                { step: 1, label: 'Items' },
+                { step: 2, label: 'Address' },
+                { step: 3, label: 'Schedule' },
+                { step: 4, label: 'Review' },
+                { step: 5, label: 'Done' }
+              ]).map((s) => {
+                const isActive = currentStep === s.step;
+                const isCompleted = currentStep > s.step;
+                return (
+                  <div key={s.step} className="flex flex-col items-center">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black transition-all ${
+                      isCompleted ? 'bg-indigo-600 text-white' :
+                      isActive ? 'bg-[#091535] text-white ring-4 ring-indigo-100' :
+                      'bg-slate-100 text-slate-400'
+                    }`}>
+                      {s.step === 4 && hasHomePickupActive ? 2 : s.step === 5 && hasHomePickupActive ? 3 : s.step}
+                    </div>
+                    <span className={`text-[9px] font-black tracking-tight mt-1 transition-colors ${
+                      isActive || isCompleted ? 'text-[#091535] font-black' : 'text-slate-400 font-bold'
+                    }`}>
+                      {s.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Steps Contents */}
+          <div className="min-h-[300px]">
+            {/* Step 1: Items Selector */}
+            {currentStep === 1 && (
+              <div className="space-y-6 text-left">
+                <div className="flex items-center gap-2 text-[#0A142F]">
+                  <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
+                  <h3 className="text-sm font-black uppercase tracking-wider">Step 1: Review Items</h3>
+                </div>
+                
+                {/* Display list of checkout items */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+                  {cartItems.map((item) => (
+                    <div key={item.id} className="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0">
+                      <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center shrink-0 overflow-hidden border border-slate-100">
+                        {item.image ? (
+                          <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <ShoppingBag size={18} className="text-slate-400" />
+                        )}
+                      </div>
+                      <div className="flex-grow min-w-0">
+                        <p className="text-xs font-bold text-slate-900 truncate">{item.name}</p>
+                        <p className="text-[10px] text-slate-400 font-medium">Qty: {item.quantity || 1} â€¢ {item.weight ? `${item.weight.toFixed(2)} kg` : 'TBD'}</p>
+                      </div>
+                      <div className="text-xs font-black text-slate-900 shrink-0">
+                        â‚¹{(item.price || 0).toFixed(2)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Shipping Preference Selection */}
+                {!isWarehouseCheckout && userAppointments.some(a => a.status === 'Scheduled') && cartItems.length > 0 && (
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+                    <h4 className="text-xs font-black text-[#0A142F] uppercase tracking-wider">How would you like to receive your items?</h4>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div 
+                        onClick={() => {
+                          setShippingPreference('International');
+                          setAddress({
+                            fullName: pickupName || currentUser?.name || '',
+                            email: currentUser?.email || '',
+                            phone: pickupPhone || '',
+                            addressLine1: `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}`,
+                            city: pickupAddress.city,
+                            state: pickupAddress.state,
+                            zipCode: pickupAddress.zip,
+                            country: 'India'
+                          });
+                        }}
+                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${shippingPreference === 'International' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                      >
+                        <div className="flex items-center gap-2.5 mb-1.5">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${shippingPreference === 'International' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                            <Globe size={16} />
+                          </div>
+                          <div className="text-xs font-black text-slate-900">Ship to my home</div>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
+                          Consolidate with pickup items and ship to your home.
+                        </p>
+                      </div>
+
+                      <div 
+                        onClick={() => {
+                          setShippingPreference('LocalPickup');
+                          setAddress(WAREHOUSE_ADDRESS);
+                        }}
+                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${shippingPreference === 'LocalPickup' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                      >
+                        <div className="flex items-center gap-2.5 mb-1.5">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${shippingPreference === 'LocalPickup' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                            <Package size={16} />
+                          </div>
+                          <div className="text-xs font-black text-slate-900">Bring items during Home Pickup</div>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
+                          Our agent will bring these items during scheduled pickup.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Navigation Buttons */}
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    onClick={goBack}
+                    className="flex-1 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    Back to Cart
+                  </button>
+                  <button 
+                    onClick={() => setActiveCheckoutStep(hasHomePickupActive ? 4 : 2)}
+                    className="flex-1 py-3.5 bg-[#091535] text-white font-black rounded-xl text-xs transition-all active:scale-[0.98] shadow-md shadow-indigo-100 cursor-pointer"
+                  >
+                    {hasHomePickupActive ? 'Next: Payment â†’' : 'Next: Address â†’'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Address Details */}
+            {currentStep === 2 && (
+              <div className="space-y-6 text-left">
+                <div className="flex items-center gap-2 text-[#0A142F]">
+                  <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
+                  <h3 className="text-sm font-black uppercase tracking-wider">Step 2: Destination Address</h3>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Full Name</label>
+                    <input 
+                      type="text" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.fullName}
+                      onChange={e => setAddress({...address, fullName: e.target.value})}
+                      placeholder="Receiver's Full Name"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Email</label>
+                      <input 
+                        type="email" 
+                        disabled={shippingPreference === 'LocalPickup'}
+                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                        value={address.email}
+                        onChange={e => setAddress({...address, email: e.target.value})}
+                        placeholder="email@example.com"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Phone</label>
+                      <input 
+                        type="tel" 
+                        disabled={shippingPreference === 'LocalPickup'}
+                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                        value={address.phone}
+                        onChange={e => setAddress({...address, phone: e.target.value})}
+                        placeholder="Receiver's Contact Number"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Address Line 1</label>
+                    <input 
+                      type="text" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.addressLine1}
+                      onChange={e => setAddress({...address, addressLine1: e.target.value})}
+                      placeholder="Street, Building, Flat No."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">City</label>
+                      <input 
+                        type="text" 
+                        disabled={shippingPreference === 'LocalPickup'}
+                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                        value={address.city}
+                        onChange={e => setAddress({...address, city: e.target.value})}
+                        placeholder="City"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">State</label>
+                      <input 
+                        type="text" 
+                        disabled={shippingPreference === 'LocalPickup'}
+                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                        value={address.state || ''}
+                        onChange={e => setAddress({...address, state: e.target.value})}
+                        placeholder="State"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Zip Code</label>
+                      <input 
+                        type="text" 
+                        disabled={shippingPreference === 'LocalPickup'}
+                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500"
+                        placeholder="e.g. 123456"
+                        value={address.zipCode}
+                        onChange={e => setAddress({...address, zipCode: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-0.5">Country</label>
+                      <select 
+                        disabled={shippingPreference === 'LocalPickup'}
+                        className="w-full p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold disabled:bg-slate-50 disabled:text-slate-500 bg-white"
+                        value={address.country}
+                        onChange={e => setAddress({...address, country: e.target.value})}
+                      >
+                        {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Navigation Buttons */}
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    onClick={() => setActiveCheckoutStep(1)}
+                    className="flex-1 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    â† Back
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const isValid = address.fullName && address.email && address.phone && address.addressLine1 && address.city && address.state && address.zipCode;
+                      if (!isValid) {
+                        toast.error("Please fill out all destination address fields to proceed.");
+                        return;
+                      }
+                      setActiveCheckoutStep(3);
+                    }}
+                    className="flex-1 py-3.5 bg-[#091535] text-white font-black rounded-xl text-xs transition-all active:scale-[0.98] shadow-md shadow-indigo-100 cursor-pointer"
+                  >
+                    Next: Date â†’
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Shipping Date Selection */}
+            {currentStep === 3 && (
+              <div className="space-y-6 text-left">
+                <div className="flex items-center gap-2 text-[#0A142F]">
+                  <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
+                  <h3 className="text-sm font-black uppercase tracking-wider">Step 3: Select Shipping Date</h3>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Available Dispatch Dates</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {SHIPPING_DATES.map(date => {
+                      const dObj = new Date(date);
+                      return (
+                        <button 
+                          key={date}
+                          onClick={() => setSelectedDate(date)}
+                          className={`p-4 rounded-xl border-2 transition-all text-center flex flex-col items-center justify-center cursor-pointer ${
+                            selectedDate === date 
+                              ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
+                              : 'border-slate-100 hover:border-slate-200 text-slate-600'
+                          }`}
+                        >
+                          <div className="text-[9px] font-extrabold uppercase opacity-65 mb-1">
+                            {dObj.toLocaleString('default', { month: 'short' })}
+                          </div>
+                          <div className="text-lg font-black">{date.split('-')[2]}</div>
+                          <div className="text-[9px] font-semibold opacity-60 mt-0.5">
+                            {dObj.toLocaleString('default', { weekday: 'short' })}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Navigation Buttons */}
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    onClick={() => setActiveCheckoutStep(2)}
+                    className="flex-1 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    â† Back
+                  </button>
+                  <button 
+                    onClick={() => setActiveCheckoutStep(4)}
+                    className="flex-1 py-3.5 bg-[#091535] text-white font-black rounded-xl text-xs transition-all active:scale-[0.98] shadow-md shadow-indigo-100 cursor-pointer"
+                  >
+                    Next: Pay â†’
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: Review & Payment Details */}
+            {currentStep === 4 && (
+              <div className="space-y-6 text-left">
+                <div className="flex items-center gap-2 text-[#0A142F]">
+                  <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
+                  <h3 className="text-sm font-black uppercase tracking-wider">Step 4: Review & Pay</h3>
+                </div>
+
+                {/* Order Summary Card */}
+                <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-sm space-y-4">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Order Summary</h4>
+                  
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between text-slate-300">
+                      <span>Total Weight</span>
+                      <span className="font-bold text-white">{totalWeight.toFixed(2)} kg</span>
+                    </div>
+                    <div className="flex justify-between text-slate-300">
+                      <span>Shipping ({address.country})</span>
+                      <span className="font-bold text-white">â‚¹{(totalWeight * (shippingRates[address.country] || 10)).toFixed(2)}</span>
+                    </div>
+
+                    {(() => {
+                      const discountPercent = shippingDiscounts[address.country] || 0;
+                      if (discountPercent > 0) {
+                        const baseShip = totalWeight * (shippingRates[address.country] || 10);
+                        const saved = baseShip * (discountPercent / 100);
+                        return (
+                          <div className="flex justify-between text-rose-400 font-semibold">
+                            <span>Shipping Discount ({discountPercent}%)</span>
+                            <span>-â‚¹{saved.toFixed(2)}</span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    <div className="flex justify-between text-slate-300">
+                      <span>Items Cost</span>
+                      <span className="font-bold text-white">â‚¹{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
+                    </div>
+
+                    {userAppointments.some(a => a.status === 'Scheduled') && (
+                      <div className="flex justify-between text-slate-300">
+                        <span>Shop Item Delivery</span>
+                        <span className="text-emerald-400 font-bold">{shippingPreference === 'LocalPickup' ? 'During Home Pickup' : 'To my Home'}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Coupon Block */}
+                  <div className="py-2.5 border-t border-b border-slate-800/80 my-1">
+                    {!appliedCoupon ? (
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">Coupon Code</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            maxLength={5}
+                            value={couponCodeInput}
+                            onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                            className="bg-slate-800 text-white text-xs font-mono font-bold uppercase rounded-lg px-2.5 py-1.5 flex-grow outline-none border border-slate-700 placeholder-slate-500"
+                            placeholder="CODE5"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const codeClean = couponCodeInput.trim().toUpperCase();
+                              if (codeClean.length !== 5) {
+                                toast.error("Coupon code must be exactly 5 characters.");
+                                return;
+                              }
+                              const matched = coupons.find(c => c.code === codeClean);
+                              if (!matched) {
+                                toast.error(`Coupon code "${codeClean}" is invalid.`);
+                                return;
+                              }
+                              if (!matched.isEnabled) {
+                                toast.error(`Coupon code "${codeClean}" is inactive.`);
+                                return;
+                              }
+                              setAppliedCoupon({
+                                code: matched.code,
+                                discountPercent: matched.discountPercent
+                              });
+                              toast.success(`Coupon "${matched.code}" applied! Saved ${matched.discountPercent}% OFF.`);
+                            }}
+                            className="bg-indigo-600 text-white text-xs font-bold rounded-lg px-3 py-1.5 transition-all cursor-pointer"
+                          >
+                            Apply
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2">
+                        <span className="text-[10px] text-emerald-400 font-bold font-mono uppercase">{appliedCoupon.code} applied ({appliedCoupon.discountPercent}% OFF)</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAppliedCoupon(null);
+                            setCouponCodeInput('');
+                          }}
+                          className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-1 flex justify-between items-center">
+                    <span className="text-sm font-bold text-slate-300">Total Amount</span>
+                    <span className="text-xl font-black text-indigo-400">
+                      â‚¹{(appliedCoupon ? Math.max(0, totalCost - (totalCost * (appliedCoupon.discountPercent / 100))) : totalCost).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Payment Selection or Pay at Home */}
+                {!isWarehouseCheckout && (
+                  !isPayAtHome ? (
+                    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Payment Method</h4>
+                      <div className="space-y-2.5">
+                        <div 
+                          onClick={() => setPaymentMethod('upi')}
+                          className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${paymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                        >
+                          <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0">UPI</div>
+                          <div className="text-left">
+                            <p className="text-xs font-bold text-slate-900 leading-none">UPI / QR Code</p>
+                            <p className="text-[9px] text-slate-500 mt-1">Google Pay, PhonePe, Paytm, Any UPI App</p>
+                          </div>
+                          <div className={`ml-auto w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                            {paymentMethod === 'upi' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                          </div>
+                        </div>
+
+                        <div 
+                          onClick={() => setPaymentMethod('card')}
+                          className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                        >
+                          <div className="w-9 h-9 bg-slate-800 rounded-lg flex items-center justify-center text-white shrink-0"><CreditCard size={16} /></div>
+                          <div className="text-left">
+                            <p className="text-xs font-bold text-slate-900 leading-none">Credit / Debit Card</p>
+                            <p className="text-[9px] text-slate-500 mt-1">Visa, Mastercard, Amex</p>
+                          </div>
+                          <div className={`ml-auto w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                            {paymentMethod === 'card' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Razorpay Test Mode Helper Guide */}
+                      <div className="mt-4 p-3 bg-indigo-50/80 border border-indigo-100 rounded-xl text-left">
+                        <p className="text-[10px] font-black text-indigo-950 flex items-center gap-1">
+                          <Sparkles size={12} className="text-indigo-600 animate-pulse" /> Razorpay Test Mode Guide
+                        </p>
+                        <p className="text-[9px] text-indigo-900 mt-1.5 leading-normal font-semibold">
+                          To bypass international card limits in Razorpay's Test Mode, please select:
+                        </p>
+                        <ul className="list-disc pl-3 text-[9px] text-indigo-900/90 mt-1.5 space-y-1 leading-normal font-medium">
+                          <li><strong>UPI / QR Code:</strong> Choose <span className="font-bold">UPI</span>, enter <code className="bg-white/90 px-1 py-0.5 rounded border border-indigo-100 font-mono text-indigo-600">test@upi</code>, then click <span className="font-bold">Success</span> to simulate a completed transaction.</li>
+                          <li><strong>Netbanking:</strong> Select any bank (e.g. SBI) and click <span className="font-bold">Success</span> on the bank simulator.</li>
+                          <li><strong>Domestic Card:</strong> Use India test Visa <code className="bg-white/90 px-1 py-0.5 rounded border border-indigo-100 font-mono text-indigo-600">4111 1111 1111 1111</code> with CVV <span className="font-mono font-bold">123</span>.</li>
+                        </ul>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 space-y-2">
+                      <h4 className="text-xs font-black text-slate-900 flex items-center gap-2">
+                        <CheckCircle2 size={16} className="text-emerald-600" /> Pay at Home enabled
+                      </h4>
+                      <p className="text-[10px] text-slate-600 leading-relaxed font-semibold">
+                        Pay for your shop items along with your shipping charges during our home pickup visit.
+                      </p>
+                    </div>
+                  )
+                )}
+
+                {/* Terms Consent and Checkout Button */}
+                <div className="bg-slate-50 p-3.5 rounded-xl text-[10px] text-slate-500 leading-relaxed font-medium">
+                  By placing this order, you agree to the international shipping terms and conditions of Jiffex.
+                </div>
+
+                {/* Navigation Buttons */}
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    onClick={() => setActiveCheckoutStep(hasHomePickupActive ? 1 : 3)}
+                    className="py-3.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs px-5 transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    â† Back
+                  </button>
+                  <button 
+                    onClick={handleFinalPayment}
+                    className="flex-grow py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs transition-all active:scale-[0.98] shadow-lg shadow-emerald-100 cursor-pointer"
+                  >
+                    {isWarehouseCheckout 
+                      ? 'Confirm Shipment Request'
+                      : isPayAtHome 
+                        ? 'Place Order (Pay at Home) â†’' 
+                        : `Pay & Place Order â†’`
+                    }
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 5: Done (Confirmed) */}
+            {currentStep === 5 && (
+              <div className="space-y-6 text-left animate-fade-in font-sans">
+                {/* Confirmation Card */}
+                <div className="bg-emerald-50 border border-emerald-200/60 p-5 rounded-2xl flex flex-col gap-4 shadow-sm relative overflow-hidden">
+                  <div className="flex items-start gap-3 z-10">
+                    <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-200">
+                      <CheckCircle2 size={22} />
+                    </div>
+                    <div>
+                      <span className="inline-block text-[9px] font-extrabold text-emerald-700 tracking-wider bg-emerald-100 px-2 py-0.5 rounded-full mb-1">
+                        ORDER CONFIRMED
+                      </span>
+                      <h2 className="text-sm font-black text-slate-900 leading-tight">
+                        Thanks, {currentUser?.name?.split(' ')[0] || 'Customer'}!
+                      </h2>
+                      <p className="text-[10px] text-slate-500 font-semibold leading-normal mt-1">
+                        {isWarehouseCheckout 
+                          ? 'Your warehouse shipment request has been placed successfully.' 
+                          : 'Your shop order has been placed successfully.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-100 p-3 rounded-xl flex items-center justify-between gap-3 shrink-0 shadow-sm">
+                    <div>
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">ORDER REFERENCE ID</p>
+                      <p className="text-xs font-black text-[#091535] tracking-wide mt-1.5 font-mono">
+                        {orderId || 'SH-00214'}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const ref = orderId || 'SH-00214';
+                        navigator.clipboard.writeText(ref);
+                        toast.success('Order Reference ID copied!');
+                      }}
+                      className="p-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-all shrink-0 cursor-pointer"
+                    >
+                      <Copy size={13} className="stroke-[2.5]" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3 text-xs">
+                    <span className="font-bold text-slate-400 uppercase tracking-wider">Estimated Delivery</span>
+                    <span className="font-black text-indigo-600">{isWarehouseCheckout ? 'Awaiting Warehouse Arrival' : '12-15 Business Days'}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
+                    {isWarehouseCheckout 
+                      ? "Your shipment request is registered. Once received at our hub, we will weigh and bill your order."
+                      : isPayAtHome 
+                        ? "Our agent will bring your order and finalize billing at your home during pickup."
+                        : shippingPreference === 'LocalPickup'
+                          ? "Payment received. Our agent will bring these items with them during scheduled home pickup."
+                          : `We have received your payment. Our team will consolidate your items and ship them on ${selectedDate}.`
+                    }
+                  </p>
+                </div>
+
+                {/* Consolidation Options Prompts */}
+                {shopConsolidationOption === 'warehouse' && (
+                  <div className="p-5 bg-emerald-50 border border-emerald-100 rounded-2xl text-left space-y-2.5">
+                    <h4 className="font-black text-emerald-950 text-xs flex items-center gap-1.5">
+                      <Warehouse className="text-emerald-700 animate-pulse" size={15} />
+                      Send items to our Warehouse
+                    </h4>
+                    <p className="text-[10px] text-slate-600 leading-relaxed font-semibold">
+                      We've compiled your customized forwarding instructions. Get your mailing address now.
+                    </p>
+                    <button
+                      onClick={() => {
+                        navigateTo('warehouse');
+                        setIsPaid(false);
+                        setOrderId(null);
+                        setShopConsolidationOption(null);
+                      }}
+                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow shadow-emerald-200 cursor-pointer"
+                    >
+                      Get Warehouse Address â†’
+                    </button>
+                  </div>
+                )}
+
+                {/* Go to history */}
+                <button 
+                  onClick={() => { 
+                    navigateTo('history'); 
+                    setIsPaid(false); 
+                    setOrderId(null); 
+                    setShopConsolidationOption(null);
+                  }}
+                  className="w-full py-3.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-black transition-all cursor-pointer"
+                >
+                  {isWarehouseCheckout ? 'Go to My Orders' : 'View Order History'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div id="finalize-checkout-grid" className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Back Action */}
+          <button 
+            id="btn-finalize-back"
+            onClick={goBack} 
+            className="flex items-center gap-2 text-slate-600 hover:text-indigo-600 font-bold transition-all group py-1 cursor-pointer"
+          >
+            <ArrowLeft className="group-hover:-translate-x-1 transition-transform text-slate-500 group-hover:text-indigo-600" size={20} />
+            <span>Back</span>
+          </button>
+
+          {/* Order ID Header */}
+          {orderId && !isWarehouseCheckout && (
+            <div id="finalize-order-header" className="bg-gradient-to-r from-indigo-600 to-violet-600 p-6 rounded-2xl text-white shadow-lg shadow-indigo-100 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-widest opacity-80">Order Reference</div>
+                <div className="text-2xl font-black">{orderId}</div>
+              </div>
+              <div className="px-4 py-2 bg-white/20 backdrop-blur rounded-xl text-xs font-bold">
+                Awaiting Payment
+              </div>
+            </div>
+          )}
+          
+          {/* Shipping Preference Selection */}
+          {(!isWarehouseCheckout && (shopConsolidationOption === 'pickup')) && cartItems.length > 0 && (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold flex items-center gap-2 text-slate-900">
+                  <Truck className="text-indigo-600" /> Shop Items Shipping Destination
+                </h3>
+                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                  Linked with Home Pickup Schedule
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium">
+                Choose where you want your Shop items delivered. You can ship them together to your Home Pickup address, enter a different delivery address, or hold them at our warehouse.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Option 1: Ship to Home Pickup Address */}
+                <div 
+                  onClick={() => {
+                    setShopItemsShippingDestination('home');
+                    setShippingPreference('International');
+                    if (pickupDestination && pickupDestination.addressLine1) {
+                      setAddress({
+                        fullName: pickupDestination.fullName || pickupName || currentUser?.name || '',
+                        email: pickupDestination.email || currentUser?.email || '',
+                        phone: pickupDestination.phone || pickupPhone || '',
+                        addressLine1: pickupDestination.addressLine1,
+                        city: pickupDestination.city,
+                        state: pickupDestination.state,
+                        zipCode: pickupDestination.zipCode,
+                        country: pickupDestination.country || 'USA'
+                      });
+                    } else {
+                      setAddress({
+                        fullName: pickupName || currentUser?.name || '',
+                        email: currentUser?.email || '',
+                        phone: pickupPhone || '',
+                        addressLine1: `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}`,
+                        city: pickupAddress.city,
+                        state: pickupAddress.state,
+                        zipCode: pickupAddress.zip,
+                        country: 'India'
+                      });
+                    }
+                    toast.success('Shipping destination set to Home Pickup Address!');
+                  }}
+                  className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                    shopItemsShippingDestination === 'home'
+                      ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-1 ring-indigo-600/20' 
+                      : 'border-slate-100 hover:border-slate-200 bg-white'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${shopItemsShippingDestination === 'home' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                          <Home size={18} />
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-slate-900 text-xs">Home Pickup Address</div>
+                          <span className="text-[9px] text-indigo-600 font-bold uppercase tracking-wider">Pickup Synced</span>
+                        </div>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${shopItemsShippingDestination === 'home' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>
+                        {shopItemsShippingDestination === 'home' && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+                      Ship items together to your home destination address alongside your home pickup shipment.
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2.5 border-t border-slate-200/60 text-[10px] text-slate-500 space-y-0.5">
+                    <p>ğŸ“… <span className="font-bold text-slate-700">Date:</span> {selectedPickupDate ? new Date(selectedPickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Pickup Date'}</p>
+                    <p className="truncate">ğŸ“ <span className="font-bold text-slate-700">To:</span> {pickupDestination.fullName || address.fullName || 'Receiver'}, {pickupDestination.city || address.city || 'City'}</p>
+                  </div>
+                </div>
+
+                {/* Option 2: Enter Another Address */}
+                <div 
+                  onClick={() => {
+                    setShopItemsShippingDestination('custom');
+                    setShippingPreference('International');
+                    toast.success('Custom address mode enabled. Please enter destination address below.');
+                  }}
+                  className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                    shopItemsShippingDestination === 'custom'
+                      ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-1 ring-indigo-600/20' 
+                      : 'border-slate-100 hover:border-slate-200 bg-white'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${shopItemsShippingDestination === 'custom' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                          <MapPin size={18} />
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-slate-900 text-xs">Another Address</div>
+                          <span className="text-[9px] text-indigo-600 font-bold uppercase tracking-wider">Custom Address</span>
+                        </div>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${shopItemsShippingDestination === 'custom' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>
+                        {shopItemsShippingDestination === 'custom' && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+                      Deliver shop items to another address or recipient other than your home pickup location.
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2.5 border-t border-slate-200/60 text-[10px] text-slate-500 space-y-0.5">
+                    <p>âœï¸ <span className="font-bold text-slate-700">Enter custom recipient</span></p>
+                    <p className="text-indigo-600 font-bold">Fill address form below â†“</p>
+                  </div>
+                </div>
+
+                {/* Option 3: Ship to Jiffex Warehouse */}
+                <div 
+                  onClick={() => {
+                    setShopItemsShippingDestination('warehouse');
+                    setShippingPreference('LocalPickup');
+                    setAddress(WAREHOUSE_ADDRESS);
+                    toast.success('Shipping destination set to Jiffex Warehouse!');
+                  }}
+                  className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                    shopItemsShippingDestination === 'warehouse'
+                      ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-1 ring-indigo-600/20' 
+                      : 'border-slate-100 hover:border-slate-200 bg-white'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${shopItemsShippingDestination === 'warehouse' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                          <Warehouse size={18} />
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-slate-900 text-xs">Jiffex Warehouse</div>
+                          <span className="text-[9px] text-emerald-600 font-bold uppercase tracking-wider">Hub Holding</span>
+                        </div>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${shopItemsShippingDestination === 'warehouse' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>
+                        {shopItemsShippingDestination === 'warehouse' && <div className="w-2 h-2 rounded-full bg-indigo-600" />}
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+                      Hold shop items at the Jiffex Warehouse hub for storage, inspection, or separate pickup.
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2.5 border-t border-slate-200/60 text-[10px] text-slate-500 space-y-0.5">
+                    <p>ğŸ¬ <span className="font-bold text-slate-700">Hub:</span> {WAREHOUSE_ADDRESS.name}</p>
+                    <p className="truncate">ğŸ“ <span className="font-bold text-slate-700">Address:</span> {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Address Form & Shipping Date Logic */}
+          {(shopConsolidationOption === 'pickup' && cartItems.some(i => i.source === 'Store') && shopItemsShippingDestination === 'home') ? (
+            <div className="bg-emerald-50 border border-emerald-200/80 p-5 rounded-2xl flex items-center justify-between text-emerald-900 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-sm">
+                  <Check size={20} />
+                </div>
+                <div>
+                  <p className="font-extrabold text-sm text-slate-900">Destination Address & Shipping Date Synced</p>
+                  <p className="text-xs text-slate-600 font-medium">
+                    Automatically managed through your Home Pickup schedule ({selectedPickupDate ? new Date(selectedPickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Scheduled Pickup Date'}) to {pickupDestination.fullName || 'Home Address'} ({pickupDestination.city || 'City'}, {pickupDestination.country || 'USA'}).
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShopItemsShippingDestination('custom');
+                  toast.info('You can now enter a different shipping address below.');
+                }}
+                className="text-xs font-bold text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 px-3 py-1.5 rounded-xl transition-all shadow-sm shrink-0 cursor-pointer"
+              >
+                Change Address
+              </button>
+            </div>
+          ) : (shopConsolidationOption === 'pickup' && cartItems.some(i => i.source === 'Store') && shopItemsShippingDestination === 'warehouse') ? (
+            <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl flex items-center justify-between text-slate-800 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-sm">
+                  <Warehouse size={20} />
+                </div>
+                <div>
+                  <p className="font-extrabold text-sm text-slate-900">Shipping to Jiffex Warehouse Hub</p>
+                  <p className="text-xs text-slate-600 font-medium">
+                    {WAREHOUSE_ADDRESS.name} â€¢ {WAREHOUSE_ADDRESS.street}, {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state} {WAREHOUSE_ADDRESS.zipCode}
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-wider bg-slate-200 text-slate-800 px-3 py-1 rounded-full">
+                Warehouse Holding
+              </span>
+            </div>
+          ) : (
+            <>
+              {/* Address Form */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    <MapPin className="text-red-500" /> {shippingPreference === 'LocalPickup' ? 'Warehouse Destination' : shopItemsShippingDestination === 'custom' ? 'Different Shipping Address' : 'Destination Address'}
+                  </h3>
+                  {shopItemsShippingDestination === 'custom' && (
+                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                      Custom Address for Shop Items
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Full Name</label>
+                    <input 
+                      type="text" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.fullName}
+                      onChange={e => setAddress({...address, fullName: e.target.value})}
+                      placeholder="Receiver's Full Name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Email</label>
+                    <input 
+                      type="email" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.email}
+                      onChange={e => setAddress({...address, email: e.target.value})}
+                      placeholder="email@example.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Phone</label>
+                    <input 
+                      type="tel" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.phone}
+                      onChange={e => setAddress({...address, phone: e.target.value})}
+                      placeholder="Receiver's Phone Number"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Address Line 1</label>
+                    <input 
+                      type="text" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.addressLine1}
+                      onChange={e => setAddress({...address, addressLine1: e.target.value})}
+                      placeholder="Street, Building, Flat No."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">City</label>
+                    <input 
+                      type="text" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.city}
+                      onChange={e => setAddress({...address, city: e.target.value})}
+                      placeholder="City"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Zip Code</label>
+                    <input 
+                      type="text" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      placeholder="e.g. 123456"
+                      value={address.zipCode}
+                      onChange={e => setAddress({...address, zipCode: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Country</label>
+                    <select 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.country}
+                      onChange={e => setAddress({...address, country: e.target.value})}
+                    >
+                      {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {shippingPreference && (
+                  <div className="mt-4 p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl flex items-center gap-2 text-xs text-indigo-800">
+                    <Info size={14} />
+                    <span>
+                      {shippingPreference === 'LocalPickup' 
+                        ? 'Warehouse address is used for local pickup items.' 
+                        : shopItemsShippingDestination === 'custom'
+                        ? 'Enter the recipient details where your shop items should be delivered.'
+                        : 'Address pre-filled from your pickup location. You can modify it if needed.'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Shipping Date */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                  <Calendar className="text-indigo-600" /> Select Shipping Date
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {SHIPPING_DATES.map(date => (
+                    <button 
+                      key={date}
+                      onClick={() => setSelectedDate(date)}
+                      className={`p-4 rounded-xl border-2 transition-all text-center ${selectedDate === date ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-100 hover:border-slate-200 text-slate-600'}`}
+                    >
+                      <div className="text-xs font-bold uppercase opacity-60 mb-1">
+                        {new Date(date).toLocaleString('default', { month: 'long' })}
+                      </div>
+                      <div className="text-xl font-black">{date.split('-')[2]}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Payment */}
+          {!isWarehouseCheckout && (
+            !isPayAtHome ? (
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                  <CreditCard className="text-emerald-600" /> Payment Method
+                </h3>
+                <div className="space-y-4">
+                  <div 
+                    onClick={() => setPaymentMethod('upi')}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                  >
+                    <div className="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-black text-sm">UPI</div>
+                    <div>
+                      <div className="font-bold">UPI / QR Code</div>
+                      <div className="text-xs text-slate-500">Google Pay, PhonePe, Paytm, Any UPI App</div>
+                    </div>
+                    <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'upi' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                      {paymentMethod === 'upi' && <div className="w-2 h-2 bg-white rounded-full" />}
+                    </div>
+                  </div>
+                  <div 
+                    onClick={() => setPaymentMethod('card')}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                  >
+                    <div className="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center text-white"><CreditCard size={24} /></div>
+                    <div>
+                      <div className="font-bold">Credit / Debit Card</div>
+                      <div className="text-xs text-slate-500">Visa, Mastercard, Amex</div>
+                    </div>
+                    <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'card' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                      {paymentMethod === 'card' && <div className="w-2 h-2 bg-white rounded-full" />}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-emerald-50 p-8 rounded-3xl border border-emerald-100 space-y-4">
+                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm">
+                  <Home size={32} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">Pay at Home enabled</h3>
+                  <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                    Since you have a scheduled pickup and opted to ship to your home, you can pay for your shop items along with your shipping charges. 
+                    <span className="block mt-2 font-bold text-emerald-700">Final billing will be done at your home during pickup.</span>
+                  </p>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+
+        {/* Summary Sidebar */}
+        <div className="lg:col-span-1">
+          <div className="bg-slate-900 text-white p-6 rounded-3xl sticky top-8">
+            {isWarehouseCheckout ? (
+              <div className="space-y-4 mb-8">
+                <h3 className="text-xl font-bold mb-2">Shipment Information</h3>
+                <p className="text-xs text-slate-400 leading-relaxed font-semibold">
+                  No payment is required right now. Final billing and invoice will be generated after all items are received at our warehouse. You can check the status of your order in <span className="font-bold text-indigo-400">My Orders</span>.
+                </p>
+                <div className="h-px bg-slate-800 my-4" />
+                <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-800">
+                  <div className="flex items-center justify-between text-slate-300 text-sm">
+                    <span className="font-medium">Total Items</span>
+                    <span className="font-black text-indigo-400 text-lg">{cartItems.length} Items</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-xl font-bold mb-6">Order Summary</h3>
+                <div className="space-y-4 mb-8">
+                  <div className="flex justify-between text-slate-400 text-sm">
+                    <span>Total Weight</span>
+                    <span className="text-white font-medium">{totalWeight.toFixed(2)} kg</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400 text-sm">
+                    <span>Shipping ({address.country})</span>
+                    <span className="text-white font-medium">â‚¹{(totalWeight * (shippingRates[address.country] || 10)).toFixed(2)}</span>
+                  </div>
+                  {(() => {
+                    const discountPercent = shippingDiscounts[address.country] || 0;
+                    if (discountPercent > 0) {
+                      const baseShip = totalWeight * (shippingRates[address.country] || 10);
+                      const saved = baseShip * (discountPercent / 100);
+                      return (
+                        <div className="flex justify-between text-rose-400 text-sm font-semibold">
+                          <span>Shipping Discount ({discountPercent}%)</span>
+                          <span>-â‚¹{saved.toFixed(2)}</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                  <div className="flex justify-between text-slate-400 text-sm">
+                    <span>Items Cost</span>
+                    <span className="text-white font-medium">â‚¹{cartItems.reduce((sum, i) => sum + (i.price || 0), 0).toFixed(2)}</span>
+                  </div>
+                  {userAppointments.some(a => a.status === 'Scheduled') && (
+                    <div className="flex justify-between text-slate-400 text-sm">
+                      <span>Shop Item Delivery</span>
+                      <span className="text-emerald-400 font-medium">{shippingPreference === 'LocalPickup' ? 'During Home Pickup' : 'To my Home'}</span>
+                    </div>
+                  )}
+
+                  {/* Coupon Application Block */}
+                  <div className="py-3 border-t border-b border-slate-800/60 my-2">
+                    {!appliedCoupon ? (
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Apply Coupon Code (5 Chars)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            maxLength={5}
+                            value={couponCodeInput}
+                            onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                            className="bg-slate-800 text-white text-xs font-mono font-bold uppercase rounded-xl px-3 py-2 flex-grow outline-none border border-slate-700 focus:border-indigo-500 transition-colors placeholder-slate-500"
+                            placeholder="CODE5"
+                            id="coupon-apply-input"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const codeClean = couponCodeInput.trim().toUpperCase();
+                              if (codeClean.length !== 5) {
+                                toast.error("Coupon code must be exactly 5 characters.");
+                                return;
+                              }
+                              const matched = coupons.find(c => c.code === codeClean);
+                              if (!matched) {
+                                toast.error(`Coupon code "${codeClean}" is invalid or does not exist.`);
+                                return;
+                              }
+                              if (!matched.isEnabled) {
+                                toast.error(`Coupon code "${codeClean}" is currently inactive.`);
+                                return;
+                              }
+                              setAppliedCoupon({
+                                code: matched.code,
+                                discountPercent: matched.discountPercent
+                              });
+                              toast.success(`Coupon "${matched.code}" applied successfully! Saved ${matched.discountPercent}% OFF total.`);
+                            }}
+                            id="apply-coupon-btn"
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-4 py-2 transition-all active:scale-95 shrink-0"
+                          >
+                            Apply
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-2.5">
+                        <div className="flex items-center gap-2">
+                          <TicketIcon size={14} className="text-emerald-400 shrink-0" />
+                          <div>
+                            <div className="text-[10px] font-black text-emerald-400 uppercase tracking-wider font-mono">Coupon applied</div>
+                            <div className="text-[11px] text-slate-300 font-semibold">{appliedCoupon.code} ({appliedCoupon.discountPercent}% OFF)</div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAppliedCoupon(null);
+                            setCouponCodeInput('');
+                            toast.info("Coupon code removed.");
+                          }}
+                          className="text-[10px] bg-slate-800 text-slate-400 hover:text-white px-2 py-1 rounded-lg transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {appliedCoupon && (
+                    <div className="flex justify-between text-emerald-400 text-sm font-semibold animate-fadeIn">
+                      <span>Coupon Discount ({appliedCoupon.discountPercent}%)</span>
+                      <span>-â‚¹{(totalCost * (appliedCoupon.discountPercent / 100)).toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  <div className="h-px bg-slate-800 my-4" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-bold">Total Amount</span>
+                    <span className="text-2xl font-black text-indigo-400">
+                      â‚¹{(appliedCoupon ? Math.max(0, totalCost - (totalCost * (appliedCoupon.discountPercent / 100))) : totalCost).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="bg-slate-800 p-4 rounded-2xl mb-6">
+              <div className="flex items-start gap-3 text-xs text-slate-300">
+                <Info size={16} className="text-indigo-400 shrink-0" />
+                <p>By confirming, you agree to our shipping terms and conditions.</p>
+              </div>
+            </div>
+
+            <button 
+              disabled={cartItems.length === 0}
+              onClick={handleFinalPayment}
+              className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-200"
+            >
+              {isWarehouseCheckout 
+                ? 'Confirm Shipment Request'
+                : isPayAtHome 
+                  ? 'Confirm Order (Pay at Home)' 
+                  : 'Confirm & Pay'
+              }
+            </button>
+
+            <div className="mt-8 pt-8 border-t border-slate-800">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Prohibited Items</h4>
+              <div className="space-y-2">
+                {PROHIBITED_ITEMS.slice(0, 4).map(item => (
+                  <div key={item} className="flex items-center gap-2 text-[10px] text-slate-400">
+                    <AlertTriangle size={12} className="text-amber-500" /> {item}
+                  </div>
+                ))}
+                <button className="text-[10px] text-indigo-400 font-bold mt-2">View Full List</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser, currentUser?.id, handleFinalPayment, shippingPreference, appointments, pickupAddress, pickupName, pickupPhone, orderedItemIds, shopConsolidationOption, isMobile, activeCheckoutStep, couponCodeInput, appliedCoupon, coupons, setAppliedCoupon, setCouponCodeInput, goBack, navigateTo]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-indigo-600" size={48} />
+      </div>
+    );
+  }
+
+  const handleLogout = async () => {
+    // 1. Immediately and synchronously clear all local state and items to avoid transition lag or state re-fetching
+    clearActiveSession();
+    setItems([]);
+    setOrders([]);
+    setSession(null);
+    setCurrentUser(null);
+    setIsGuestMode(false);
+    setGuestEmail('');
+    setActivePickupStep(1);
+    setLastBookingRef(null);
+    setIsSchedulingNewPickup(false);
+    setShowPickupConfirmModal(false);
+    
+    // 2. Perform background async Supabase signOut
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('Supabase signOut background error:', err);
+    }
+    
+    setAddress({
+      fullName: '',
+      email: '',
+      phone: '',
+      addressLine1: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: COUNTRIES[0],
+    });
+    setPickupAddress({
+      street: '',
+      apartment: '',
+      city: '',
+      state: '',
+      zip: ''
+    });
+    setPickupDetailsTab('pickup');
+    setPickupDestination({
+      fullName: '',
+      email: '',
+      phone: '',
+      addressLine1: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: COUNTRIES[0],
+    });
+    setPickupName('');
+    setPickupPhone('');
+    setPickupLanguage('English');
+    setPickupItemType('Everyday Items');
+    setPickupVehicleType('Less than 5 kg');
+    setPickupSpecialInstructions('');
+    setPickupCategory('Personal Effects');
+    setPickupEstimatedWeight('Less than 5 kg');
+    setCartItemName('');
+    setCartItemWeight('');
+    setCartItemQuantity(1);
+    setCartItemFragile(false);
+    setCartItemInvoiceNumber('');
+    setCartItemRemarks('');
+    setIsPaid(false);
+    setOrderId(null);
+    setActiveTab('home');
+    setTabHistory(['home']);
+  };
+
+  const handleAssignAgent = async (orderId: string, agent: AgentProfile | null) => {
+    try {
+      const previousOrder = orders.find(o => o.id === orderId);
+      const prevAgent = previousOrder?.assignedAgent;
+      
+      await api.updateOrder(orderId, { 
+        assignedAgent: agent || undefined, 
+        assignedAgentId: agent ? agent.id : undefined 
+      });
+      setOrders(prev => prev.map(o => o.id === orderId ? { 
+        ...o, 
+        assignedAgent: agent || undefined, 
+        assignedAgentId: agent ? agent.id : undefined 
+      } : o));
+
+      // Also update 'pickups' table in Supabase
+      if (dbStatus.connected) {
+        try {
+          await api.updatePickup(orderId, {
+            assignedAgentId: agent ? agent.id : null,
+          });
+        } catch (e) {
+          console.warn('Failed to update pickup agent assignment in Supabase:', e);
+        }
+      }
+
+      if (agent) {
+        logAgentActionToSupabase(
+          'ASSIGN',
+          agent.id,
+          agent.name,
+          { orderId },
+          currentUser?.email || 'admin@jiffex.com'
+        );
+      } else if (prevAgent) {
+        logAgentActionToSupabase(
+          'DEASSIGN',
+          prevAgent.id,
+          prevAgent.name,
+          { orderId },
+          currentUser?.email || 'admin@jiffex.com'
+        );
+      }
+    } catch (err) {
+      console.error('Failed to assign agent:', err);
+      throw err;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 safe-top safe-bottom overflow-x-clip">
+      {/* Supabase Status Banner */}
+      {!dbStatus.connected && dbStatus.checked && (
+        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 flex flex-col items-center justify-center gap-1 text-[10px] font-bold text-amber-700 uppercase tracking-widest">
+          <div className="flex items-center gap-2">
+            <Database size={12} />
+            Database Not Connected. Using Local Storage Mode.
+            <button 
+              onClick={() => {
+                setDbStatus(prev => ({ ...prev, checked: false }));
+                api.checkHealth()
+                  .then(res => setDbStatus({ connected: res.supabaseConnected, checked: true }))
+                  .catch(() => setDbStatus({ connected: false, checked: true }));
+              }}
+              className="ml-2 px-2 py-0.5 bg-amber-200 hover:bg-amber-300 transition-colors rounded text-[8px]"
+            >
+              Retry
+            </button>
+          </div>
+          <p className="text-[8px] opacity-70 normal-case font-medium">
+            Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Settings {'>'} Environment Variables.
+          </p>
+        </div>
+      )}
+      
+      {/* Header Area (Sticky) */}
+      <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-md shadow-md">
+        {/* Error Banner */}
+        {dbError && (
+          <div className="bg-red-500 text-white p-4 text-center font-bold relative z-20 shadow-lg">
+            <div className="max-w-7xl mx-auto flex items-center justify-center gap-3">
+              <ShieldCheck size={20} />
+              <span>{dbError}</span>
+              <button 
+                onClick={() => setDbError(null)}
+                className="ml-4 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg text-xs transition-colors"
+               >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Navigation */}
+        <nav className="bg-white/95 border-b border-slate-100 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.04)] sticky top-0 z-[100] backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 md:h-20 flex items-center justify-between gap-4 flex-nowrap">
+            {/* Mobile View Logo - Only visible below md screens */}
+            <div 
+              className="flex md:hidden items-center gap-2 cursor-pointer shrink-0" 
+              onClick={() => {
+                if (currentUser?.role === 'admin' || currentUser?.role === 'Admin') navigateTo('admin');
+                else if (currentUser?.role === 'agent' || currentUser?.role === 'Agent') {
+                  setActiveWorkOrder(null);
+                  navigateTo('agent');
+                } else navigateTo('home');
+              }}
+            >
+              <Logo size={22} className="h-7" />
+            </div>
+            
+            {/* Desktop Navigation Group - Only visible on md screens & up */}
+            <div className="hidden md:flex flex-1 items-center justify-between gap-4 flex-nowrap w-full">
+              {/* Desktop Logo */}
+              <div 
+                className="flex items-center gap-3 cursor-pointer shrink-0" 
+                onClick={() => {
+                  if (currentUser?.role === 'admin' || currentUser?.role === 'Admin') navigateTo('admin');
+                  else if (currentUser?.role === 'agent' || currentUser?.role === 'Agent') {
+                    setActiveWorkOrder(null);
+                    navigateTo('agent');
+                  } else navigateTo('home');
+                }}
+              >
+                <Logo height="h-12 sm:h-14" />
+              </div>
+
+              {currentUser?.role !== 'agent' && currentUser?.role !== 'customer_service' && (
+                  <>
+                    {/* Services Dropdown */}
+                    <div 
+                      className="relative"
+                      onMouseEnter={() => setShowServicesDropdown(true)}
+                      onMouseLeave={() => setShowServicesDropdown(false)}
+                    >
+                      <button 
+                        onClick={() => setShowServicesDropdown(!showServicesDropdown)}
+                        className={`text-xs lg:text-sm uppercase tracking-wider font-extrabold transition-all pb-1.5 border-b-2 mt-0.5 flex items-center gap-1 text-nowrap shrink-0 ${
+                          (activeTab === 'store' || activeTab === 'pickup' || activeTab === 'warehouse')
+                            ? 'text-orange-600 border-orange-500' 
+                            : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'
+                        }`}
+                      >
+                        Services
+                        <ChevronDown size={12} className={`transition-transform duration-300 ${showServicesDropdown ? 'rotate-180 text-orange-600' : 'text-slate-400'}`} />
+                      </button>
+
+                      <AnimatePresence>
+                        {showServicesDropdown && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                            transition={{ duration: 0.15, ease: 'easeOut' }}
+                            className="absolute left-0 mt-3 z-[110] bg-white rounded-2xl border border-slate-100 shadow-[0_12px_36px_rgba(15,23,42,0.08)] p-3.5 grid grid-cols-3 gap-3 w-[580px] pointer-events-auto"
+                          >
+                            <button
+                              onClick={() => {
+                                navigateTo('store');
+                                setShowServicesDropdown(false);
+                              }}
+                              className="flex flex-col items-center text-center p-4 rounded-xl border border-slate-100 hover:border-orange-200 hover:bg-gradient-to-b hover:from-orange-50/20 hover:to-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
+                            >
+                              <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center mb-3 transition-all duration-300 group-hover:bg-orange-500 group-hover:text-white group-hover:scale-110 group-hover:shadow-[0_8px_16px_rgba(249,115,22,0.25)]">
+                                <ShoppingBag size={22} className="stroke-[2.2] transition-transform group-hover:rotate-6" />
+                              </div>
+                              <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-orange-600 transition-colors">Shop & Ship</span>
+                              <span className="text-slate-450 text-[10px] leading-relaxed block px-1">Buy from India and get global delivery.</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                navigateTo('pickup');
+                                setShowServicesDropdown(false);
+                              }}
+                              className="flex flex-col items-center text-center p-4 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-gradient-to-b hover:from-indigo-50/20 hover:to-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
+                            >
+                              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3 transition-all duration-300 group-hover:bg-indigo-600 group-hover:text-white group-hover:scale-110 group-hover:shadow-[0_8px_16px_rgba(79,70,229,0.25)]">
+                                <Truck size={22} className="stroke-[2.2] transition-transform group-hover:-translate-x-1" />
+                              </div>
+                              <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-indigo-650 transition-colors">Schedule Pickup</span>
+                              <span className="text-slate-450 text-[10px] leading-relaxed block px-1">We gather, pack & ship package from home.</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                navigateTo('warehouse');
+                                setShowServicesDropdown(false);
+                              }}
+                              className="flex flex-col items-center text-center p-4 rounded-xl border border-slate-100 hover:border-emerald-200 hover:bg-gradient-to-b hover:from-emerald-50/20 hover:to-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden"
+                            >
+                              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 transition-all duration-300 group-hover:bg-emerald-600 group-hover:text-white group-hover:scale-110 group-hover:shadow-[0_8px_16px_rgba(16,185,129,0.25)]">
+                                <Package size={22} className="stroke-[2.2] transition-transform group-hover:scale-105" />
+                              </div>
+                              <span className="font-extrabold text-[#111827] text-xs uppercase tracking-wider mb-1 block group-hover:text-indigo-650 transition-colors">Drop Off Package</span>
+                              <span className="text-slate-450 text-[10px] leading-relaxed block px-1">Deliver items directly to our warehouse.</span>
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <button 
+                      onClick={() => navigateTo('track')}
+                      className={`text-xs lg:text-sm uppercase tracking-wider font-extrabold transition-all pb-1.5 border-b-2 mt-0.5 text-nowrap shrink-0 ${activeTab === 'track' ? 'text-orange-600 border-orange-500' : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'}`}
+                    >
+                      Track your shipment
+                    </button>
+                    <button 
+                      onClick={() => navigateTo('about')}
+                      className={`text-xs lg:text-sm uppercase tracking-wider font-extrabold transition-all pb-1.5 border-b-2 mt-0.5 text-nowrap shrink-0 ${activeTab === 'about' ? 'text-orange-600 border-orange-500' : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'}`}
+                    >
+                      Why JiffEX
+                    </button>
+                    <button 
+                      onClick={() => navigateTo('support')}
+                      className={`text-xs lg:text-sm uppercase tracking-wider font-extrabold transition-all pb-1.5 border-b-2 mt-0.5 text-nowrap shrink-0 ${activeTab === 'support' ? 'text-orange-600 border-orange-500' : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'}`}
+                    >
+                      Support
+                    </button>
+                    {currentUser?.role !== 'agent' && (
+                      <button 
+                        onClick={handleQuickQuoteClick}
+                        className="text-xs lg:text-sm font-extrabold uppercase tracking-wider text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 px-3.5 py-1.5 rounded-xl shadow-sm hover:shadow-md transition-all duration-300 ease-out hover:-translate-y-0.5 active:translate-y-0 text-nowrap shrink-0"
+                      >
+                        Quick Quote
+                      </button>
+                    )}
+                  </>
+                )}
+
+                {currentUser?.role === 'admin' && (
+                  <button 
+                    onClick={() => navigateTo('admin')}
+                    className={`text-xs lg:text-sm font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'admin' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'} text-nowrap shrink-0`}
+                  >
+                    Admin
+                  </button>
+                )}
+                {currentUser?.role === 'webmaster' && (
+                  <button 
+                    onClick={() => navigateTo('admin')}
+                    className={`text-xs lg:text-sm font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'admin' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'} text-nowrap shrink-0`}
+                  >
+                    Catalog
+                  </button>
+                )}
+                {currentUser?.role === 'agent' && (
+                  <button 
+                    onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); }}
+                    className={`text-xs lg:text-sm font-bold transition-all px-3 py-1.5 rounded-xl border border-emerald-100 ${activeTab === 'agent' ? 'text-white bg-emerald-600' : 'text-emerald-600 hover:bg-emerald-50'} text-nowrap shrink-0`}
+                  >
+                    Work Portal
+                  </button>
+                )}
+                {currentUser?.role === 'customer_service' && (
+                  <button 
+                    onClick={() => navigateTo('support')}
+                    className={`text-xs lg:text-sm font-bold transition-all px-3 py-1.5 rounded-xl border border-indigo-100 ${activeTab === 'support' ? 'text-white bg-indigo-600' : 'text-indigo-600 hover:bg-indigo-50'} text-nowrap shrink-0`}
+                  >
+                    Support Desk
+                  </button>
+                )}
+
+                {/* Cart Only */}
+                {currentUser?.role !== 'agent' && (
+                  <button 
+                    onClick={() => navigateTo('cart')}
+                    className={`relative p-2 rounded-xl transition-all shrink-0 ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <ShoppingCart size={18} className="lg:w-5 lg:h-5 shrink-0" />
+                    {cartItems.length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black border border-white">
+                        {cartItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                {/* Profile or Sign in */}
+                {currentUser ? (
+                  <div 
+                    className="relative shrink-0"
+                    onMouseEnter={() => setShowUserDropdown(true)}
+                    onMouseLeave={() => setShowUserDropdown(false)}
+                  >
+                    <button 
+                      className={`flex items-center gap-1.5 lg:gap-2 px-2.5 py-1.5 rounded-xl transition-all border-2 shrink-0 ${
+                        showUserDropdown ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-slate-50 border-transparent text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="w-7 h-7 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-black text-xs shadow-sm shrink-0">
+                        {currentUser.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="hidden lg:flex flex-col items-start leading-none shrink-0 whitespace-nowrap">
+                        {currentUser.role.toLowerCase() !== 'customer' && (
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5 whitespace-nowrap">{currentUser.role}</span>
+                        )}
+                        <span className="text-xs font-black text-slate-900 whitespace-nowrap">{currentUser.name}</span>
+                      </div>
+                      <ChevronDown size={14} className={`hidden lg:block transition-transform duration-300 shrink-0 ${showUserDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    <AnimatePresence>
+                      {showUserDropdown && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                        className="absolute top-full right-0 mt-2 w-56 bg-white rounded-3xl border border-slate-200 shadow-2xl shadow-slate-200/50 py-2 z-50"
+                      >
+                        <div className="px-4 py-3 border-b border-slate-50 mb-1">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">Signed in as</p>
+                          <p className="text-sm font-bold text-slate-900 truncate">{currentUser.email}</p>
+                        </div>
+                        
+                        {currentUser?.role !== 'agent' && (
+                          <>
+                            <button 
+                              onClick={() => { navigateTo('history'); setShowUserDropdown(false); }}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                            >
+                              <History size={18} /> My Orders
+                            </button>
+                            
+                            <button 
+                              onClick={() => { navigateTo('account'); setShowUserDropdown(false); }}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                            >
+                              <UserIcon size={18} /> My Account
+                            </button>
+                          </>
+                        )}
+
+                        <div className="h-px bg-slate-50 my-1 mx-2" />
+                        
+                        <button 
+                          onClick={() => { handleLogout(); setShowUserDropdown(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-red-500 hover:bg-red-50 transition-all"
+                        >
+                          <LogOut size={18} /> Sign Out
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }}
+                  className="bg-deep-blue text-white flex items-center gap-1.5 py-1.5 px-3 lg:py-2 lg:px-4 text-xs lg:text-sm rounded-xl font-extrabold hover:bg-slate-800 transition-all active:scale-95 whitespace-nowrap text-nowrap shrink-0 uppercase tracking-wider"
+                >
+                  <UserIcon size={14} className="lg:w-4 lg:h-4 shrink-0" /> <span className="whitespace-nowrap">Sign In</span>
+                </button>
+              )}
+          </div>
+
+            {/* Mobile View Group - Only visible below md screens */}
+            <div className="flex md:hidden items-center gap-2 ml-auto shrink-0">
+              {currentUser?.role !== 'agent' && (
+                <button 
+                  onClick={() => navigateTo('cart')}
+                  className={`relative p-1.5 rounded-xl transition-all shrink-0 ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600'}`}
+                >
+                  <ShoppingCart size={18} className="shrink-0" />
+                  {cartItems.length > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 bg-indigo-600 text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-black border border-white">
+                      {cartItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {/* Mobile Profile Or Sign In icon button */}
+              {currentUser ? (
+                <button 
+                  className="w-7 h-7 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-black text-[10px] shrink-0"
+                  onClick={() => navigateTo('account')}
+                >
+                  {currentUser.name.charAt(0).toUpperCase()}
+                </button>
+              ) : (
+                <button 
+                  onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }}
+                  className="p-1.5 text-slate-600 hover:bg-slate-50 rounded-xl"
+                >
+                  <UserIcon size={18} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Mobile Menu Drawer */}
+          <AnimatePresence>
+            {isMobileMenuOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="lg:hidden border-t border-slate-100 bg-white overflow-hidden"
+              >
+                <div className="flex flex-col p-4 gap-2">
+                  <div className="px-3 py-4 mb-2 border-b border-slate-50">
+                    <Logo size={24} className="h-8" />
+                  </div>
+                  {currentUser?.role !== 'agent' && (
+                    <button 
+                      onClick={() => { navigateTo('store'); setIsMobileMenuOpen(false); }}
+                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'store' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      Shop & Ship
+                    </button>
+                  )}
+                  {currentUser?.role !== 'agent' && (
+                    <div className="flex flex-col gap-1">
+                      <div className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Ship Items</div>
+                      <button 
+                        onClick={() => { navigateTo('pickup'); setIsMobileMenuOpen(false); }}
+                        className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'pickup' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        <Truck size={20} /> Schedule Pickup
+                      </button>
+                      <button 
+                        onClick={() => { navigateTo('warehouse'); setIsMobileMenuOpen(false); }}
+                        className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'warehouse' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        <Package size={20} /> Drop Off Package
+                      </button>
+                    </div>
+                  )}
+                  {currentUser?.role !== 'agent' && (
+                    <div className="flex flex-col gap-1">
+                      <button 
+                        onClick={() => { navigateTo('track'); setIsMobileMenuOpen(false); }}
+                        className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'track' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        Track Shipment
+                      </button>
+                      <button 
+                        onClick={() => { navigateTo('about'); setIsMobileMenuOpen(false); }}
+                        className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'about' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        Why JiffEX
+                      </button>
+                      <button 
+                        onClick={() => { navigateTo('support'); setIsMobileMenuOpen(false); }}
+                        className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'support' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        {currentUser?.role === 'customer_service' ? 'Support Desk' : 'Support'}
+                      </button>
+                    </div>
+                  )}
+
+                  {currentUser?.role === 'admin' && (
+                    <button 
+                      onClick={() => { navigateTo('admin'); setIsMobileMenuOpen(false); }}
+                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'admin' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      Admin Dashboard
+                    </button>
+                  )}
+                  {currentUser?.role === 'webmaster' && (
+                    <button 
+                      onClick={() => { navigateTo('admin'); setIsMobileMenuOpen(false); }}
+                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'admin' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      Catalog Manager
+                    </button>
+                  )}
+                  {currentUser?.role === 'agent' && (
+                    <button 
+                      onClick={() => { setActiveWorkOrder(null); navigateTo('agent'); setIsMobileMenuOpen(false); }}
+                      className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'agent' ? 'text-emerald-600 bg-emerald-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      Work Portal
+                    </button>
+                  )}
+                   {currentUser?.role !== 'agent' && (
+                    <button 
+                      onClick={handleQuickQuoteClick}
+                      className="text-lg font-black p-3.5 rounded-xl text-center text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 transition-all shadow-sm hover:shadow-md mt-2 flex items-center justify-center gap-2"
+                    >
+                      Quick Quote
+                    </button>
+                  )}
+                  
+                  <div className="pt-4 mt-2 border-t border-slate-100">
+                    {!currentUser ? (
+                      <button 
+                        onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); setIsMobileMenuOpen(false); }}
+                        className="w-full bg-deep-blue text-white flex items-center justify-center gap-2 py-3 rounded-xl font-bold hover:bg-slate-800 transition-all active:scale-95"
+                      >
+                        <UserIcon size={20} />
+                        <span>Sign In</span>
+                      </button>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <div className="px-3 py-2 flex flex-col">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Account</span>
+                          <span className="text-lg font-black text-slate-900 leading-tight">{currentUser.name}</span>
+                          <span className="text-xs text-slate-500 font-medium truncate">{currentUser.email}</span>
+                        </div>
+                        <div className="h-px bg-slate-100 my-2 mx-3" />
+                        {currentUser?.role !== 'agent' && (
+                          <>
+                            <button 
+                              onClick={() => { navigateTo('history'); setIsMobileMenuOpen(false); }}
+                              className={`text-lg font-bold p-3 rounded-xl text-left transition-all flex items-center gap-3 ${activeTab === 'history' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                            >
+                              <History size={20} /> My Orders
+                            </button>
+                            <button 
+                              onClick={() => { navigateTo('account'); setIsMobileMenuOpen(false); }}
+                              className="text-lg font-bold p-3 rounded-xl text-left text-slate-600 hover:bg-slate-50 transition-all flex items-center gap-3"
+                            >
+                              <UserIcon size={20} /> My Account
+                            </button>
+                          </>
+                        )}
+                        <button 
+                          onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+                          className="w-full p-3 rounded-xl text-left font-bold text-red-600 bg-red-50 flex items-center gap-2 mt-2"
+                        >
+                          <LogOut size={20} />
+                          <span>Sign Out</span>
+                        </button>
+                      </div>
+                    )}
+                    
+
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </nav>
+      </header>
+
+      {/* Main Content */}
+      <main className={`relative max-w-7xl mx-auto pb-10 md:pb-20 ${
+        activeTab === 'home'
+          ? 'pt-0 md:pt-8 px-0 md:px-4'
+          : (activeTab === 'store' && isMobile)
+            ? 'pt-0 px-0'
+            : 'px-4 ' + (activeTab === 'about' || activeTab === 'store' || activeTab === 'warehouse' || activeTab === 'pickup' || activeTab === 'cart' || activeTab === 'finalize' 
+              ? 'pt-8' 
+              : activeTab === 'history' 
+                ? 'pt-6' 
+                : activeTab === 'admin' || activeTab === 'support' || currentUser?.role === 'agent'
+                  ? 'pt-4' 
+                  : 'pt-20')
+      }`}>
+        <AnimatePresence>
+          {activeTab !== 'home' && activeTab !== 'about' && activeTab !== 'pickup' && activeTab !== 'warehouse' && activeTab !== 'store' && activeTab !== 'finalize' && activeTab !== 'history' && activeTab !== 'agent' && activeTab !== 'support' && activeTab !== 'admin' && <BackButton onClick={goBack} />}
+        </AnimatePresence>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+          >
+            {activeTab === 'home' && HomeSection}
+            {activeTab === 'about' && <AboutSection />}
+            {activeTab === 'track' && <TrackSection />}
+            {activeTab === 'pickup' && renderUnifiedCartSection('Pickup')}
+            {activeTab === 'warehouse' && renderUnifiedCartSection('Warehouse')}
+            {activeTab === 'cart' && (isMobile ? (
+              <MobileCartSection
+                items={items}
+                appointments={userAppointments}
+                currentUser={currentUser}
+                customerWarehouseId={customerWarehouseId}
+                addItem={addItem}
+                removeItem={removeItem}
+                updateItemQuantity={updateItemQuantity}
+                removeStoreItem={removeStoreItem}
+                handleCheckout={handleCheckout}
+                navigateTo={navigateTo}
+                storeProducts={storeProducts}
+                orderedItemIds={orderedItemIds}
+                shopConsolidationOption={shopConsolidationOption}
+                setShopConsolidationOption={setShopConsolidationOption}
+                pickupConsolidationOption={pickupConsolidationOption}
+                showConsolidationError={showConsolidationError}
+                setShowConsolidationError={setShowConsolidationError}
+                couponCodeInput={couponCodeInput}
+                setCouponCodeInput={setCouponCodeInput}
+                coupons={coupons}
+                appliedCoupon={appliedCoupon}
+                setAppliedCoupon={setAppliedCoupon}
+              />
+            ) : renderUnifiedCartSection())}
+            {activeTab === 'notifications' && NotificationCenter}
+            {activeTab === 'support' && (
+              <SupportSection 
+                currentUser={currentUser} 
+                orders={orders}
+                tickets={tickets}
+                setTickets={setTickets}
+                refundRequests={refundRequests}
+                setRefundRequests={setRefundRequests}
+              />
+            )}
+            {activeTab === 'store' && StoreSection}
+            {activeTab === 'finalize' && FinalizeSection}
+            {activeTab === 'history' && CustomerHistory}
+            {activeTab === 'warehouse-mgmt' && renderWarehouseManagementSection()}
+            {activeTab === 'admin' && (
+              <AdminDashboard 
+                currentUser={currentUser}
+                orders={orders}
+                appointments={appointments}
+                onAssignAgent={handleAssignAgent}
+                agents={agents}
+                setAgents={setAgents}
+                categories={categories}
+                setCategories={setCategories}
+                adminTab={adminTab as any}
+                setAdminTab={setAdminTab as any}
+                storeProducts={storeProducts}
+                setStoreProducts={setStoreProducts}
+                setOrders={setOrders}
+                setItems={setItems}
+                onUpdateOrderItemStatus={updateOrderItemStatus}
+                onUpdateOrderItemWeight={updateOrderItemWeight}
+                refundRequests={refundRequests}
+                setRefundRequests={setRefundRequests}
+                isWebmaster={currentUser?.role === 'webmaster'}
+                shippingRates={shippingRates}
+                setShippingRates={setShippingRates}
+                shippingRateBands={shippingRateBands}
+                setShippingRateBands={setShippingRateBands}
+                shippingDiscounts={shippingDiscounts}
+                setShippingDiscounts={setShippingDiscounts}
+                coupons={coupons}
+                setCoupons={setCoupons}
+                isAutoAssignAgentEnabled={isAutoAssignAgentEnabled}
+                setIsAutoAssignAgentEnabled={setIsAutoAssignAgentEnabled}
+              />
+            )}
+            {activeTab === 'agent' && AgentSection}
+            {activeTab === 'account' && (
+              <AccountSection 
+                currentUser={currentUser} 
+                onUpdateProfile={handleUpdateProfile}
+                customerWarehouseId={customerWarehouseId}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </main>
+
+      {/* Footer */}
+      <footer className="hidden md:block bg-slate-50 border-t border-slate-200 pt-16 pb-24 px-4 relative z-40">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
+          <div className="col-span-1">
+            <div className="flex items-center gap-2 mb-6">
+              <Logo height="h-12" />
+            </div>
+            <p className="text-slate-500 max-w-sm leading-relaxed text-sm">
+              Your trusted partner for seamless global shipping and warehouse solutions. We simplify logistics so you can focus on growing your business.
+            </p>
+          </div>
+          
+          <div>
+            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Company</h4>
+            <ul className="space-y-4">
+              <li><button onClick={() => navigateTo('support')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Contact</button></li>
+              <li><button onClick={() => alert('Shipping Policy coming soon!')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Shipping Policy</button></li>
+              <li><button onClick={() => alert('Privacy Policy coming soon!')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Privacy Policy</button></li>
+            </ul>
+          </div>
+          
+          {currentUser?.role !== 'agent' && (
+            <div>
+              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Account</h4>
+              <ul className="space-y-4">
+                <li><button onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Sign In</button></li>
+                <li><button onClick={() => navigateTo(currentUser ? 'account' : 'home')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">My Account Details</button></li>
+                <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">My Shipments</button></li>
+                <li><button onClick={() => navigateTo('history')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Order History</button></li>
+                <li><button onClick={() => navigateTo('notifications')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Notifications</button></li>
+              </ul>
+            </div>
+          )}
+
+          <div>
+            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-6">Services</h4>
+            <ul className="space-y-4">
+              <li><button onClick={() => navigateTo('pickup')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Pickup from home</button></li>
+              <li><button onClick={() => navigateTo('warehouse')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Send to Our Warehouse</button></li>
+              <li><button onClick={() => navigateTo('store')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Shop</button></li>
+              <li><button onClick={() => navigateTo('home')} className="text-slate-500 hover:text-indigo-600 transition-colors text-sm font-medium">Rate Calculator</button></li>
+            </ul>
+          </div>
+        </div>
+        
+        <div className="max-w-7xl mx-auto mt-16 pt-8 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+          <p className="text-slate-400 text-sm hidden md:block">
+            Â© 2026 Global Logistics Pro Inc. All rights reserved.
+          </p>
+          <p className="text-slate-400 text-xs md:hidden text-center leading-relaxed">
+            Â© 2026 Jiffex Fulfilment Private Limited. All rights reserved.
+          </p>
+          <div className="flex items-center gap-6">
+            <button className="text-slate-400 hover:text-slate-600 transition-colors"><Share size={20} /></button>
+            <button className="text-slate-400 hover:text-slate-600 transition-colors"><MessageSquare size={20} /></button>
+          </div>
+        </div>
+      </footer>
+
+      {/* Pickup Choice Modal - Removed for Unified Workflow */}
+
+      {/* Conflict Modal */}
+      <AnimatePresence>
+        {showConflictModal.show && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[130] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100"
+            >
+              <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                <AlertTriangle size={32} />
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 text-center mb-2">Order in Progress</h3>
+              <p className="text-slate-500 text-center mb-8 leading-relaxed">
+                An agent pickup order is currently in progress. Do you still want to place this order? 
+                <span className="block mt-2 font-bold text-indigo-600">If yes, this will be processed as a separate order.</span>
+              </p>
+              
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={() => {
+                    const { item, source } = showConflictModal;
+                    if (item && source) {
+                      addItem(item, source, true);
+                    }
+                  }}
+                  className="w-full btn-cta"
+                >
+                  Yes, Place Separate Order
+                </button>
+                <button 
+                  onClick={() => setShowConflictModal({ show: false, item: null, source: null })}
+                  className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                >
+                  No, Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Cancellation Modal */}
+      <AnimatePresence>
+        {cancellingPickupId && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[140] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100"
+            >
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                <AlertTriangle size={32} />
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 text-center mb-2">Cancel Pickup?</h3>
+              <p className="text-slate-500 text-center mb-8 leading-relaxed">
+                Are you sure you want to cancel this scheduled pickup request? This action cannot be undone.
+              </p>
+              
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={confirmCancelPickup}
+                  className="w-full py-4 bg-red-600 text-white rounded-2xl font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200"
+                >
+                  Yes, Cancel Pickup
+                </button>
+                <button 
+                  onClick={() => setCancellingPickupId(null)}
+                  className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                >
+                  No, Keep It
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Login Modal */}
+      <AnimatePresence>
+        {showLoginModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLoginModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden"
+            >
+              <button 
+                onClick={() => setShowLoginModal(false)}
+                className="absolute top-5 right-5 w-10 h-10 bg-slate-100/90 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-200 transition-all z-20 shadow-sm"
+              >
+                <X size={20} />
+              </button>
+              <div className="p-6 sm:p-8 overflow-y-auto flex-1 custom-scrollbar">
+                <div className="text-center mb-6">
+                  <div className="flex items-center justify-center mx-auto mb-3">
+                    <Logo height="h-14 sm:h-16" />
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
+                    {loginTriggerSource === 'checkout' ? 'Almost There!' : loginTriggerSource === 'pickup' ? 'One Last Step!' : 'Welcome to Jiffex'}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed">
+                    {loginTriggerSource === 'checkout' 
+                      ? 'Sign in or create an account to complete your secure checkout' 
+                      : loginTriggerSource === 'pickup'
+                      ? 'Verify your identity to confirm your pickup'
+                      : 'Sign in or create an account to continue'}
+                  </p>
+                </div>
+                <Login onSuccess={(email, name) => {
+                  saveActiveSession(email, name);
+                  setGuestEmail(email);
+                  if (name) setGuestName(name);
+                  setIsGuestMode(true);
+                  setShowLoginModal(false);
+                  
+                  // Auto-redirect based on role for smoother testing
+                  const isAdmin = isAdminEmail(email);
+                  const isAgent = email.toLowerCase().endsWith('.agent@jiffex.com') || email === 'agent@jiffex.com';
+                  if (isAdmin) {
+                    navigateTo('admin');
+                  } else if (isAgent) {
+                    navigateTo('agent');
+                  } else if (loginTriggerSource === 'pickup') {
+                    // Start guest/member session and direct synchronous confirmation to next step (Step 5)
+                    const guestId = email ? `guest_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : sessionGuestId;
+                    confirmPickup('AllAgent', guestId, email, name || pickupName);
+                  } else if (loginTriggerSource === 'checkout') {
+                    navigateTo('finalize');
+                  }
+                }} />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Payment Gateway Trouble / International Card Fallback Modal */}
+      <AnimatePresence>
+        {showPaymentTroubleModal && (
+          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPaymentTroubleModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[2rem] shadow-2xl overflow-hidden text-left"
+            >
+              {/* Header decorative */}
+              <div className="bg-red-50 p-6 border-b border-red-100 flex items-start gap-4">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-red-600 shrink-0">
+                  <AlertTriangle size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 leading-tight">Payment Issue?</h3>
+                  <p className="text-xs text-red-700 font-bold mt-1">
+                    "International cards are not supported"
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Razorpay accounts in test mode (and standard Indian accounts without international activation) block foreign cards by default, displaying the error above.
+                </p>
+                
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">How would you like to proceed?</h4>
+                  
+                  {/* Option 1: Simulate Payment Success */}
+                  <button
+                    onClick={async () => {
+                      if (paymentTroublePendingOrderSave) {
+                        toast.loading("Processing simulated transaction...", { id: "sim-payment" });
+                        try {
+                          await paymentTroublePendingOrderSave();
+                          toast.dismiss("sim-payment");
+                          setShowPaymentTroubleModal(false);
+                        } catch (err) {
+                          toast.dismiss("sim-payment");
+                          toast.error("Failed to complete order simulation.");
+                        }
+                      } else {
+                        setShowPaymentTroubleModal(false);
+                      }
+                    }}
+                    className="w-full p-4 rounded-2xl border-2 border-indigo-600 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-900 text-left transition-all flex items-center gap-4 group"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                      <Sparkles size={20} className="group-hover:rotate-12 transition-transform" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-xs font-black">Simulate Payment Success</div>
+                      <div className="text-[10px] text-indigo-600 font-bold mt-0.5">Recommended for Testing & Demos</div>
+                    </div>
+                  </button>
+
+                  {/* Option 2: Try Domestic Payment */}
+                  <button
+                    onClick={() => {
+                      setShowPaymentTroubleModal(false);
+                      toast.info("Please use 'test@upi' or a Domestic Visa card to test.");
+                    }}
+                    className="w-full p-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-left transition-all flex items-center gap-4"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
+                      <CreditCard size={18} />
+                    </div>
+                    <div>
+                      <div className="text-xs font-black">Try UPI / Domestic Test Bank</div>
+                      <div className="text-[10px] text-slate-500 font-bold mt-0.5">Bypasses international card limits</div>
+                    </div>
+                  </button>
+
+                  {/* Option 3: WhatsApp Support */}
+                  <a
+                    href="https://wa.me/919502758111"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full p-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-left transition-all flex items-center gap-4 block"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200">
+                      <MessageSquare size={18} />
+                    </div>
+                    <div>
+                      <div className="text-xs font-black">Contact Support on WhatsApp</div>
+                      <div className="text-[10px] text-emerald-600 font-bold mt-0.5">Pay via PayPal, Stripe, or Bank Transfer</div>
+                    </div>
+                  </a>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowPaymentTroubleModal(false)}
+                  className="px-5 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-extrabold text-xs transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showPickupConfirmModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[2.5rem] p-8 max-w-lg w-full shadow-2xl border border-slate-100 overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-2xl font-black text-slate-900">Confirm Pickup</h3>
+                <button 
+                  onClick={() => setShowPickupConfirmModal(false)}
+                  className="w-10 h-10 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center hover:bg-slate-200 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                      <UserIcon size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Customer Name</p>
+                      <p className="text-base font-bold text-slate-900">{pickupName}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                      <Phone size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contact Number</p>
+                      <p className="text-base font-bold text-slate-900">+91 {pickupPhone}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                      <MapPin size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pickup Address</p>
+                      <p className="text-sm font-bold text-slate-900 leading-relaxed">
+                        {pickupAddress.street}{pickupAddress.apartment ? `, ${pickupAddress.apartment}` : ''}, {pickupAddress.city}, {pickupAddress.zip}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                      <Clock size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Scheduled Slot</p>
+                      <p className="text-base font-bold text-slate-900">{selectedPickupDate} at {selectedPickupTime}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 pt-4">
+                  <button 
+                    onClick={() => {
+                      setShowPickupConfirmModal(false);
+                      confirmPickup('AllAgent');
+                    }}
+                    className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] text-lg font-black hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-200 flex items-center justify-center gap-3"
+                  >
+                    <CheckCircle2 size={24} /> Confirm & Schedule
+                  </button>
+                  <button 
+                    onClick={() => setShowPickupConfirmModal(false)}
+                    className="w-full py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm"
+                  >
+                    Back to Edit
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Bottom Navigation Bar */}
+      {(!currentUser || (['customer', 'guest'].includes((currentUser.role || '').toLowerCase()))) && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-lg border-t border-slate-100 shadow-[0_-8px_30px_rgba(15,23,42,0.06)] z-[90] pb-safe">
+          <div className="flex justify-around items-center h-12 px-2">
+            {[
+              { id: 'home', label: 'Home', icon: Home },
+              { id: 'track', label: 'Track', icon: Search },
+              { id: 'new_order', label: 'New Order', icon: Plus, isFab: true },
+              { id: 'support', label: 'Support', icon: HelpCircle },
+              { id: 'account', label: 'Account', icon: UserIcon }
+            ].map((item) => {
+              const Icon = item.icon;
+              if (item.isFab) {
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setShowNewOrderMenu(true);
+                    }}
+                    className="flex flex-col items-center justify-center flex-1 h-full relative"
+                  >
+                    <div className="absolute -top-4 flex flex-col items-center">
+                      <div className="p-1.5 bg-indigo-600 text-white rounded-full shadow-lg shadow-indigo-200 border-4 border-white active:scale-95 transition-transform">
+                        <Icon size={16} className="stroke-[3]" />
+                      </div>
+                      <span className="text-[8px] font-black uppercase tracking-wider mt-0.5 text-indigo-600">
+                        {item.label}
+                      </span>
+                    </div>
+                  </button>
+                );
+              }
+              const isActive = item.id === 'account' 
+                ? (activeTab === 'account' || activeTab === 'history') 
+                : activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    if (item.id === 'account') {
+                      setShowAccountMenu(true);
+                    } else {
+                      navigateTo(item.id as any);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                  }}
+                  className="flex flex-col items-center justify-center flex-1 h-full relative"
+                >
+                  <div className={`p-0.5 rounded-xl transition-all duration-300 relative ${
+                    isActive 
+                      ? 'text-indigo-600 scale-110' 
+                      : 'text-slate-400 hover:text-slate-600'
+                  }`}>
+                    <Icon size={16} className="stroke-[2.2]" />
+                  </div>
+                  <span className={`text-[8px] font-black uppercase tracking-wider mt-0 transition-colors duration-300 ${
+                    isActive ? 'text-indigo-600 font-extrabold' : 'text-slate-400'
+                  }`}>
+                    {item.label}
+                  </span>
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeMobileIndicator"
+                      className="absolute bottom-0.5 w-4 h-0.5 bg-indigo-600 rounded-full"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile New Order Quick Drawer */}
+      <AnimatePresence>
+        {showNewOrderMenu && (
+          <div className="md:hidden fixed inset-0 z-[150] overflow-hidden">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowNewOrderMenu(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+
+            {/* Bottom Sheet */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2.5rem] shadow-2xl p-6 pb-12 border-t border-slate-100"
+            >
+              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6" />
+
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-black text-slate-900">Start a New Shipment</h3>
+                <p className="text-xs text-slate-500 mt-1">Select one of our premium international services</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                {/* Pickup Option */}
+                <button
+                  onClick={() => {
+                    setShowNewOrderMenu(false);
+                    navigateTo('pickup');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100/50 transition-all text-left w-full"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-100">
+                    <Truck size={22} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-indigo-950">Schedule Doorstep Pickup</h4>
+                    <p className="text-xs text-indigo-700/80 mt-0.5">We collect, pack & ship internationally</p>
+                  </div>
+                </button>
+
+                {/* Drop-off Option */}
+                <button
+                  onClick={() => {
+                    setShowNewOrderMenu(false);
+                    navigateTo('warehouse');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-100 hover:bg-emerald-100/50 transition-all text-left w-full"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-100">
+                    <Package size={22} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-emerald-950">Drop Off at Warehouse</h4>
+                    <p className="text-xs text-emerald-700/80 mt-0.5">Ship your package to our hubsâ€”we deliver abroad</p>
+                  </div>
+                </button>
+
+                {/* Shop Option */}
+                <button
+                  onClick={() => {
+                    setShowNewOrderMenu(false);
+                    navigateTo('store');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-amber-50 border border-amber-100 hover:bg-amber-100/50 transition-all text-left w-full"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-100">
+                    <ShoppingBag size={22} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-amber-950">Shop & Ship from India</h4>
+                    <p className="text-xs text-amber-700/80 mt-0.5">Shop Indian brandsâ€”we pack and ship abroad</p>
+                  </div>
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowNewOrderMenu(false)}
+                className="w-full mt-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all active:scale-95"
+              >
+                Cancel
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Account Quick Drawer */}
+      <AnimatePresence>
+        {showAccountMenu && (
+          <div className="md:hidden fixed inset-0 z-[150] overflow-hidden">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAccountMenu(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+
+            {/* Bottom Sheet */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2.5rem] shadow-2xl p-6 pb-12 border-t border-slate-100"
+            >
+              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6" />
+
+              <div className="text-center mb-6">
+                <h3 className="text-xl font-black text-slate-900">Your Account</h3>
+                <p className="text-xs text-slate-500 mt-1">Manage details or track order history</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                {/* My Account Option */}
+                <button
+                  onClick={() => {
+                    setShowAccountMenu(false);
+                    navigateTo('account');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100/50 transition-all text-left w-full"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-100">
+                    <UserIcon size={22} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-indigo-950">My Account</h4>
+                    <p className="text-xs text-indigo-700/80 mt-0.5">View your profile details and preferences</p>
+                  </div>
+                </button>
+
+                {/* My Orders Option */}
+                <button
+                  onClick={() => {
+                    setShowAccountMenu(false);
+                    navigateTo('history');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100/50 transition-all text-left w-full"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-100">
+                    <History size={22} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-indigo-950">My Orders</h4>
+                    <p className="text-xs text-indigo-700/80 mt-0.5">Track shipment statuses and order history</p>
+                  </div>
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowAccountMenu(false)}
+                className="w-full mt-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-all active:scale-95"
+              >
+                Cancel
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <Toaster position="top-center" richColors />
+    </div>
+  );
+}

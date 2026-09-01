@@ -162,7 +162,7 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
       const idx = filteredPickupSlots.findIndex(s => s.date === selectedPickupDate);
       if (idx >= 0) {
         const page = Math.floor(idx / 7) * 7;
-        setDateStartIndex(page);
+        setDateStartIndex(prev => (prev !== page ? page : prev));
       }
     }
   }, [selectedPickupDate, filteredPickupSlots]);
@@ -754,8 +754,8 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                   <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input 
                     type="text" 
-                    className="w-full p-3.5 pl-11 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900"
-                    placeholder="Sender Full Name"
+                    className="w-full p-3.5 pl-11 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
+                    placeholder="Enter sender's full name"
                     value={pickupName}
                     onChange={(e) => setPickupName(e.target.value)}
                   />
@@ -765,11 +765,11 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-600">Mobile Phone *</label>
                 <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">+91</span>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">+91</span>
                   <input 
                     type="tel" 
-                    className="w-full p-3.5 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900"
-                    placeholder="10-digit mobile"
+                    className="w-full p-3.5 pl-12 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
+                    placeholder="10-digit mobile number"
                     value={pickupPhone}
                     maxLength={10}
                     onChange={(e) => {
@@ -786,8 +786,8 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input 
                     type="email" 
-                    className="w-full p-3.5 pl-11 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900"
-                    placeholder="email@domain.com"
+                    className="w-full p-3.5 pl-11 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
+                    placeholder="name@example.com"
                     value={pickupEmail}
                     onChange={(e) => setPickupEmail(e.target.value)}
                   />
@@ -798,8 +798,8 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                 <label className="block text-xs font-bold text-slate-600">Street Address *</label>
                 <input 
                   type="text" 
-                  className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900"
-                  placeholder="House No, Apartment, Street / Landmark"
+                  className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
+                  placeholder="Flat, House no., Building, Street / Landmark"
                   value={pickupAddress.street}
                   onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
                 />
@@ -809,8 +809,8 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                 <label className="block text-xs font-bold text-slate-600">City *</label>
                 <input 
                   type="text" 
-                  className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900"
-                  placeholder="e.g. Mumbai"
+                  className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
+                  placeholder="City"
                   value={pickupAddress.city}
                   onChange={(e) => setPickupAddress({...pickupAddress, city: e.target.value})}
                 />
@@ -821,8 +821,8 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                   <label className="block text-xs font-bold text-slate-600">State *</label>
                   <input 
                     type="text" 
-                    className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900"
-                    placeholder="Maharashtra"
+                    className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
+                    placeholder="State"
                     value={pickupAddress.state}
                     onChange={(e) => setPickupAddress({...pickupAddress, state: e.target.value})}
                   />
@@ -831,8 +831,8 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                   <label className="block text-xs font-bold text-slate-600">PIN Code *</label>
                   <input 
                     type="text" 
-                    className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900"
-                    placeholder="400001"
+                    className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
+                    placeholder="PIN Code"
                     value={pickupAddress.zip}
                     onChange={(e) => setPickupAddress({...pickupAddress, zip: e.target.value})}
                   />
@@ -842,8 +842,8 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
               <div className="md:col-span-2 space-y-1.5">
                 <label className="block text-xs font-bold text-slate-600">Special Instructions for Agent (Optional)</label>
                 <textarea 
-                  className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium min-h-[80px] text-sm text-slate-900"
-                  placeholder="e.g. Call before coming, gate code 1234, fragile glass inside"
+                  className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium min-h-[80px] text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
+                  placeholder="Any special instructions for courier executive (optional)"
                   value={pickupSpecialInstructions}
                   onChange={(e) => setPickupSpecialInstructions(e.target.value)}
                 />
@@ -923,8 +923,8 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                   <label className="block text-xs font-bold text-slate-600">Receiver Full Name *</label>
                   <input 
                     type="text" 
-                    className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900"
-                    placeholder="Recipient Full Name"
+                    className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
+                    placeholder="Enter receiver's name"
                     value={pickupDestination.fullName || ''}
                     onChange={(e) => setPickupDestination({...pickupDestination, fullName: e.target.value})}
                   />
@@ -934,8 +934,8 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                   <label className="block text-xs font-bold text-slate-600">Receiver Phone Number *</label>
                   <input 
                     type="tel" 
-                    className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900"
-                    placeholder="Phone with country code"
+                    className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
+                    placeholder="Phone number with country code"
                     value={pickupDestination.phone || ''}
                     onChange={(e) => setPickupDestination({...pickupDestination, phone: e.target.value})}
                   />
@@ -945,8 +945,8 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                   <label className="block text-xs font-bold text-slate-600">Destination Street Address *</label>
                   <input 
                     type="text" 
-                    className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900"
-                    placeholder="Street Address, Building, Suite / Apt"
+                    className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
+                    placeholder="Street address, apartment, suite"
                     value={pickupDestination.addressLine1 || ''}
                     onChange={(e) => setPickupDestination({...pickupDestination, addressLine1: e.target.value})}
                   />
@@ -956,7 +956,7 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                   <label className="block text-xs font-bold text-slate-600">Destination City *</label>
                   <input 
                     type="text" 
-                    className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900"
+                    className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
                     placeholder="City"
                     value={pickupDestination.city || ''}
                     onChange={(e) => setPickupDestination({...pickupDestination, city: e.target.value})}
@@ -968,7 +968,7 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                     <label className="block text-xs font-bold text-slate-600">State / Region *</label>
                     <input 
                       type="text" 
-                      className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900"
+                      className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
                       placeholder="State / Region"
                       value={pickupDestination.state || ''}
                       onChange={(e) => setPickupDestination({...pickupDestination, state: e.target.value})}
@@ -978,7 +978,7 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                     <label className="block text-xs font-bold text-slate-600">ZIP / Post Code *</label>
                     <input 
                       type="text" 
-                      className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900"
+                      className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
                       placeholder="Postal Code"
                       value={pickupDestination.zipCode || ''}
                       onChange={(e) => setPickupDestination({...pickupDestination, zipCode: e.target.value})}

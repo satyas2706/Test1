@@ -28,12 +28,12 @@ const AccountSection = ({ currentUser, onUpdateProfile, customerWarehouseId }: A
   // Sync state whenever currentUser loads or changes
   useEffect(() => {
     if (currentUser) {
-      setName(currentUser.name || '');
-      setEmail(currentUser.email || '');
-      setPhone(currentUser.phone || '');
-      setAddress(currentUser.address || '');
+      setName(prev => (prev === (currentUser.name || '') ? prev : (currentUser.name || '')));
+      setEmail(prev => (prev === (currentUser.email || '') ? prev : (currentUser.email || '')));
+      setPhone(prev => (prev === (currentUser.phone || '') ? prev : (currentUser.phone || '')));
+      setAddress(prev => (prev === (currentUser.address || '') ? prev : (currentUser.address || '')));
     }
-  }, [currentUser]);
+  }, [currentUser?.id, currentUser?.name, currentUser?.email, currentUser?.phone, currentUser?.address]);
 
   const handleCopyId = () => {
     navigator.clipboard.writeText(customerWarehouseId);

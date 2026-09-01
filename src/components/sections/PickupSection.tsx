@@ -47,8 +47,8 @@ const PickupSection = ({
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
               <input 
                 type="text" 
-                placeholder="Sender's Name"
-                className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all"
+                placeholder="Enter full name"
+                className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all placeholder:text-slate-300 placeholder:font-light"
                 value={pickupDetails.fullName}
                 onChange={(e) => setPickupDetails({ ...pickupDetails, fullName: e.target.value })}
               />
@@ -57,8 +57,8 @@ const PickupSection = ({
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
               <input 
                 type="tel" 
-                placeholder="+91 98765 43210"
-                className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all"
+                placeholder="10-digit phone number"
+                className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all placeholder:text-slate-300 placeholder:font-light"
                 value={pickupDetails.phone}
                 onChange={(e) => setPickupDetails({ ...pickupDetails, phone: e.target.value })}
               />
@@ -68,8 +68,8 @@ const PickupSection = ({
               <div className="relative">
                 <MapPin className="absolute left-4 top-4 text-slate-400" size={20} />
                 <textarea 
-                  placeholder="Street address, Apartment, Suite, etc."
-                  className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all min-h-[120px]"
+                  placeholder="Flat, House no., Building, Street / Landmark"
+                  className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all min-h-[120px] placeholder:text-slate-300 placeholder:font-light"
                   value={pickupDetails.address}
                   onChange={(e) => setPickupDetails({ ...pickupDetails, address: e.target.value })}
                 />
@@ -79,8 +79,8 @@ const PickupSection = ({
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">City</label>
               <input 
                 type="text" 
-                placeholder="e.g. Mumbai"
-                className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all"
+                placeholder="City"
+                className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all placeholder:text-slate-300 placeholder:font-light"
                 value={pickupDetails.city}
                 onChange={(e) => setPickupDetails({ ...pickupDetails, city: e.target.value })}
               />
@@ -89,8 +89,8 @@ const PickupSection = ({
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">PIN Code</label>
               <input 
                 type="text" 
-                placeholder="400001"
-                className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all"
+                placeholder="PIN Code"
+                className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all placeholder:text-slate-300 placeholder:font-light"
                 value={pickupDetails.pinCode}
                 onChange={(e) => setPickupDetails({ ...pickupDetails, pinCode: e.target.value })}
               />
@@ -144,8 +144,8 @@ const PickupSection = ({
                   <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                     <input 
                       type="text" 
-                      placeholder="Item Name (e.g. Traditional Saree)"
-                      className="w-full p-4 bg-white rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all"
+                      placeholder="Item name"
+                      className="w-full p-4 bg-white rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all placeholder:text-slate-300 placeholder:font-light"
                       value={item.name}
                       onChange={(e) => {
                         const newItems = [...items];
@@ -158,7 +158,7 @@ const PickupSection = ({
                       <input 
                         type="number" 
                         placeholder="Weight (kg)"
-                        className="w-full p-4 bg-white rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all"
+                        className="w-full p-4 bg-white rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 outline-none text-slate-900 font-bold transition-all placeholder:text-slate-300 placeholder:font-light"
                         value={item.weight || ''}
                         onChange={(e) => {
                           const newItems = [...items];

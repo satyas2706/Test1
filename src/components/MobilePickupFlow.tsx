@@ -574,7 +574,7 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                   <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Full Name</label>
                   <input 
                     type="text"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm placeholder:text-slate-300 placeholder:font-light"
                     value={pickupName}
                     onChange={(e) => setPickupName(e.target.value)}
                     placeholder="Enter full name"
@@ -585,20 +585,20 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                   <input 
                     type="tel"
                     maxLength={10}
-                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm placeholder:text-slate-300 placeholder:font-light"
                     value={pickupPhone}
                     onChange={(e) => setPickupPhone(e.target.value.replace(/\D/g, ''))}
-                    placeholder="Enter 10-digit phone number"
+                    placeholder="10-digit mobile number"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Street Address</label>
                   <input 
                     type="text"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm placeholder:text-slate-300 placeholder:font-light"
                     value={pickupAddress.street || ''}
                     onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
-                    placeholder="Flat, House no., Building, Company"
+                    placeholder="Flat, House no., Building, Street / Landmark"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -606,7 +606,7 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                     <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">City</label>
                     <input 
                       type="text"
-                      className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm placeholder:text-slate-300 placeholder:font-light"
                       value={pickupAddress.city || ''}
                       onChange={(e) => setPickupAddress({...pickupAddress, city: e.target.value})}
                       placeholder="City"
@@ -616,7 +616,7 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                     <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">State</label>
                     <input 
                       type="text"
-                      className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                      className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm placeholder:text-slate-300 placeholder:font-light"
                       value={pickupAddress.state || ''}
                       onChange={(e) => setPickupAddress({...pickupAddress, state: e.target.value})}
                       placeholder="State"
@@ -627,10 +627,10 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                   <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Pincode</label>
                   <input 
                     type="text"
-                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                    className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm placeholder:text-slate-300 placeholder:font-light"
                     value={pickupAddress.zip || ''}
                     onChange={(e) => setPickupAddress({...pickupAddress, zip: e.target.value})}
-                    placeholder="6-digit pincode"
+                    placeholder="PIN Code"
                   />
                 </div>
 
@@ -664,7 +664,7 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                 {/* Option to provide destination details later */}
                 <div className="bg-amber-50 p-3 rounded-xl border border-amber-200/80 flex items-start gap-2.5">
                   <input 
-                    type="checkbox"
+                    type="checkbox" 
                     id="provide-destination-later-mobile"
                     className="w-4 h-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500 mt-0.5 cursor-pointer accent-amber-600"
                     checked={provideDestinationLater}
@@ -707,7 +707,7 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                       <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Receiver Full Name</label>
                       <input 
                         type="text"
-                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm placeholder:text-slate-300 placeholder:font-light"
                         value={pickupDestination.fullName || ''}
                         onChange={(e) => setPickupDestination({...pickupDestination, fullName: e.target.value})}
                         placeholder="Enter receiver's name"
@@ -717,20 +717,20 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                       <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Receiver Phone Number</label>
                       <input 
                         type="tel"
-                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm placeholder:text-slate-300 placeholder:font-light"
                         value={pickupDestination.phone || ''}
                         onChange={(e) => setPickupDestination({...pickupDestination, phone: e.target.value})}
-                        placeholder="Enter phone with country code"
+                        placeholder="Phone number with country code"
                       />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Destination Street Address</label>
                       <input 
                         type="text"
-                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                        className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm placeholder:text-slate-300 placeholder:font-light"
                         value={pickupDestination.addressLine1 || ''}
                         onChange={(e) => setPickupDestination({...pickupDestination, addressLine1: e.target.value})}
-                        placeholder="Street Address"
+                        placeholder="Street address, apartment, suite"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -738,7 +738,7 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                         <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">City</label>
                         <input 
                           type="text"
-                          className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                          className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm placeholder:text-slate-300 placeholder:font-light"
                           value={pickupDestination.city || ''}
                           onChange={(e) => setPickupDestination({...pickupDestination, city: e.target.value})}
                           placeholder="City"
@@ -748,10 +748,10 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                         <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">State / Region</label>
                         <input 
                           type="text"
-                          className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                          className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm placeholder:text-slate-300 placeholder:font-light"
                           value={pickupDestination.state || ''}
                           onChange={(e) => setPickupDestination({...pickupDestination, state: e.target.value})}
-                          placeholder="State"
+                          placeholder="State / Region"
                         />
                       </div>
                     </div>
@@ -760,10 +760,10 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                         <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Zip / Postal Code</label>
                         <input 
                           type="text"
-                          className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm"
+                          className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs bg-white text-slate-900 shadow-sm placeholder:text-slate-300 placeholder:font-light"
                           value={pickupDestination.zipCode || ''}
                           onChange={(e) => setPickupDestination({...pickupDestination, zipCode: e.target.value})}
-                          placeholder="Zipcode"
+                          placeholder="Postal code"
                         />
                       </div>
                       <div className="space-y-1">
