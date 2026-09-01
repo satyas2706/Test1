@@ -557,18 +557,18 @@ app.post("/api/auth/send-otp", async (req, res) => {
       try {
         const recipientTo = isAdminTarget ? ADMIN_EMAILS.join(', ') : cleanEmail;
         const emailSubject = isAdminTarget 
-          ? `Your JiffEX Admin Login Verification Code: ${code}`
-          : `Your JiffEX Login Verification Code: ${code}`;
+          ? `Your Jiffex Admin Login Verification Code: ${code}`
+          : `Your Jiffex Login Verification Code: ${code}`;
 
         await mailTransporter.sendMail({
           from: getSenderAddress(process.env.SMTP_FROM),
           to: recipientTo,
           subject: emailSubject,
-          text: `Your JiffEX ${isAdminTarget ? 'Admin ' : ''}verification code is: ${code}\n\nEnter this 6-digit code on the login screen to sign in. This code is valid for 10 minutes.\n\n${isAdminTarget ? 'This administrator verification code was sent to Srikanth Satya and Arun Dubba.' : 'If you did not request this code, please ignore this message.'}`,
+          text: `Your Jiffex ${isAdminTarget ? 'Admin ' : ''}verification code is: ${code}\n\nEnter this 6-digit code on the login screen to sign in. This code is valid for 10 minutes.\n\n${isAdminTarget ? 'This administrator verification code was sent to Srikanth Satya and Arun Dubba.' : 'If you did not request this code, please ignore this message.'}`,
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 36px; border: 1px solid #e2e8f0; border-radius: 20px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
               <div style="text-align: center; margin-bottom: 28px;">
-                <h1 style="color: #4f46e5; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">JiffEX Logistics</h1>
+                <h1 style="color: #4f46e5; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">Jiffex Fulfilment</h1>
                 <p style="color: #64748b; font-size: 13px; margin-top: 4px; font-weight: 500;">Secure Express International Shipping</p>
               </div>
               <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 24px;">
@@ -4244,7 +4244,7 @@ app.get("/api/omnidimension/pickup", handleBookHomePickup);
 // OmniDimension Tools JSON Schema Manifest & Test
 app.get("/api/omnidimension/tools", (req, res) => {
   res.json({
-    name: "Jiffex Logistics Tools",
+    name: "Jiffex Fulfilment Tools",
     version: "2.0.0",
     tools: [
       {

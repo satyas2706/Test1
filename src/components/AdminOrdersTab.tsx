@@ -525,7 +525,7 @@ export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
                             <button
                               onClick={() => {
                                 const cleanPhone = phone.replace(/\D/g, '');
-                                const msg = encodeURIComponent(`Hi ${customerName}, this is Jiffex Logistics regarding your order #${order.id} (${order.status}).`);
+                                const msg = encodeURIComponent(`Hi ${customerName}, this is Jiffex Fulfilment regarding your order #${order.id} (${order.status}).`);
                                 window.open(`https://wa.me/91${cleanPhone.slice(-10)}?text=${msg}`, '_blank');
                               }}
                               className="p-2 bg-emerald-50 hover:bg-emerald-600 text-emerald-600 hover:text-white rounded-xl text-xs font-black transition-all shadow-sm"

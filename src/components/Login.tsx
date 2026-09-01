@@ -318,20 +318,6 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '' }) =>
                 We will send a secure 6-digit one-time password (OTP) to your email to verify your session.
               </p>
             </div>
-
-            <div className="space-y-2">
-              <div className="p-3.5 bg-indigo-50/50 rounded-2xl border border-indigo-100/60 text-left">
-                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
-                  <strong className="text-indigo-900 font-bold">Admin Portal Sign In:</strong> Use <span className="font-mono font-bold text-indigo-700">srikanth.satya@jiffex.in</span> or <span className="font-mono font-bold text-indigo-700">Arun.dubba@Jiffex.in</span>. Login OTP will be delivered directly to both administrators.
-                </p>
-              </div>
-
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 text-left">
-                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
-                  <strong className="text-slate-800 font-bold">Field Agent Sign In:</strong> Use your assigned agent email, e.g. <span className="font-mono font-bold text-slate-700">12345.agent@jiffex.com</span>.
-                </p>
-              </div>
-            </div>
           </div>
         </div>
       ) : (

@@ -1236,7 +1236,7 @@ const SupportSection = ({ currentUser, orders, tickets, setTickets, refundReques
               <span>Jiffex AI Support Agent</span>
             </div>
             <h4 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-              Instant Jiffex Logistics Support
+              Instant Jiffex Fulfilment Support
             </h4>
             <p className="text-sm text-slate-300 leading-relaxed font-medium">
               Have questions about shipping rates, scheduling doorstep pickup, shop & ship consolidation, or tracking? Use our 24/7 Jiffex assistant for instant resolution.
