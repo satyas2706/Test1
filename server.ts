@@ -2944,12 +2944,22 @@ const deduplicateOrders = (ordersList: any[]) => {
         if (error) console.error('[SERVER SELF-HEAL] PG Delete Error:', error.message);
         else console.log('[SERVER SELF-HEAL] PG Deleted IDs:', idsToDelete);
       });
+    supabase.from('pickups').delete().in('id', idsToDelete)
+      .then(({ error }) => {
+        if (error) console.error('[SERVER SELF-HEAL] Pickups Delete Error:', error.message);
+        else console.log('[SERVER SELF-HEAL] Pickups Deleted IDs:', idsToDelete);
+      });
     // Filter from memory arrays
     const filteredMem = memOrders.filter(o => !idsToDelete.includes(o.id));
     memOrders.length = 0;
     memOrders.push(...filteredMem);
-    saveDb();
+
+    const filteredPickups = memPickups.filter(p => !idsToDelete.includes(p.id));
+    memPickups.length = 0;
+    memPickups.push(...filteredPickups);
+
     cachedAllOrders = cachedAllOrders.filter(o => !idsToDelete.includes(o.id));
+    saveDb();
   }
 
   return cleanList;
@@ -4650,7 +4660,7 @@ async function startServer() {
     refreshAllOrdersCache().catch(err => {
       console.warn("[Background Cache] Orders cache refresh warning:", err.message);
     });
-  }, 15000);
+  }, 60000);
 
   console.log("Configuring Vite middleware...");
   // Vite middleware for development
