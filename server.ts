@@ -72,10 +72,28 @@ const isSupabaseValid = !!(
 );
 const supabase = isSupabaseValid ? createClient(supabaseUrl, supabaseKey) : null;
 
+// Server-only Supabase Admin Client (using service role key for privileged operations like self-heal)
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ? process.env.SUPABASE_SERVICE_ROLE_KEY.trim().replace(/^['"]|['"]$/g, '') : '';
+const isSupabaseAdminValid = !!(
+  supabaseUrl && 
+  supabaseServiceRoleKey && 
+  supabaseUrl !== 'undefined' && 
+  supabaseServiceRoleKey !== 'undefined' && 
+  supabaseUrl.trim() !== '' && 
+  supabaseServiceRoleKey.trim() !== '' &&
+  !supabaseUrl.includes('placeholder') &&
+  !supabaseServiceRoleKey.includes('placeholder')
+);
+const supabaseAdmin = isSupabaseAdminValid ? createClient(supabaseUrl, supabaseServiceRoleKey) : null;
+
 if (supabase) {
   console.log("Supabase client initialized on server.");
 } else {
   console.warn("Supabase credentials missing. Running in limited mode.");
+}
+
+if (supabaseAdmin) {
+  console.log("Supabase admin client initialized on server.");
 }
 
 // Global cache for resilient database order fallback
@@ -2881,7 +2899,7 @@ const transformDbOrder = (o: any) => {
 // Helper to perform structural deduplication of orders
 // If there is an order that is still scheduled but has empty items, and we find a completed/processed clone
 // (created historical sequence increment bugs in the previous codebase), we automatically delete the scheduled empty clone.
-const deduplicateOrders = (ordersList: any[]) => {
+const deduplicateOrders = async (ordersList: any[]): Promise<any[]> => {
   if (!ordersList || ordersList.length === 0) return ordersList;
 
   const completed = ordersList.filter(o => {
@@ -2937,18 +2955,26 @@ const deduplicateOrders = (ordersList: any[]) => {
     }
   }
 
-  // Fire background PostgreSQL deletions if we have duplicate IDs and supabase is alive
-  if (idsToDelete.length > 0 && supabase) {
-    supabase.from('orders').delete().in('id', idsToDelete)
-      .then(({ error }) => {
-        if (error) console.error('[SERVER SELF-HEAL] PG Delete Error:', error.message);
+  // Fire privileged PostgreSQL deletions if we have duplicate IDs
+  if (idsToDelete.length > 0) {
+    const adminDb = supabaseAdmin || supabase;
+    if (adminDb) {
+      try {
+        const { error: ordersErr } = await adminDb.from('orders').delete().in('id', idsToDelete);
+        if (ordersErr) console.error('[SERVER SELF-HEAL] PG Delete Error:', ordersErr.message);
         else console.log('[SERVER SELF-HEAL] PG Deleted IDs:', idsToDelete);
-      });
-    supabase.from('pickups').delete().in('id', idsToDelete)
-      .then(({ error }) => {
-        if (error) console.error('[SERVER SELF-HEAL] Pickups Delete Error:', error.message);
+      } catch (e: any) {
+        console.error('[SERVER SELF-HEAL] PG Delete Exception:', e.message);
+      }
+
+      try {
+        const { error: pickupsErr } = await adminDb.from('pickups').delete().in('id', idsToDelete);
+        if (pickupsErr) console.error('[SERVER SELF-HEAL] Pickups Delete Error:', pickupsErr.message);
         else console.log('[SERVER SELF-HEAL] Pickups Deleted IDs:', idsToDelete);
-      });
+      } catch (e: any) {
+        console.error('[SERVER SELF-HEAL] Pickups Delete Exception:', e.message);
+      }
+    }
     // Filter from memory arrays
     const filteredMem = memOrders.filter(o => !idsToDelete.includes(o.id));
     memOrders.length = 0;
@@ -3428,7 +3454,7 @@ const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
       return dateB - dateA;
     });
 
-    const deduplicated = deduplicateOrders(combinedList);
+    const deduplicated = await deduplicateOrders(combinedList);
     if (deduplicated && deduplicated.length > 0) {
       cachedAllOrders = deduplicated;
       lastOrderRefreshTime = Date.now();
@@ -3466,8 +3492,7 @@ app.get("/api/orders", async (req, res) => {
     return dateB - dateA;
   });
 
-  const deduplicatedFinalOrders = deduplicateOrders(finalOrders);
-  res.json(deduplicatedFinalOrders);
+  res.json(finalOrders);
 });
 
 // API: Public Tracking (No Auth required)
@@ -3548,7 +3573,7 @@ app.get("/api/orders/:customerId", async (req, res) => {
 
       return isIdMatch || isEmailMatch || isPhoneMatch;
     });
-    return res.json(deduplicateOrders(userOrders.map(transformDbOrder)));
+    return res.json(await deduplicateOrders(userOrders.map(transformDbOrder)));
   }
 
   try {
@@ -3603,7 +3628,7 @@ app.get("/api/orders/:customerId", async (req, res) => {
     });
 
     const transformed = mergedOrders.map(transformDbOrder);
-    res.json(deduplicateOrders(transformed));
+    res.json(await deduplicateOrders(transformed));
   } catch (err: any) {
     console.log(`Serving filtered orders fallback for user: ${customerId}`);
     
@@ -3631,7 +3656,7 @@ app.get("/api/orders/:customerId", async (req, res) => {
         return dateB - dateA;
       });
 
-    res.json(deduplicateOrders(fallback));
+    res.json(await deduplicateOrders(fallback));
   }
 });
 
