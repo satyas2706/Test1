@@ -137,7 +137,7 @@ export function updateSupabaseConfig(url: string, key: string) {
  * Resilient Supabase query execution with automatic retry for transient schema cache / PostgREST warming states (PGRST002, 503, timeout).
  */
 export async function safeSupabaseQuery<T = any>(
-  queryFn: () => Promise<{ data: T | null; error: any }>,
+  queryFn: () => PromiseLike<{ data: T | null; error: any }> | Promise<{ data: T | null; error: any }> | any,
   options: { retries?: number; initialDelayMs?: number; label?: string } = {}
 ): Promise<{ data: T | null; error: any }> {
   const retries = options.retries ?? 3;

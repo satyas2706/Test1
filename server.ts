@@ -55,7 +55,7 @@ if (process.env.TWILIO_WHATSAPP_NUMBER) {
 }
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = 3000;
 
 // Initialize Supabase Client
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -104,7 +104,7 @@ const queryWithTimeout = (promise: any, ms = 2500, timeoutErrorMsg = 'Operation 
  * Resilient server-side Supabase query execution with automatic retry for transient schema cache / PostgREST warming states.
  */
 async function safeSupabaseQuery<T = any>(
-  queryFn: () => Promise<{ data: T | null; error: any }>,
+  queryFn: () => PromiseLike<{ data: T | null; error: any }> | Promise<{ data: T | null; error: any }> | any,
   options: { retries?: number; initialDelayMs?: number; label?: string } = {}
 ): Promise<{ data: T | null; error: any }> {
   const retries = options.retries ?? 3;
@@ -2148,8 +2148,13 @@ app.post("/api/order-confirmation", async (req, res) => {
     const isPaid = order.paymentStatus === 'Paid' || order.payment_status === 'Paid';
     const isPayAtHome = order.paymentStatus === 'Pay at Home' || order.payment_status === 'Pay at Home';
     const isPending = order.paymentStatus === 'Pending' || order.payment_status === 'Pending';
+    const isShopOrder = orderIdStr.startsWith('SH-') || 
+                        (order.items && Array.isArray(order.items) && order.items.some((i: any) => i.source === 'Store' || i.source === 'shop'));
 
-    const subject = isPaid ? `Order Confirmed & Paid: ${trackingId}` : `Order Confirmed: ${trackingId}`;
+    let subject = isPaid ? `Order Confirmed & Paid: ${trackingId}` : `Order Confirmed: ${trackingId}`;
+    if (isShopOrder && isPaid) {
+      subject = `Tax Invoice & Order Confirmation: ${trackingId}`;
+    }
     
     let paymentBlockText = `Payment Status: Pending\nAmount: ₹${(order.totalCost || order.total_cost || 0).toLocaleString()}`;
     let paymentBlockHtml = `
@@ -2174,6 +2179,39 @@ app.post("/api/order-confirmation", async (req, res) => {
       </div>`;
     }
 
+    // Generate invoice PDF attachment if Shop & Ship or Paid
+    let attachments: any[] = [];
+    if (isShopOrder || isPaid) {
+      try {
+        console.log(`[Order Confirmation] Generating tax invoice PDF for order ${order.id}...`);
+        const pdfBuffer = await generateInvoicePDF(order, companyDetails);
+        if (pdfBuffer && pdfBuffer.length > 0) {
+          attachments.push({
+            filename: `Invoice_${trackingId}.pdf`,
+            content: pdfBuffer
+          });
+          console.log(`[Order Confirmation] Tax invoice PDF generated (${pdfBuffer.length} bytes) for order ${order.id}`);
+        }
+      } catch (pdfErr) {
+        console.error(`[Order Confirmation] Error generating invoice PDF for order ${order.id}:`, pdfErr);
+      }
+    }
+
+    // Notice text: Shop & Ship orders receive an attached invoice, NOT a consolidation notice
+    const invoiceNoticeHtml = isShopOrder 
+      ? `
+  <p style="background-color: #f0fdf4; padding: 12px; border-radius: 8px; border: 1px solid #bbf7d0; font-size: 13px; color: #166534; margin: 15px 0;">
+    <strong>Tax Invoice:</strong> Your official tax invoice for order <strong>${trackingId}</strong> has been generated and is attached to this email.
+  </p>`
+      : `
+  <p style="background-color: #eff6ff; padding: 10px; border-radius: 8px; border: 1px solid #bfdbfe; font-size: 13px; color: #1e40af; margin: 15px 0;">
+    <strong>Invoice Notice:</strong> To avoid multiple separate emails, we will generate and email a single consolidated tax invoice once all of your active orders are successfully completed.
+  </p>`;
+
+    const invoiceNoticeText = isShopOrder
+      ? `Your official tax invoice for order ${trackingId} has been generated and is attached to this email.`
+      : `Your final tax invoice will be generated and emailed as a consolidated invoice once all your active orders are completed.`;
+
     const bodyText = `
 Dear ${order.destination.fullName},
 
@@ -2186,7 +2224,7 @@ Destination: ${order.destination.city}, ${order.destination.country}
 
 Track your shipment here: ${trackingUrl}
 
-Your final tax invoice will be generated and emailed as a consolidated invoice once all your active orders are completed.
+${invoiceNoticeText}
 
 If you have any questions, please contact our support team at ${companyDetails.email}.
 
@@ -2211,9 +2249,7 @@ The Jiffex Team
     </a>
   </p>
   
-  <p style="background-color: #eff6ff; padding: 10px; border-radius: 8px; border: 1px solid #bfdbfe; font-size: 13px; color: #1e40af; margin: 15px 0;">
-    <strong>Invoice Notice:</strong> To avoid multiple separate emails, we will generate and email a single consolidated tax invoice once all of your active orders are successfully completed.
-  </p>
+  ${invoiceNoticeHtml}
 
   <p>If you have any questions, please contact our support team at <a href="mailto:${companyDetails.email}" style="color: #4f46e5;">${companyDetails.email}</a>.</p>
   
@@ -2232,7 +2268,8 @@ The Jiffex Team
       to: email,
       subject: subject,
       text: bodyText,
-      html: bodyHtml
+      html: bodyHtml,
+      attachments: attachments.length > 0 ? attachments : undefined
     });
 
     console.log(`[Order Confirmation] Confirmation for order ${order.id} successfully sent to ${email}`);
@@ -3293,8 +3330,8 @@ let lastOrderRefreshTime = 0;
 
 const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
   const now = Date.now();
-  // Return cached immediately if refreshed within last 2 seconds and not forced
-  if (!force && cachedAllOrders.length > 0 && now - lastOrderRefreshTime < 2000) {
+  // Return cached immediately if refreshed within last 60 seconds and not forced
+  if (!force && cachedAllOrders.length > 0 && now - lastOrderRefreshTime < 60000) {
     return cachedAllOrders;
   }
   if (isRefreshingOrders && cachedAllOrders.length > 0) {

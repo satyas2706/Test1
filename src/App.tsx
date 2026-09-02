@@ -6879,9 +6879,9 @@ export default function App() {
 
       fetchOrders();
 
-      // For Agent, Admin, or Support roles, poll every 3 seconds to ensure instant reflection
+      // Lightweight fallback refresh every 60s for Admin/Agent (Supabase Realtime handles instant updates)
       if (isAdminRole || isAgentRole || activeTab === 'agent' || activeTab === 'admin') {
-        const intervalId = setInterval(fetchOrders, 3000);
+        const intervalId = setInterval(fetchOrders, 60000);
         return () => clearInterval(intervalId);
       }
     }
@@ -7405,10 +7405,14 @@ export default function App() {
             // Send a special "Pay at Home" confirmation email
             await api.sendOrderConfirmationEmail(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
             toast.success(`Order confirmed! Confirmation sent to ${recipientEmail}. Final billing will be done at your home.`);
-          } else {
-            // Online paid / UPI: send order confirmation. Invoice will be consolidated on completion.
+          } else if (hasShopItemsInOrder) {
+            // Shop & Ship: send order confirmation with generated tax invoice PDF
             await api.sendOrderConfirmationEmail(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
-            toast.success(`Payment successful! Order confirmation sent to ${recipientEmail}. Your consolidated tax invoice will be generated when all active orders are completed.`);
+            toast.success(`Payment successful! Order confirmed and tax invoice sent to ${recipientEmail}.`);
+          } else {
+            // Online paid / UPI: send order confirmation
+            await api.sendOrderConfirmationEmail(recipientEmail, finalSavedOrder, COMPANY_DETAILS);
+            toast.success(`Payment successful! Order confirmation sent to ${recipientEmail}.`);
           }
         } catch (err: any) {
           console.error('Failed to sync order or send email:', err.message);
@@ -16399,6 +16403,60 @@ export default function App() {
             </div>
           )}
 
+          {/* Invoice Actions for desktop */}
+          {!isWarehouseCheckout && !isPayAtHome && (
+            <div className="flex justify-center gap-3 pt-2 max-w-xl mx-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetOrder = orders.find(o => o.id === orderId) || {
+                    id: orderId || 'SH-00001',
+                    destination: address,
+                    items: cartItems,
+                    totalWeight,
+                    totalCost,
+                    status: 'Order Confirmed',
+                    paymentStatus: 'Paid',
+                    createdAt: new Date().toISOString()
+                  } as any;
+                  setSelectedOrderForInvoice(targetOrder);
+                }}
+                className="flex-1 py-3.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-2xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              >
+                <FileText size={16} /> View Tax Invoice
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const targetEmail = address.email || currentUser?.email;
+                  if (!targetEmail) {
+                    toast.error("No recipient email found.");
+                    return;
+                  }
+                  const targetOrder = orders.find(o => o.id === orderId) || {
+                    id: orderId || 'SH-00001',
+                    destination: address,
+                    items: cartItems,
+                    totalWeight,
+                    totalCost,
+                    status: 'Order Confirmed',
+                    paymentStatus: 'Paid',
+                    createdAt: new Date().toISOString()
+                  } as any;
+                  const promise = api.sendInvoicePDF(targetEmail, targetOrder, COMPANY_DETAILS);
+                  toast.promise(promise, {
+                    loading: 'Sending invoice PDF to email...',
+                    success: `Tax Invoice PDF sent to ${targetEmail}!`,
+                    error: 'Could not send invoice email.'
+                  });
+                }}
+                className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              >
+                <Mail size={16} /> Email Invoice
+              </button>
+            </div>
+          )}
+
           <div className="flex justify-center pt-2">
             <button 
               onClick={() => { 
@@ -17070,6 +17128,60 @@ export default function App() {
                       className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow shadow-emerald-200 cursor-pointer"
                     >
                       Get Warehouse Address →
+                    </button>
+                  </div>
+                )}
+
+                {/* Invoice Actions */}
+                {!isWarehouseCheckout && !isPayAtHome && (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetOrder = orders.find(o => o.id === orderId) || {
+                          id: orderId || 'SH-00001',
+                          destination: address,
+                          items: cartItems,
+                          totalWeight,
+                          totalCost,
+                          status: 'Order Confirmed',
+                          paymentStatus: 'Paid',
+                          createdAt: new Date().toISOString()
+                        } as any;
+                        setSelectedOrderForInvoice(targetOrder);
+                      }}
+                      className="flex-1 py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <FileText size={14} /> View Tax Invoice
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const targetEmail = address.email || currentUser?.email;
+                        if (!targetEmail) {
+                          toast.error("No recipient email found.");
+                          return;
+                        }
+                        const targetOrder = orders.find(o => o.id === orderId) || {
+                          id: orderId || 'SH-00001',
+                          destination: address,
+                          items: cartItems,
+                          totalWeight,
+                          totalCost,
+                          status: 'Order Confirmed',
+                          paymentStatus: 'Paid',
+                          createdAt: new Date().toISOString()
+                        } as any;
+                        const promise = api.sendInvoicePDF(targetEmail, targetOrder, COMPANY_DETAILS);
+                        toast.promise(promise, {
+                          loading: 'Sending invoice PDF to email...',
+                          success: `Tax Invoice PDF sent to ${targetEmail}!`,
+                          error: 'Could not send invoice email.'
+                        });
+                      }}
+                      className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Mail size={14} /> Email Invoice
                     </button>
                   </div>
                 )}
