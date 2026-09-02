@@ -642,7 +642,7 @@ const AdminDashboard = ({
                         value={testFrom}
                         onChange={e => setTestFrom(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium"
-                        placeholder="JiffEX Notifications <yourname@gmail.com>"
+                        placeholder="Jiffex Notifications <yourname@gmail.com>"
                       />
                     </div>
 
@@ -694,7 +694,7 @@ const AdminDashboard = ({
                     <li>Go to your Google Account Security Dashboard (<a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="underline font-extrabold text-indigo-800">myaccount.google.com/security</a>)</li>
                     <li>Ensure **2-Step Verification** is turned ON for your account.</li>
                     <li>Go to the Google Account search box at the top and type **App Passwords**.</li>
-                    <li>Generate a password with App Name: **JiffEX Mail**.</li>
+                    <li>Generate a password with App Name: **Jiffex Mail**.</li>
                     <li>Copy the 16-character code Google displays.</li>
                     <li>Open **Settings** (located in top right menu of AI Studio Platform), select **Environment Variables**, and paste code into <code className="font-semibold bg-indigo-100 rounded px-1">SMTP_PASS</code>. Then click **Restart Dev Server**.</li>
                   </ol>

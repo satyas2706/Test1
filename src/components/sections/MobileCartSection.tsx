@@ -73,7 +73,7 @@ export const MobileCartSection: React.FC<MobileCartSectionProps> = ({
   const hasCompletedPickup = appointments.some(a => a.status === 'Completed');
 
   // Filter items in cart (active cart items, which are not ordered yet)
-  const displayItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
+  const displayItems = items.filter(i => !orderedItemIds.has(i.id) && (i.source !== 'Warehouse' || i.submitted === true));
   const displayWeight = displayItems.reduce((sum, item) => sum + (item.weight || 0), 0);
   const hasTBDWeight = displayItems.some(i => i.weight === 0);
 
@@ -106,7 +106,7 @@ export const MobileCartSection: React.FC<MobileCartSectionProps> = ({
             </div>
             <h3 className="text-xl font-extrabold text-slate-900">Your cart is empty</h3>
             <p className="text-sm text-slate-500 mt-2 max-w-xs">
-              Add items from the JiffEX Store or register packages sent to our warehouse to get started.
+              Add items from the Jiffex Store or register packages sent to our warehouse to get started.
             </p>
             <button 
               onClick={() => navigateTo('store')}

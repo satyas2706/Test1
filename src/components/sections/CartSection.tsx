@@ -142,9 +142,9 @@ const CartSection = ({
 
   const displayItems = mode 
     ? (mode === 'Warehouse' 
-        ? items.filter(i => i.source === 'Warehouse' && !i.submitted)
-        : items.filter(i => i.source === mode))
-    : items.filter(i => i.source !== 'Warehouse' || i.submitted);
+        ? items.filter(i => (!orderedItemIds || !orderedItemIds.has(i.id)) && i.source === 'Warehouse' && !i.submitted)
+        : items.filter(i => (!orderedItemIds || !orderedItemIds.has(i.id)) && i.source === mode))
+    : items.filter(i => (!orderedItemIds || !orderedItemIds.has(i.id)) && (i.source !== 'Warehouse' || i.submitted));
 
   const displayWeight = displayItems.reduce((sum, item) => sum + (item.weight || 0), 0);
   const hasTBDWeight = displayItems.some(i => i.weight === 0);

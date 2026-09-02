@@ -100,6 +100,68 @@ const queryWithTimeout = (promise: any, ms = 2500, timeoutErrorMsg = 'Operation 
   });
 };
 
+/**
+ * Resilient server-side Supabase query execution with automatic retry for transient schema cache / PostgREST warming states.
+ */
+async function safeSupabaseQuery<T = any>(
+  queryFn: () => Promise<{ data: T | null; error: any }>,
+  options: { retries?: number; initialDelayMs?: number; label?: string } = {}
+): Promise<{ data: T | null; error: any }> {
+  const retries = options.retries ?? 3;
+  const initialDelayMs = options.initialDelayMs ?? 600;
+  const label = options.label || 'Supabase query';
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const result = await queryFn();
+      const err = result?.error;
+      if (!err) {
+        return result;
+      }
+
+      const isTransient =
+        err.code === 'PGRST002' ||
+        err.code === 'PGRST000' ||
+        err.code === '57014' ||
+        err.code === '53300' ||
+        err.status === 503 ||
+        err.status === 502 ||
+        err.status === 504 ||
+        (typeof err.message === 'string' && (
+          err.message.includes('schema cache') ||
+          err.message.includes('connection') ||
+          err.message.includes('timeout') ||
+          err.message.includes('fetch failed') ||
+          err.message.includes('NetworkError')
+        ));
+
+      if (isTransient && attempt < retries) {
+        const delay = initialDelayMs * Math.pow(1.8, attempt - 1);
+        await new Promise(res => setTimeout(res, delay));
+        continue;
+      }
+
+      return result;
+    } catch (caughtErr: any) {
+      const isTransient =
+        caughtErr?.code === 'PGRST002' ||
+        caughtErr?.message?.includes('schema cache') ||
+        caughtErr?.message?.includes('fetch failed') ||
+        caughtErr?.message?.includes('timeout');
+
+      if (isTransient && attempt < retries) {
+        const delay = initialDelayMs * Math.pow(1.8, attempt - 1);
+        await new Promise(res => setTimeout(res, delay));
+        continue;
+      }
+
+      return { data: null, error: caughtErr };
+    }
+  }
+
+  return { data: null, error: new Error(`${label} failed after ${retries} attempts`) };
+}
+
 console.log("Starting server initialization...");
 
 // In-memory OTP store supporting multiple active codes within expiration window
@@ -263,7 +325,7 @@ function formatSmtpError(err: any, prefix: string): string {
 To resolve this:
   a. Enable 2-Step Verification in your Google Account settings.
   b. Search for "App Passwords" in your Google Account.
-  c. Generate a new App Password named "JiffEX Mail".
+  c. Generate a new App Password named "Jiffex Mail".
   d. Paste the 16-character code as "SMTP_PASS" in server secrets and restart the dev server.${mismatchWarning}`;
   }
   return `${prefix} Error: ${message}`;
@@ -345,7 +407,7 @@ async function sendNotification(userId: string, event: string, message: string, 
     const to = recipientInfo?.email;
     console.log(`[Notification] Attempting to send email to: ${to} for event: ${event}`);
     if (to && to !== 'user@example.com' && to.includes('@')) {
-      let subject = `JiffEX Notification: ${event}`;
+      let subject = `Jiffex Notification: ${event}`;
       let html = null;
       let text = message;
 
@@ -358,12 +420,12 @@ async function sendNotification(userId: string, event: string, message: string, 
         const appUrl = process.env.APP_URL || "https://www.jiffex.com";
         const trackingUrl = `${appUrl}?tab=track&id=${orderId}`;
 
-        subject = `Pickup Scheduled: Your JiffEX Appointment ${orderId}`;
+        subject = `Pickup Scheduled: Your Jiffex Appointment ${orderId}`;
         
         html = `
 <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0; border: 1px solid #eee; padding: 20px; border-radius: 10px; text-align: left;">
   <p>Dear <strong>${fullName}</strong>,</p>
-  <p>Thank you for choosing <strong>JiffEX</strong> for your shipping needs.</p>
+  <p>Thank you for choosing <strong>Jiffex</strong> for your shipping needs.</p>
   <p>We are pleased to confirm that your home pickup has been successfully scheduled. Our agent will visit your location as per the details below:</p>
   
   <div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4f46e5;">
@@ -393,8 +455,8 @@ async function sendNotification(userId: string, event: string, message: string, 
   
   <p style="font-size: 14px; color: #666;">
     Best regards,<br>
-    <strong>The JiffEX Team</strong><br>
-    JiffEX Shipping & Logistics<br>
+    <strong>The Jiffex Team</strong><br>
+    Jiffex Shipping & Logistics<br>
     <a href="https://www.jiffex.com" style="color: #4f46e5; text-decoration: none;">www.jiffex.com</a>
   </p>
 </div>
@@ -835,11 +897,14 @@ const DEFAULT_SHIPPING_SETTINGS = {
 const getShippingSettings = async () => {
   if (supabase) {
     try {
-      const { data, error } = await supabase
-        .from('shipping_settings')
-        .select('*')
-        .eq('id', 'global')
-        .maybeSingle();
+      const { data, error } = await safeSupabaseQuery(() =>
+        supabase
+          .from('shipping_settings')
+          .select('*')
+          .eq('id', 'global')
+          .maybeSingle(),
+        { label: 'getShippingSettings' }
+      );
 
       if (!error && data) {
         const rates = data.rates || DEFAULT_SHIPPING_SETTINGS.rates;
@@ -853,11 +918,13 @@ const getShippingSettings = async () => {
             { code: "BOOST", discountPercent: 12, isEnabled: false }
           ]
         };
-      } else if (error && error.code !== 'PGRST116') {
-        console.warn("[Supabase] Failed to fetch shipping settings:", error.message);
+      } else if (error && error.code !== 'PGRST116' && error.code !== 'PGRST002') {
+        console.warn("[Supabase] Failed to fetch shipping settings:", error.message || error);
       }
     } catch (err: any) {
-      console.warn("[Supabase] Exception fetching shipping settings:", err.message || err);
+      if (!err?.message?.includes('schema cache')) {
+        console.warn("[Supabase] Exception fetching shipping settings:", err.message || err);
+      }
     }
   }
 
@@ -876,24 +943,29 @@ const saveShippingSettings = async (settings: any) => {
     try {
       // Package _rateBands into rates object as fallback for database compatibility
       const ratesPayload = { ...settings.rates, _rateBands: settings.rateBands };
-      const { error } = await supabase
-        .from('shipping_settings')
-        .upsert({
-          id: 'global',
-          rates: ratesPayload,
-          discounts: settings.discounts,
-          coupons: settings.coupons,
-          updated_at: new Date().toISOString()
-        });
+      const { error } = await safeSupabaseQuery(() =>
+        supabase
+          .from('shipping_settings')
+          .upsert({
+            id: 'global',
+            rates: ratesPayload,
+            discounts: settings.discounts,
+            coupons: settings.coupons,
+            updated_at: new Date().toISOString()
+          }),
+        { label: 'saveShippingSettings' }
+      );
 
       if (!error) {
         console.log("[Supabase] Successfully saved shipping settings to Supabase.");
         return true;
-      } else {
-        console.warn("[Supabase] Failed to save shipping settings to Supabase:", error.message);
+      } else if (error.code !== 'PGRST002') {
+        console.warn("[Supabase] Failed to save shipping settings to Supabase:", error.message || error);
       }
     } catch (err: any) {
-      console.warn("[Supabase] Exception saving shipping settings to Supabase:", err.message || err);
+      if (!err?.message?.includes('schema cache')) {
+        console.warn("[Supabase] Exception saving shipping settings to Supabase:", err.message || err);
+      }
     }
   }
   return false;
@@ -973,7 +1045,10 @@ app.get("/api/products", async (req, res) => {
   if (!supabase) return res.json(MOCK_PRODUCTS);
   
   try {
-    const { data, error } = await supabase.from('products').select('*');
+    const { data, error } = await safeSupabaseQuery(() =>
+      supabase.from('products').select('*'),
+      { label: 'fetchProducts' }
+    );
     if (error) throw error;
     
     // If table is empty, return mocks as seed data
@@ -983,7 +1058,9 @@ app.get("/api/products", async (req, res) => {
     
     res.json(data.map(dbToProduct));
   } catch (err: any) {
-    console.error("Fetch Products Error:", err.message);
+    if (!err?.message?.includes('schema cache')) {
+      console.warn("Fetch Products fallback to default items:", err.message || err);
+    }
     res.json(MOCK_PRODUCTS.map(dbToProduct));
   }
 });
@@ -994,7 +1071,10 @@ app.post("/api/products", async (req, res) => {
 
   try {
     const dbPayload = productToDb(req.body);
-    const { data, error } = await supabase.from('products').insert(dbPayload).select().single();
+    const { data, error } = await safeSupabaseQuery(() =>
+      supabase.from('products').insert(dbPayload).select().single(),
+      { label: 'createProduct' }
+    );
     if (error) throw error;
     res.json(dbToProduct(data));
   } catch (err: any) {
@@ -1012,7 +1092,10 @@ app.patch("/api/products/:id", async (req, res) => {
     const dbPayload = productToDb(req.body);
     // Explicitly do not let id be changed on patch
     delete dbPayload.id;
-    const { data, error } = await supabase.from('products').update(dbPayload).eq('id', id).select().single();
+    const { data, error } = await safeSupabaseQuery(() =>
+      supabase.from('products').update(dbPayload).eq('id', id).select().single(),
+      { label: 'updateProduct' }
+    );
     if (error) throw error;
     res.json(dbToProduct(data));
   } catch (err: any) {
@@ -1027,7 +1110,10 @@ app.delete("/api/products/:id", async (req, res) => {
 
   const { id } = req.params;
   try {
-    const { error } = await supabase.from('products').delete().eq('id', id);
+    const { error } = await safeSupabaseQuery(() =>
+      supabase.from('products').delete().eq('id', id),
+      { label: 'deleteProduct' }
+    );
     if (error) throw error;
     res.json({ success: true });
   } catch (err: any) {
@@ -1622,7 +1708,7 @@ app.patch("/api/orders/:orderId", async (req, res) => {
     // Send WhatsApp/Email notification if order status was changed in PATCH updates
     if (updates.status !== undefined && data) {
       try {
-        const message = `*JiffEX Shipment Update* 📦\n\nYour order #${orderId.slice(0, 8)} status has changed to: *${updates.status}*\n\nTrack here: ${process.env.APP_URL || 'https://jiffex.com'}/track?id=${orderId}`;
+        const message = `*Jiffex Shipment Update* 📦\n\nYour order #${orderId.slice(0, 8)} status has changed to: *${updates.status}*\n\nTrack here: ${process.env.APP_URL || 'https://jiffex.com'}/track?id=${orderId}`;
         await sendNotification(
           data.customer_id || '',
           "Order Status Updated",
@@ -1702,7 +1788,7 @@ app.patch("/api/orders/:orderId/status", async (req, res) => {
     // 3. Send notification if order was found
     if (order) {
       try {
-        const message = `*JiffEX Shipment Update*\n\nYour order #${orderId.slice(0, 8)} status has changed to: *${status}*\n\nTrack here: ${process.env.APP_URL || 'https://jiffex.com'}/track?id=${orderId}`;
+        const message = `*Jiffex Shipment Update*\n\nYour order #${orderId.slice(0, 8)} status has changed to: *${status}*\n\nTrack here: ${process.env.APP_URL || 'https://jiffex.com'}/track?id=${orderId}`;
         
         await sendNotification(
           order.customer_id,
@@ -1807,11 +1893,11 @@ app.post("/api/smtp/test", async (req, res) => {
     await tempTransporter.sendMail({
       from: getSenderAddress(cleanedFrom),
       to: cleanedUser,
-      subject: "JiffEX SMTP Diagnostic Test Successful!",
+      subject: "Jiffex SMTP Diagnostic Test Successful!",
       html: `
         <div style="font-family: sans-serif; padding: 24px; max-width: 600px; border: 1px solid #4f46e5; border-radius: 16px;">
           <h2 style="color: #4f46e5; margin-top: 0;">🎉 SMTP Connection Successful!</h2>
-          <p>Your JiffEX notification server has successfully authenticated and is ready to send notifications.</p>
+          <p>Your Jiffex notification server has successfully authenticated and is ready to send notifications.</p>
           <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
           <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
             <tr>
@@ -1876,14 +1962,14 @@ app.post("/api/invoice/send-pdf", async (req, res) => {
     const orderIdStr = String(order.id || '');
     const isPrefixed = ['SH-', 'SW-', 'PH-', 'BB-'].some(p => orderIdStr.startsWith(p));
     const trackingId = isPrefixed ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
-    const appUrl = process.env.APP_URL || "https://www.jiffex.com";
+    const appUrl = process.env.APP_URL || "https://www.jiffex.shop";
     const trackingUrl = `${appUrl}?tab=track&id=${trackingId}`;
     
-    const subject = `Invoice for your JiffEX Order: ${trackingId}`;
+    const subject = `Invoice for your Jiffex Order: ${trackingId}`;
     const bodyText = `
 Dear ${order.destination.fullName},
 
-Thank you for choosing JiffEX for your shipping needs. 
+Thank you for choosing Jiffex for your shipping needs. 
 
 We are pleased to inform you that your payment has been successfully processed. Please find the attached tax invoice for your order ${trackingId}.
 
@@ -1891,19 +1977,19 @@ Your shipment is being processed and will be dispatched as per the scheduled dat
 
 Track your shipment here: ${trackingUrl}
 
-If you have any questions or require further assistance, please do not hesitate to contact our support team at ${companyDetails.email}.
+If you have any questions or require further assistance, please do not hesitate to contact our support team at ${companyDetails.email || 'support@jiffex.shop'}.
 
 Best regards,
 
-The JiffEX Team
-JiffEX Shipping & Logistics
-www.jiffex.com
+The Jiffex Team
+Jiffex Fulfilment Private Limited
+www.jiffex.shop
     `.trim();
 
     const bodyHtml = `
 <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0; border: 1px solid #eee; padding: 20px; border-radius: 10px; text-align: left;">
   <p>Dear <strong>${order.destination.fullName}</strong>,</p>
-  <p>Thank you for choosing <strong>JiffEX</strong> for your shipping needs.</p>
+  <p>Thank you for choosing <strong>Jiffex</strong> for your shipping needs.</p>
   <p>We are pleased to inform you that your payment has been successfully processed. Please find the attached tax invoice for your order <strong>${trackingId}</strong>.</p>
   <p>Your shipment is being processed and will be dispatched as per the scheduled date.</p>
   
@@ -1913,15 +1999,15 @@ www.jiffex.com
     </a>
   </p>
   
-  <p>If you have any questions or require further assistance, please do not hesitate to contact our support team at <a href="mailto:${companyDetails.email}" style="color: #4f46e5;">${companyDetails.email}</a>.</p>
+  <p>If you have any questions or require further assistance, please do not hesitate to contact our support team at <a href="mailto:${companyDetails.email || 'support@jiffex.shop'}" style="color: #4f46e5;">${companyDetails.email || 'support@jiffex.shop'}</a>.</p>
   
   <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
   
   <p style="font-size: 14px; color: #666;">
     Best regards,<br>
-    <strong>The JiffEX Team</strong><br>
-    JiffEX Shipping & Logistics<br>
-    <a href="https://www.jiffex.com" style="color: #4f46e5; text-decoration: none;">www.jiffex.com</a>
+    <strong>The Jiffex Team</strong><br>
+    Jiffex Fulfilment Private Limited<br>
+    <a href="https://www.jiffex.shop" style="color: #4f46e5; text-decoration: none;">www.jiffex.shop</a>
   </p>
 </div>
     `.trim();
@@ -1973,38 +2059,38 @@ app.post("/api/invoice/send-consolidated-pdf", async (req, res) => {
 
     const userInitials = (orders[0]?.destination?.fullName || 'USR').slice(0, 3).toUpperCase();
     const consolId = `CONSOL-${userInitials}-${new Date().getTime().toString().slice(-6)}`;
-    const subject = `Consolidated Invoice for your JiffEX Orders: ${consolId}`;
+    const subject = `Consolidated Invoice for your Jiffex Orders: ${consolId}`;
     const bodyText = `
 Dear ${orders[0].destination?.fullName || 'Valued Customer'},
 
-Thank you for choosing JiffEX for your shipping needs. 
+Thank you for choosing Jiffex for your shipping needs. 
 
 All your orders have now been completed successfully. Please find attached your single consolidated tax invoice containing all your completed shipments.
 
-If you have any questions or require further assistance, please do not hesitate to contact our support team at ${companyDetails.email}.
+If you have any questions or require further assistance, please do not hesitate to contact our support team at ${companyDetails.email || 'support@jiffex.shop'}.
 
 Best regards,
 
-The JiffEX Team
-JiffEX Shipping & Logistics
-www.jiffex.com
+The Jiffex Team
+Jiffex Fulfilment Private Limited
+www.jiffex.shop
     `.trim();
 
     const bodyHtml = `
 <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0; border: 1px solid #eee; padding: 20px; border-radius: 10px; text-align: left;">
   <p>Dear <strong>${orders[0].destination?.fullName || 'Valued Customer'}</strong>,</p>
-  <p>Thank you for choosing <strong>JiffEX</strong> for your shipping needs.</p>
+  <p>Thank you for choosing <strong>Jiffex</strong> for your shipping needs.</p>
   <p>We are pleased to inform you that all your orders have now been completed successfully. Please find the attached single consolidated tax invoice for your completed shipments.</p>
   
-  <p>If you have any questions or require further assistance, please do not hesitate to contact our support team at <a href="mailto:${companyDetails.email}" style="color: #4f46e5;">${companyDetails.email}</a>.</p>
+  <p>If you have any questions or require further assistance, please do not hesitate to contact our support team at <a href="mailto:${companyDetails.email || 'support@jiffex.shop'}" style="color: #4f46e5;">${companyDetails.email || 'support@jiffex.shop'}</a>.</p>
   
   <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
   
   <p style="font-size: 14px; color: #666;">
     Best regards,<br>
-    <strong>The JiffEX Team</strong><br>
-    JiffEX Shipping & Logistics<br>
-    <a href="https://www.jiffex.com" style="color: #4f46e5; text-decoration: none;">www.jiffex.com</a>
+    <strong>The Jiffex Team</strong><br>
+    Jiffex Fulfilment Private Limited<br>
+    <a href="https://www.jiffex.shop" style="color: #4f46e5; text-decoration: none;">www.jiffex.shop</a>
   </p>
 </div>
     `.trim();
@@ -2091,7 +2177,7 @@ app.post("/api/order-confirmation", async (req, res) => {
     const bodyText = `
 Dear ${order.destination.fullName},
 
-Thank you for choosing JiffEX. Your order ${trackingId} has been confirmed.
+Thank you for choosing Jiffex. Your order ${trackingId} has been confirmed.
 
 ${paymentBlockText}
 
@@ -2105,13 +2191,13 @@ Your final tax invoice will be generated and emailed as a consolidated invoice o
 If you have any questions, please contact our support team at ${companyDetails.email}.
 
 Best regards,
-The JiffEX Team
+The Jiffex Team
     `.trim();
 
     const bodyHtml = `
 <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0; border: 1px solid #eee; padding: 20px; border-radius: 10px; text-align: left;">
   <p>Dear <strong>${order.destination.fullName}</strong>,</p>
-  <p>Thank you for choosing <strong>JiffEX</strong>. Your order <strong>${trackingId}</strong> has been confirmed.</p>
+  <p>Thank you for choosing <strong>Jiffex</strong>. Your order <strong>${trackingId}</strong> has been confirmed.</p>
   
   ${paymentBlockHtml}
 
@@ -2135,7 +2221,7 @@ The JiffEX Team
   
   <p style="font-size: 14px; color: #666;">
     Best regards,<br>
-    <strong>The JiffEX Team</strong>
+    <strong>The Jiffex Team</strong>
   </p>
 </div>
     `.trim();
@@ -2161,6 +2247,26 @@ The JiffEX Team
 });
 
 async function fetchImageBuffer(url: string | undefined): Promise<Buffer | null> {
+  // Check if local logo file exists first as most reliable and fastest source
+  const localLogoPaths = [
+    path.join(process.cwd(), 'public', 'logo.jpg'),
+    path.join(process.cwd(), 'public', 'logo.png'),
+    path.join(process.cwd(), 'logo.png')
+  ];
+  for (const localPath of localLogoPaths) {
+    if (fs.existsSync(localPath)) {
+      try {
+        const localBuf = fs.readFileSync(localPath);
+        if (localBuf && localBuf.length > 0) {
+          console.log(`[PDF Logo] Loaded logo from local filesystem: ${localPath}`);
+          return localBuf;
+        }
+      } catch (err) {
+        console.warn(`[PDF Logo] Error reading local file ${localPath}:`, err);
+      }
+    }
+  }
+
   if (!url || typeof url !== 'string' || !url.startsWith('http')) {
     console.warn('[PDF Logo] Invalid or missing logo URL');
     return null;
@@ -2204,12 +2310,6 @@ async function fetchImageBuffer(url: string | undefined): Promise<Buffer | null>
       throw new Error('Fetched image buffer is empty');
     }
     
-    // Basic check for image header (PNG, JPG, GIF)
-    const isImage = buffer[0] === 0x89 || buffer[0] === 0xFF || buffer[0] === 0x47;
-    if (!isImage && !contentType?.includes('image')) {
-      console.warn('[PDF Logo] Buffer does not appear to be a standard image format');
-    }
-    
     console.log(`[PDF Logo] Successfully fetched logo buffer, size: ${buffer.length} bytes`);
     return buffer;
   } catch (error) {
@@ -2227,79 +2327,101 @@ async function generateConsolidatedInvoicePDF(orders: any[], companyDetails: any
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    // Header Section
-    const logoUrl = process.env.VITE_LOGO_URL || "https://raw.githubusercontent.com/satyas2706/Test1/main/public/logo.png";
+    const compName = companyDetails?.fullName || companyDetails?.name || "Jiffex Fulfilment Private Limited";
+    const compGst = companyDetails?.gstin || "36AAHCJ4656R1ZQ";
+    const compAddress = companyDetails?.address || "Plot No 20, Siddartha Nagar North, Hyderabad 500038";
+    const compEmail = companyDetails?.email || "support@jiffex.shop";
+    const compWebsite = companyDetails?.website || "www.jiffex.shop";
+
+    // Header Section - Logo & Company Info
+    const logoUrl = process.env.VITE_LOGO_URL || "https://lh3.googleusercontent.com/d/1XuJvOVPtaq-Ifmz3Uw0S5HgeGY2ygOIL";
     const logoBuffer = await fetchImageBuffer(logoUrl);
     
     if (logoBuffer) {
       try {
-        doc.image(logoBuffer, 50, 45, { width: 120 });
-        doc.moveDown(2);
+        doc.image(logoBuffer, 50, 40, { width: 130 });
       } catch (err) {
         console.error("[PDF Logo] Rendering Error:", err);
-        doc.fillColor("#4f46e5").fontSize(28).font("Helvetica-Bold").text("JIFFEX", 50, 50);
-        doc.moveDown(1.5);
+        doc.fillColor("#4f46e5").fontSize(26).font("Helvetica-Bold").text("Jiffex", 50, 45);
       }
     } else {
-      doc.fillColor("#4f46e5").fontSize(28).font("Helvetica-Bold").text("JIFFEX", 50, 50);
-      doc.moveDown(1.5);
+      doc.fillColor("#4f46e5").fontSize(26).font("Helvetica-Bold").text("Jiffex", 50, 45);
     }
     
-    doc.fillColor("#444444").fontSize(10).font("Helvetica");
-    doc.text(companyDetails.name, 350, 50, { align: "right" });
-    doc.text(companyDetails.address, 350, 65, { align: "right" });
-    doc.text(companyDetails.email, 350, 80, { align: "right" });
+    // Company details on top right
+    doc.fillColor("#1e293b").fontSize(11).font("Helvetica-Bold");
+    doc.text(compName, 260, 45, { align: "right", width: 285 });
     
-    doc.moveDown(2.5);
+    doc.fillColor("#475569").fontSize(9).font("Helvetica");
+    doc.text(compAddress, 260, 60, { align: "right", width: 285 });
+    doc.font("Helvetica-Bold").text(`GSTIN: ${compGst}`, 260, 75, { align: "right", width: 285 });
+    doc.font("Helvetica").text(`Email: ${compEmail} | Web: ${compWebsite}`, 260, 90, { align: "right", width: 285 });
+    
+    doc.moveTo(50, 110).lineTo(545, 110).lineWidth(1).strokeColor("#cbd5e1").stroke();
+
+    // Invoice Title & Meta Box
     const pageWidth = doc.page.width;
-    doc.fillColor("#000000").fontSize(20).font("Helvetica-Bold").text("CONSOLIDATED TAX INVOICE", 0, doc.y, { 
+    doc.fillColor("#0f172a").fontSize(18).font("Helvetica-Bold").text("CONSOLIDATED TAX INVOICE", 0, 120, { 
       align: "center",
       width: pageWidth
     });
-    doc.moveDown();
 
-    const infoTop = doc.y;
-    doc.fontSize(10).font("Helvetica-Bold").text(`Invoice Number:`, 50, infoTop);
     const primaryOrder = orders[0];
     const userInitials = (primaryOrder?.destination?.fullName || 'USR').slice(0, 3).toUpperCase();
     const consolId = `CONSOL-${userInitials}-${new Date().getTime().toString().slice(-6)}`;
-    doc.font("Helvetica").text(consolId, 150, infoTop);
     
-    doc.font("Helvetica-Bold").text(`Invoice Date:`, 50, infoTop + 15);
-    doc.font("Helvetica").text(`${new Date().toLocaleDateString()}`, 150, infoTop + 15);
-    
-    doc.moveDown(2);
+    doc.fontSize(9).font("Helvetica-Bold").fillColor("#334155");
+    doc.text(`Invoice No: ${consolId}`, 50, 148);
+    doc.text(`Invoice Date: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 380, 148, { align: 'right', width: 165 });
+    doc.text(`Place of Supply: Telangana (36)`, 50, 162);
+    doc.text(`Reverse Charge: No`, 380, 162, { align: 'right', width: 165 });
 
-    // Customer Details
-    const customerTop = doc.y;
-    doc.fontSize(12).font("Helvetica-Bold").text("Customer Details", 50, customerTop);
-    doc.moveTo(50, customerTop + 15).lineTo(250, customerTop + 15).stroke();
-    
-    doc.fontSize(10).font("Helvetica").text(`Name: ${primaryOrder?.destination?.fullName || 'Valued Customer'}`, 50, customerTop + 25);
-    doc.text(`Email: ${primaryOrder?.destination?.email || ''}`, 50, customerTop + 40);
-    doc.text(`Phone: ${primaryOrder?.destination?.phone || ''}`, 50, customerTop + 55);
-    
-    const addr = primaryOrder?.destination;
-    const addressStr = addr ? `${addr.addressLine1 || ''}, ${addr.city || ''}, ${addr.state || ''}, ${addr.zipCode || ''}, ${addr.country || ''}` : '';
-    doc.text(`Address: ${addressStr}`, 50, customerTop + 70, { width: 200 });
+    doc.moveTo(50, 178).lineTo(545, 178).lineWidth(0.5).strokeColor("#e2e8f0").stroke();
 
-    doc.moveDown(4);
+    // Billing & Shipping Address side-by-side
+    const addrTop = 188;
+    const dest = primaryOrder?.destination || {};
+    const destName = dest.fullName || 'Valued Customer';
+    const destPhone = dest.phone || 'N/A';
+    const destEmail = dest.email || 'N/A';
+    const destAddrStr = [dest.addressLine1, dest.city, dest.state, dest.zipCode, dest.country].filter(Boolean).join(', ');
+
+    // Billing Address Box
+    doc.rect(50, addrTop, 240, 92).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
+    doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold").text("BILLING ADDRESS", 60, addrTop + 8);
+    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(destName, 60, addrTop + 24, { width: 220 });
+    doc.font("Helvetica").fillColor("#475569");
+    doc.text(destAddrStr || 'Same as destination address', 60, addrTop + 36, { width: 220 });
+    doc.text(`Phone: ${destPhone}`, 60, addrTop + 62, { width: 220 });
+    doc.text(`Email: ${destEmail}`, 60, addrTop + 74, { width: 220 });
+
+    // Shipping Address Box
+    doc.rect(305, addrTop, 240, 92).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
+    doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold").text("SHIPPING ADDRESS", 315, addrTop + 8);
+    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(destName, 315, addrTop + 24, { width: 220 });
+    doc.font("Helvetica").fillColor("#475569");
+    doc.text(destAddrStr || 'N/A', 315, addrTop + 36, { width: 220 });
+    doc.text(`Phone: ${destPhone}`, 315, addrTop + 62, { width: 220 });
+    doc.text(`Email: ${destEmail}`, 315, addrTop + 74, { width: 220 });
 
     // Order Details Table
-    const tableTop = doc.y;
-    doc.fontSize(12).font("Helvetica-Bold").text("Consolidated Item Details", 50, tableTop);
+    const tableTop = addrTop + 106;
+    doc.fillColor("#0f172a").fontSize(11).font("Helvetica-Bold").text("Consolidated Item Details", 50, tableTop);
     
-    doc.fontSize(10).font("Helvetica-Bold");
-    doc.text("Item Description", 50, tableTop + 25);
-    doc.text("Order ID", 220, tableTop + 25);
-    doc.text("Qty", 320, tableTop + 25, { width: 40, align: 'center' });
-    doc.text("Weight", 380, tableTop + 25, { width: 70, align: 'center' });
-    doc.text("Price", 470, tableTop + 25, { width: 80, align: 'right' });
+    // Table Header Bar
+    const thY = tableTop + 16;
+    doc.rect(50, thY, 495, 22).fill("#0f172a");
     
-    doc.moveTo(50, tableTop + 40).lineTo(550, tableTop + 40).stroke();
+    doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#ffffff");
+    doc.text("Item Description", 58, thY + 6);
+    doc.text("Order ID", 220, thY + 6);
+    doc.text("Qty", 295, thY + 6, { width: 30, align: 'center' });
+    doc.text("Unit Price", 330, thY + 6, { width: 65, align: 'right' });
+    doc.text("Tax", 400, thY + 6, { width: 55, align: 'right' });
+    doc.text("Total Amount", 460, thY + 6, { width: 80, align: 'right' });
     
-    let y = tableTop + 50;
-    doc.font("Helvetica");
+    let y = thY + 26;
+    doc.font("Helvetica").fillColor("#1e293b");
 
     const allItems: any[] = [];
     orders.forEach(order => {
@@ -2311,70 +2433,88 @@ async function generateConsolidatedInvoicePDF(orders: any[], companyDetails: any
       });
     });
 
-    allItems.forEach((item: any) => {
-      if (y > 700) {
+    allItems.forEach((item: any, idx: number) => {
+      if (y > 670) {
         doc.addPage();
         y = 50;
-        doc.fontSize(10).font("Helvetica-Bold");
-        doc.text("Item Description", 50, y);
-        doc.text("Order ID", 220, y);
-        doc.text("Qty", 320, y, { width: 40, align: 'center' });
-        doc.text("Weight", 380, y, { width: 70, align: 'center' });
-        doc.text("Price", 470, y, { width: 80, align: 'right' });
-        doc.moveTo(50, y + 15).lineTo(550, y + 15).stroke();
-        y += 25;
-        doc.font("Helvetica");
+        doc.rect(50, y, 495, 22).fill("#0f172a");
+        doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#ffffff");
+        doc.text("Item Description", 58, y + 6);
+        doc.text("Order ID", 220, y + 6);
+        doc.text("Qty", 295, y + 6, { width: 30, align: 'center' });
+        doc.text("Unit Price", 330, y + 6, { width: 65, align: 'right' });
+        doc.text("Tax", 400, y + 6, { width: 55, align: 'right' });
+        doc.text("Total Amount", 460, y + 6, { width: 80, align: 'right' });
+        y += 28;
       }
 
-      doc.text(item.name || 'Unknown Item', 50, y, { width: 160 });
-      doc.text(item.orderId || 'N/A', 220, y);
-      doc.text((item.quantity || 1).toString(), 320, y, { width: 40, align: 'center' });
-      doc.text(`${item.weight || 0} kg`, 380, y, { width: 70, align: 'center' });
-      doc.text(`Rs.${(item.price || 0).toLocaleString()}`, 470, y, { width: 80, align: 'right' });
+      const qty = item.quantity || 1;
+      const totalItemPrice = item.price || 0;
+      const unitPrice = qty > 0 ? (totalItemPrice / qty) : totalItemPrice;
+      const isEven = idx % 2 === 1;
+
+      if (isEven) {
+        doc.rect(50, y - 4, 495, 20).fill("#f8fafc");
+      }
+
+      doc.fillColor("#1e293b").fontSize(8.5).font("Helvetica");
+      doc.text(item.name || 'Unknown Item', 58, y, { width: 155 });
+      doc.text(item.orderId || 'N/A', 220, y, { width: 70 });
+      doc.text(qty.toString(), 295, y, { width: 30, align: 'center' });
+      doc.text(`Rs. ${Math.round(unitPrice).toLocaleString()}`, 330, y, { width: 65, align: 'right' });
+      doc.text("Rs. 0 (0%)", 400, y, { width: 55, align: 'right' });
+      doc.text(`Rs. ${Math.round(totalItemPrice).toLocaleString()}`, 460, y, { width: 80, align: 'right' });
+      
       y += 20;
     });
 
-    if (y > 650) {
+    if (y > 640) {
       doc.addPage();
       y = 50;
     }
 
-    doc.moveTo(50, y).lineTo(550, y).stroke();
-    doc.moveDown(2);
+    doc.moveTo(50, y).lineTo(545, y).lineWidth(1).strokeColor("#cbd5e1").stroke();
+    y += 12;
 
-    // Shipping Details
-    const shippingTop = y + 15;
-    doc.fontSize(12).font("Helvetica-Bold").text("Shipping & Summary", 50, shippingTop);
-    doc.fontSize(10).font("Helvetica");
-    doc.text(`Completed Orders: ${orders.map(o => o.id).join(', ')}`, 50, shippingTop + 20, { width: 280 });
-    doc.text(`Destination: ${primaryOrder?.destination?.country || 'N/A'}`, 50, shippingTop + 50);
+    // Shipping & Cost Breakdown Summary
+    const summaryTop = y;
+    doc.fillColor("#0f172a").fontSize(10).font("Helvetica-Bold").text("Shipping & Summary", 50, summaryTop);
+    doc.fontSize(8.5).font("Helvetica").fillColor("#475569");
+    doc.text(`Orders Included: ${orders.map(o => o.id).join(', ')}`, 50, summaryTop + 16, { width: 260 });
+    doc.text(`Destination Country: ${dest.country || 'International'}`, 50, summaryTop + 42);
+    doc.text(`GST Status: Tax Invoice under GST Rules (Telangana)`, 50, summaryTop + 56);
 
-    // Cost Breakdown
-    const costTop = shippingTop;
-    doc.fontSize(12).font("Helvetica-Bold").text("Cost Breakdown", 350, costTop);
-    
+    // Cost Breakdown table on right
+    const costBoxX = 330;
     const productCost = allItems.reduce((acc: number, i: any) => acc + (i.price || 0), 0);
     const totalCost = orders.reduce((acc: number, o: any) => acc + (o.total_cost || o.totalCost || 0), 0);
     const shippingCharges = Math.max(0, totalCost - productCost);
+
+    doc.rect(costBoxX, summaryTop, 215, 95).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
     
-    doc.fontSize(10).font("Helvetica");
-    doc.text(`Consolidated Product Cost:`, 350, costTop + 20);
-    doc.text(`Rs.${productCost.toLocaleString()}`, 460, costTop + 20, { width: 80, align: 'right' });
-    
-    doc.text(`Shipping Charges:`, 350, costTop + 35);
-    doc.text(`Rs.${shippingCharges.toLocaleString()}`, 460, costTop + 35, { width: 80, align: 'right' });
-    
-    doc.text(`Taxes:`, 350, costTop + 50);
-    doc.text(`Rs.0`, 460, costTop + 50, { width: 80, align: 'right' });
-    
-    doc.moveTo(350, costTop + 65).lineTo(550, costTop + 65).stroke();
-    doc.font("Helvetica-Bold").text(`Total Paid:`, 350, costTop + 70);
-    doc.text(`Rs.${totalCost.toLocaleString()}`, 460, costTop + 70, { width: 80, align: 'right' });
+    doc.fillColor("#475569").fontSize(8.5).font("Helvetica");
+    doc.text("Items Subtotal:", costBoxX + 12, summaryTop + 10);
+    doc.text(`Rs. ${Math.round(productCost).toLocaleString()}`, costBoxX + 110, summaryTop + 10, { width: 90, align: 'right' });
+
+    doc.text("Shipping & Handling:", costBoxX + 12, summaryTop + 26);
+    doc.text(`Rs. ${Math.round(shippingCharges).toLocaleString()}`, costBoxX + 110, summaryTop + 26, { width: 90, align: 'right' });
+
+    doc.text("Tax / GST (0%):", costBoxX + 12, summaryTop + 42);
+    doc.text("Rs. 0", costBoxX + 110, summaryTop + 42, { width: 90, align: 'right' });
+
+    doc.moveTo(costBoxX + 10, summaryTop + 60).lineTo(costBoxX + 205, summaryTop + 60).lineWidth(0.5).strokeColor("#cbd5e1").stroke();
+
+    doc.fillColor("#0f172a").fontSize(10).font("Helvetica-Bold");
+    doc.text("Total Amount:", costBoxX + 12, summaryTop + 70);
+    doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, costBoxX + 110, summaryTop + 70, { width: 90, align: 'right' });
 
     // Footer Section
-    doc.font("Helvetica-Oblique").fontSize(8).fillColor("#666666")
-       .text("This is a system-generated consolidated invoice and does not require a physical signature.", 50, 750, { align: "center" });
-    doc.text(`Support: ${companyDetails.email} | Website: www.jiffex.com`, { align: "center" });
+    doc.font("Helvetica-Oblique").fontSize(8).fillColor("#64748b")
+       .text("This is a computer-generated consolidated tax invoice and does not require a physical signature.", 50, 755, { align: "center", width: 495 });
+    doc.font("Helvetica").fontSize(8).fillColor("#475569")
+       .text(`Support: ${compEmail} | Website: ${compWebsite} | GSTIN: ${compGst}`, 50, 768, { align: "center", width: 495 });
+    doc.font("Helvetica").fontSize(7.5).fillColor("#94a3b8")
+       .text(`${compName} • ${compAddress}`, 50, 780, { align: "center", width: 495 });
 
     doc.end();
   });
@@ -2389,125 +2529,189 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    // Header Section
-    const logoUrl = process.env.VITE_LOGO_URL || "https://raw.githubusercontent.com/satyas2706/Test1/main/public/logo.png";
+    const compName = companyDetails?.fullName || companyDetails?.name || "Jiffex Fulfilment Private Limited";
+    const compGst = companyDetails?.gstin || "36AAHCJ4656R1ZQ";
+    const compAddress = companyDetails?.address || "Plot No 20, Siddartha Nagar North, Hyderabad 500038";
+    const compEmail = companyDetails?.email || "support@jiffex.shop";
+    const compWebsite = companyDetails?.website || "www.jiffex.shop";
+
+    // Header Section - Logo & Company Info
+    const logoUrl = process.env.VITE_LOGO_URL || "https://lh3.googleusercontent.com/d/1XuJvOVPtaq-Ifmz3Uw0S5HgeGY2ygOIL";
     const logoBuffer = await fetchImageBuffer(logoUrl);
     
     if (logoBuffer) {
       try {
-        // Try to render the image
-        doc.image(logoBuffer, 50, 45, { width: 120 });
-        doc.moveDown(2);
+        doc.image(logoBuffer, 50, 40, { width: 130 });
       } catch (err) {
         console.error("[PDF Logo] Rendering Error:", err);
-        // Fallback to text logo if image rendering fails
-        doc.fillColor("#4f46e5").fontSize(28).font("Helvetica-Bold").text("JIFFEX", 50, 50);
-        doc.moveDown(1.5);
+        doc.fillColor("#4f46e5").fontSize(26).font("Helvetica-Bold").text("Jiffex", 50, 45);
       }
     } else {
-      // Fallback to text logo if fetch fails
-      doc.fillColor("#4f46e5").fontSize(28).font("Helvetica-Bold").text("JIFFEX", 50, 50);
-      doc.moveDown(1.5);
+      doc.fillColor("#4f46e5").fontSize(26).font("Helvetica-Bold").text("Jiffex", 50, 45);
     }
     
-    doc.fillColor("#444444").fontSize(10).font("Helvetica");
-    doc.text(companyDetails.name, 350, 50, { align: "right" });
-    doc.text(companyDetails.address, 350, 65, { align: "right" });
-    doc.text(companyDetails.email, 350, 80, { align: "right" });
+    // Company details on top right
+    doc.fillColor("#1e293b").fontSize(11).font("Helvetica-Bold");
+    doc.text(compName, 260, 45, { align: "right", width: 285 });
     
-    doc.moveDown(2.5);
+    doc.fillColor("#475569").fontSize(9).font("Helvetica");
+    doc.text(compAddress, 260, 60, { align: "right", width: 285 });
+    doc.font("Helvetica-Bold").text(`GSTIN: ${compGst}`, 260, 75, { align: "right", width: 285 });
+    doc.font("Helvetica").text(`Email: ${compEmail} | Web: ${compWebsite}`, 260, 90, { align: "right", width: 285 });
+    
+    doc.moveTo(50, 110).lineTo(545, 110).lineWidth(1).strokeColor("#cbd5e1").stroke();
+
+    // Invoice Title & Meta Box
     const pageWidth = doc.page.width;
-    doc.fillColor("#000000").fontSize(22).font("Helvetica-Bold").text("TAX INVOICE", 0, doc.y, { 
+    doc.fillColor("#0f172a").fontSize(18).font("Helvetica-Bold").text("TAX INVOICE", 0, 120, { 
       align: "center",
       width: pageWidth
     });
-    doc.moveDown();
 
-    const infoTop = doc.y;
-    doc.fontSize(10).font("Helvetica-Bold").text(`Invoice Number:`, 50, infoTop);
     const orderIdStr = String(order.id || '');
-    doc.font("Helvetica").text(`INV-${orderIdStr.slice(0, 8).toUpperCase()}`, 150, infoTop);
-    
-    doc.font("Helvetica-Bold").text(`Invoice Date:`, 50, infoTop + 15);
-    doc.font("Helvetica").text(`${new Date(order.created_at || order.createdAt || new Date()).toLocaleDateString()}`, 150, infoTop + 15);
-    
-    doc.moveDown(2);
+    const invNo = `INV-${orderIdStr.slice(0, 8).toUpperCase()}`;
+    const invDate = new Date(order.created_at || order.createdAt || new Date()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
-    // Customer Details
-    const customerTop = doc.y;
-    doc.fontSize(12).font("Helvetica-Bold").text("Customer Details", 50, customerTop);
-    doc.moveTo(50, customerTop + 15).lineTo(250, customerTop + 15).stroke();
-    
-    doc.fontSize(10).font("Helvetica").text(`Name: ${order.destination.fullName}`, 50, customerTop + 25);
-    doc.text(`Email: ${order.destination.email}`, 50, customerTop + 40);
-    doc.text(`Phone: ${order.destination.phone}`, 50, customerTop + 55);
-    doc.text(`Address: ${order.destination.addressLine1}, ${order.destination.city}, ${order.destination.state}, ${order.destination.zipCode}, ${order.destination.country}`, 50, customerTop + 70, { width: 200 });
+    doc.fontSize(9).font("Helvetica-Bold").fillColor("#334155");
+    doc.text(`Invoice No: ${invNo}`, 50, 148);
+    doc.text(`Invoice Date: ${invDate}`, 380, 148, { align: 'right', width: 165 });
+    doc.text(`Place of Supply: Telangana (36)`, 50, 162);
+    doc.text(`Reverse Charge: No`, 380, 162, { align: 'right', width: 165 });
 
-    doc.moveDown(4);
+    doc.moveTo(50, 178).lineTo(545, 178).lineWidth(0.5).strokeColor("#e2e8f0").stroke();
+
+    // Billing & Shipping Address side-by-side
+    const addrTop = 188;
+    const dest = order.destination || {};
+    const destName = dest.fullName || 'Valued Customer';
+    const destPhone = dest.phone || 'N/A';
+    const destEmail = dest.email || 'N/A';
+    const destAddrStr = [dest.addressLine1, dest.city, dest.state, dest.zipCode, dest.country].filter(Boolean).join(', ');
+
+    // Billing Address Box
+    doc.rect(50, addrTop, 240, 92).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
+    doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold").text("BILLING ADDRESS", 60, addrTop + 8);
+    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(destName, 60, addrTop + 24, { width: 220 });
+    doc.font("Helvetica").fillColor("#475569");
+    doc.text(destAddrStr || 'Same as destination address', 60, addrTop + 36, { width: 220 });
+    doc.text(`Phone: ${destPhone}`, 60, addrTop + 62, { width: 220 });
+    doc.text(`Email: ${destEmail}`, 60, addrTop + 74, { width: 220 });
+
+    // Shipping Address Box
+    doc.rect(305, addrTop, 240, 92).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
+    doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold").text("SHIPPING ADDRESS", 315, addrTop + 8);
+    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(destName, 315, addrTop + 24, { width: 220 });
+    doc.font("Helvetica").fillColor("#475569");
+    doc.text(destAddrStr || 'N/A', 315, addrTop + 36, { width: 220 });
+    doc.text(`Phone: ${destPhone}`, 315, addrTop + 62, { width: 220 });
+    doc.text(`Email: ${destEmail}`, 315, addrTop + 74, { width: 220 });
 
     // Order Details Table
-    const tableTop = doc.y;
-    doc.fontSize(12).font("Helvetica-Bold").text("Order Details", 50, tableTop);
+    const tableTop = addrTop + 106;
+    doc.fillColor("#0f172a").fontSize(11).font("Helvetica-Bold").text("Order Details", 50, tableTop);
     
-    doc.fontSize(10).font("Helvetica-Bold");
-    doc.text("Item Description", 50, tableTop + 25);
-    doc.text("Qty", 300, tableTop + 25, { width: 40, align: 'center' });
-    doc.text("Weight", 360, tableTop + 25, { width: 80, align: 'center' });
-    doc.text("Price", 460, tableTop + 25, { width: 80, align: 'right' });
+    // Table Header Bar
+    const thY = tableTop + 16;
+    doc.rect(50, thY, 495, 22).fill("#0f172a");
     
-    doc.moveTo(50, tableTop + 40).lineTo(550, tableTop + 40).stroke();
+    doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#ffffff");
+    doc.text("Item Description", 58, thY + 6);
+    doc.text("Qty", 260, thY + 6, { width: 35, align: 'center' });
+    doc.text("Unit Price", 305, thY + 6, { width: 70, align: 'right' });
+    doc.text("Tax", 385, thY + 6, { width: 65, align: 'right' });
+    doc.text("Total Amount", 460, thY + 6, { width: 80, align: 'right' });
     
-    let y = tableTop + 50;
-    doc.font("Helvetica");
-    (order.items || []).forEach((item: any) => {
-      doc.text(item.name || 'Unknown Item', 50, y);
-      doc.text((item.quantity || 1).toString(), 300, y, { width: 40, align: 'center' });
-      doc.text(`${item.weight || 0} kg`, 360, y, { width: 80, align: 'center' });
-      doc.text(`Rs.${(item.price || 0).toLocaleString()}`, 460, y, { width: 80, align: 'right' });
+    let y = thY + 26;
+    doc.font("Helvetica").fillColor("#1e293b");
+
+    const items = order.items || [];
+    items.forEach((item: any, idx: number) => {
+      if (y > 670) {
+        doc.addPage();
+        y = 50;
+        doc.rect(50, y, 495, 22).fill("#0f172a");
+        doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#ffffff");
+        doc.text("Item Description", 58, y + 6);
+        doc.text("Qty", 260, y + 6, { width: 35, align: 'center' });
+        doc.text("Unit Price", 305, y + 6, { width: 70, align: 'right' });
+        doc.text("Tax", 385, y + 6, { width: 65, align: 'right' });
+        doc.text("Total Amount", 460, y + 6, { width: 80, align: 'right' });
+        y += 28;
+      }
+
+      const qty = item.quantity || 1;
+      const totalItemPrice = item.price || 0;
+      const unitPrice = qty > 0 ? (totalItemPrice / qty) : totalItemPrice;
+      const isEven = idx % 2 === 1;
+
+      if (isEven) {
+        doc.rect(50, y - 4, 495, 20).fill("#f8fafc");
+      }
+
+      doc.fillColor("#1e293b").fontSize(8.5).font("Helvetica");
+      doc.text(item.name || 'Unknown Item', 58, y, { width: 195 });
+      doc.text(qty.toString(), 260, y, { width: 35, align: 'center' });
+      doc.text(`Rs. ${Math.round(unitPrice).toLocaleString()}`, 305, y, { width: 70, align: 'right' });
+      doc.text("Rs. 0 (0%)", 385, y, { width: 65, align: 'right' });
+      doc.text(`Rs. ${Math.round(totalItemPrice).toLocaleString()}`, 460, y, { width: 80, align: 'right' });
+      
       y += 20;
     });
 
-    doc.moveTo(50, y).lineTo(550, y).stroke();
-    doc.moveDown(2);
+    if (y > 640) {
+      doc.addPage();
+      y = 50;
+    }
 
-    // Shipping Details
-    const shippingTop = doc.y;
-    doc.fontSize(12).font("Helvetica-Bold").text("Shipping Details", 50, shippingTop);
-    doc.fontSize(10).font("Helvetica");
-    doc.text(`Service Type: ${(order.items && order.items[0]) ? order.items[0].source : 'Standard Shipping'}`, 50, shippingTop + 20);
-    doc.text(`Origin: India`, 50, shippingTop + 35);
-    doc.text(`Destination: ${order.destination.country}`, 50, shippingTop + 50);
+    doc.moveTo(50, y).lineTo(545, y).lineWidth(1).strokeColor("#cbd5e1").stroke();
+    y += 12;
+
+    // Shipping Details & Cost Breakdown Summary
+    const shippingTop = y;
+    doc.fillColor("#0f172a").fontSize(10).font("Helvetica-Bold").text("Shipping Details", 50, shippingTop);
+    
     const isPrefixed = ['SH-', 'SW-', 'PH-', 'BB-'].some(p => orderIdStr.startsWith(p));
     const trackingId = isPrefixed ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
-    doc.text(`Tracking ID: ${trackingId}`, 50, shippingTop + 65);
+    const serviceType = (order.items && order.items[0]) ? order.items[0].source : 'Standard Shipping';
 
-    // Cost Breakdown
-    const costTop = shippingTop;
-    doc.fontSize(12).font("Helvetica-Bold").text("Cost Breakdown", 350, costTop);
-    
+    doc.fontSize(8.5).font("Helvetica").fillColor("#475569");
+    doc.text(`Service Type: ${serviceType}`, 50, shippingTop + 16);
+    doc.text(`Origin: Hyderabad, Telangana, India`, 50, shippingTop + 30);
+    doc.text(`Destination: ${dest.country || 'International'}`, 50, shippingTop + 44);
+    doc.text(`Tracking ID: ${trackingId}`, 50, shippingTop + 58);
+    doc.text(`GST Status: Tax Invoice under GST Rules (Telangana)`, 50, shippingTop + 72);
+
+    // Cost Breakdown table on right
+    const costBoxX = 330;
     const productCost = (order.items || []).reduce((acc: number, i: any) => acc + (i.price || 0), 0);
     const totalCost = order.total_cost || order.totalCost || 0;
     const shippingCharges = Math.max(0, totalCost - productCost);
+
+    doc.rect(costBoxX, shippingTop, 215, 95).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
     
-    doc.fontSize(10).font("Helvetica");
-    doc.text(`Product Cost:`, 350, costTop + 20);
-    doc.text(`Rs.${productCost.toLocaleString()}`, 460, costTop + 20, { width: 80, align: 'right' });
-    
-    doc.text(`Shipping Charges:`, 350, costTop + 35);
-    doc.text(`Rs.${shippingCharges.toLocaleString()}`, 460, costTop + 35, { width: 80, align: 'right' });
-    
-    doc.text(`Taxes:`, 350, costTop + 50);
-    doc.text(`Rs.0`, 460, costTop + 50, { width: 80, align: 'right' });
-    
-    doc.moveTo(350, costTop + 65).lineTo(550, costTop + 65).stroke();
-    doc.font("Helvetica-Bold").text(`Total Paid:`, 350, costTop + 70);
-    doc.text(`Rs.${totalCost.toLocaleString()}`, 460, costTop + 70, { width: 80, align: 'right' });
+    doc.fillColor("#475569").fontSize(8.5).font("Helvetica");
+    doc.text("Items Subtotal:", costBoxX + 12, shippingTop + 10);
+    doc.text(`Rs. ${Math.round(productCost).toLocaleString()}`, costBoxX + 110, shippingTop + 10, { width: 90, align: 'right' });
+
+    doc.text("Shipping & Handling:", costBoxX + 12, shippingTop + 26);
+    doc.text(`Rs. ${Math.round(shippingCharges).toLocaleString()}`, costBoxX + 110, shippingTop + 26, { width: 90, align: 'right' });
+
+    doc.text("Tax / GST (0%):", costBoxX + 12, shippingTop + 42);
+    doc.text("Rs. 0", costBoxX + 110, shippingTop + 42, { width: 90, align: 'right' });
+
+    doc.moveTo(costBoxX + 10, shippingTop + 60).lineTo(costBoxX + 205, shippingTop + 60).lineWidth(0.5).strokeColor("#cbd5e1").stroke();
+
+    doc.fillColor("#0f172a").fontSize(10).font("Helvetica-Bold");
+    doc.text("Total Amount:", costBoxX + 12, shippingTop + 70);
+    doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, costBoxX + 110, shippingTop + 70, { width: 90, align: 'right' });
 
     // Footer Section
-    doc.font("Helvetica-Oblique").fontSize(8).fillColor("#666666")
-       .text("This is a system-generated invoice and does not require a physical signature.", 50, 750, { align: "center" });
-    doc.text(`Support: ${companyDetails.email} | Website: www.jiffex.com`, { align: "center" });
-    doc.text("Terms: All shipments are subject to JiffEX terms and conditions.", { align: "center" });
+    doc.font("Helvetica-Oblique").fontSize(8).fillColor("#64748b")
+       .text("This is a computer-generated invoice and does not require a physical signature.", 50, 755, { align: "center", width: 495 });
+    doc.font("Helvetica").fontSize(8).fillColor("#475569")
+       .text(`Support: ${compEmail} | Website: ${compWebsite} | GSTIN: ${compGst}`, 50, 768, { align: "center", width: 495 });
+    doc.font("Helvetica").fontSize(7.5).fillColor("#94a3b8")
+       .text(`${compName} • ${compAddress}`, 50, 780, { align: "center", width: 495 });
 
     doc.end();
   });
@@ -3390,7 +3594,10 @@ async function seedDatabaseIfEmpty() {
     console.log("[Supabase Seeder] Checking if database requires seeding...");
 
     // 1. Seed Products if empty
-    const { data: existingProducts, error: pError } = await supabase.from('products').select('id').limit(1);
+    const { data: existingProducts, error: pError } = await safeSupabaseQuery(() =>
+      supabase.from('products').select('id').limit(1),
+      { label: 'seedCheckProducts' }
+    );
     if (!pError && (!existingProducts || existingProducts.length === 0)) {
        console.log("[Supabase Seeder] Products table is empty, seeding default products...");
        const defaultProducts = [
@@ -3467,16 +3674,22 @@ async function seedDatabaseIfEmpty() {
            estimated_delivery: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
          }
        ];
-       const { error: pInsError } = await supabase.from('products').insert(defaultProducts);
-       if (pInsError) {
-         console.error("[Supabase Seeder] Failed to seed products:", pInsError);
+       const { error: pInsError } = await safeSupabaseQuery(() =>
+         supabase.from('products').insert(defaultProducts),
+         { label: 'seedInsertProducts' }
+       );
+       if (pInsError && pInsError.code !== 'PGRST002') {
+         console.warn("[Supabase Seeder] Failed to seed products:", pInsError.message || pInsError);
        } else {
          console.log("[Supabase Seeder] Products seeded successfully!");
        }
     }
 
     // 2. Seed Agents if empty
-    const { data: existingAgents, error: aError } = await supabase.from('agents').select('id').limit(1);
+    const { data: existingAgents, error: aError } = await safeSupabaseQuery(() =>
+      supabase.from('agents').select('id').limit(1),
+      { label: 'seedCheckAgents' }
+    );
     if (!aError && (!existingAgents || existingAgents.length === 0)) {
        console.log("[Supabase Seeder] Agents table is empty, seeding default agents...");
        const defaultAgents = [
@@ -3484,16 +3697,22 @@ async function seedDatabaseIfEmpty() {
          { id: '10002', name: 'Priya Patel', phone: '+91 87654 32109', email: '10002.agent@jiffex.com', status: 'Active', vehicle_number: 'MH-02-CD-5678' },
          { id: '12345', name: 'Test Agent (You)', phone: '+91 00000 00000', email: '12345.agent@jiffex.com', status: 'Active', vehicle_number: 'TEST-001' }
        ];
-       const { error: aInsError } = await supabase.from('agents').insert(defaultAgents);
-       if (aInsError) {
-         console.error("[Supabase Seeder] Failed to seed agents:", aInsError);
+       const { error: aInsError } = await safeSupabaseQuery(() =>
+         supabase.from('agents').insert(defaultAgents),
+         { label: 'seedInsertAgents' }
+       );
+       if (aInsError && aInsError.code !== 'PGRST002') {
+         console.warn("[Supabase Seeder] Failed to seed agents:", aInsError.message || aInsError);
        } else {
          console.log("[Supabase Seeder] Agents seeded successfully!");
        }
     }
 
     // 3. Seed Items if empty
-    const { data: existingItems, error: iError } = await supabase.from('items').select('id').limit(1);
+    const { data: existingItems, error: iError } = await safeSupabaseQuery(() =>
+      supabase.from('items').select('id').limit(1),
+      { label: 'seedCheckItems' }
+    );
     if (!iError && (!existingItems || existingItems.length === 0)) {
        console.log("[Supabase Seeder] Items table is empty, seeding default items...");
        const item1Id = crypto.randomUUID();
@@ -3518,14 +3737,20 @@ async function seedDatabaseIfEmpty() {
            price: 0,
          }
        ];
-       const { error: iInsError } = await supabase.from('items').insert(defaultItems);
-       if (iInsError) {
-         console.error("[Supabase Seeder] Failed to seed items:", iInsError);
+       const { error: iInsError } = await safeSupabaseQuery(() =>
+         supabase.from('items').insert(defaultItems),
+         { label: 'seedInsertItems' }
+       );
+       if (iInsError && iInsError.code !== 'PGRST002') {
+         console.warn("[Supabase Seeder] Failed to seed items:", iInsError.message || iInsError);
        } else {
          console.log("[Supabase Seeder] Items seeded successfully!");
          
          // 4. Seed Orders if empty (referencing the items seeded)
-         const { data: existingOrders, error: oError } = await supabase.from('orders').select('id').limit(1);
+         const { data: existingOrders, error: oError } = await safeSupabaseQuery(() =>
+           supabase.from('orders').select('id').limit(1),
+           { label: 'seedCheckOrders' }
+         );
          if (!oError && (!existingOrders || existingOrders.length === 0)) {
             console.log("[Supabase Seeder] Orders table is empty, seeding default orders...");
             const defaultOrders = [
@@ -3578,9 +3803,12 @@ async function seedDatabaseIfEmpty() {
                 shipping_date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
               }
             ];
-            const { error: oInsError } = await supabase.from('orders').insert(defaultOrders);
-            if (oInsError) {
-              console.error("[Supabase Seeder] Failed to seed orders:", oInsError);
+            const { error: oInsError } = await safeSupabaseQuery(() =>
+              supabase.from('orders').insert(defaultOrders),
+              { label: 'seedInsertOrders' }
+            );
+            if (oInsError && oInsError.code !== 'PGRST002') {
+              console.warn("[Supabase Seeder] Failed to seed orders:", oInsError.message || oInsError);
             } else {
               console.log("[Supabase Seeder] Orders seeded successfully!");
             }
@@ -3589,46 +3817,61 @@ async function seedDatabaseIfEmpty() {
 
        // 6. Seed Shipping Settings if empty
        try {
-         const { data: existingSettings, error: sErr } = await supabase.from('shipping_settings').select('id').limit(1);
+         const { data: existingSettings, error: sErr } = await safeSupabaseQuery(() =>
+           supabase.from('shipping_settings').select('id').limit(1),
+           { label: 'seedCheckShippingSettings' }
+         );
          if (!sErr && (!existingSettings || existingSettings.length === 0)) {
             console.log("[Supabase Seeder] shipping_settings table is empty, seeding default settings...");
-            const { error: sInsError } = await supabase.from('shipping_settings').insert({
-              id: 'global',
-              rates: DEFAULT_SHIPPING_SETTINGS.rates,
-              discounts: DEFAULT_SHIPPING_SETTINGS.discounts,
-              coupons: [
-                { code: "SHIP5", discountPercent: 5, isEnabled: true },
-                { code: "BOOST", discountPercent: 12, isEnabled: false }
-              ]
-            });
-            if (sInsError) {
-              console.error("[Supabase Seeder] Failed to seed shipping_settings:", sInsError);
+            const { error: sInsError } = await safeSupabaseQuery(() =>
+              supabase.from('shipping_settings').insert({
+                id: 'global',
+                rates: DEFAULT_SHIPPING_SETTINGS.rates,
+                discounts: DEFAULT_SHIPPING_SETTINGS.discounts,
+                coupons: [
+                  { code: "SHIP5", discountPercent: 5, isEnabled: true },
+                  { code: "BOOST", discountPercent: 12, isEnabled: false }
+                ]
+              }),
+              { label: 'seedInsertShippingSettings' }
+            );
+            if (sInsError && sInsError.code !== 'PGRST002') {
+              console.warn("[Supabase Seeder] Failed to seed shipping_settings:", sInsError.message || sInsError);
             } else {
               console.log("[Supabase Seeder] shipping_settings seeded successfully!");
             }
          }
        } catch (e: any) {
-         console.warn("[Supabase Seeder] Optional shipping_settings table check skipped or failed:", e.message || e);
+         if (!e?.message?.includes('schema cache')) {
+           console.warn("[Supabase Seeder] Optional shipping_settings table check skipped or failed:", e.message || e);
+         }
        }
 
        // 7. Clear pre-existing guest-user Store items to keep local startup empty by default
        try {
-         const { error: clearStoreErr } = await supabase
-           .from('items')
-           .delete()
-           .eq('user_id', 'guest-user')
-           .eq('source', 'Store');
-         if (clearStoreErr) {
-           console.error("[Supabase Seeder] Failed to clear pre-existing guest-user Store items:", clearStoreErr);
+         const { error: clearStoreErr } = await safeSupabaseQuery(() =>
+           supabase
+             .from('items')
+             .delete()
+             .eq('user_id', 'guest-user')
+             .eq('source', 'Store'),
+           { label: 'seedClearGuestStoreItems' }
+         );
+         if (clearStoreErr && clearStoreErr.code !== 'PGRST002') {
+           console.warn("[Supabase Seeder] Failed to clear pre-existing guest-user Store items:", clearStoreErr.message || clearStoreErr);
          } else {
            console.log("[Supabase Seeder] Cleared pre-existing guest-user Store items successfully!");
          }
        } catch (e: any) {
-         console.warn("[Supabase Seeder] Optional guest-user Store items cleaning skipped or failed:", e.message || e);
+         if (!e?.message?.includes('schema cache')) {
+           console.warn("[Supabase Seeder] Optional guest-user Store items cleaning skipped or failed:", e.message || e);
+         }
        }
     }
   } catch (err: any) {
-    console.error("[Supabase Seeder] Error during seeding:", err.message);
+    if (!err?.message?.includes('schema cache')) {
+      console.warn("[Supabase Seeder] Seeding deferred:", err.message || err);
+    }
   }
 }
 
@@ -3651,7 +3894,7 @@ function getCarrierTrackingUrl(carrier: string | undefined | null, trackingNumbe
 }
 
 function generateRealTrackingData(order: any): any {
-  const carrier = order.carrier || order.carrier_name || "JiffEX";
+  const carrier = order.carrier || order.carrier_name || "Jiffex";
   const trackingNumber = order.tracking_number || order.trackingNumber || "TBD";
   const rawStatus = order.shipment_status || order.status || "Pending";
   
@@ -3695,7 +3938,7 @@ function generateRealTrackingData(order: any): any {
     }
   }
   const destinationLoc = `${cityStr}, ${countryStr}`;
-  const warehouseLoc = "JiffEX Delhi Warehouse, India";
+  const warehouseLoc = "Jiffex Delhi Warehouse, India";
 
   if (events.length === 0) {
     const statusLower = String(rawStatus).toLowerCase();
@@ -3725,7 +3968,7 @@ function generateRealTrackingData(order: any): any {
         location: 'Sorting Hub Gateway',
         date: formatDate(new Date(baseDate.getTime() + 1.5 * 24 * 60 * 60 * 1000)),
         time: formatTime(22, 10),
-        description: 'International customs cleared and departing JiffEX transit facility.'
+        description: 'International customs cleared and departing Jiffex transit facility.'
       });
     }
     if (statusLower.includes('delivered') || statusLower.includes('out') || statusLower.includes('transit') || statusLower.includes('ship') || statusLower.includes('packed') || statusLower.includes('warehouse') || statusLower.includes('received')) {
@@ -3734,7 +3977,7 @@ function generateRealTrackingData(order: any): any {
         location: warehouseLoc,
         date: formatDate(baseDate),
         time: formatTime(11, 45),
-        description: 'Package received at JiffEX sorting warehouse, categorized, and prepared.'
+        description: 'Package received at Jiffex sorting warehouse, categorized, and prepared.'
       });
     }
 
@@ -4001,7 +4244,7 @@ const handleGetShipmentStatus = async (req: express.Request, res: express.Respon
     const destCity = destObj?.city || "London";
     const destCountry = destObj?.country || "United Kingdom";
     const estDelivery = foundOrder.shipping_date || foundOrder.shippingDate || trackingData.estimatedDelivery || "in 3-5 business days";
-    const carrier = foundOrder.carrier || "JiffEX Express";
+    const carrier = foundOrder.carrier || "Jiffex Express";
 
     const speechText = `Shipment ${trackingCode} to ${destCity}, ${destCountry} is currently ${statusText} with ${carrier}. Estimated delivery date is ${estDelivery}.`;
 
@@ -4109,7 +4352,7 @@ const handleGetShippingQuote = async (req: express.Request, res: express.Respons
 
     const isStandard = method.toLowerCase().includes('standard') || method.toLowerCase().includes('economy');
     const methodMultiplier = isStandard ? 0.75 : 1.0;
-    const effectiveMethod = isStandard ? 'Standard Economy' : 'JiffEX Priority Express';
+    const effectiveMethod = isStandard ? 'Standard Economy' : 'Jiffex Priority Express';
 
     const rawQuote = isFlatRate ? baseRate * methodMultiplier : chargeableWeight * baseRate * methodMultiplier;
     const discountPercent = Number(discounts[normalizedCountry]) || 0;

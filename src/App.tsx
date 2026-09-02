@@ -143,7 +143,7 @@ import {
   COMPANY_DETAILS
 } from './constants';
 import { api } from './services/api';
-import { supabase, isSupabaseConfigured, updateSupabaseConfig } from './lib/supabase';
+import { supabase, isSupabaseConfigured, updateSupabaseConfig, safeSupabaseQuery } from './lib/supabase';
 import { Login } from './components/Login';
 import { Session } from '@supabase/supabase-js';
 import AccountSection from './components/sections/AccountSection';
@@ -295,44 +295,55 @@ export const logAgentActionToSupabase = async (
     console.log(`[Supabase Agent Sync] ${actionType} on ${agentId} (${agentName}) by ${performedBy}`);
     if (isSupabaseConfigured) {
       if (actionType === 'CREATE' || actionType === 'UPDATE') {
-        const { error: upsertError } = await supabase
-          .from('agents')
-          .upsert({
-            id: agentId,
-            name: agentName,
-            phone: details.phone || '',
-            email: details.email || `${agentId}.agent@jiffex.com`,
-            status: details.status || 'Active',
-            vehicle_number: details.vehicleNumber || ''
-          });
-        if (upsertError) {
-          console.error('[Supabase agents upsert error]:', upsertError);
+        const { error: upsertError } = await safeSupabaseQuery(() =>
+          supabase
+            .from('agents')
+            .upsert({
+              id: agentId,
+              name: agentName,
+              phone: details.phone || '',
+              email: details.email || `${agentId}.agent@jiffex.com`,
+              status: details.status || 'Active',
+              vehicle_number: details.vehicleNumber || ''
+            }),
+          { label: 'upsertAgent' }
+        );
+        if (upsertError && upsertError.code !== 'PGRST002') {
+          console.warn('[Supabase agents upsert error]:', upsertError.message || upsertError);
         }
       } else if (actionType === 'DELETE') {
-        const { error: deleteError } = await supabase
-          .from('agents')
-          .delete()
-          .eq('id', agentId);
-        if (deleteError) {
-          console.error('[Supabase agents delete error]:', deleteError);
+        const { error: deleteError } = await safeSupabaseQuery(() =>
+          supabase
+            .from('agents')
+            .delete()
+            .eq('id', agentId),
+          { label: 'deleteAgent' }
+        );
+        if (deleteError && deleteError.code !== 'PGRST002') {
+          console.warn('[Supabase agents delete error]:', deleteError.message || deleteError);
         }
       }
 
-      const { error: logError } = await supabase
-        .from('agent_logs')
-        .insert({
-          action_type: actionType,
-          agent_id: agentId,
-          agent_name: agentName,
-          details,
-          performed_by: performedBy
-        });
-      if (logError) {
-        console.error('[Supabase agent_logs log error]:', logError);
+      const { error: logError } = await safeSupabaseQuery(() =>
+        supabase
+          .from('agent_logs')
+          .insert({
+            action_type: actionType,
+            agent_id: agentId,
+            agent_name: agentName,
+            details,
+            performed_by: performedBy
+          }),
+        { label: 'logAgentAction' }
+      );
+      if (logError && logError.code !== 'PGRST002') {
+        console.warn('[Supabase agent_logs log error]:', logError.message || logError);
       }
     }
-  } catch (err) {
-    console.error('Failed to update Supabase agent records:', err);
+  } catch (err: any) {
+    if (!err?.message?.includes('schema cache')) {
+      console.warn('Failed to update Supabase agent records:', err.message || err);
+    }
   }
 };
 
@@ -403,7 +414,7 @@ const getStatusWhatsAppMessage = (orderId: string, status: string, name: string,
       break;
     case 'Delivered':
       statusEmoji = '🎉';
-      statusDescription = 'has been successfully Delivered! Thank you for shipping with JiffEX. We hope to serve you again soon!';
+      statusDescription = 'has been successfully Delivered! Thank you for shipping with Jiffex. We hope to serve you again soon!';
       break;
     case 'Cancelled':
       statusEmoji = '❌';
@@ -415,7 +426,7 @@ const getStatusWhatsAppMessage = (orderId: string, status: string, name: string,
 
   const costString = totalCost ? `\n💰 Total cost: *₹${totalCost.toFixed(2)}*` : '';
 
-  return `*JiffEX Shipment Notification* ${statusEmoji}\n\nDear *${name || 'Customer'}*,\n\nYour shipment *#${orderId.slice(0, 8)}* ${statusDescription}\n\n📍 Destination: *${country || 'N/A'}*${costString}\n\n🔗 Live Tracker: ${trackingUrl}\n\nThank you for choosing JiffEX!`;
+  return `*Jiffex Shipment Notification* ${statusEmoji}\n\nDear *${name || 'Customer'}*,\n\nYour shipment *#${orderId.slice(0, 8)}* ${statusDescription}\n\n📍 Destination: *${country || 'N/A'}*${costString}\n\n🔗 Live Tracker: ${trackingUrl}\n\nThank you for choosing Jiffex!`;
 };
 
 const BackButton = ({ onClick }: { onClick: () => void }) => (
@@ -528,7 +539,7 @@ const StaticShipmentTracker = ({ order }: { order?: Order }) => {
         </div>
         <div className="text-right">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Service</div>
-          <div className="text-xs font-black text-indigo-600">JiffEX Global Express</div>
+          <div className="text-xs font-black text-indigo-600">Jiffex Global Express</div>
         </div>
       </div>
     </div>
@@ -857,7 +868,7 @@ const SupportDeskDashboard = ({ orders, tickets, setTickets, refundRequests, set
                                 onClick={() => {
                                   const order = orders.find(o => o.id === selectedTicket.orderId);
                                   if (order) {
-                                    const message = `*JiffEX Support HUB*\n\nRegarding your ticket: ${selectedTicket.id}\nOrder ID: ${order.id}\nStatus: ${order.status}\n\nHere is your current invoice summary.\nTotal: ₹${order.totalCost.toFixed(2)}\n\nHow else can we help you today?`;
+                                    const message = `*Jiffex Support HUB*\n\nRegarding your ticket: ${selectedTicket.id}\nOrder ID: ${order.id}\nStatus: ${order.status}\n\nHere is your current invoice summary.\nTotal: ₹${order.totalCost.toFixed(2)}\n\nHow else can we help you today?`;
                                     sendWhatsApp(order.destination.phone, message);
                                   }
                                 }}
@@ -3894,7 +3905,7 @@ const AdminDashboard = ({
                       image: newProduct.image || 'https://picsum.photos/seed/product/400/400',
                       weight: newProduct.weight || 0.5,
                       estimatedDelivery: newProduct.estimatedDelivery || new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                      description: "Imported product from JiffEX shop catalog.",
+                      description: "Imported product from Jiffex shop catalog.",
                       dimensions: { length: 15, width: 12, height: 8, unit: 'cm' },
                       material: 'Premium quality',
                       origin: 'India'
@@ -6035,11 +6046,16 @@ export default function App() {
     const loadAgentsFromSupabase = async () => {
       if (dbStatus.connected && isSupabaseConfigured) {
         try {
-          const { data, error } = await supabase
-            .from('agents')
-            .select('*');
+          const { data, error } = await safeSupabaseQuery(() =>
+            supabase
+              .from('agents')
+              .select('*'),
+            { label: 'loadAgents' }
+          );
           if (error) {
-            console.error('Error fetching agents from Supabase:', error);
+            if (error.code !== 'PGRST002' && !error.message?.includes('schema cache')) {
+              console.warn('Could not sync agents from Supabase:', error.message || error);
+            }
           } else if (data && data.length > 0) {
             const mappedAgents: AgentProfile[] = data.map(a => ({
               id: a.id,
@@ -6052,8 +6068,10 @@ export default function App() {
             setAgents(mappedAgents);
             localStorage.setItem('jiffex_agents_list', JSON.stringify(mappedAgents));
           }
-        } catch (e) {
-          console.error('Failed to load agents from Supabase:', e);
+        } catch (e: any) {
+          if (!e?.message?.includes('schema cache')) {
+            console.warn('Failed to load agents from Supabase:', e.message || e);
+          }
         }
       }
     };
@@ -6899,7 +6917,7 @@ export default function App() {
   }, [orderedItemIds]);
 
   const cartItems = useMemo(() => {
-    return items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
+    return items.filter(i => !orderedItemIds.has(i.id) && (i.source !== 'Warehouse' || i.submitted === true));
   }, [items, orderedItemIds]);
 
   const totalWeight = useMemo(() => {
@@ -7229,7 +7247,7 @@ export default function App() {
   const handleFinalPayment = async () => {
     if (!currentUser) return;
     const hasScheduledPickup = userAppointments.some(a => a.status === 'Scheduled');
-    const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
+    const cartItems = items.filter(i => !orderedItemIds.has(i.id) && (i.source !== 'Warehouse' || i.submitted === true));
     
     // Determine payment status based on pickup and shipping preference
     const isPayAtHome = hasScheduledPickup && shippingPreference === 'International' && !cartItems.some(i => i.source === 'Store');
@@ -7755,7 +7773,7 @@ export default function App() {
     setCouponCodeInput('');
 
     // Determine primary source and generate the correct order ID first so it is preserved even across login
-    const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
+    const cartItems = items.filter(i => !orderedItemIds.has(i.id) && (i.source !== 'Warehouse' || i.submitted === true));
 
     let source: 'Store' | 'Warehouse' | 'Pickup' = 'Store';
     
@@ -7798,14 +7816,13 @@ export default function App() {
       return;
     }
 
-    if (hasScheduledPickup) {
+    if (hasScheduledPickup && cartItems.length === 0) {
       toast.warning("You have an active agent pickup scheduled. Please add items to your cart first.");
       return;
     }
 
-    const pendingItems = items.filter(i => i.status === 'Pending');
-    if (pendingItems.length > 0) {
-      toast.warning(`You have ${pendingItems.length} item(s) with PENDING status. All items must be 'Received at Warehouse' before you can proceed to checkout.`);
+    if (cartItems.length === 0 && !hasScheduledPickup) {
+      toast.warning("Your cart is empty. Please add items to your cart first.");
       return;
     }
     
@@ -8208,7 +8225,7 @@ export default function App() {
                 <div className="space-y-0.5">
                   <span className="text-xs font-black text-teal-800 uppercase tracking-widest block leading-none">Database Records Synced</span>
                   <p className="text-[11px] text-teal-700 leading-relaxed font-semibold">
-                    This shipment tracking status is synchronized directly with your real JiffEX dashboard order data.
+                    This shipment tracking status is synchronized directly with your real Jiffex dashboard order data.
                   </p>
                 </div>
               </div>
@@ -8494,7 +8511,7 @@ export default function App() {
         carrier = 'USPS';
       }
 
-      // Map JiffEX native status to tracking status
+      // Map Jiffex native status to tracking status
       const rawStatus = order.status;
       let status: 'In Transit' | 'Out for Delivery' | 'Delivered' | 'Pending' = 'Pending';
       if (rawStatus === 'Delivered') {
@@ -8507,7 +8524,7 @@ export default function App() {
         status = 'Pending';
       }
 
-      const origin = 'JiffEX Delhi Hub (DEL), India';
+      const origin = 'Jiffex Delhi Hub (DEL), India';
       const destination = `${order.destination?.city || 'New York'}, ${order.destination?.state ? order.destination.state + ', ' : ''}${destCountry}`;
       
       const shipDate = order.shippingDate || order.created_at || order.createdAt || new Date().toISOString();
@@ -8607,7 +8624,7 @@ export default function App() {
           location: origin,
           date: formatDateStr(dateBase),
           time: formatTimeStr(21, 15),
-          description: 'Departed JiffEX New Delhi logistics facility.'
+          description: 'Departed Jiffex New Delhi logistics facility.'
         });
         events.push({
           status: 'Processed at Warehouse',
@@ -8628,7 +8645,7 @@ export default function App() {
         }
         if (order.status === 'Received at Warehouse' || order.status === 'In Warehouse') {
           events.push({
-            status: 'Received at JiffEX Warehouse',
+            status: 'Received at Jiffex Warehouse',
             location: origin,
             date: formatDateStr(today),
             time: formatTimeStr(10, 0),
@@ -8648,10 +8665,10 @@ export default function App() {
       const weight = `${calculatedWeight.toFixed(1)} kg`;
 
       const serviceTypes: Record<'FedEx' | 'DHL' | 'UPS' | 'USPS', string> = {
-        UPS: 'UPS Worldwide Express® (via JiffEX)',
-        FedEx: 'FedEx International Priority® (via JiffEX)',
-        DHL: 'DHL Express Worldwide® (via JiffEX)',
-        USPS: 'USPS Priority Mail Express® (via JiffEX)'
+        UPS: 'UPS Worldwide Express® (via Jiffex)',
+        FedEx: 'FedEx International Priority® (via Jiffex)',
+        DHL: 'DHL Express Worldwide® (via Jiffex)',
+        USPS: 'USPS Priority Mail Express® (via Jiffex)'
       };
 
       return {
@@ -8837,7 +8854,7 @@ export default function App() {
                     <div className="space-y-0.5">
                       <h4 className="text-[10px] font-black text-amber-950 uppercase tracking-wider">Notice</h4>
                       <p className="text-[10px] text-amber-800 leading-normal font-medium">
-                        Status updates can take 12-24 hours to reflect after handover. If you have questions, please reach out to JiffEX support.
+                        Status updates can take 12-24 hours to reflect after handover. If you have questions, please reach out to Jiffex support.
                       </p>
                     </div>
                   </div>
@@ -9454,10 +9471,10 @@ export default function App() {
             </div>
           </div>
 
-          {/* How JiffEX Works - Value Prop */}
+          {/* How Jiffex Works - Value Prop */}
           <div id="how-it-works" className="hidden md:block space-y-12 scroll-mt-24">
             <div className="text-center space-y-4">
-              <h3 className="text-4xl font-black text-slate-900 tracking-tight">How JiffEX Works</h3>
+              <h3 className="text-4xl font-black text-slate-900 tracking-tight">How Jiffex Works</h3>
               <p className="text-slate-500 max-w-2xl mx-auto">A seamless, unified shipping experience designed for your convenience.</p>
             </div>
 
@@ -9657,7 +9674,7 @@ export default function App() {
                 <div className="space-y-3 relative z-10">
                   <h4 className="text-2xl font-black">Unified Shipping Protocol</h4>
                   <p className="text-slate-400 leading-relaxed">
-                    When you schedule an agent pickup, JiffEX activates the <span className="text-white font-bold">Home-First Protocol</span>. All your items—whether from Shop or our warehouse—are consolidated at your doorstep for a truly personalized shipping experience.
+                    When you schedule an agent pickup, Jiffex activates the <span className="text-white font-bold">Home-First Protocol</span>. All your items—whether from Shop or our warehouse—are consolidated at your doorstep for a truly personalized shipping experience.
                   </p>
                 </div>
               </div>
@@ -9849,7 +9866,7 @@ export default function App() {
             <div className="text-center py-12 text-slate-400 bg-white border border-slate-100 rounded-2xl p-6 shadow-sm mx-4">
               <Package size={48} className="mx-auto mb-4 opacity-20 text-indigo-600" />
               <p className="text-sm font-semibold text-slate-700">You are not logged in</p>
-              <p className="text-xs text-slate-500 mt-1 max-w-[240px] mx-auto leading-relaxed">Sign in to your JiffEX account to view, track, and manage all your shipments.</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-[240px] mx-auto leading-relaxed">Sign in to your Jiffex account to view, track, and manage all your shipments.</p>
               <button 
                 onClick={() => {
                   setLoginTriggerSource('default');
@@ -9878,7 +9895,7 @@ export default function App() {
           <div className="text-center py-16 text-slate-400 bg-white border border-slate-100 rounded-3xl p-8 shadow-sm max-w-md mx-auto">
             <Package size={56} className="mx-auto mb-4 opacity-20 text-indigo-600" />
             <p className="text-lg font-bold text-slate-700">You are not logged in</p>
-            <p className="text-sm text-slate-500 mt-2 leading-relaxed">Sign in to your JiffEX account to view, track, and manage all your shipments.</p>
+            <p className="text-sm text-slate-500 mt-2 leading-relaxed">Sign in to your Jiffex account to view, track, and manage all your shipments.</p>
             <button 
               onClick={() => {
                 setLoginTriggerSource('default');
@@ -9999,7 +10016,7 @@ export default function App() {
                         : `${completedOrdersList.length} of ${unifiedHistory.filter(o => o.status !== 'Cancelled').length} Shipments Completed`}
                     </h4>
                     <p className="text-[11px] text-slate-600 mt-1 max-w-md leading-relaxed">
-                      To keep your billing clean, JiffEX generates a single consolidated invoice grouping all completed orders.
+                      To keep your billing clean, Jiffex generates a single consolidated invoice grouping all completed orders.
                     </p>
                     
                     <div className="mt-4 flex flex-wrap gap-2">
@@ -10175,11 +10192,11 @@ export default function App() {
                             error: 'Could not send invoice via Email.'
                           });
 
-                          const summary = `JiffEX Invoice\nOrder ID: ${order.id}\nDestination: ${order.destination.fullName || ''}, ${order.destination.country}\nTotal Weight: ${order.totalWeight || order.total_weight || 0} kg\nTotal Cost: ₹${order.totalCost || order.total_cost || 0}`;
+                          const summary = `Jiffex Invoice\nOrder ID: ${order.id}\nDestination: ${order.destination.fullName || ''}, ${order.destination.country}\nTotal Weight: ${order.totalWeight || order.total_weight || 0} kg\nTotal Cost: ₹${order.totalCost || order.total_cost || 0}`;
                           if (navigator.share) {
                             try {
                               await navigator.share({
-                                title: `JiffEX Invoice - ${order.id}`,
+                                title: `Jiffex Invoice - ${order.id}`,
                                 text: summary,
                               });
                             } catch (e) {
@@ -10235,13 +10252,17 @@ export default function App() {
                   exit={{ opacity: 0, scale: 0.9, y: 20 }}
                   className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
                 >
-                  <div className="flex justify-between items-start mb-8">
+                  <div className="flex justify-between items-start mb-6">
                     <div>
                       <div className="flex items-center gap-2 mb-2">
-                        <Logo iconSize={18} />
+                        <Logo iconSize={20} />
                       </div>
                       <h2 className="text-2xl font-black text-slate-900">Tax Invoice</h2>
-                      <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {selectedOrderForInvoice.id}</p>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 font-semibold">
+                        <span>Invoice: <strong className="text-slate-800">INV-{(selectedOrderForInvoice.id || '').slice(0, 8).toUpperCase()}</strong></span>
+                        <span>•</span>
+                        <span>GSTIN: <strong className="text-slate-800">{COMPANY_DETAILS.gstin}</strong></span>
+                      </div>
                     </div>
                     <button 
                       onClick={() => setSelectedOrderForInvoice(null)}
@@ -10251,23 +10272,24 @@ export default function App() {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-8 mb-8">
+                  <div className="grid grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                     <div>
-                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
-                      <div className="text-sm font-bold text-slate-900">JiffEX Warehouse</div>
-                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                        {WAREHOUSE_ADDRESS.street}<br />
-                        {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
-                        {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Billed & Supplied By</h4>
+                      <div className="text-xs font-bold text-slate-900">{COMPANY_DETAILS.name}</div>
+                      <div className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                        {COMPANY_DETAILS.address}<br />
+                        GSTIN: {COMPANY_DETAILS.gstin}<br />
+                        Email: {COMPANY_DETAILS.email} | Web: {COMPANY_DETAILS.website}
                       </div>
                     </div>
                     <div>
-                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
-                      <div className="text-sm font-bold text-slate-900">{selectedOrderForInvoice.destination.fullName}</div>
-                      <div className="text-xs text-slate-600 leading-relaxed mt-1">
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Billing & Shipping Address</h4>
+                      <div className="text-xs font-bold text-slate-900">{selectedOrderForInvoice.destination.fullName}</div>
+                      <div className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
                         {selectedOrderForInvoice.destination.addressLine1}<br />
                         {selectedOrderForInvoice.destination.city}, {selectedOrderForInvoice.destination.state}<br />
-                        {selectedOrderForInvoice.destination.zipCode}, {selectedOrderForInvoice.destination.country}
+                        {selectedOrderForInvoice.destination.zipCode}, {selectedOrderForInvoice.destination.country}<br />
+                        Phone: {selectedOrderForInvoice.destination.phone || 'N/A'}
                       </div>
                     </div>
                   </div>
@@ -10276,8 +10298,8 @@ export default function App() {
                     const isPendingInvoice = (selectedOrderForInvoice.status === 'Scheduled' || selectedOrderForInvoice.status === 'Pending Pickup') && (!selectedOrderForInvoice.items || selectedOrderForInvoice.items.length === 0);
                     return (
                       <>
-                        <div className="border-t border-slate-100 pt-6 mb-8">
-                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
+                        <div className="border-t border-slate-100 pt-5 mb-6">
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Order Items & Tax Details</h4>
                           {isPendingInvoice ? (
                             <div className="bg-indigo-50/50 border border-indigo-100/60 text-indigo-900 rounded-2xl p-6 text-center">
                               <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -10289,28 +10311,37 @@ export default function App() {
                               </p>
                             </div>
                           ) : (
-                            <div className="space-y-3">
-                              {selectedOrderForInvoice.items.map((item, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                                      {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
-                                    </div>
-                                    <div>
-                                      <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
-                                        <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
-                                        <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
-                                        <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
-                                        <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
+                            <div className="space-y-2">
+                              {/* Item Table Header */}
+                              <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-100/80 rounded-lg text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                <div className="col-span-5">Item Description</div>
+                                <div className="col-span-2 text-center">Qty</div>
+                                <div className="col-span-2 text-right">Unit Price</div>
+                                <div className="col-span-1 text-right">Tax</div>
+                                <div className="col-span-2 text-right">Total Amount</div>
+                              </div>
+                              {selectedOrderForInvoice.items.map((item, idx) => {
+                                const qty = item.quantity || 1;
+                                const itemTotal = item.price || 0;
+                                const unitPrice = qty > 0 ? (itemTotal / qty) : itemTotal;
+                                return (
+                                  <div key={idx} className="grid grid-cols-12 gap-2 items-center p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                                    <div className="col-span-5 flex items-center gap-2.5">
+                                      <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 shrink-0 overflow-hidden">
+                                        {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={16} />}
+                                      </div>
+                                      <div>
+                                        <div className="font-bold text-slate-900 line-clamp-1">{item.name}</div>
+                                        <div className="text-[10px] text-slate-500">{getSafeItemUnitWeight(item)} kg • {item.source}</div>
                                       </div>
                                     </div>
+                                    <div className="col-span-2 text-center font-bold text-slate-700">{qty}</div>
+                                    <div className="col-span-2 text-right font-medium text-slate-700">₹{Math.round(unitPrice)}</div>
+                                    <div className="col-span-1 text-right font-medium text-slate-500">₹0</div>
+                                    <div className="col-span-2 text-right font-bold text-slate-900">₹{Math.round(itemTotal)}</div>
                                   </div>
-                                  <div className="text-sm font-bold text-slate-900">
-                                    {item.price ? `₹${item.price}` : '-'}
-                                  </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -10328,9 +10359,13 @@ export default function App() {
                             </div>
                           ) : (
                             <>
-                              <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
-                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Weight</span>
-                                <span className="font-bold">{getSafeOrderTotalWeight(selectedOrderForInvoice)} kg</span>
+                              <div className="flex justify-between items-center mb-3 pb-3 border-b border-white/10 text-xs">
+                                <span className="text-slate-400 font-bold uppercase tracking-widest">Total Weight</span>
+                                <span className="font-bold text-white">{getSafeOrderTotalWeight(selectedOrderForInvoice)} kg</span>
+                              </div>
+                              <div className="flex justify-between items-center mb-3 pb-3 border-b border-white/10 text-xs">
+                                <span className="text-slate-400 font-bold uppercase tracking-widest">Taxes (GST 0%)</span>
+                                <span className="font-bold text-slate-300">₹0</span>
                               </div>
                               <div className="flex justify-between items-center">
                                 <div>
@@ -10338,7 +10373,7 @@ export default function App() {
                                   <div className="text-3xl font-black">₹{Math.round(Number(selectedOrderForInvoice.totalCost || selectedOrderForInvoice.total_cost || 0))}</div>
                                 </div>
                                 <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
-                                  {selectedOrderForInvoice.paymentStatus}
+                                  {selectedOrderForInvoice.paymentStatus || 'Paid'}
                                 </div>
                               </div>
                             </>
@@ -10348,12 +10383,30 @@ export default function App() {
                     );
                   })()}
 
-                  <div className="mt-8 flex gap-4">
-                    <button className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                  <div className="mt-6 flex gap-4">
+                    <button 
+                      onClick={() => window.print()}
+                      className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer border-0"
+                    >
                       <Printer size={18} /> Print
                     </button>
-                    <button className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer">
-                      <Share size={18} /> Share
+                    <button 
+                      onClick={async () => {
+                        const targetEmail = selectedOrderForInvoice.destination.email || currentUser?.email;
+                        if (!targetEmail) {
+                          toast.error("No recipient email found for this order.");
+                          return;
+                        }
+                        const promise = api.sendInvoicePDF(targetEmail, selectedOrderForInvoice, COMPANY_DETAILS);
+                        toast.promise(promise, {
+                          loading: 'Sending invoice PDF to email...',
+                          success: `Tax Invoice PDF sent to ${targetEmail}!`,
+                          error: 'Could not send invoice via email.'
+                        });
+                      }}
+                      className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/20"
+                    >
+                      <Share size={18} /> Share PDF
                     </button>
                   </div>
                 </motion.div>
@@ -10390,7 +10443,7 @@ export default function App() {
                       <div className="text-sm font-bold text-slate-900">
                         {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
                           ? ((selectedOrderForDetails as any).pickupAddress?.fullName || selectedOrderForDetails.customerName || 'Customer Residence')
-                          : 'JiffEX Warehouse'
+                          : 'Jiffex Warehouse'
                         }
                       </div>
                       <div className="text-xs text-slate-600 leading-relaxed mt-1">
@@ -10575,7 +10628,7 @@ export default function App() {
                       : `${completedOrdersList.length} of ${unifiedHistory.filter(o => o.status !== 'Cancelled').length} Shipments Completed`}
                   </h4>
                   <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
-                    To keep your billing clean and reduce duplicate files, JiffEX generates a single consolidated invoice grouping all completed orders.
+                    To keep your billing clean and reduce duplicate files, Jiffex generates a single consolidated invoice grouping all completed orders.
                   </p>
                 </div>
                 
@@ -10715,11 +10768,11 @@ export default function App() {
                             error: 'Could not send invoice via Email.'
                           });
 
-                          const summary = `JiffEX Invoice\nOrder ID: ${order.id}\nDestination: ${order.destination.fullName || ''}, ${order.destination.country}\nTotal Weight: ${order.totalWeight || order.total_weight || 0} kg\nTotal Cost: ₹${order.totalCost || order.total_cost || 0}`;
+                          const summary = `Jiffex Invoice\nOrder ID: ${order.id}\nDestination: ${order.destination.fullName || ''}, ${order.destination.country}\nTotal Weight: ${order.totalWeight || order.total_weight || 0} kg\nTotal Cost: ₹${order.totalCost || order.total_cost || 0}`;
                           if (navigator.share) {
                             try {
                               await navigator.share({
-                                title: `JiffEX Invoice - ${order.id}`,
+                                title: `Jiffex Invoice - ${order.id}`,
                                 text: summary,
                               });
                             } catch (e) {
@@ -10800,7 +10853,7 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-8 mb-8">
                   <div>
                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
-                    <div className="text-sm font-bold text-slate-900">JiffEX Warehouse</div>
+                    <div className="text-sm font-bold text-slate-900">Jiffex Warehouse</div>
                     <div className="text-xs text-slate-600 leading-relaxed mt-1">
                       {WAREHOUSE_ADDRESS.street}<br />
                       {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
@@ -10936,7 +10989,7 @@ export default function App() {
                       <div className="text-sm font-bold text-slate-900">
                         {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
                           ? ((selectedOrderForDetails as any).pickupAddress?.fullName || selectedOrderForDetails.customerName || 'Customer Residence')
-                          : 'JiffEX Warehouse'
+                          : 'Jiffex Warehouse'
                         }
                       </div>
                       <div className="text-xs text-slate-600 leading-relaxed mt-1">
@@ -11112,7 +11165,7 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-8 mb-8">
                     <div>
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
-                      <div className="text-sm font-bold text-slate-900">JiffEX Warehouse</div>
+                      <div className="text-sm font-bold text-slate-900">Jiffex Warehouse</div>
                       <div className="text-xs text-slate-600 leading-relaxed mt-1">
                         {WAREHOUSE_ADDRESS.street}<br />
                         {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
@@ -11246,7 +11299,7 @@ export default function App() {
               <div className="flex items-center gap-2 flex-wrap">
                 <button 
                   onClick={() => {
-                    const message = `*JiffEX Work Order Invoice*\n\nOrder ID: ${woOrderId}\nCustomer: ${woAddress.fullName}\nTotal Amount: ₹${woTotalCost.toFixed(2)}\nDestination: ${woAddress.country}\nStatus: Processed & Paid\n\nThank you for choosing JiffEX!`;
+                    const message = `*Jiffex Work Order Invoice*\n\nOrder ID: ${woOrderId}\nCustomer: ${woAddress.fullName}\nTotal Amount: ₹${woTotalCost.toFixed(2)}\nDestination: ${woAddress.country}\nStatus: Processed & Paid\n\nThank you for choosing Jiffex!`;
                     sendWhatsApp(woAddress.phone, message);
                   }}
                   className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors flex items-center gap-1.5 text-xs font-bold font-sans"
@@ -11257,10 +11310,10 @@ export default function App() {
                 </button>
                 <button 
                   onClick={() => {
-                    const summary = `JiffEX Invoice\nOrder ID: ${woOrderId}\nDestination: ${woAddress.fullName}, ${woAddress.country}\nTotal Weight: ${woTotalWeight.toFixed(1)} kg\nTotal: ₹${woTotalCost.toFixed(2)}`;
+                    const summary = `Jiffex Invoice\nOrder ID: ${woOrderId}\nDestination: ${woAddress.fullName}, ${woAddress.country}\nTotal Weight: ${woTotalWeight.toFixed(1)} kg\nTotal: ₹${woTotalCost.toFixed(2)}`;
                     if (navigator.share) {
                       navigator.share({
-                        title: 'JiffEX Invoice',
+                        title: 'Jiffex Invoice',
                         text: summary,
                       }).catch(console.error);
                     } else {
@@ -13460,13 +13513,13 @@ export default function App() {
       ? items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Warehouse' && !i.submitted).length === 0
       : mode === 'Pickup'
         ? items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Pickup' && !i.submitted).length === 0 && (isSchedulingNewPickup ? true : !hasActivePickup)
-        : items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true).length === 0 && !hasActivePickup;
+        : items.filter(i => !orderedItemIds.has(i.id) && (i.source !== 'Warehouse' || i.submitted === true)).length === 0 && !hasActivePickup;
 
     const displayItems = mode 
       ? (mode === 'Warehouse' 
           ? items.filter(i => !orderedItemIds.has(i.id) && i.source === 'Warehouse' && !i.submitted)
           : items.filter(i => !orderedItemIds.has(i.id) && i.source === mode))
-      : items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
+      : items.filter(i => !orderedItemIds.has(i.id) && (i.source !== 'Warehouse' || i.submitted === true));
 
     const displayWeight = displayItems.reduce((sum, item) => sum + (item.weight || 0), 0);
     const hasTBDWeight = displayItems.some(i => i.weight === 0);
@@ -16278,7 +16331,7 @@ export default function App() {
         </div>
       );
     }
-    const cartItems = items.filter(i => !orderedItemIds.has(i.id) && i.submitted === true);
+    const cartItems = items.filter(i => !orderedItemIds.has(i.id) && (i.source !== 'Warehouse' || i.submitted === true));
     const isWarehouseCheckout = orderId ? orderId.startsWith('SW-') : cartItems.some(i => i.source === 'Warehouse');
     const hasScheduledPickup = userAppointments.some(a => a.status === 'Scheduled');
     const isPayAtHome = hasScheduledPickup && shippingPreference === 'International' && !cartItems.some(i => i.source === 'Store');
@@ -17913,7 +17966,7 @@ export default function App() {
                       onClick={() => navigateTo('about')}
                       className={`text-xs lg:text-sm uppercase tracking-wider font-extrabold transition-all pb-1.5 border-b-2 mt-0.5 text-nowrap shrink-0 ${activeTab === 'about' ? 'text-orange-600 border-orange-500' : 'text-slate-800 border-transparent hover:text-orange-600 hover:border-orange-500'}`}
                     >
-                      Why JiffEX
+                      Why Jiffex
                     </button>
                     <button 
                       onClick={() => navigateTo('support')}
@@ -18142,7 +18195,7 @@ export default function App() {
                         onClick={() => { navigateTo('about'); setIsMobileMenuOpen(false); }}
                         className={`text-lg font-bold p-3 rounded-xl text-left transition-all ${activeTab === 'about' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'}`}
                       >
-                        Why JiffEX
+                        Why Jiffex
                       </button>
                       <button 
                         onClick={() => { navigateTo('support'); setIsMobileMenuOpen(false); }}

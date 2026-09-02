@@ -1,4 +1,4 @@
--- JiffEX Database Setup SQL
+-- Jiffex Database Setup SQL
 -- Run this in your Supabase SQL Editor
 
 -- Create the 'items' table

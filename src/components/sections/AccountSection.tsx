@@ -78,7 +78,7 @@ const AccountSection = ({ currentUser, onUpdateProfile, customerWarehouseId }: A
       <div className="text-center space-y-3">
         <h3 className="text-4xl font-black text-slate-900 tracking-tight">My Account</h3>
         <p className="text-slate-500 max-w-lg mx-auto">
-          Manage your JiffEX shipping profile, default pickup/delivery address, and contact preferences.
+          Manage your Jiffex shipping profile, default pickup/delivery address, and contact preferences.
         </p>
       </div>
 

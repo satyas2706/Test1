@@ -1,4 +1,4 @@
-# JiffEX Shipping & Logistics App
+# Jiffex Shipping & Logistics App
 
 A full-stack logistics application built with React, Express, and Supabase.
 

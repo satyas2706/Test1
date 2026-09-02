@@ -114,7 +114,7 @@ const FinalizeSection = ({
                 
                 // Fallback to mailto
                 const subject = `Invoice for Order ${orderId}`;
-                const body = `Hi ${address.fullName},\n\nYour payment for order ${orderId} was successful.\nTotal Amount: ₹${totalCost.toFixed(2)}\nDestination: ${address.country}\n\nThank you for choosing JiffEX!`;
+                const body = `Hi ${address.fullName},\n\nYour payment for order ${orderId} was successful.\nTotal Amount: ₹${totalCost.toFixed(2)}\nDestination: ${address.country}\n\nThank you for choosing Jiffex!`;
                 window.location.href = `mailto:${address.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
               } finally {
                 setIsSendingInvoice(false);
@@ -126,7 +126,7 @@ const FinalizeSection = ({
           </button>
           <button 
             onClick={() => {
-              const message = `*JiffEX Invoice*\n\nOrder ID: ${orderId}\nCustomer: ${address.fullName}\nTotal Amount: ₹${totalCost.toFixed(2)}\nDestination: ${address.country}\nStatus: Paid\n\nThank you for choosing JiffEX!`;
+              const message = `*Jiffex Invoice*\n\nOrder ID: ${orderId}\nCustomer: ${address.fullName}\nTotal Amount: ₹${totalCost.toFixed(2)}\nDestination: ${address.country}\nStatus: Paid\n\nThank you for choosing Jiffex!`;
               const cleanPhone = address.phone.replace(/\D/g, '');
               window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
             }}

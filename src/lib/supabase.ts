@@ -132,3 +132,65 @@ export function updateSupabaseConfig(url: string, key: string) {
     }
   }
 }
+
+/**
+ * Resilient Supabase query execution with automatic retry for transient schema cache / PostgREST warming states (PGRST002, 503, timeout).
+ */
+export async function safeSupabaseQuery<T = any>(
+  queryFn: () => Promise<{ data: T | null; error: any }>,
+  options: { retries?: number; initialDelayMs?: number; label?: string } = {}
+): Promise<{ data: T | null; error: any }> {
+  const retries = options.retries ?? 3;
+  const initialDelayMs = options.initialDelayMs ?? 600;
+  const label = options.label || 'Supabase query';
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const result = await queryFn();
+      const err = result?.error;
+      if (!err) {
+        return result;
+      }
+
+      const isTransient =
+        err.code === 'PGRST002' ||
+        err.code === 'PGRST000' ||
+        err.code === '57014' ||
+        err.code === '53300' ||
+        err.status === 503 ||
+        err.status === 502 ||
+        err.status === 504 ||
+        (typeof err.message === 'string' && (
+          err.message.includes('schema cache') ||
+          err.message.includes('connection') ||
+          err.message.includes('timeout') ||
+          err.message.includes('fetch failed') ||
+          err.message.includes('NetworkError')
+        ));
+
+      if (isTransient && attempt < retries) {
+        const delay = initialDelayMs * Math.pow(1.8, attempt - 1);
+        await new Promise(res => setTimeout(res, delay));
+        continue;
+      }
+
+      return result;
+    } catch (caughtErr: any) {
+      const isTransient =
+        caughtErr?.code === 'PGRST002' ||
+        caughtErr?.message?.includes('schema cache') ||
+        caughtErr?.message?.includes('fetch failed') ||
+        caughtErr?.message?.includes('timeout');
+
+      if (isTransient && attempt < retries) {
+        const delay = initialDelayMs * Math.pow(1.8, attempt - 1);
+        await new Promise(res => setTimeout(res, delay));
+        continue;
+      }
+
+      return { data: null, error: caughtErr };
+    }
+  }
+
+  return { data: null, error: new Error(`${label} failed after ${retries} attempts`) };
+}

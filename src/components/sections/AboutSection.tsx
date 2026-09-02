@@ -27,7 +27,7 @@ const AboutSection = () => {
           animate={{ opacity: 1, y: 0 }}
           className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-50 border border-slate-200/60 text-slate-600 text-xs font-black uppercase tracking-widest"
         >
-          <Sparkles size={12} className="text-orange-500 animate-pulse" /> Why JiffEX
+          <Sparkles size={12} className="text-orange-500 animate-pulse" /> Why Jiffex
         </motion.div>
         
         <motion.h2 
@@ -129,7 +129,7 @@ const AboutSection = () => {
                 Ready to ship your next global package?
               </h4>
               <p className="text-slate-300 text-xs leading-relaxed">
-                Experience the convenience of streamlined global delivery with JiffEX tracking.
+                Experience the convenience of streamlined global delivery with Jiffex tracking.
               </p>
             </div>
             <div className="pt-6 relative z-10">

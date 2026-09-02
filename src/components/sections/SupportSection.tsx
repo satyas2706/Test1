@@ -201,7 +201,7 @@ const SupportSection = () => {
         <h4 className="text-2xl font-black text-slate-900 mb-8 text-center">Frequently Asked Questions</h4>
         <div className="space-y-4">
           {[
-            { q: "How do I track my international shipment?", a: "Enter your JiffEX tracking number in the tracking tab, or ask the Jiffex Agent 'Track my package JFX-XXXXX' for instant live checkpoint details." },
+            { q: "How do I track my international shipment?", a: "Enter your Jiffex tracking number in the tracking tab, or ask the Jiffex Agent 'Track my package JFX-XXXXX' for instant live checkpoint details." },
             { q: "How is the shipping cost calculated?", a: "Costs are based on chargeable weight (the greater of actual weight vs volumetric weight) and the destination country tier. The Jiffex Agent can calculate instant quotes for you." },
             { q: "Can I book a doorstep pickup for free?", a: "Yes! Doorstep pickup is completely free across all serviceable cities. You can schedule it anytime via the website or directly with the Jiffex Agent." },
             { q: "What items are prohibited?", a: "We cannot ship hazardous materials, flammable items, currency, or restricted electronics. Please consult our support team for specialized commodities." }

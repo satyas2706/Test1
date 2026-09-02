@@ -123,7 +123,7 @@ const CustomerHistory = ({
                         
                         // Fallback to mailto if server send fails
                         const subject = `Invoice for Order ${order.id}`;
-                        const body = `Hi ${order.destination.fullName},\n\nHere is your invoice for order ${order.id}.\nTotal Amount: ₹${order.totalCost}\nDestination: ${order.destination.country}\n\nThank you for choosing JiffEX!`;
+                        const body = `Hi ${order.destination.fullName},\n\nHere is your invoice for order ${order.id}.\nTotal Amount: ₹${order.totalCost}\nDestination: ${order.destination.country}\n\nThank you for choosing Jiffex!`;
                         window.location.href = `mailto:${order.destination.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                       } finally {
                         setIsSendingInvoice(null);
@@ -135,7 +135,7 @@ const CustomerHistory = ({
                   </button>
                   <button 
                     onClick={() => {
-                      const message = `*JiffEX Invoice*\n\nOrder ID: ${order.id}\nCustomer: ${order.destination.fullName}\nTotal Amount: ₹${order.totalCost}\nDestination: ${order.destination.country}\nStatus: ${order.status}\n\nThank you for choosing JiffEX!`;
+                      const message = `*Jiffex Invoice*\n\nOrder ID: ${order.id}\nCustomer: ${order.destination.fullName}\nTotal Amount: ₹${order.totalCost}\nDestination: ${order.destination.country}\nStatus: ${order.status}\n\nThank you for choosing Jiffex!`;
                       const cleanPhone = order.destination.phone.replace(/\D/g, '');
                       window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
                     }}
@@ -179,7 +179,7 @@ const CustomerHistory = ({
               <div className="grid grid-cols-2 gap-8 mb-8">
                 <div>
                   <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
-                  <div className="text-sm font-bold text-slate-900">JiffEX Warehouse</div>
+                  <div className="text-sm font-bold text-slate-900">Jiffex Warehouse</div>
                   <div className="text-xs text-slate-600 leading-relaxed mt-1">
                     {WAREHOUSE_ADDRESS.street}<br />
                     {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
@@ -255,7 +255,7 @@ const CustomerHistory = ({
 
                         // Fallback to mailto
                         const subject = `Invoice for Order ${selectedOrderForInvoice.id}`;
-                        const body = `Hi ${selectedOrderForInvoice.destination.fullName},\n\nHere is your invoice for order ${selectedOrderForInvoice.id}.\nTotal Amount: ₹${selectedOrderForInvoice.totalCost}\nDestination: ${selectedOrderForInvoice.destination.country}\n\nThank you for choosing JiffEX!`;
+                        const body = `Hi ${selectedOrderForInvoice.destination.fullName},\n\nHere is your invoice for order ${selectedOrderForInvoice.id}.\nTotal Amount: ₹${selectedOrderForInvoice.totalCost}\nDestination: ${selectedOrderForInvoice.destination.country}\n\nThank you for choosing Jiffex!`;
                         window.location.href = `mailto:${selectedOrderForInvoice.destination.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                       } finally {
                         setIsSendingInvoice(null);
@@ -267,7 +267,7 @@ const CustomerHistory = ({
                   </button>
                   <button 
                     onClick={() => {
-                      const message = `*JiffEX Invoice*\n\nOrder ID: ${selectedOrderForInvoice.id}\nCustomer: ${selectedOrderForInvoice.destination.fullName}\nTotal Amount: ₹${selectedOrderForInvoice.totalCost}\nDestination: ${selectedOrderForInvoice.destination.country}\nStatus: ${selectedOrderForInvoice.status}\n\nThank you for choosing JiffEX!`;
+                      const message = `*Jiffex Invoice*\n\nOrder ID: ${selectedOrderForInvoice.id}\nCustomer: ${selectedOrderForInvoice.destination.fullName}\nTotal Amount: ₹${selectedOrderForInvoice.totalCost}\nDestination: ${selectedOrderForInvoice.destination.country}\nStatus: ${selectedOrderForInvoice.status}\n\nThank you for choosing Jiffex!`;
                       const cleanPhone = selectedOrderForInvoice.destination.phone.replace(/\D/g, '');
                       window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
                     }}
@@ -279,7 +279,7 @@ const CustomerHistory = ({
                     onClick={() => {
                       if (navigator.share) {
                         navigator.share({
-                          title: `JiffEX Invoice - ${selectedOrderForInvoice.id}`,
+                          title: `Jiffex Invoice - ${selectedOrderForInvoice.id}`,
                           text: `Invoice for order ${selectedOrderForInvoice.id} to ${selectedOrderForInvoice.destination.country}. Total: ₹${selectedOrderForInvoice.totalCost}`,
                           url: window.location.href
                         }).catch(console.error);
