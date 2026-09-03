@@ -3470,6 +3470,7 @@ const transformDbPickupToOrder = (p: any) => {
 // Global background cache refresh tracker
 let refreshOrdersPromise: Promise<any[]> | null = null;
 let lastOrderRefreshTime = 0;
+let lastOrderRefreshAttemptTime = 0;
 
 const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
   const now = Date.now();
@@ -3483,20 +3484,37 @@ const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
   }
 
   const executeRefresh = async (): Promise<any[]> => {
+    lastOrderRefreshAttemptTime = Date.now();
     try {
       const orderMap = new Map<string, any>();
 
       // 1. Fetch from pickups table in Supabase
       if (supabase) {
         try {
-          const { data: pickups, error: pErr } = await queryWithTimeout(
+          const pickupsController = new AbortController();
+          let pickupsTimer: NodeJS.Timeout | null = null;
+
+          const pickupsTimeoutPromise = new Promise<{ data: any; error: any }>((resolve) => {
+            pickupsTimer = setTimeout(() => {
+              pickupsController.abort();
+              resolve({ data: null, error: new Error('Pickups query timed out') });
+            }, 3500);
+          });
+
+          const pickupsQueryPromise = Promise.resolve(
             supabase
               .from('pickups')
               .select('*')
-              .order('created_at', { ascending: false }),
-            3500,
-            'Pickups query timed out'
+              .order('created_at', { ascending: false })
+              .abortSignal(pickupsController.signal)
           ).catch((err: any) => ({ data: null, error: err }));
+
+          const { data: pickups, error: pErr } = await Promise.race([
+            pickupsQueryPromise,
+            pickupsTimeoutPromise
+          ]).finally(() => {
+            if (pickupsTimer) clearTimeout(pickupsTimer);
+          });
 
           if (!pErr && Array.isArray(pickups)) {
             pickups.forEach((p: any) => {
@@ -3515,15 +3533,31 @@ const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
         // 2. Fetch from orders table using a single lightweight query
         // Excludes the heavy items column (containing multi-megabyte base64 images) to prevent PostgreSQL 57014 statement timeouts
         try {
-          const { data: dbOrders, error: oErr } = await queryWithTimeout(
+          const ordersController = new AbortController();
+          let ordersTimer: NodeJS.Timeout | null = null;
+
+          const ordersTimeoutPromise = new Promise<{ data: any; error: any }>((resolve) => {
+            ordersTimer = setTimeout(() => {
+              ordersController.abort();
+              resolve({ data: null, error: new Error('Orders query timed out') });
+            }, 3500);
+          });
+
+          const ordersQueryPromise = Promise.resolve(
             supabase
               .from('orders')
               .select('id, customer_id, total_weight, total_cost, status, destination, payment_status, shipping_date, created_at, tracking_number, carrier, shipment_status, shipment_date, last_tracking_update, tracking_response')
               .order('id', { ascending: false })
-              .limit(500),
-            3500,
-            'Orders query timed out'
+              .limit(500)
+              .abortSignal(ordersController.signal)
           ).catch((err: any) => ({ data: null, error: err }));
+
+          const { data: dbOrders, error: oErr } = await Promise.race([
+            ordersQueryPromise,
+            ordersTimeoutPromise
+          ]).finally(() => {
+            if (ordersTimer) clearTimeout(ordersTimer);
+          });
 
           if (!oErr && Array.isArray(dbOrders)) {
             dbOrders.forEach((o: any) => {
@@ -3588,8 +3622,9 @@ const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
 
 // API: Get all orders (Admin only - returns complete list with zero timeouts)
 app.get("/api/orders", async (req, res) => {
-  // If cache is empty during initial startup, wait for cache to populate
-  if (cachedAllOrders.length === 0) {
+  // If cache is empty during initial startup, wait for cache to populate only if no refresh was attempted within the previous 60 seconds
+  const now = Date.now();
+  if (cachedAllOrders.length === 0 && now - lastOrderRefreshAttemptTime >= 60000) {
     await refreshAllOrdersCache(true);
   }
 
