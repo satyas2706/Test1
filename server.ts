@@ -3361,7 +3361,7 @@ const transformDbPickupToOrder = (p: any) => {
 };
 
 // Global background cache refresh tracker
-let isRefreshingOrders = false;
+let refreshOrdersPromise: Promise<any[]> | null = null;
 let lastOrderRefreshTime = 0;
 
 const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
@@ -3370,112 +3370,115 @@ const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
   if (!force && cachedAllOrders.length > 0 && now - lastOrderRefreshTime < 60000) {
     return cachedAllOrders;
   }
-  if (isRefreshingOrders && cachedAllOrders.length > 0) {
-    return cachedAllOrders;
+  // If a refresh is already in-flight, return the shared in-flight Promise
+  if (refreshOrdersPromise) {
+    return refreshOrdersPromise;
   }
-  isRefreshingOrders = true;
-  try {
-    const orderMap = new Map<string, any>();
 
-    // 1. Fetch from pickups table in Supabase
-    if (supabase) {
-      try {
-        const { data: pickups, error: pErr } = await supabase
-          .from('pickups')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (!pErr && Array.isArray(pickups)) {
-          pickups.forEach((p: any) => {
-            const transformed = transformDbPickupToOrder(p);
-            if (transformed && transformed.id) {
-              orderMap.set(transformed.id, transformed);
-            }
-          });
+  const executeRefresh = async (): Promise<any[]> => {
+    try {
+      const orderMap = new Map<string, any>();
+
+      // 1. Fetch from pickups table in Supabase
+      if (supabase) {
+        try {
+          const { data: pickups, error: pErr } = await supabase
+            .from('pickups')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (!pErr && Array.isArray(pickups)) {
+            pickups.forEach((p: any) => {
+              const transformed = transformDbPickupToOrder(p);
+              if (transformed && transformed.id) {
+                orderMap.set(transformed.id, transformed);
+              }
+            });
+          }
+        } catch (err: any) {
+          console.warn('[SERVER] Pickups table fetch warning:', err.message);
         }
-      } catch (err: any) {
-        console.warn('[SERVER] Pickups table fetch warning:', err.message);
-      }
 
-      // 2. Fetch from orders table in safe chunked ranges to prevent statement timeouts
-      try {
-        const ranges = [
-          [0, 49],
-          [50, 99],
-          [100, 149],
-          [150, 199]
-        ];
-        for (const [start, end] of ranges) {
-          try {
-            const { data: chunk, error: cErr } = await supabase
-              .from('orders')
-              .select('*')
-              .order('id', { ascending: false })
-              .range(start, end);
-            if (!cErr && Array.isArray(chunk) && chunk.length > 0) {
-              chunk.forEach((o: any) => {
-                const transformed = transformDbOrder(o);
-                if (transformed && transformed.id) {
-                  orderMap.set(transformed.id, transformed);
+        // 2. Fetch from orders table in safe chunked ranges to prevent statement timeouts
+        try {
+          const ranges = [
+            [0, 49],
+            [50, 99],
+            [100, 149],
+            [150, 199]
+          ];
+          for (const [start, end] of ranges) {
+            try {
+              const { data: chunk, error: cErr } = await supabase
+                .from('orders')
+                .select('*')
+                .order('id', { ascending: false })
+                .range(start, end);
+              if (!cErr && Array.isArray(chunk) && chunk.length > 0) {
+                chunk.forEach((o: any) => {
+                  const transformed = transformDbOrder(o);
+                  if (transformed && transformed.id) {
+                    orderMap.set(transformed.id, transformed);
+                  }
+                });
+                if (chunk.length < (end - start + 1)) {
+                  break;
                 }
-              });
-              if (chunk.length < (end - start + 1)) {
+              } else {
                 break;
               }
-            } else {
+            } catch (chunkErr) {
               break;
             }
-          } catch (chunkErr) {
-            break;
           }
+        } catch (err: any) {
+          console.warn('[SERVER] Orders table fetch warning:', err.message);
         }
-      } catch (err: any) {
-        console.warn('[SERVER] Orders table fetch warning:', err.message);
       }
+
+      // 3. Overlay in-memory pickups & in-memory orders (ensuring local additions are never lost)
+      memPickups.forEach((p: any) => {
+        const transformed = transformDbPickupToOrder(p);
+        if (transformed && transformed.id) {
+          orderMap.set(transformed.id, transformed);
+        }
+      });
+
+      memOrders.forEach((o: any) => {
+        const transformed = transformDbOrder(o);
+        if (transformed && transformed.id) {
+          orderMap.set(transformed.id, transformed);
+        }
+      });
+
+      const combinedList = Array.from(orderMap.values()).sort((a: any, b: any) => {
+        const dateA = new Date(a.created_at || a.createdAt || 0).getTime();
+        const dateB = new Date(b.created_at || b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+
+      const deduplicated = await deduplicateOrders(combinedList);
+      if (deduplicated && deduplicated.length > 0) {
+        cachedAllOrders = deduplicated;
+        lastOrderRefreshTime = Date.now();
+      }
+      return cachedAllOrders;
+    } catch (err: any) {
+      console.error('[SERVER] Failed to refresh all orders cache:', err.message);
+      return cachedAllOrders;
+    } finally {
+      refreshOrdersPromise = null;
     }
+  };
 
-    // 3. Overlay in-memory pickups & in-memory orders (ensuring local additions are never lost)
-    memPickups.forEach((p: any) => {
-      const transformed = transformDbPickupToOrder(p);
-      if (transformed && transformed.id) {
-        orderMap.set(transformed.id, transformed);
-      }
-    });
-
-    memOrders.forEach((o: any) => {
-      const transformed = transformDbOrder(o);
-      if (transformed && transformed.id) {
-        orderMap.set(transformed.id, transformed);
-      }
-    });
-
-    const combinedList = Array.from(orderMap.values()).sort((a: any, b: any) => {
-      const dateA = new Date(a.created_at || a.createdAt || 0).getTime();
-      const dateB = new Date(b.created_at || b.createdAt || 0).getTime();
-      return dateB - dateA;
-    });
-
-    const deduplicated = await deduplicateOrders(combinedList);
-    if (deduplicated && deduplicated.length > 0) {
-      cachedAllOrders = deduplicated;
-      lastOrderRefreshTime = Date.now();
-    }
-    return cachedAllOrders;
-  } catch (err: any) {
-    console.error('[SERVER] Failed to refresh all orders cache:', err.message);
-    return cachedAllOrders;
-  } finally {
-    isRefreshingOrders = false;
-  }
+  refreshOrdersPromise = executeRefresh();
+  return refreshOrdersPromise;
 };
 
 // API: Get all orders (Admin only - returns complete list with zero timeouts)
 app.get("/api/orders", async (req, res) => {
-  // If cache is empty or stale, trigger refresh
+  // If cache is empty during initial startup, wait for cache to populate
   if (cachedAllOrders.length === 0) {
     await refreshAllOrdersCache(true);
-  } else {
-    // Trigger non-blocking background refresh to keep cache fresh
-    refreshAllOrdersCache().catch(console.error);
   }
 
   // Merge any recent memory orders
