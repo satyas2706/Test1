@@ -6319,14 +6319,22 @@ export default function App() {
     const fetchUserProfile = async () => {
       if (currentUser && isSupabaseConfigured && dbStatus.connected) {
         try {
-          const { data, error } = await supabase
+          const profileQuery = supabase
             .from('customer_profiles')
             .select('*')
             .eq('id', currentUser.id)
             .maybeSingle();
 
+          const timeoutPromise = new Promise<{ data: any; error: any }>((_, reject) =>
+            setTimeout(() => reject(new Error('Profile fetch timeout')), 3500)
+          );
+
+          const { data, error } = await Promise.race([profileQuery, timeoutPromise]).catch(
+            (err: any) => ({ data: null, error: err })
+          );
+
           if (error) {
-            console.error('Error fetching customer profile from Supabase:', error);
+            console.warn('Customer profile fetch notice (using local details):', error?.message || error);
           } else if (data) {
             // Merge/fill the home pickup details!
             if (data.name) setPickupName(data.name);
@@ -6341,20 +6349,21 @@ export default function App() {
                 zip: data.zip || ''
               });
             }
-          } else {
-            // Fallback to current user generic fields if nothing saved in supabase yet
-            if (currentUser.name && currentUser.name !== 'User' && currentUser.name !== 'Guest User') {
-              setPickupName(currentUser.name);
-            }
-            if (currentUser.email) {
-              setPickupEmail(currentUser.email);
-            }
-            if (currentUser.phone) {
-              setPickupPhone(currentUser.phone);
-            }
+            return;
           }
-        } catch (e) {
-          console.error('Failed to load user profile details from Supabase:', e);
+
+          // Fallback to current user generic fields if nothing saved in supabase yet or error
+          if (currentUser.name && currentUser.name !== 'User' && currentUser.name !== 'Guest User') {
+            setPickupName(currentUser.name);
+          }
+          if (currentUser.email) {
+            setPickupEmail(currentUser.email);
+          }
+          if (currentUser.phone) {
+            setPickupPhone(currentUser.phone);
+          }
+        } catch (e: any) {
+          console.warn('Notice loading user profile details (using fallback):', e?.message || e);
         }
       } else if (currentUser) {
         // Fallback to local storage or current user object

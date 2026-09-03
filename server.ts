@@ -123,15 +123,16 @@ const queryWithTimeout = (promise: any, ms = 2500, timeoutErrorMsg = 'Operation 
  */
 async function safeSupabaseQuery<T = any>(
   queryFn: () => PromiseLike<{ data: T | null; error: any }> | Promise<{ data: T | null; error: any }> | any,
-  options: { retries?: number; initialDelayMs?: number; label?: string } = {}
+  options: { retries?: number; initialDelayMs?: number; label?: string; timeoutMs?: number } = {}
 ): Promise<{ data: T | null; error: any }> {
-  const retries = options.retries ?? 3;
-  const initialDelayMs = options.initialDelayMs ?? 600;
+  const retries = options.retries ?? 2;
+  const initialDelayMs = options.initialDelayMs ?? 400;
+  const timeoutMs = options.timeoutMs ?? 3500;
   const label = options.label || 'Supabase query';
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const result = await queryFn();
+      const result = await queryWithTimeout(queryFn(), timeoutMs, `${label} timed out`);
       const err = result?.error;
       if (!err) {
         return result;
@@ -149,12 +150,13 @@ async function safeSupabaseQuery<T = any>(
           err.message.includes('schema cache') ||
           err.message.includes('connection') ||
           err.message.includes('timeout') ||
+          err.message.includes('upstream') ||
           err.message.includes('fetch failed') ||
           err.message.includes('NetworkError')
         ));
 
       if (isTransient && attempt < retries) {
-        const delay = initialDelayMs * Math.pow(1.8, attempt - 1);
+        const delay = initialDelayMs * Math.pow(1.5, attempt - 1);
         await new Promise(res => setTimeout(res, delay));
         continue;
       }
@@ -165,10 +167,11 @@ async function safeSupabaseQuery<T = any>(
         caughtErr?.code === 'PGRST002' ||
         caughtErr?.message?.includes('schema cache') ||
         caughtErr?.message?.includes('fetch failed') ||
-        caughtErr?.message?.includes('timeout');
+        caughtErr?.message?.includes('timeout') ||
+        caughtErr?.message?.includes('upstream');
 
       if (isTransient && attempt < retries) {
-        const delay = initialDelayMs * Math.pow(1.8, attempt - 1);
+        const delay = initialDelayMs * Math.pow(1.5, attempt - 1);
         await new Promise(res => setTimeout(res, delay));
         continue;
       }
@@ -177,7 +180,7 @@ async function safeSupabaseQuery<T = any>(
     }
   }
 
-  return { data: null, error: new Error(`${label} failed after ${retries} attempts`) };
+  return { data: null, error: new Error(`${label} timed out or failed after ${retries} attempts`) };
 }
 
 console.log("Starting server initialization...");
@@ -912,56 +915,82 @@ const DEFAULT_SHIPPING_SETTINGS = {
   }
 };
 
-const getShippingSettings = async () => {
-  if (supabase) {
-    try {
-      const { data, error } = await safeSupabaseQuery(() =>
-        supabase
-          .from('shipping_settings')
-          .select('*')
-          .eq('id', 'global')
-          .maybeSingle(),
-        { label: 'getShippingSettings' }
-      );
+let cachedShippingSettings: any = {
+  rates: { ...DEFAULT_SHIPPING_SETTINGS.rates },
+  rateBands: JSON.parse(JSON.stringify(DEFAULT_RATE_BANDS)),
+  discounts: { ...DEFAULT_SHIPPING_SETTINGS.discounts },
+  coupons: [
+    { code: "SHIP5", discountPercent: 5, isEnabled: true },
+    { code: "BOOST", discountPercent: 12, isEnabled: false }
+  ]
+};
+let isShippingSettingsFetched = false;
+let isFetchingShippingSettings = false;
 
-      if (!error && data) {
-        const rates = data.rates || DEFAULT_SHIPPING_SETTINGS.rates;
-        const rateBands = data.rate_bands || data.rateBands || rates?._rateBands || DEFAULT_SHIPPING_SETTINGS.rateBands;
-        return {
-          rates,
-          rateBands,
-          discounts: data.discounts || DEFAULT_SHIPPING_SETTINGS.discounts,
-          coupons: data.coupons || [
-            { code: "SHIP5", discountPercent: 5, isEnabled: true },
-            { code: "BOOST", discountPercent: 12, isEnabled: false }
-          ]
-        };
-      } else if (error && error.code !== 'PGRST116' && error.code !== 'PGRST002') {
-        console.warn("[Supabase] Failed to fetch shipping settings:", error.message || error);
-      }
-    } catch (err: any) {
-      if (!err?.message?.includes('schema cache')) {
-        console.warn("[Supabase] Exception fetching shipping settings:", err.message || err);
+const fetchShippingSettingsFromDb = async () => {
+  if (!supabase || isFetchingShippingSettings) return;
+  isFetchingShippingSettings = true;
+  try {
+    const { data, error } = await queryWithTimeout(
+      supabase
+        .from('shipping_settings')
+        .select('*')
+        .eq('id', 'global')
+        .maybeSingle(),
+      2500,
+      'Shipping settings query timed out'
+    ).catch((err: any) => ({ data: null, error: err }));
+
+    if (!error && data) {
+      const rates = data.rates || cachedShippingSettings.rates;
+      const rateBands = data.rate_bands || data.rateBands || rates?._rateBands || cachedShippingSettings.rateBands;
+      cachedShippingSettings = {
+        rates,
+        rateBands,
+        discounts: data.discounts || cachedShippingSettings.discounts,
+        coupons: data.coupons || cachedShippingSettings.coupons
+      };
+      isShippingSettingsFetched = true;
+    } else if (error) {
+      const isExpected = error.code === 'PGRST116' || error.code === 'PGRST002' ||
+        String(error.message || '').includes('timed out') ||
+        String(error.message || '').includes('timeout') ||
+        String(error.message || '').includes('upstream');
+      if (!isExpected) {
+        console.warn("[Supabase] Notice fetching shipping settings (using cache):", error.message || error);
       }
     }
+  } catch (err: any) {
+    // Silent catch, using in-memory cache
+  } finally {
+    isFetchingShippingSettings = false;
   }
+};
 
-  // Fallback to default in-memory settings since we strictly do not read or write anything to local filesystem.
-  return {
-    ...DEFAULT_SHIPPING_SETTINGS,
-    coupons: [
-      { code: "SHIP5", discountPercent: 5, isEnabled: true },
-      { code: "BOOST", discountPercent: 12, isEnabled: false }
-    ]
-  };
+// Initial background sync
+if (supabase) {
+  fetchShippingSettingsFromDb().catch(() => {});
+}
+
+const getShippingSettings = async () => {
+  if (!isShippingSettingsFetched && supabase) {
+    fetchShippingSettingsFromDb().catch(() => {});
+  }
+  return { ...cachedShippingSettings };
 };
 
 const saveShippingSettings = async (settings: any) => {
+  cachedShippingSettings = {
+    ...cachedShippingSettings,
+    ...settings
+  };
+  isShippingSettingsFetched = true;
+
   if (supabase) {
     try {
       // Package _rateBands into rates object as fallback for database compatibility
       const ratesPayload = { ...settings.rates, _rateBands: settings.rateBands };
-      const { error } = await safeSupabaseQuery(() =>
+      queryWithTimeout(
         supabase
           .from('shipping_settings')
           .upsert({
@@ -971,22 +1000,21 @@ const saveShippingSettings = async (settings: any) => {
             coupons: settings.coupons,
             updated_at: new Date().toISOString()
           }),
-        { label: 'saveShippingSettings' }
-      );
-
-      if (!error) {
-        console.log("[Supabase] Successfully saved shipping settings to Supabase.");
-        return true;
-      } else if (error.code !== 'PGRST002') {
-        console.warn("[Supabase] Failed to save shipping settings to Supabase:", error.message || error);
-      }
+        3000,
+        'Save shipping settings timed out'
+      ).then(({ error }: any) => {
+        if (!error) {
+          console.log("[Supabase] Successfully saved shipping settings to Supabase.");
+        } else if (error.code !== 'PGRST002' && !String(error.message || '').includes('timeout') && !String(error.message || '').includes('upstream')) {
+          console.warn("[Supabase] Notice saving shipping settings to Supabase:", error.message || error);
+        }
+      }).catch(() => {});
+      return true;
     } catch (err: any) {
-      if (!err?.message?.includes('schema cache')) {
-        console.warn("[Supabase] Exception saving shipping settings to Supabase:", err.message || err);
-      }
+      // Silent catch
     }
   }
-  return false;
+  return true;
 };
 
 app.get("/api/settings/shipping", async (req, res) => {
@@ -1172,17 +1200,21 @@ app.delete("/api/items/:id", async (req, res) => {
 });
 
 // Example API: Get all items for a user
-app.get("/api/items/:userId", async (req, res) => {
-  const { userId } = req.params;
-  if (!supabase) {
+const handleGetItems = async (req: express.Request, res: express.Response) => {
+  const userId = (req.params.userId || req.query.userId || 'all') as string;
+
+  const getFallbackItems = () => {
     if (userId === 'all') {
-      return res.json(memItems);
+      return memItems;
     }
-    const userItems = memItems.filter(i => {
+    return memItems.filter(i => {
       const uId = i.user_id || i.userId || i.customer_id || i.customerId;
       return String(uId) === String(userId);
     });
-    return res.json(userItems);
+  };
+
+  if (!supabase) {
+    return res.json(getFallbackItems());
   }
 
   try {
@@ -1190,14 +1222,17 @@ app.get("/api/items/:userId", async (req, res) => {
     if (userId !== 'all') {
       query = query.eq('user_id', userId);
     }
-    const { data, error } = await query;
+    const { data, error } = await queryWithTimeout(query, 3500, 'Supabase items query timed out');
     if (error) throw error;
     res.json(data || []);
   } catch (err: any) {
-    console.error("Fetch Items Error:", err.message);
-    res.json([]);
+    console.warn("[SERVER] Fetch Items notice (using memory items fallback):", err?.message || err);
+    res.json(getFallbackItems());
   }
-});
+};
+
+app.get("/api/items", handleGetItems);
+app.get("/api/items/:userId", handleGetItems);
 
 // Example API: Create an item
 app.post("/api/items", async (req, res) => {
@@ -2896,6 +2931,27 @@ const transformDbOrder = (o: any) => {
   };
 };
 
+// Helper to strip heavy base64 images from items while preserving all metadata for UI and deduplication
+const stripItemImages = (items: any): any[] => {
+  if (!items) return [];
+  let parsed = items;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch (e) {
+      return [];
+    }
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.map((item: any) => {
+    if (!item || typeof item !== 'object') return item;
+    if (!item.image) return item;
+    // Retain all fields except large base64 image data; set hasImage flag
+    const { image, ...rest } = item;
+    return { ...rest, hasImage: true };
+  });
+};
+
 // Helper to perform structural deduplication of orders
 // If there is an order that is still scheduled but has empty items, and we find a completed/processed clone
 // (created historical sequence increment bugs in the previous codebase), we automatically delete the scheduled empty clone.
@@ -2941,14 +2997,65 @@ const deduplicateOrders = async (ordersList: any[]): Promise<any[]> => {
       return isSeqClose;
     });
 
-    let its = pend.items;
-    if (typeof its === 'string') {
-      try { its = JSON.parse(its); } catch (e) { its = []; }
+    // Check if pend in memory has real items (when called from non-cached contexts)
+    let inMemoryItems = pend.items;
+    if (typeof inMemoryItems === 'string') {
+      try { inMemoryItems = JSON.parse(inMemoryItems); } catch (e) { inMemoryItems = []; }
     }
-    const itemLength = Array.isArray(its) ? its.length : 0;
+    const hasInMemoryItems = Array.isArray(inMemoryItems) && inMemoryItems.length > 0;
 
-    if (isDup && itemLength === 0 && (pend.status === 'Scheduled' || pend.status === 'Pending Pickup' || pend.status === 'Pending')) {
-      console.log(`[SERVER SELF-HEAL] Deleting stale duplicate order: ${pend.id}`);
+    const isCandidate = isDup && !hasInMemoryItems && (pend.status === 'Scheduled' || pend.status === 'Pending Pickup' || pend.status === 'Pending');
+
+    let isVerifiedStaleDuplicate = false;
+
+    // Fail-safe rule: do NOT delete solely because the lightweight cached representation lacks items.
+    // Verify candidate directly against Supabase querying ONLY this candidate ID.
+    if (isCandidate) {
+      const adminDb = supabaseAdmin || supabase;
+      if (adminDb) {
+        try {
+          // Query ONLY the candidate order ID, retrieving the smallest possible data to check item presence
+          // without pulling base64 image data.
+          const verifyPromise = adminDb
+            .from('orders')
+            .select('id, items->0->id, items->0->name')
+            .eq('id', pend.id)
+            .maybeSingle();
+
+          const { data: verifiedOrder, error: verifyError } = await queryWithTimeout(
+            verifyPromise,
+            2000,
+            `Deduplication verification timed out for candidate ${pend.id}`
+          );
+
+          if (!verifyError && verifiedOrder && verifiedOrder.id === pend.id) {
+            const vObj = verifiedOrder as any;
+            const firstId = vObj['items->0->id'] || (vObj.items && vObj.items[0]?.id);
+            const firstName = vObj['items->0->name'] || (vObj.items && vObj.items[0]?.name);
+
+            if (firstId || firstName) {
+              // Real items exist in database: legitimate order, protect it
+              isVerifiedStaleDuplicate = false;
+            } else {
+              // If arrow projection is not supported or returns an ambiguous result where emptiness
+              // cannot be safely determined without retrieving the full items JSONB value,
+              // the fail-safe rule mandates DO NOT DELETE.
+              isVerifiedStaleDuplicate = false;
+            }
+          } else {
+            // Query failed, timed out, or returned unexpected data: fail-safe retain
+            isVerifiedStaleDuplicate = false;
+          }
+        } catch (verifyEx: any) {
+          // Timeout or network error: fail-safe retain
+          console.warn(`[SERVER SELF-HEAL] Verification check timed out/failed for ${pend.id}, retaining order:`, verifyEx?.message || verifyEx);
+          isVerifiedStaleDuplicate = false;
+        }
+      }
+    }
+
+    if (isVerifiedStaleDuplicate) {
+      console.log(`[SERVER SELF-HEAL] Deleting verified stale duplicate order: ${pend.id}`);
       idsToDelete.push(pend.id);
     } else {
       cleanList.push(pend);
@@ -3382,10 +3489,15 @@ const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
       // 1. Fetch from pickups table in Supabase
       if (supabase) {
         try {
-          const { data: pickups, error: pErr } = await supabase
-            .from('pickups')
-            .select('*')
-            .order('created_at', { ascending: false });
+          const { data: pickups, error: pErr } = await queryWithTimeout(
+            supabase
+              .from('pickups')
+              .select('*')
+              .order('created_at', { ascending: false }),
+            3500,
+            'Pickups query timed out'
+          ).catch((err: any) => ({ data: null, error: err }));
+
           if (!pErr && Array.isArray(pickups)) {
             pickups.forEach((p: any) => {
               const transformed = transformDbPickupToOrder(p);
@@ -3393,42 +3505,42 @@ const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
                 orderMap.set(transformed.id, transformed);
               }
             });
+          } else if (pErr) {
+            console.warn('[SERVER] Pickups table fetch notice (using cache):', pErr.message || pErr);
           }
         } catch (err: any) {
           console.warn('[SERVER] Pickups table fetch warning:', err.message);
         }
 
-        // 2. Fetch from orders table in safe chunked ranges to prevent statement timeouts
+        // 2. Fetch from orders table using a single lightweight query
+        // Excludes the heavy items column (containing multi-megabyte base64 images) to prevent PostgreSQL 57014 statement timeouts
         try {
-          const ranges = [
-            [0, 49],
-            [50, 99],
-            [100, 149],
-            [150, 199]
-          ];
-          for (const [start, end] of ranges) {
-            try {
-              const { data: chunk, error: cErr } = await supabase
-                .from('orders')
-                .select('*')
-                .order('id', { ascending: false })
-                .range(start, end);
-              if (!cErr && Array.isArray(chunk) && chunk.length > 0) {
-                chunk.forEach((o: any) => {
-                  const transformed = transformDbOrder(o);
-                  if (transformed && transformed.id) {
-                    orderMap.set(transformed.id, transformed);
-                  }
-                });
-                if (chunk.length < (end - start + 1)) {
-                  break;
-                }
-              } else {
-                break;
+          const { data: dbOrders, error: oErr } = await queryWithTimeout(
+            supabase
+              .from('orders')
+              .select('id, customer_id, total_weight, total_cost, status, destination, payment_status, shipping_date, created_at, tracking_number, carrier, shipment_status, shipment_date, last_tracking_update, tracking_response')
+              .order('id', { ascending: false })
+              .limit(500),
+            3500,
+            'Orders query timed out'
+          ).catch((err: any) => ({ data: null, error: err }));
+
+          if (!oErr && Array.isArray(dbOrders)) {
+            dbOrders.forEach((o: any) => {
+              // Retain items if already loaded from pickups
+              const existing = orderMap.get(o.id);
+              const itemsList = existing?.items || [];
+              const lightweightOrder = {
+                ...o,
+                items: itemsList
+              };
+              const transformed = transformDbOrder(lightweightOrder);
+              if (transformed && transformed.id) {
+                orderMap.set(transformed.id, transformed);
               }
-            } catch (chunkErr) {
-              break;
-            }
+            });
+          } else if (oErr) {
+            console.warn('[SERVER] Orders table fetch notice (using cache):', oErr.message || oErr);
           }
         } catch (err: any) {
           console.warn('[SERVER] Orders table fetch warning:', err.message);
@@ -3892,13 +4004,14 @@ async function seedDatabaseIfEmpty() {
 
        // 6. Seed Shipping Settings if empty
        try {
-         const { data: existingSettings, error: sErr } = await safeSupabaseQuery(() =>
+         const { data: existingSettings, error: sErr } = await queryWithTimeout(
            supabase.from('shipping_settings').select('id').limit(1),
-           { label: 'seedCheckShippingSettings' }
-         );
+           2000,
+           'Seed check shipping settings timed out'
+         ).catch((err: any) => ({ data: null, error: err }));
          if (!sErr && (!existingSettings || existingSettings.length === 0)) {
             console.log("[Supabase Seeder] shipping_settings table is empty, seeding default settings...");
-            const { error: sInsError } = await safeSupabaseQuery(() =>
+            const { error: sInsError } = await queryWithTimeout(
               supabase.from('shipping_settings').insert({
                 id: 'global',
                 rates: DEFAULT_SHIPPING_SETTINGS.rates,
@@ -3908,11 +4021,12 @@ async function seedDatabaseIfEmpty() {
                   { code: "BOOST", discountPercent: 12, isEnabled: false }
                 ]
               }),
-              { label: 'seedInsertShippingSettings' }
-            );
-            if (sInsError && sInsError.code !== 'PGRST002') {
-              console.warn("[Supabase Seeder] Failed to seed shipping_settings:", sInsError.message || sInsError);
-            } else {
+              2000,
+              'Seed insert shipping settings timed out'
+            ).catch((err: any) => ({ data: null, error: err }));
+            if (sInsError && sInsError.code !== 'PGRST002' && !String(sInsError.message || '').includes('timeout')) {
+              console.warn("[Supabase Seeder] Notice seeding shipping_settings:", sInsError.message || sInsError);
+            } else if (!sInsError) {
               console.log("[Supabase Seeder] shipping_settings seeded successfully!");
             }
          }

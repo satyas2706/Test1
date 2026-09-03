@@ -4,6 +4,13 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const API_URL = window.location.origin;
 
+const withTimeout = <T = any>(promise: any, ms = 3500, errorMsg = 'Operation timed out'): Promise<T> => {
+  return Promise.race([
+    Promise.resolve(promise) as Promise<T>,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(errorMsg)), ms))
+  ]);
+};
+
 // Database converters for Products
 function dbToProduct(dbProduct: any): StoreProduct {
   if (!dbProduct) return dbProduct;
@@ -315,13 +322,13 @@ export const api = {
         if (userId !== 'all') {
           query = query.eq('user_id', userId);
         }
-        const { data, error } = await query;
+        const { data, error } = await withTimeout(query, 3500, 'Supabase items timed out');
         if (!error && data) {
           const flatItems = data.map(dbToItem) as ShippingItem[];
           return groupItems(flatItems);
         }
       } catch (e) {
-        console.warn('[Supabase] Fetch items direct failed:', e);
+        console.warn('[Supabase] Fetch items direct notice:', e);
       }
     }
 
@@ -440,7 +447,9 @@ export const api = {
 
     if (isSupabaseConfigured) {
       try {
-        let query = supabase.from('orders').select('*');
+        let query = supabase
+          .from('orders')
+          .select('id, customer_id, total_weight, total_cost, status, destination, payment_status, shipping_date, created_at, tracking_number, carrier, shipment_status, shipment_date, last_tracking_update, tracking_response');
         if (userId !== 'all') {
           const idsToCheck = [userId];
           if (email) {
@@ -451,12 +460,16 @@ export const api = {
           }
           query = query.in('customer_id', idsToCheck);
         }
-        const { data, error } = await query.order('created_at', { ascending: false });
+        const { data, error } = await withTimeout(
+          query.order('created_at', { ascending: false }).limit(200),
+          3500,
+          'Supabase orders timed out'
+        );
         if (!error && data) {
           return data.map(transformDbOrder);
         }
       } catch (e) {
-        console.warn('[Supabase] Fetch orders direct failed:', e);
+        console.warn('[Supabase] Fetch orders direct notice:', e);
       }
     }
 
@@ -479,12 +492,20 @@ export const api = {
 
     if (isSupabaseConfigured) {
       try {
-        const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+        const { data, error } = await withTimeout(
+          supabase
+            .from('orders')
+            .select('id, customer_id, total_weight, total_cost, status, destination, payment_status, shipping_date, created_at, tracking_number, carrier, shipment_status, shipment_date, last_tracking_update, tracking_response')
+            .order('created_at', { ascending: false })
+            .limit(300),
+          3500,
+          'Supabase all orders timed out'
+        );
         if (!error && data) {
           return data.map(transformDbOrder);
         }
       } catch (e) {
-        console.warn('[Supabase] Fetch all orders direct failed:', e);
+        console.warn('[Supabase] Fetch all orders direct notice:', e);
       }
     }
 
@@ -839,17 +860,21 @@ export const api = {
 
   async getShippingSettings(): Promise<{ rates: Record<string, number>; rateBands?: Record<string, any[]>; discounts: Record<string, number>; coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }> }> {
     try {
-      const response = await fetch(`${API_URL}/api/settings/shipping`);
+      const response = await withTimeout(fetch(`${API_URL}/api/settings/shipping`), 3000, 'Shipping settings fetch timed out');
       if (response.ok) {
         return await response.json();
       }
-    } catch (err) {
-      console.warn('[API] /api/settings/shipping fetch failed:', err);
+    } catch (err: any) {
+      // Server endpoint is cached, but if network blip occurs, continue to fallback
     }
 
     if (isSupabaseConfigured) {
       try {
-        const { data, error } = await supabase.from('shipping_settings').select('*').eq('id', 'global').maybeSingle();
+        const { data, error } = await withTimeout(
+          supabase.from('shipping_settings').select('*').eq('id', 'global').maybeSingle(),
+          2500,
+          'Direct shipping settings query timed out'
+        );
         if (!error && data) {
           const parsedRates = typeof data.rates === 'string' ? JSON.parse(data.rates) : data.rates;
           const parsedRateBands = data.rate_bands || data.rateBands || (parsedRates && parsedRates._rateBands);
@@ -860,8 +885,8 @@ export const api = {
             coupons: typeof data.coupons === 'string' ? JSON.parse(data.coupons) : data.coupons
           };
         }
-      } catch (e) {
-        console.warn('[Supabase] getShippingSettings direct failed:', e);
+      } catch (e: any) {
+        // Direct query fallback handled silently
       }
     }
 
@@ -877,27 +902,35 @@ export const api = {
 
   async updateShippingSettings(updates: { rates?: Record<string, number>; rateBands?: Record<string, any[]>; discounts?: Record<string, number>; coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }> }): Promise<{ rates: Record<string, number>; rateBands?: Record<string, any[]>; discounts: Record<string, number>; coupons?: Array<{ code: string; discountPercent: number; isEnabled: boolean }> }> {
     try {
-      const response = await fetch(`${API_URL}/api/settings/shipping`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
+      const response = await withTimeout(
+        fetch(`${API_URL}/api/settings/shipping`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates),
+        }),
+        3500,
+        'Update shipping settings timed out'
+      );
       if (response.ok) {
         return await response.json();
       }
     } catch (err) {
-      console.warn('[API] /api/settings/shipping POST failed:', err);
+      console.warn('[API] /api/settings/shipping notice (saving locally):', err);
     }
 
     if (isSupabaseConfigured) {
       try {
         const ratesWithBands = updates.rates ? { ...updates.rates, _rateBands: updates.rateBands } : undefined;
-        const { data, error } = await supabase.from('shipping_settings').upsert({
-          id: 'global',
-          rates: ratesWithBands || updates.rates,
-          discounts: updates.discounts,
-          coupons: updates.coupons
-        }).select().single();
+        const { data, error } = await withTimeout(
+          supabase.from('shipping_settings').upsert({
+            id: 'global',
+            rates: ratesWithBands || updates.rates,
+            discounts: updates.discounts,
+            coupons: updates.coupons
+          }).select().single(),
+          3000,
+          'Supabase update shipping settings timed out'
+        );
         if (!error && data) {
           const parsedRates = typeof data.rates === 'string' ? JSON.parse(data.rates) : data.rates;
           const parsedRateBands = data.rate_bands || data.rateBands || (parsedRates && parsedRates._rateBands);
@@ -909,7 +942,7 @@ export const api = {
           };
         }
       } catch (e) {
-        console.warn('[Supabase] updateShippingSettings direct failed:', e);
+        // Direct query fallback handled silently
       }
     }
 
