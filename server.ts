@@ -3622,10 +3622,13 @@ const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
 
 // API: Get all orders (Admin only - returns complete list with zero timeouts)
 app.get("/api/orders", async (req, res) => {
-  // If cache is empty during initial startup, wait for cache to populate only if no refresh was attempted within the previous 60 seconds
-  const now = Date.now();
-  if (cachedAllOrders.length === 0 && now - lastOrderRefreshAttemptTime >= 60000) {
-    await refreshAllOrdersCache(true);
+  // If cache is empty during initial startup or restart, ensure cache is warmed before building response
+  if (cachedAllOrders.length === 0) {
+    if (refreshOrdersPromise) {
+      await refreshOrdersPromise.catch(() => {});
+    } else {
+      await refreshAllOrdersCache(true).catch(() => {});
+    }
   }
 
   // Merge any recent memory orders

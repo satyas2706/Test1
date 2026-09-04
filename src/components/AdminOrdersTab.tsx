@@ -14,7 +14,8 @@ import {
   X, 
   Box, 
   User as UserIcon, 
-  Send 
+  Send,
+  Loader2 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Order, AgentProfile, ShippingStatus } from '../types';
@@ -26,6 +27,8 @@ interface AdminOrdersTabProps {
   agents: AgentProfile[];
   handleUpdateOrderStatus: (orderId: string, status: ShippingStatus) => Promise<void>;
   handleAssignAgent: (orderId: string, agentId: string) => Promise<void>;
+  isLoading?: boolean;
+  ordersLoadError?: string | null;
 }
 
 export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
@@ -34,6 +37,8 @@ export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
   agents,
   handleUpdateOrderStatus,
   handleAssignAgent,
+  isLoading = false,
+  ordersLoadError = null,
 }) => {
   const [ordersSearch, setOrdersSearch] = useState('');
   const [ordersStatusFilter, setOrdersStatusFilter] = useState('All');
@@ -46,7 +51,9 @@ export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
     setIsRefreshingOrders(true);
     try {
       const refreshed = await api.getAllOrders();
-      if (refreshed && refreshed.length > 0) {
+      if (refreshed === null) {
+        toast.error('Unable to reach server. Please check your connection.');
+      } else if (refreshed.length > 0) {
         setOrders(refreshed);
         toast.success(`Successfully loaded ${refreshed.length} total orders from database.`);
       } else {
@@ -195,19 +202,27 @@ export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t border-slate-100">
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/80">
             <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Bookings</div>
-            <div className="text-2xl font-black text-slate-900 mt-0.5">{orders.length}</div>
+            <div className="text-2xl font-black text-slate-900 mt-0.5">
+              {isLoading && orders.length === 0 ? <span className="text-slate-300 animate-pulse">--</span> : ordersLoadError && orders.length === 0 ? <span className="text-amber-400">--</span> : orders.length}
+            </div>
           </div>
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/80">
             <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Weight Volume</div>
-            <div className="text-2xl font-black text-indigo-600 mt-0.5">{orders.reduce((sum, o) => sum + (o.totalWeight || 0), 0).toFixed(1)} kg</div>
+            <div className="text-2xl font-black text-indigo-600 mt-0.5">
+              {isLoading && orders.length === 0 ? <span className="text-indigo-300 animate-pulse">--</span> : ordersLoadError && orders.length === 0 ? <span className="text-amber-400">--</span> : `${orders.reduce((sum, o) => sum + (o.totalWeight || 0), 0).toFixed(1)} kg`}
+            </div>
           </div>
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/80">
             <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Declared Value</div>
-            <div className="text-2xl font-black text-emerald-600 mt-0.5">₹{orders.reduce((sum, o) => sum + (o.totalCost || 0), 0).toLocaleString()}</div>
+            <div className="text-2xl font-black text-emerald-600 mt-0.5">
+              {isLoading && orders.length === 0 ? <span className="text-emerald-300 animate-pulse">--</span> : ordersLoadError && orders.length === 0 ? <span className="text-amber-400">--</span> : `₹${orders.reduce((sum, o) => sum + (o.totalCost || 0), 0).toLocaleString()}`}
+            </div>
           </div>
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/80">
             <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Pending Fulfillment</div>
-            <div className="text-2xl font-black text-amber-600 mt-0.5">{orders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled').length}</div>
+            <div className="text-2xl font-black text-amber-600 mt-0.5">
+              {isLoading && orders.length === 0 ? <span className="text-amber-300 animate-pulse">--</span> : ordersLoadError && orders.length === 0 ? <span className="text-amber-400">--</span> : orders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled').length}
+            </div>
           </div>
         </div>
 
@@ -299,7 +314,23 @@ export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
 
       {/* Master Orders Table */}
       <div className="bg-white rounded-[3rem] border border-slate-100 shadow-sm overflow-hidden">
-        {filteredOrdersList.length === 0 ? (
+        {isLoading && orders.length === 0 ? (
+          <div className="text-center py-24 px-4">
+            <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-slate-800">Loading dashboard data...</h3>
+            <p className="text-sm text-slate-400 mt-1">
+              Synchronizing consignment and booking records with database.
+            </p>
+          </div>
+        ) : ordersLoadError && orders.length === 0 ? (
+          <div className="text-center py-24 px-4">
+            <RefreshCw className="w-12 h-12 text-amber-500 animate-spin mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-slate-800">Unable to load dashboard data. Retrying...</h3>
+            <p className="text-sm text-slate-400 mt-1">
+              Failed to connect to the orders service. A background retry will automatically update once available.
+            </p>
+          </div>
+        ) : filteredOrdersList.length === 0 ? (
           <div className="text-center py-24 px-4">
             <Box className="w-16 h-16 text-slate-200 mx-auto mb-4" />
             <h3 className="text-xl font-bold text-slate-400">No Orders Found</h3>

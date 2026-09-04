@@ -576,6 +576,8 @@ interface AdminDashboardProps {
   setCoupons?: React.Dispatch<React.SetStateAction<Array<{ code: string; discountPercent: number; isEnabled: boolean }>>>;
   isAutoAssignAgentEnabled: boolean;
   setIsAutoAssignAgentEnabled: React.Dispatch<React.SetStateAction<boolean>>;
+  isOrdersLoading?: boolean;
+  ordersLoadError?: string | null;
 }
 
 interface SupportDeskDashboardProps {
@@ -1426,7 +1428,9 @@ const AdminDashboard = ({
   coupons = [],
   setCoupons,
   isAutoAssignAgentEnabled,
-  setIsAutoAssignAgentEnabled
+  setIsAutoAssignAgentEnabled,
+  isOrdersLoading = false,
+  ordersLoadError = null
 }: AdminDashboardProps) => {
   const [categoryInput, setCategoryInput] = useState('');
   const [agentSearch, setAgentSearch] = useState('');
@@ -1972,7 +1976,24 @@ const AdminDashboard = ({
 
         <div className="space-y-4 pb-20">
           {adminTab === 'Overview' ? (
-            <div className="space-y-8">
+            isOrdersLoading && orders.length === 0 ? (
+              <div className="bg-white p-12 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center py-20 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-4">
+                  <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+                </div>
+                <h3 className="text-lg font-black text-slate-900 mb-1">Loading dashboard data...</h3>
+                <p className="text-sm font-medium text-slate-500 max-w-sm">Fetching real-time orders, pickups, and shipment statistics from the server.</p>
+              </div>
+            ) : ordersLoadError && orders.length === 0 ? (
+              <div className="bg-white p-12 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center py-20 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center mb-4">
+                  <RefreshCw className="w-6 h-6 text-amber-600 animate-spin" />
+                </div>
+                <h3 className="text-lg font-black text-slate-900 mb-1">Unable to load dashboard data. Retrying...</h3>
+                <p className="text-sm font-medium text-slate-500 max-w-sm">Failed to connect to the orders service. A background retry will automatically update once available.</p>
+              </div>
+            ) : (
+              <div className="space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {stats.map((stat, i) => (
                   <motion.div 
@@ -2120,6 +2141,7 @@ const AdminDashboard = ({
                 </div>
               </div>
             </div>
+            )
           ) : adminTab === 'Orders' ? (
             <AdminOrdersTab
               orders={orders}
@@ -2127,6 +2149,8 @@ const AdminDashboard = ({
               agents={agents}
               handleUpdateOrderStatus={handleUpdateOrderStatus}
               handleAssignAgent={handleAssignAgent}
+              isLoading={isOrdersLoading}
+              ordersLoadError={ordersLoadError}
             />
           ) : adminTab === 'Pickups' ? (
             <div className="space-y-6">
@@ -2144,7 +2168,19 @@ const AdminDashboard = ({
               </div>
 
               <div className="grid grid-cols-1 gap-6">
-                {appointments.length === 0 ? (
+                {isOrdersLoading && appointments.length === 0 ? (
+                  <div className="text-center py-24 bg-white rounded-[3rem] border border-slate-100 shadow-sm">
+                    <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-slate-800">Loading dashboard data...</h3>
+                    <p className="text-sm text-slate-400 mt-1">Retrieving scheduled appointments from server.</p>
+                  </div>
+                ) : ordersLoadError && appointments.length === 0 ? (
+                  <div className="text-center py-24 bg-white rounded-[3rem] border border-slate-100 shadow-sm">
+                    <RefreshCw className="w-12 h-12 text-amber-500 animate-spin mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-slate-800">Unable to load dashboard data. Retrying...</h3>
+                    <p className="text-sm text-slate-400 mt-1">Failed to retrieve scheduled appointments. Retrying automatically...</p>
+                  </div>
+                ) : appointments.length === 0 ? (
                    <div className="text-center py-24 bg-white rounded-[3rem] border border-dashed border-slate-200">
                     <Calendar className="w-16 h-16 text-slate-200 mx-auto mb-4" />
                     <h3 className="text-xl font-bold text-slate-400">No Pickup Requests Found</h3>
@@ -2314,7 +2350,19 @@ const AdminDashboard = ({
               </div>
 
               <div className="space-y-6">
-                {orders.length === 0 ? (
+                {isOrdersLoading && orders.length === 0 ? (
+                  <div className="text-center py-24 bg-white rounded-[3rem] border border-slate-100 shadow-sm">
+                    <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-slate-800">Loading dashboard data...</h3>
+                    <p className="text-sm text-slate-400 mt-1">Retrieving pipeline and shipment data from server.</p>
+                  </div>
+                ) : ordersLoadError && orders.length === 0 ? (
+                  <div className="text-center py-24 bg-white rounded-[3rem] border border-slate-100 shadow-sm">
+                    <RefreshCw className="w-12 h-12 text-amber-500 animate-spin mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-slate-800">Unable to load dashboard data. Retrying...</h3>
+                    <p className="text-sm text-slate-400 mt-1">Failed to retrieve pipeline data. Retrying automatically...</p>
+                  </div>
+                ) : orders.length === 0 ? (
                   <div className="text-center py-24 bg-white rounded-[3rem] border border-dashed border-slate-200">
                     <Box className="w-16 h-16 text-slate-200 mx-auto mb-4" />
                     <p className="text-slate-400 font-bold text-xl uppercase tracking-widest">Pipeline Empty</p>
@@ -5007,6 +5055,12 @@ export default function App() {
   });
   const [selectedDate, setSelectedDate] = useState<string>(SHIPPING_DATES[0]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [isOrdersLoading, setIsOrdersLoading] = useState<boolean>(true);
+  const [ordersLoadError, setOrdersLoadError] = useState<string | null>(null);
+  const ordersRef = useRef<Order[]>(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
   
   // Derieve appointments from orders in real-time
   const [agents, setAgents] = useState<AgentProfile[]>(() => {
@@ -6819,7 +6873,19 @@ export default function App() {
       const isAdminRole = currentUser ? ['admin', 'webmaster', 'customer_service'].includes(roleLower) : false;
       const isAgentRole = roleLower === 'agent';
       
-      const processOrders = (data: any[]) => {
+      const processOrders = (data: any[] | null) => {
+        if (data === null || !Array.isArray(data)) {
+          // Network failure or temporary timeout: retain existing orders
+          setIsOrdersLoading(false);
+          if (ordersRef.current.length === 0) {
+            setOrdersLoadError('Unable to load dashboard data. Retrying...');
+          }
+          return;
+        }
+
+        setOrdersLoadError(null);
+        setIsOrdersLoading(false);
+
         const rawNormalized = data.map(normalizeOrder) as any[];
         
         // Dedup logic to remove stale scheduled duplicates resulting from the old ID-increment bug
@@ -6862,6 +6928,11 @@ export default function App() {
 
         // Fast-compare with prev list, including status, paymentStatus, item count, totalCost and weight
         setOrders(prev => {
+          // Protect an already-populated dashboard from being wiped by an unexpected transient empty polling response
+          if (prev.length > 0 && cleanOrders.length === 0) {
+            return prev;
+          }
+
           if (prev.length === cleanOrders.length && 
               prev.every((o: any, idx: number) => {
                 const norm = cleanOrders[idx];
@@ -6874,15 +6945,22 @@ export default function App() {
               })) {
             return prev;
           }
+          ordersRef.current = cleanOrders;
           return cleanOrders;
         });
       };
 
       const fetchOrders = () => {
         if (isAdminRole || isAgentRole) {
-          api.getAllOrders().then(processOrders).catch(console.error);
+          api.getAllOrders().then(processOrders).catch(err => {
+            console.error(err);
+            processOrders(null);
+          });
         } else {
-          api.getOrders(uId, currentUser?.email, currentUser?.phone).then(processOrders).catch(console.error);
+          api.getOrders(uId, currentUser?.email, currentUser?.phone).then(processOrders).catch(err => {
+            console.error(err);
+            processOrders(null);
+          });
         }
       };
 
@@ -12667,6 +12745,30 @@ export default function App() {
       return WorkOrderSection;
     }
 
+    if (isOrdersLoading && orders.length === 0) {
+      return (
+        <div className="bg-white p-12 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-4">
+            <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+          </div>
+          <h3 className="text-lg font-black text-slate-900 mb-1">Loading assigned tasks...</h3>
+          <p className="text-sm font-medium text-slate-500 max-w-sm">Fetching agent bookings and schedule data from the server.</p>
+        </div>
+      );
+    }
+
+    if (ordersLoadError && orders.length === 0) {
+      return (
+        <div className="bg-white p-12 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center mb-4">
+            <RefreshCw className="w-6 h-6 text-amber-600 animate-spin" />
+          </div>
+          <h3 className="text-lg font-black text-slate-900 mb-1">Unable to load dashboard data. Retrying...</h3>
+          <p className="text-sm font-medium text-slate-500 max-w-sm">Failed to connect to the agent service. A background retry will automatically update once available.</p>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between gap-4">
@@ -13100,7 +13202,7 @@ export default function App() {
         )}
       </div>
     );
-  }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser, agentActiveTab, setAgentActiveTab, agentMainTab, setAgentMainTab, orders]);
+  }, [appointments, activeWorkOrder, setActiveWorkOrder, WorkOrderSection, currentUser, agentActiveTab, setAgentActiveTab, agentMainTab, setAgentMainTab, orders, isOrdersLoading, ordersLoadError]);
   const renderWarehouseManagementSection = () => {
     const warehouseItems = items.filter(i => !orderedItemIds.has(i.id) && (i.source === 'Warehouse' || i.source === 'Pickup')).map(i => ({ ...i, orderId: null as string | null }));
     const orderWarehouseItems = orders.flatMap(o => 
@@ -17811,7 +17913,10 @@ export default function App() {
     // 1. Immediately and synchronously clear all local state and items to avoid transition lag or state re-fetching
     clearActiveSession();
     setItems([]);
+    ordersRef.current = [];
     setOrders([]);
+    setIsOrdersLoading(true);
+    setOrdersLoadError(null);
     setSession(null);
     setCurrentUser(null);
     setIsGuestMode(false);
@@ -18514,6 +18619,8 @@ export default function App() {
                 setCoupons={setCoupons}
                 isAutoAssignAgentEnabled={isAutoAssignAgentEnabled}
                 setIsAutoAssignAgentEnabled={setIsAutoAssignAgentEnabled}
+                isOrdersLoading={isOrdersLoading}
+                ordersLoadError={ordersLoadError}
               />
             )}
             {activeTab === 'agent' && AgentSection}

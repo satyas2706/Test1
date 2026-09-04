@@ -480,7 +480,7 @@ export const api = {
     return this.fetchOrders(userId, email, phone);
   },
 
-  async getAllOrders(): Promise<Order[]> {
+  async getAllOrders(): Promise<Order[] | null> {
     try {
       const response = await fetch(`${API_URL}/api/orders`);
       if (response.ok) {
@@ -509,7 +509,7 @@ export const api = {
       }
     }
 
-    return [];
+    return null;
   },
 
   async getNextOrderId(prefix: string): Promise<{ nextId: string }> {
