@@ -318,11 +318,41 @@ export const api = {
 
     if (isSupabaseConfigured) {
       try {
-        let query = supabase.from('items').select('*').neq('user_id', 'deleted');
+        let query = supabase.from('items').select(`
+          id,
+          user_id,
+          name,
+          weight,
+          status,
+          source,
+          price,
+          submitted,
+          created_at
+        `).neq('user_id', 'deleted');
         if (userId !== 'all') {
           query = query.eq('user_id', userId);
         }
         const { data, error } = await withTimeout(query, 3500, 'Supabase items timed out');
+        if (error && (error.code === '42703' || (error.message && error.message.includes('submitted')))) {
+          let safeQuery = supabase.from('items').select(`
+            id,
+            user_id,
+            name,
+            weight,
+            status,
+            source,
+            price,
+            created_at
+          `).neq('user_id', 'deleted');
+          if (userId !== 'all') {
+            safeQuery = safeQuery.eq('user_id', userId);
+          }
+          const { data: safeData, error: safeError } = await withTimeout(safeQuery, 3500, 'Supabase items safe timed out');
+          if (!safeError && safeData) {
+            const flatItems = safeData.map(dbToItem) as ShippingItem[];
+            return groupItems(flatItems);
+          }
+        }
         if (!error && data) {
           const flatItems = data.map(dbToItem) as ShippingItem[];
           return groupItems(flatItems);
@@ -480,6 +510,63 @@ export const api = {
     return this.fetchOrders(userId, email, phone);
   },
 
+  async getOrderDetail(orderId: string, customerId?: string, email?: string, role?: string): Promise<Order> {
+    try {
+      const params = new URLSearchParams();
+      if (customerId) params.append('customerId', customerId);
+      if (email) params.append('email', email);
+      if (role) params.append('role', role);
+      const queryStr = params.toString() ? `?${params.toString()}` : '';
+
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (customerId) headers['x-customer-id'] = customerId;
+      if (email) headers['x-customer-email'] = email;
+      if (role) headers['x-user-role'] = role;
+
+      const response = await fetch(`${API_URL}/api/orders/detail/${orderId}${queryStr}`, {
+        headers
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || `Failed to fetch order detail (${response.status})`);
+    } catch (err) {
+      console.warn('[API] /api/orders/detail fetch failed, checking fallback:', err);
+      if (isSupabaseConfigured) {
+        try {
+          const { data, error } = await supabase
+            .from('orders')
+            .select(`
+              id,
+              customer_id,
+              total_weight,
+              total_cost,
+              status,
+              destination,
+              payment_status,
+              shipping_date,
+              created_at,
+              tracking_number,
+              carrier,
+              shipment_status,
+              shipment_date,
+              last_tracking_update,
+              items
+            `)
+            .eq('id', orderId)
+            .maybeSingle();
+          if (!error && data) {
+            return transformDbOrder(data);
+          }
+        } catch (e) {
+          console.warn('[Supabase] direct single order detail fetch failed:', e);
+        }
+      }
+      throw err;
+    }
+  },
+
   async getAllOrders(): Promise<Order[] | null> {
     try {
       const response = await fetch(`${API_URL}/api/orders`);
@@ -566,9 +653,35 @@ export const api = {
 
     if (isSupabaseConfigured) {
       try {
-        const { data, error } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
+        const { data, error } = await supabase
+          .from('orders')
+          .select(`
+            id,
+            tracking_number,
+            carrier,
+            status,
+            shipment_status,
+            shipping_date,
+            shipment_date,
+            last_tracking_update,
+            total_weight,
+            created_at,
+            tracking_response,
+            destination
+          `)
+          .eq('id', orderId)
+          .maybeSingle();
         if (!error && data) {
-          return transformDbOrder(data);
+          const transformed = transformDbOrder(data);
+          return {
+            ...transformed,
+            items: [],
+            destination: {
+              city: transformed.destination?.city || '',
+              state: transformed.destination?.state || '',
+              country: transformed.destination?.country || ''
+            }
+          };
         }
       } catch (e) {
         console.warn('[Supabase] trackOrder direct failed:', e);
@@ -604,16 +717,46 @@ export const api = {
 
     if (isSupabaseConfigured) {
       try {
-        const { data, error } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
+        const { data, error } = await supabase
+          .from('orders')
+          .select(`
+            id,
+            tracking_number,
+            carrier,
+            status,
+            shipment_status,
+            shipping_date,
+            shipment_date,
+            last_tracking_update,
+            total_weight,
+            created_at,
+            tracking_response,
+            destination
+          `)
+          .eq('id', orderId)
+          .maybeSingle();
         if (!error && data) {
+          let tr = data.tracking_response;
+          if (typeof tr === 'string') {
+            try { tr = JSON.parse(tr); } catch (e) { tr = null; }
+          }
+          const sanitizedEvents = tr && Array.isArray(tr.events)
+            ? tr.events.map((evt: any) => ({
+                status: String(evt?.status || ''),
+                location: String(evt?.location || ''),
+                date: String(evt?.date || ''),
+                time: String(evt?.time || ''),
+                description: String(evt?.description || '')
+              }))
+            : [];
           return {
             success: true,
             isLive: false,
-            trackingData: data.tracking_response || {
-              id: data.tracking_number || 'TBD',
+            trackingData: {
+              id: data.tracking_number || data.id || 'TBD',
               carrier: data.carrier || 'Pending Assignment',
-              status: data.shipment_status || 'In Warehouse',
-              events: []
+              status: data.shipment_status || data.status || 'In Warehouse',
+              events: sanitizedEvents
             }
           };
         }

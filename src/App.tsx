@@ -11,6 +11,7 @@ import { AdminOrdersTab } from './components/AdminOrdersTab';
 import { MobileDropOffFlow } from './components/MobileDropOffFlow';
 import { RateBand, CountryRateBands } from './types';
 import { DEFAULT_RATE_BANDS, calculateShippingCost } from './utils/shipping';
+import { uploadProductImage } from './utils/imageCompression';
 import { 
   Package, 
   PackageCheck, 
@@ -1654,6 +1655,8 @@ const AdminDashboard = ({
     return { id: sugId, name: '', phone: '', email: `${sugId}.agent@jiffex.com`, vehicleNumber: '' };
   });
   const [newProduct, setNewProduct] = useState<Partial<StoreProduct>>({ name: '', price: 0, category: categories[0] || 'Pooja', image: '', weight: 0, estimatedDelivery: '' });
+  const [isUploadingProductImage, setIsUploadingProductImage] = useState(false);
+  const [productImageUploadError, setProductImageUploadError] = useState<string | null>(null);
 
   const filteredProducts = storeProducts.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(productFilterInput.toLowerCase()) || 
@@ -1662,14 +1665,26 @@ const AdminDashboard = ({
     return matchesSearch && matchesCategory;
   });
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setNewProduct(prev => ({ ...prev, image: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    const target = e.target;
+    setIsUploadingProductImage(true);
+    setProductImageUploadError(null);
+
+    try {
+      const publicUrl = await uploadProductImage(file);
+      setNewProduct(prev => ({ ...prev, image: publicUrl }));
+      toast.success('Product image compressed and uploaded to Storage!');
+    } catch (err: any) {
+      console.error('[Admin Add Product] Image upload failed:', err);
+      const msg = err.message || 'Image upload failed. Please try again.';
+      setProductImageUploadError(msg);
+      toast.error(msg);
+    } finally {
+      setIsUploadingProductImage(false);
+      target.value = '';
     }
   };
 
@@ -3933,14 +3948,33 @@ const AdminDashboard = ({
                         value={newProduct.image || ''}
                         onChange={e => setNewProduct({...newProduct, image: e.target.value})}
                       />
-                      <label className="p-4 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 cursor-pointer flex items-center justify-center transition-colors shadow-sm" title="Upload Local Asset">
-                        <Upload size={18} className="text-slate-400" />
-                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                      <label className={`p-4 bg-white border border-slate-200 rounded-2xl hover:bg-slate-50 cursor-pointer flex items-center justify-center transition-colors shadow-sm ${isUploadingProductImage ? 'opacity-50 pointer-events-none' : ''}`} title="Upload Local Asset">
+                        {isUploadingProductImage ? <RefreshCw size={18} className="animate-spin text-indigo-600" /> : <Upload size={18} className="text-slate-400" />}
+                        <input type="file" className="hidden" accept="image/*" disabled={isUploadingProductImage} onChange={handleImageUpload} />
                       </label>
                     </div>
+                    {productImageUploadError && (
+                      <p className="text-xs font-semibold text-rose-600 flex items-center gap-1 mt-2 ml-1">
+                        <AlertTriangle size={12} />
+                        {productImageUploadError}
+                      </p>
+                    )}
+                    {newProduct.image && (
+                      <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 mt-2">
+                        <img src={newProduct.image} className="w-full h-full object-cover" alt="Preview" referrerPolicy="no-referrer" />
+                        <button 
+                          type="button"
+                          onClick={() => setNewProduct(prev => ({...prev, image: ''}))}
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <button 
+                  disabled={isUploadingProductImage}
                   onClick={async () => {
                     if (!newProduct.name || !newProduct.price) {
                       toast.error("Name and price are required.");
@@ -3982,7 +4016,7 @@ const AdminDashboard = ({
                       setInventoryActiveSubTab('StoreCatalog');
                     }
                   }}
-                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100"
+                  className={`w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100 ${isUploadingProductImage ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Publish to Catalog
                 </button>
@@ -5648,6 +5682,41 @@ export default function App() {
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
   const [selectedOrdersForConsolidatedInvoice, setSelectedOrdersForConsolidatedInvoice] = useState<Order[] | null>(null);
   const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<Order | null>(null);
+  const [orderDetailCache, setOrderDetailCache] = useState<Record<string, Order>>({});
+  const [loadingOrderDetail, setLoadingOrderDetail] = useState<string | null>(null);
+  const [orderDetailError, setOrderDetailError] = useState<string | null>(null);
+
+  const loadOrderDetailIfNeeded = useCallback(async (order: Order) => {
+    if (!order || !order.id) return;
+    if (order.items && order.items.length > 0) return;
+    if (orderDetailCache[order.id]) return;
+
+    setLoadingOrderDetail(order.id);
+    setOrderDetailError(null);
+    try {
+      const detail = await api.getOrderDetail(order.id, currentUser?.id, currentUser?.email, currentUser?.role);
+      if (detail) {
+        setOrderDetailCache(prev => ({ ...prev, [order.id]: detail }));
+      }
+    } catch (err: any) {
+      console.warn('[OrderDetail] Failed to fetch items for order:', order.id, err);
+      setOrderDetailError(err.message || 'Failed to load item details.');
+    } finally {
+      setLoadingOrderDetail(null);
+    }
+  }, [currentUser, orderDetailCache]);
+
+  useEffect(() => {
+    if (selectedOrderForInvoice) {
+      loadOrderDetailIfNeeded(selectedOrderForInvoice);
+    }
+  }, [selectedOrderForInvoice, loadOrderDetailIfNeeded]);
+
+  useEffect(() => {
+    if (selectedOrderForDetails) {
+      loadOrderDetailIfNeeded(selectedOrderForDetails);
+    }
+  }, [selectedOrderForDetails, loadOrderDetailIfNeeded]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
 
@@ -10386,12 +10455,29 @@ export default function App() {
                   </div>
 
                   {(() => {
-                    const isPendingInvoice = (selectedOrderForInvoice.status === 'Scheduled' || selectedOrderForInvoice.status === 'Pending Pickup') && (!selectedOrderForInvoice.items || selectedOrderForInvoice.items.length === 0);
+                    const currentInvoice = (selectedOrderForInvoice && orderDetailCache[selectedOrderForInvoice.id]) || selectedOrderForInvoice;
+                    const isPendingInvoice = (currentInvoice.status === 'Scheduled' || currentInvoice.status === 'Pending Pickup') && (!currentInvoice.items || currentInvoice.items.length === 0);
+                    const isLoading = loadingOrderDetail === currentInvoice.id;
                     return (
                       <>
                         <div className="border-t border-slate-100 pt-5 mb-6">
                           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Order Items & Tax Details</h4>
-                          {isPendingInvoice ? (
+                          {isLoading ? (
+                            <div className="py-8 text-center text-slate-500 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center justify-center gap-2">
+                              <Loader2 className="animate-spin text-indigo-600" size={24} />
+                              <span className="text-xs font-semibold">Loading item details...</span>
+                            </div>
+                          ) : orderDetailError && (!currentInvoice.items || currentInvoice.items.length === 0) ? (
+                            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-center">
+                              <p className="text-xs text-red-600 font-semibold mb-2">{orderDetailError}</p>
+                              <button
+                                onClick={() => loadOrderDetailIfNeeded(selectedOrderForInvoice)}
+                                className="px-3 py-1.5 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-colors cursor-pointer"
+                              >
+                                Retry
+                              </button>
+                            </div>
+                          ) : isPendingInvoice ? (
                             <div className="bg-indigo-50/50 border border-indigo-100/60 text-indigo-900 rounded-2xl p-6 text-center">
                               <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
                                 <Clock size={20} />
@@ -10400,6 +10486,10 @@ export default function App() {
                               <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
                                 This is a scheduled pickup from home. The item list will be finalized and updated once our agent collects and measures your items at our hub.
                               </p>
+                            </div>
+                          ) : (!currentInvoice.items || currentInvoice.items.length === 0) ? (
+                            <div className="p-4 bg-slate-50 rounded-xl text-center text-slate-400 text-xs">
+                              No items found for this order.
                             </div>
                           ) : (
                             <div className="space-y-2">
@@ -10411,7 +10501,7 @@ export default function App() {
                                 <div className="col-span-1 text-right">Tax</div>
                                 <div className="col-span-2 text-right">Total Amount</div>
                               </div>
-                              {selectedOrderForInvoice.items.map((item, idx) => {
+                              {currentInvoice.items.map((item, idx) => {
                                 const qty = item.quantity || 1;
                                 const itemTotal = item.price || 0;
                                 const unitPrice = qty > 0 ? (itemTotal / qty) : itemTotal;
@@ -10963,12 +11053,29 @@ export default function App() {
                 </div>
 
                 {(() => {
-                  const isPendingInvoice = (selectedOrderForInvoice.status === 'Scheduled' || selectedOrderForInvoice.status === 'Pending Pickup') && (!selectedOrderForInvoice.items || selectedOrderForInvoice.items.length === 0);
+                  const currentInvoice = (selectedOrderForInvoice && orderDetailCache[selectedOrderForInvoice.id]) || selectedOrderForInvoice;
+                  const isPendingInvoice = (currentInvoice.status === 'Scheduled' || currentInvoice.status === 'Pending Pickup') && (!currentInvoice.items || currentInvoice.items.length === 0);
+                  const isLoading = loadingOrderDetail === currentInvoice.id;
                   return (
                     <>
                       <div className="border-t border-slate-100 pt-6 mb-8">
                         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
-                        {isPendingInvoice ? (
+                        {isLoading ? (
+                          <div className="py-8 text-center text-slate-500 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center justify-center gap-2">
+                            <Loader2 className="animate-spin text-indigo-600" size={24} />
+                            <span className="text-xs font-semibold">Loading item details...</span>
+                          </div>
+                        ) : orderDetailError && (!currentInvoice.items || currentInvoice.items.length === 0) ? (
+                          <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-center">
+                            <p className="text-xs text-red-600 font-semibold mb-2">{orderDetailError}</p>
+                            <button
+                              onClick={() => loadOrderDetailIfNeeded(selectedOrderForInvoice)}
+                              className="px-3 py-1.5 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-colors cursor-pointer"
+                            >
+                              Retry
+                            </button>
+                          </div>
+                        ) : isPendingInvoice ? (
                           <div className="bg-indigo-50/50 border border-indigo-100/60 text-indigo-900 rounded-2xl p-6 text-center">
                             <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
                               <Clock size={20} />
@@ -10978,9 +11085,13 @@ export default function App() {
                               This is a scheduled pickup from home. The item list will be finalized and updated once our agent collects and measures your items at our hub.
                             </p>
                           </div>
+                        ) : (!currentInvoice.items || currentInvoice.items.length === 0) ? (
+                          <div className="p-4 bg-slate-50 rounded-xl text-center text-slate-400 text-xs">
+                            No items found for this order.
+                          </div>
                         ) : (
                           <div className="space-y-3">
-                            {selectedOrderForInvoice.items.map((item, idx) => (
+                            {currentInvoice.items.map((item, idx) => (
                               <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                                 <div className="flex items-center gap-3">
                                   <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
@@ -11161,39 +11272,66 @@ export default function App() {
                     </div>
                   )}
 
-                  <div className="border-t border-slate-100 pt-6 mb-6">
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
-                    <div className="space-y-3">
-                      {(selectedOrderForDetails.items || []).map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                              {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
-                            </div>
-                            <div>
-                              <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium font-sans">
-                                <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
-                                <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
-                                <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
-                                <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
+                  {(() => {
+                    const currentDetails = (selectedOrderForDetails && orderDetailCache[selectedOrderForDetails.id]) || selectedOrderForDetails;
+                    const isLoading = loadingOrderDetail === currentDetails.id;
+                    return (
+                      <div className="border-t border-slate-100 pt-6 mb-6">
+                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
+                        {isLoading ? (
+                          <div className="py-8 text-center text-slate-500 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center justify-center gap-2">
+                            <Loader2 className="animate-spin text-indigo-600" size={24} />
+                            <span className="text-xs font-semibold">Loading item details...</span>
+                          </div>
+                        ) : orderDetailError && (!currentDetails.items || currentDetails.items.length === 0) ? (
+                          <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-center">
+                            <p className="text-xs text-red-600 font-semibold mb-2">{orderDetailError}</p>
+                            <button
+                              onClick={() => loadOrderDetailIfNeeded(selectedOrderForDetails)}
+                              className="px-3 py-1.5 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-colors cursor-pointer"
+                            >
+                              Retry
+                            </button>
+                          </div>
+                        ) : (!currentDetails.items || currentDetails.items.length === 0) ? (
+                          <div className="p-4 bg-slate-50 rounded-xl text-center text-slate-400 text-xs">
+                            No items found for this order.
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {currentDetails.items.map((item, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
+                                    {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                                  </div>
+                                  <div>
+                                    <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium font-sans">
+                                      <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
+                                      <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
+                                      <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
+                                      <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <div className="text-sm font-bold text-slate-900">
+                                    {item.price ? `₹${item.price}` : '-'}
+                                  </div>
+                                  <div className="mt-1.5">
+                                    <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[9px] font-extrabold rounded-md uppercase tracking-wider">
+                                      {item.status || currentDetails.status}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
+                            ))}
                           </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-sm font-bold text-slate-900">
-                              {item.price ? `₹${item.price}` : '-'}
-                            </div>
-                            <div className="mt-1.5">
-                              <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[9px] font-extrabold rounded-md uppercase tracking-wider">
-                                {item.status || selectedOrderForDetails.status}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Total weight and grand total in TEXT format (No black box) */}
                   <div className="border-t border-slate-200 pt-5 space-y-3">
@@ -17926,11 +18064,12 @@ export default function App() {
     setIsSchedulingNewPickup(false);
     setShowPickupConfirmModal(false);
     
-    // 2. Perform background async Supabase signOut
+    // 2. Perform background server session logout and Supabase signOut
     try {
+      fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
       await supabase.auth.signOut();
     } catch (err) {
-      console.warn('Supabase signOut background error:', err);
+      console.warn('SignOut background error:', err);
     }
     
     setAddress({

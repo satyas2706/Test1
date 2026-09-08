@@ -27,6 +27,39 @@ const CustomerHistory = ({
   StaticShipmentTracker
 }: CustomerHistoryProps) => {
   const [isSendingInvoice, setIsSendingInvoice] = React.useState<string | null>(null);
+  const [detailCache, setDetailCache] = React.useState<Record<string, Order>>({});
+  const [loadingDetail, setLoadingDetail] = React.useState<boolean>(false);
+  const [detailError, setDetailError] = React.useState<string | null>(null);
+
+  const fetchDetail = React.useCallback(async (order: Order) => {
+    if (!order || !order.id) return;
+    if (order.items && order.items.length > 0) return;
+    if (detailCache[order.id]) return;
+
+    setLoadingDetail(true);
+    setDetailError(null);
+    try {
+      const detailed = await api.getOrderDetail(order.id, currentUser?.id, currentUser?.email, currentUser?.role);
+      if (detailed) {
+        setDetailCache(prev => ({ ...prev, [order.id]: detailed }));
+      }
+    } catch (err: any) {
+      setDetailError(err.message || 'Failed to load order items');
+    } finally {
+      setLoadingDetail(false);
+    }
+  }, [currentUser, detailCache]);
+
+  React.useEffect(() => {
+    if (selectedOrderForInvoice) {
+      fetchDetail(selectedOrderForInvoice);
+    } else {
+      setDetailError(null);
+      setLoadingDetail(false);
+    }
+  }, [selectedOrderForInvoice, fetchDetail]);
+
+  const activeInvoiceOrder = (selectedOrderForInvoice && detailCache[selectedOrderForInvoice.id]) || selectedOrderForInvoice;
 
   if (!currentUser) return null;
   const customerOrders = orders.filter(o => o.customerId === currentUser.id);
@@ -199,24 +232,45 @@ const CustomerHistory = ({
 
               <div className="border-t border-slate-100 pt-6 mb-8">
                 <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
-                <div className="space-y-3">
-                  {selectedOrderForInvoice.items.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                          {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                {loadingDetail ? (
+                  <div className="py-8 text-center text-slate-500 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center justify-center gap-2">
+                    <Loader2 className="animate-spin text-indigo-600" size={24} />
+                    <span className="text-xs font-semibold">Loading item details...</span>
+                  </div>
+                ) : detailError && (!activeInvoiceOrder?.items || activeInvoiceOrder.items.length === 0) ? (
+                  <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-center">
+                    <p className="text-xs text-red-600 font-semibold mb-2">{detailError}</p>
+                    <button
+                      onClick={() => selectedOrderForInvoice && fetchDetail(selectedOrderForInvoice)}
+                      className="px-3 py-1.5 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-colors cursor-pointer"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (!activeInvoiceOrder?.items || activeInvoiceOrder.items.length === 0) ? (
+                  <div className="p-4 bg-slate-50 rounded-xl text-center text-slate-400 text-xs">
+                    No items found for this order.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {activeInvoiceOrder.items.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
+                            {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-slate-900">{item.name}</div>
+                            <div className="text-[10px] text-slate-500">{item.source} • {item.weight}kg</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                          <div className="text-[10px] text-slate-500">{item.source} • {item.weight}kg</div>
+                        <div className="text-sm font-bold text-slate-900">
+                          {item.price ? `₹${item.price}` : '-'}
                         </div>
                       </div>
-                      <div className="text-sm font-bold text-slate-900">
-                        {item.price ? `₹${item.price}` : '-'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="bg-slate-900 rounded-2xl p-6 text-white">

@@ -163,6 +163,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '' }) =>
       const response = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ 
           email: cleanEmail, 
           code: otpCode 

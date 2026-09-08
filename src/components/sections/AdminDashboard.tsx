@@ -30,6 +30,8 @@ import {
   StoreProduct 
 } from '../../types';
 import { api } from '../../services/api';
+import { uploadProductImage } from '../../utils/imageCompression';
+import { toast } from 'sonner';
 
 interface AdminDashboardProps {
   currentUser: User | null;
@@ -72,6 +74,8 @@ const AdminDashboard = ({
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editPriceValue, setEditPriceValue] = useState<string>('');
   const [editDeliveryValue, setEditDeliveryValue] = useState<string>('');
+  const [isUploadingProductImage, setIsUploadingProductImage] = useState(false);
+  const [productImageUploadError, setProductImageUploadError] = useState<string | null>(null);
 
   // States for dynamic SMTP & Env Variables status check
   const [smtpStatus, setSmtpStatus] = useState<any>(null);
@@ -174,14 +178,26 @@ const AdminDashboard = ({
     setCategories(categories.filter(c => c !== cat));
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, newProduct: any, setNewProduct: any) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, currentNewProduct: any, setNewProduct: any) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setNewProduct({ ...newProduct, image: reader.result as string });
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    const target = e.target;
+    setIsUploadingProductImage(true);
+    setProductImageUploadError(null);
+
+    try {
+      const publicUrl = await uploadProductImage(file);
+      setNewProduct({ ...currentNewProduct, image: publicUrl });
+      toast.success('Product image compressed and uploaded to Storage!');
+    } catch (err: any) {
+      console.error('[Admin Add Product] Image upload failed:', err);
+      const msg = err.message || 'Image upload failed. Please try again.';
+      setProductImageUploadError(msg);
+      toast.error(msg);
+    } finally {
+      setIsUploadingProductImage(false);
+      target.value = '';
     }
   };
 
@@ -784,15 +800,22 @@ const AdminDashboard = ({
                         value={newProduct.image}
                         onChange={e => setNewProduct({...newProduct, image: e.target.value})}
                       />
-                      <label className="cursor-pointer px-4 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center hover:bg-slate-200 transition-all border border-slate-200">
-                        <Upload size={18} />
-                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, newProduct, setNewProduct)} />
+                      <label className={`cursor-pointer px-4 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center hover:bg-slate-200 transition-all border border-slate-200 ${isUploadingProductImage ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {isUploadingProductImage ? <RefreshCw size={18} className="animate-spin text-indigo-600" /> : <Upload size={18} />}
+                        <input type="file" className="hidden" accept="image/*" disabled={isUploadingProductImage} onChange={(e) => handleImageUpload(e, newProduct, setNewProduct)} />
                       </label>
                     </div>
+                    {productImageUploadError && (
+                      <p className="text-xs font-semibold text-rose-600 flex items-center gap-1 mt-1">
+                        <AlertTriangle size={12} />
+                        {productImageUploadError}
+                      </p>
+                    )}
                     {newProduct.image && (
                       <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200">
                         <img src={newProduct.image} className="w-full h-full object-cover" alt="Preview" referrerPolicy="no-referrer" />
                         <button 
+                          type="button"
                           onClick={() => setNewProduct({...newProduct, image: ''})}
                           className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
                         >
@@ -803,6 +826,7 @@ const AdminDashboard = ({
                   </div>
                 </div>
                 <button 
+                  disabled={isUploadingProductImage}
                   onClick={() => {
                     if (!newProduct.name || !newProduct.price) return;
                     const prod: StoreProduct = {
@@ -817,7 +841,7 @@ const AdminDashboard = ({
                     setStoreProducts([...storeProducts, prod]);
                     setNewProduct({ name: '', price: 0, category: categories[0], image: '', weight: 0, estimatedDelivery: '' });
                   }}
-                  className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                  className={`w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 ${isUploadingProductImage ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Add to Store
                 </button>

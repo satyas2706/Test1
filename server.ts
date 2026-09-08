@@ -601,6 +601,169 @@ const ADMIN_ALIASES = [
 // Agent testing email destination
 const AGENT_TEST_RECIPIENT = 'srikanth.satya@jiffex.in';
 
+// ==================================================
+// SERVER-VERIFIABLE SESSION ARCHITECTURE (STEP AUTH-1)
+// ==================================================
+const SESSION_COOKIE_NAME = 'jiffex_session';
+const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Session secret from environment variable (minimum 32 bytes)
+const rawSessionSecret = process.env.JIFFEX_SESSION_SECRET
+  ? process.env.JIFFEX_SESSION_SECRET.trim().replace(/^['"]|['"]$/g, '')
+  : '';
+
+const JIFFEX_SESSION_SECRET = (rawSessionSecret && rawSessionSecret.length >= 32)
+  ? rawSessionSecret
+  : (process.env.NODE_ENV !== 'production'
+      ? 'jiffex_dev_session_secret_32bytes_minimum_random_key_2026'
+      : '');
+
+if (process.env.NODE_ENV === 'production' && (!rawSessionSecret || rawSessionSecret.length < 32)) {
+  console.warn('[Security Alert] JIFFEX_SESSION_SECRET is missing or under 32 bytes in production! Server session generation will fail safely.');
+}
+
+interface SessionPayload {
+  email: string;
+  role: string;
+  exp: number;
+}
+
+/**
+ * Server-side authoritative role calculation from email.
+ * Never trusts any role passed from the client or request headers.
+ */
+function deriveUserRole(email: string): 'admin' | 'agent' | 'customer_service' | 'webmaster' | 'customer' {
+  const cleanEmail = email.trim().toLowerCase();
+  if (ADMIN_ALIASES.includes(cleanEmail)) {
+    return 'admin';
+  }
+  if (
+    cleanEmail.endsWith('.agent@jiffex.com') ||
+    cleanEmail.endsWith('.agent@jiffex.in') ||
+    cleanEmail === 'agent@jiffex.com' ||
+    cleanEmail === 'agent@jiffex.in' ||
+    cleanEmail.includes('.agent@') ||
+    cleanEmail.startsWith('agent@') ||
+    /^\d+\.agent@/i.test(cleanEmail)
+  ) {
+    return 'agent';
+  }
+  if (cleanEmail === 'service@jiffex.com') {
+    return 'customer_service';
+  }
+  if (cleanEmail === 'webmaster@jiffex.com') {
+    // Note: webmaster is authorized for catalog management in UI, but is NOT granted admin privileges on the server.
+    return 'webmaster';
+  }
+  return 'customer';
+}
+
+/**
+ * Creates an HMAC-SHA256 signed session token.
+ * Format: base64url(payload).base64url(signature)
+ */
+function createSessionToken(email: string, role: string): string | null {
+  if (!JIFFEX_SESSION_SECRET || JIFFEX_SESSION_SECRET.length < 32) {
+    console.error('[Auth] Cannot create session token: JIFFEX_SESSION_SECRET is missing or too short.');
+    return null;
+  }
+  const payload: SessionPayload = {
+    email: email.trim().toLowerCase(),
+    role: role.trim().toLowerCase(),
+    exp: Date.now() + SESSION_DURATION_MS
+  };
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto
+    .createHmac('sha256', JIFFEX_SESSION_SECRET)
+    .update(encodedPayload)
+    .digest('base64url');
+  return `${encodedPayload}.${signature}`;
+}
+
+/**
+ * Verifies an HMAC-SHA256 signed session token with timing-safe comparison.
+ */
+function verifySessionToken(token: string | null | undefined): SessionPayload | null {
+  if (!token || typeof token !== 'string') return null;
+  if (!JIFFEX_SESSION_SECRET || JIFFEX_SESSION_SECRET.length < 32) return null;
+
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+
+  const [encodedPayload, providedSignature] = parts;
+  if (!encodedPayload || !providedSignature) return null;
+
+  try {
+    const expectedSignature = crypto
+      .createHmac('sha256', JIFFEX_SESSION_SECRET)
+      .update(encodedPayload)
+      .digest('base64url');
+
+    const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+    const providedBuffer = Buffer.from(providedSignature, 'utf8');
+
+    if (expectedBuffer.length !== providedBuffer.length) {
+      return null;
+    }
+
+    if (!crypto.timingSafeEqual(expectedBuffer, providedBuffer)) {
+      return null;
+    }
+
+    const payloadRaw = Buffer.from(encodedPayload, 'base64url').toString('utf8');
+    const payload: SessionPayload = JSON.parse(payloadRaw);
+
+    if (!payload.email || typeof payload.email !== 'string') return null;
+    if (!payload.role || typeof payload.role !== 'string') return null;
+    if (!payload.exp || typeof payload.exp !== 'number') return null;
+
+    if (Date.now() > payload.exp) {
+      return null; // Expired
+    }
+
+    return payload;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Helper to parse cookies from Cookie header without external dependencies.
+ */
+function parseRequestCookies(cookieHeader?: string): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  if (!cookieHeader) return cookies;
+  const pairs = cookieHeader.split(';');
+  for (const pair of pairs) {
+    const idx = pair.indexOf('=');
+    if (idx === -1) continue;
+    const key = pair.slice(0, idx).trim();
+    const val = pair.slice(idx + 1).trim();
+    try {
+      cookies[key] = decodeURIComponent(val);
+    } catch {
+      cookies[key] = val;
+    }
+  }
+  return cookies;
+}
+
+/**
+ * Cryptographically verifies session from incoming request.
+ * Does NOT fall back to x-user-role, x-customer-email, query, or body.
+ */
+function getAuthenticatedUser(req: express.Request): { email: string; role: string } | null {
+  const cookies = parseRequestCookies(req.headers.cookie);
+  const sessionToken = cookies[SESSION_COOKIE_NAME];
+  const verified = verifySessionToken(sessionToken);
+  if (!verified) return null;
+
+  return {
+    email: verified.email,
+    role: verified.role
+  };
+}
+
 // Auth Routes for Email OTP Authentication
 app.post("/api/auth/send-otp", async (req, res) => {
   console.log("[Auth] POST /api/auth/send-otp", req.body);
@@ -800,18 +963,130 @@ app.post("/api/auth/verify-otp", async (req, res) => {
       displayName = 'Admin User';
     }
 
+    // Step AUTH-1: Calculate server-authoritative role & issue signed HTTP-only session cookie
+    const assignedRole = deriveUserRole(cleanEmail);
+    const sessionToken = createSessionToken(cleanEmail, assignedRole);
+
+    if (sessionToken) {
+      res.cookie(SESSION_COOKIE_NAME, sessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: SESSION_DURATION_MS
+      });
+    }
+
     res.json({ 
       success: true, 
       user: { 
         email: cleanEmail, 
         id: 'user-' + Buffer.from(cleanEmail).toString('hex').slice(0, 8),
         name: displayName,
-        role: isAdminTarget ? 'admin' : undefined
+        role: assignedRole === 'admin' ? 'admin' : (assignedRole !== 'customer' ? assignedRole : undefined)
       } 
     });
   } catch (err: any) {
     console.error("OTP Verify Error:", err.message);
     res.status(500).json({ error: "Verification failed. Please try again." });
+  }
+});
+
+// Step AUTH-1: Session validation endpoint
+app.get("/api/auth/session", (req, res) => {
+  const user = getAuthenticatedUser(req);
+  if (!user) {
+    return res.json({ authenticated: false });
+  }
+  return res.json({
+    authenticated: true,
+    user: {
+      email: user.email,
+      role: user.role
+    }
+  });
+});
+
+// Step AUTH-1: Server logout endpoint (clears HTTP-only session cookie)
+app.post("/api/auth/logout", (req, res) => {
+  res.clearCookie(SESSION_COOKIE_NAME, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/'
+  });
+  res.json({ success: true, message: "Logged out successfully" });
+});
+
+// Step 6A.2: Secure product image upload authorization using signed upload URLs
+app.post("/api/storage/product-upload-url", async (req, res) => {
+  try {
+    // 1. Resolve authenticated user using verified server session cookie
+    const user = getAuthenticatedUser(req);
+    if (!user) {
+      return res.status(401).json({ 
+        error: "Your session has expired. Please sign in again." 
+      });
+    }
+
+    // 2. Allow roles: admin, and webmaster (catalog management role only)
+    if (user.role !== 'admin' && user.role !== 'webmaster') {
+      return res.status(403).json({ 
+        error: "You are not authorized to upload product images." 
+      });
+    }
+
+    // 3. Ensure server-only Supabase admin storage client is configured
+    if (!supabaseAdmin) {
+      return res.status(503).json({ 
+        error: "Product image storage is not configured." 
+      });
+    }
+
+    // 4. Validate request body and MIME type
+    const { productId, contentType } = req.body || {};
+    const MIME_MAP: Record<string, string> = {
+      'image/webp': 'webp',
+      'image/jpeg': 'jpg',
+      'image/png': 'png'
+    };
+
+    const ext = contentType ? MIME_MAP[String(contentType).toLowerCase().trim()] : undefined;
+    if (!ext) {
+      return res.status(400).json({ 
+        error: "Unsupported image format." 
+      });
+    }
+
+    // 5. Generate secure, server-controlled storage path
+    const safeProductId = (productId ? String(productId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) : '') || 'new';
+    const timestamp = Date.now();
+    const safeUuid = crypto.randomUUID();
+    const storagePath = `products/${safeProductId}/${timestamp}-${safeUuid}.${ext}`;
+
+    // 6. Generate signed upload URL via server-only service role client
+    const { data, error } = await supabaseAdmin.storage
+      .from('shop-products')
+      .createSignedUploadUrl(storagePath);
+
+    if (error || !data) {
+      console.error("[Storage] Upstream error generating signed upload URL:", error?.message || error);
+      return res.status(503).json({ 
+        error: "Product image storage is temporarily unavailable. Please try again later." 
+      });
+    }
+
+    // 7. Return only necessary path, token, and signedUrl (never secrets or internal credentials)
+    return res.json({
+      path: storagePath,
+      token: data.token,
+      signedUrl: data.signedUrl
+    });
+  } catch (err: any) {
+    console.error("[Storage] Unexpected error generating signed product upload URL:", err.message || err);
+    return res.status(503).json({ 
+      error: "Product image storage is temporarily unavailable. Please try again later." 
+    });
   }
 });
 
@@ -1218,12 +1493,42 @@ const handleGetItems = async (req: express.Request, res: express.Response) => {
   }
 
   try {
-    let query = supabase.from('items').select('*').neq('user_id', 'deleted');
+    let query = supabase.from('items').select(`
+      id,
+      user_id,
+      name,
+      weight,
+      status,
+      source,
+      price,
+      submitted,
+      created_at
+    `).neq('user_id', 'deleted');
     if (userId !== 'all') {
       query = query.eq('user_id', userId);
     }
     const { data, error } = await queryWithTimeout(query, 3500, 'Supabase items query timed out');
-    if (error) throw error;
+    if (error) {
+      if (error.code === '42703' || (error.message && error.message.includes('submitted'))) {
+        let safeQuery = supabase.from('items').select(`
+          id,
+          user_id,
+          name,
+          weight,
+          status,
+          source,
+          price,
+          created_at
+        `).neq('user_id', 'deleted');
+        if (userId !== 'all') {
+          safeQuery = safeQuery.eq('user_id', userId);
+        }
+        const { data: safeData, error: safeError } = await queryWithTimeout(safeQuery, 3500, 'Supabase items safe query timed out');
+        if (safeError) throw safeError;
+        return res.json(safeData || []);
+      }
+      throw error;
+    }
     res.json(data || []);
   } catch (err: any) {
     console.warn("[SERVER] Fetch Items notice (using memory items fallback):", err?.message || err);
@@ -1609,7 +1914,7 @@ app.patch("/api/orders/:orderId", async (req, res) => {
     // Get current record to preserve previous destination values
     const { data: currentOrder, error: getError } = await supabase
       .from('orders')
-      .select('*')
+      .select('id, destination')
       .eq('id', orderId)
       .maybeSingle();
       
@@ -1821,7 +2126,7 @@ app.patch("/api/orders/:orderId/status", async (req, res) => {
     // 1. Get current order info for notification
     const { data: order, error: fetchError } = await supabase
       .from('orders')
-      .select('*')
+      .select('id, customer_id, destination')
       .eq('id', orderId)
       .single();
     
@@ -2898,6 +3203,7 @@ const transformDbOrder = (o: any) => {
 
   return {
     ...o,
+    items: Array.isArray(o.items) ? o.items : (o.items ? o.items : []),
     destination: dest,
     customerId: o.customer_id || o.customerId || dest?.customerId || dest?.customer_id,
     totalWeight: o.total_weight !== undefined && o.total_weight !== null ? o.total_weight : (o.totalWeight !== undefined ? o.totalWeight : (dest?.totalWeight || dest?.total_weight || 0)),
@@ -3504,7 +3810,26 @@ const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
           const pickupsQueryPromise = Promise.resolve(
             supabase
               .from('pickups')
-              .select('*')
+              .select(`
+                id,
+                customer_id,
+                customer_name,
+                email,
+                phone,
+                status,
+                pickup_date,
+                pickup_time,
+                address,
+                payment_status,
+                pickup_type,
+                assigned_agent_id,
+                language_preference,
+                item_type,
+                vehicle_type,
+                created_at,
+                total_weight,
+                total_cost
+              `)
               .order('created_at', { ascending: false })
               .abortSignal(pickupsController.signal)
           ).catch((err: any) => ({ data: null, error: err }));
@@ -3648,6 +3973,92 @@ app.get("/api/orders", async (req, res) => {
   res.json(finalOrders);
 });
 
+// Helper to sanitize public tracking responses and prevent PII/items/documents leakage
+const sanitizePublicTrackingOrder = (order: any) => {
+  if (!order) return null;
+
+  let dest = order.destination;
+  if (typeof dest === 'string') {
+    try {
+      dest = JSON.parse(dest);
+    } catch (e) {
+      dest = {};
+    }
+  }
+
+  // Sanitize destination to strictly public non-PII geographic fields
+  const sanitizedDestination = {
+    city: dest?.city || 'Destination City',
+    state: dest?.state || '',
+    country: dest?.country || 'Destination Country'
+  };
+
+  // Sanitize tracking response to only normalized tracking events & status
+  let sanitizedTrackingResponse: any = null;
+  const rawTr = order.tracking_response || order.trackingResponse;
+  if (rawTr) {
+    let parsedTr = rawTr;
+    if (typeof parsedTr === 'string') {
+      try {
+        parsedTr = JSON.parse(parsedTr);
+      } catch (e) {
+        parsedTr = null;
+      }
+    }
+    if (parsedTr && typeof parsedTr === 'object') {
+      const sanitizedEvents = Array.isArray(parsedTr.events)
+        ? parsedTr.events.map((evt: any) => ({
+            status: String(evt?.status || ''),
+            location: String(evt?.location || ''),
+            date: String(evt?.date || ''),
+            time: String(evt?.time || ''),
+            description: String(evt?.description || '')
+          }))
+        : [];
+      sanitizedTrackingResponse = {
+        id: parsedTr.id || order.tracking_number || order.id,
+        carrier: parsedTr.carrier || order.carrier || 'Jiffex',
+        status: parsedTr.status || order.status || 'In Warehouse',
+        events: sanitizedEvents
+      };
+    }
+  }
+
+  const carrier = order.carrier || order.carrier_name || 'Jiffex';
+  const trackingNumber = order.tracking_number || order.trackingNumber || order.id;
+  const status = order.status || 'In Warehouse';
+  const shipmentStatus = order.shipment_status || order.shipmentStatus || status;
+  const totalWeight = Number(order.total_weight || order.totalWeight || 0);
+  const shippingDate = order.shipping_date || order.shippingDate || null;
+  const shipmentDate = order.shipment_date || order.shipmentDate || shippingDate;
+  const lastTrackingUpdate = order.last_tracking_update || order.lastTrackingUpdate || null;
+  const createdAt = order.created_at || order.createdAt || new Date().toISOString();
+
+  return {
+    id: order.id,
+    trackingNumber: trackingNumber,
+    tracking_number: trackingNumber,
+    carrier: carrier,
+    status: status,
+    shipmentStatus: shipmentStatus,
+    shipment_status: shipmentStatus,
+    shippingDate: shippingDate,
+    shipping_date: shippingDate,
+    shipmentDate: shipmentDate,
+    shipment_date: shipmentDate,
+    lastTrackingUpdate: lastTrackingUpdate,
+    last_tracking_update: lastTrackingUpdate,
+    totalWeight: totalWeight,
+    total_weight: totalWeight,
+    createdAt: createdAt,
+    created_at: createdAt,
+    destination: sanitizedDestination,
+    trackingResponse: sanitizedTrackingResponse,
+    tracking_response: sanitizedTrackingResponse,
+    items: [] // Explicitly empty: no item descriptions, no prices, no photos
+  };
+};
+
 // API: Public Tracking (No Auth required)
 app.get("/api/orders/track/:orderId", async (req, res) => {
   const { orderId } = req.params;
@@ -3670,14 +4081,27 @@ app.get("/api/orders/track/:orderId", async (req, res) => {
   
   if (!supabase) {
     if (!cached) return res.status(404).json({ error: "Order not found" });
-    return res.json(transformDbOrder(cached));
+    return res.json(sanitizePublicTrackingOrder(cached));
   }
 
   try {
     // Query DB with speed-timeout, supporting both ID and tracking number via case-insensitive OR mapping
     const query = supabase
       .from('orders')
-      .select('*')
+      .select(`
+        id,
+        tracking_number,
+        carrier,
+        status,
+        shipment_status,
+        shipping_date,
+        shipment_date,
+        last_tracking_update,
+        total_weight,
+        created_at,
+        tracking_response,
+        destination
+      `)
       .or(`id.ilike.${searchId},tracking_number.ilike.${searchId}`)
       .maybeSingle();
 
@@ -3685,18 +4109,126 @@ app.get("/api/orders/track/:orderId", async (req, res) => {
     if (error) throw error;
 
     if (!data) {
-      if (cached) return res.json(transformDbOrder(cached));
+      if (cached) return res.json(sanitizePublicTrackingOrder(cached));
       return res.status(404).json({ error: `Order not found for Tracking/Order ID: ${orderId}` });
     }
 
-    const transformed = transformDbOrder(data);
-    res.json(transformed);
+    const sanitized = sanitizePublicTrackingOrder(data);
+    res.json(sanitized);
   } catch (err: any) {
     console.log(`Serving matched order package details for ${orderId}`);
     if (cached) {
-      return res.json(transformDbOrder(cached));
+      return res.json(sanitizePublicTrackingOrder(cached));
     }
     res.status(500).json({ error: "Tracking service temporarily unavailable. Please try your search again shortly." });
+  }
+});
+
+// API: Get single order detail for invoice/modal on demand
+app.get("/api/orders/detail/:orderId", async (req, res) => {
+  const { orderId } = req.params;
+  if (!orderId) {
+    return res.status(400).json({ error: "Order ID is required" });
+  }
+
+  const cleanOrderId = String(orderId).trim();
+  const requestingCustomerId = String(req.query.customerId || req.headers['x-customer-id'] || '').trim().toLowerCase();
+  const requestingEmail = String(req.query.email || req.headers['x-customer-email'] || '').trim().toLowerCase();
+  const userRole = String(req.query.role || req.headers['x-user-role'] || '').trim().toLowerCase();
+  const isAdminOrAgent = userRole === 'admin' || userRole === 'agent';
+
+  try {
+    let orderRecord: any = null;
+
+    if (supabase) {
+      // 1. Query orders table with minimal detail projection including items
+      const { data: dbOrder, error: orderError } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          customer_id,
+          total_weight,
+          total_cost,
+          status,
+          destination,
+          payment_status,
+          shipping_date,
+          created_at,
+          tracking_number,
+          carrier,
+          shipment_status,
+          shipment_date,
+          last_tracking_update,
+          items
+        `)
+        .eq('id', cleanOrderId)
+        .maybeSingle();
+
+      if (!orderError && dbOrder) {
+        orderRecord = dbOrder;
+      } else {
+        // 2. Check pickups table if not found in orders
+        const { data: pickupData } = await supabase
+          .from('pickups')
+          .select(`
+            id,
+            customer_id,
+            customer_name,
+            email,
+            phone,
+            status,
+            pickup_date,
+            pickup_time,
+            address,
+            payment_status,
+            pickup_type,
+            assigned_agent_id,
+            language_preference,
+            item_type,
+            vehicle_type,
+            created_at,
+            items,
+            total_weight,
+            total_cost
+          `)
+          .eq('id', cleanOrderId)
+          .maybeSingle();
+
+        if (pickupData) {
+          orderRecord = transformDbPickupToOrder(pickupData);
+        }
+      }
+    }
+
+    // 3. Fallback to in-memory orders if not found in Supabase
+    if (!orderRecord) {
+      const foundMem = memOrders.find((o: any) => String(o.id).toLowerCase() === cleanOrderId.toLowerCase());
+      if (foundMem) {
+        orderRecord = foundMem;
+      }
+    }
+
+    if (!orderRecord) {
+      return res.status(404).json({ error: `Order not found with ID: ${orderId}` });
+    }
+
+    // 4. Customer ownership verification
+    const orderCustomerId = String(orderRecord.customer_id || orderRecord.customerId || orderRecord.destination?.customerId || '').toLowerCase().trim();
+    const orderDestEmail = String(orderRecord.destination?.email || orderRecord.email || '').toLowerCase().trim();
+    const guestId = requestingEmail ? `guest_${requestingEmail.replace(/[^a-z0-9]/g, '_')}` : '';
+
+    const isOwner = (requestingCustomerId && (orderCustomerId === requestingCustomerId || orderCustomerId === guestId || orderCustomerId === requestingEmail)) ||
+                    (requestingEmail && requestingEmail !== 'guest@example.com' && orderDestEmail === requestingEmail);
+
+    if (!isAdminOrAgent && (requestingCustomerId || requestingEmail) && !isOwner) {
+      return res.status(403).json({ error: "Access denied: you do not have permission to view this order detail." });
+    }
+
+    const transformed = transformDbOrder(orderRecord);
+    return res.json(transformed);
+  } catch (err: any) {
+    console.error(`[Order-Detail] Failed to retrieve single order ${orderId}:`, err.message);
+    return res.status(500).json({ error: err.message || "Failed to retrieve order detail" });
   }
 });
 
@@ -3732,7 +4264,22 @@ app.get("/api/orders/:customerId", async (req, res) => {
   try {
     const query = supabase
       .from('orders')
-      .select('*')
+      .select(`
+        id,
+        customer_id,
+        total_weight,
+        total_cost,
+        status,
+        destination,
+        payment_status,
+        shipping_date,
+        created_at,
+        tracking_number,
+        carrier,
+        shipment_status,
+        shipment_date,
+        last_tracking_update
+      `)
       .in('customer_id', idsToFetch)
       .order('created_at', { ascending: false });
 
@@ -3747,7 +4294,22 @@ app.get("/api/orders/:customerId", async (req, res) => {
         const emailLower = String(email).toLowerCase().trim();
         const { data: emailData } = await supabase
           .from('orders')
-          .select('*')
+          .select(`
+            id,
+            customer_id,
+            total_weight,
+            total_cost,
+            status,
+            destination,
+            payment_status,
+            shipping_date,
+            created_at,
+            tracking_number,
+            carrier,
+            shipment_status,
+            shipment_date,
+            last_tracking_update
+          `)
           .ilike('destination->>email', emailLower)
           .order('created_at', { ascending: false })
           .limit(100);
@@ -4148,7 +4710,13 @@ function generateRealTrackingData(order: any): any {
       } catch (e) {}
     }
     if (tr && Array.isArray(tr.events)) {
-      events = tr.events;
+      events = tr.events.map((evt: any) => ({
+        status: String(evt?.status || ''),
+        location: String(evt?.location || ''),
+        date: String(evt?.date || ''),
+        time: String(evt?.time || ''),
+        description: String(evt?.description || '')
+      }));
     }
   }
 
@@ -4252,7 +4820,20 @@ app.post("/api/track-order", async (req, res) => {
 
     const { data: order, error } = await supabase
       .from('orders')
-      .select('*')
+      .select(`
+        id,
+        tracking_number,
+        carrier,
+        status,
+        shipment_status,
+        shipping_date,
+        shipment_date,
+        last_tracking_update,
+        total_weight,
+        created_at,
+        tracking_response,
+        destination
+      `)
       .or(`id.ilike.${searchId},tracking_number.ilike.${searchId}`)
       .maybeSingle();
     
@@ -4296,7 +4877,20 @@ app.post("/api/track-carrier", async (req, res) => {
 
     const { data: order, error } = await supabase
       .from('orders')
-      .select('*')
+      .select(`
+        id,
+        tracking_number,
+        carrier,
+        status,
+        shipment_status,
+        shipping_date,
+        shipment_date,
+        last_tracking_update,
+        total_weight,
+        created_at,
+        tracking_response,
+        destination
+      `)
       .or(`tracking_number.ilike.${searchId},id.ilike.${searchId}`)
       .maybeSingle();
     
