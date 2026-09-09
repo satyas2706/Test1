@@ -13,6 +13,7 @@ import { RateBand, CountryRateBands } from './types';
 import { DEFAULT_RATE_BANDS, calculateShippingCost } from './utils/shipping';
 import { uploadProductImage, uploadPickupItemPhoto, uploadKycDocument } from './utils/imageCompression';
 import { PickupItemThumbnail } from './components/PickupItemThumbnail';
+import { KycDocumentThumbnail } from './components/KycDocumentThumbnail';
 import { 
   Package, 
   PackageCheck, 
@@ -12415,19 +12416,23 @@ export default function App() {
                       <div key={doc.id} className="p-4 bg-slate-50 hover:bg-slate-100/75 transition-all border border-slate-200/60 rounded-2xl flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="w-12 h-12 bg-white rounded-xl border border-slate-200 overflow-hidden shrink-0">
-                            <img 
-                              src={doc.image} 
-                              alt={doc.name} 
-                              className="w-full h-full object-cover cursor-zoom-in"
-                              onClick={() => {
-                                const w = window.open();
-                                if (w) {
-                                  w.document.write(`<img src="${doc.image}" style="max-width:100%; height:auto;" />`);
+                            <KycDocumentThumbnail
+                              orderId={activeWorkOrder?.id}
+                              image={doc.image}
+                              alt={doc.name}
+                              className="w-full h-full object-cover"
+                              onOpenDocument={(url, isPdf) => {
+                                if (isPdf) {
+                                  window.open(url, '_blank', 'noopener,noreferrer');
                                 } else {
-                                  toast.info("Check screen for document preview.");
+                                  const w = window.open();
+                                  if (w) {
+                                    w.document.write(`<img src="${url}" style="max-width:100%; height:auto;" />`);
+                                  } else {
+                                    window.open(url, '_blank', 'noopener,noreferrer');
+                                  }
                                 }
                               }}
-                              referrerPolicy="no-referrer"
                             />
                           </div>
                           <div className="min-w-0">

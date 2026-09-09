@@ -475,3 +475,73 @@ export async function uploadKycDocument(
   return storagePath;
 }
 
+// In-memory cache for resolved KYC signed URLs for current view/session
+const kycSignedUrlCache = new Map<string, { url: string; expiresAt: number }>();
+
+/**
+ * Resolves a KYC document Storage path into a short-lived signed download URL.
+ * Checks the in-memory cache first to avoid duplicate network requests.
+ * Buffer: 30 seconds before 10-minute expiry.
+ */
+export async function getKycDocumentSignedUrl(
+  orderId: string,
+  storagePath: string
+): Promise<string | null> {
+  if (!orderId || !storagePath) return null;
+
+  // 1. Direct return for legacy base64 and standard http URLs
+  if (storagePath.startsWith('data:') || storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+    return storagePath;
+  }
+
+  // Must be a valid storage path starting with orders/
+  if (!storagePath.startsWith('orders/')) {
+    return null;
+  }
+
+  // 2. Check memory cache (with 30s buffer before expiration)
+  const cacheKey = `${orderId}:${storagePath}`;
+  const cached = kycSignedUrlCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt - 30000) {
+    return cached.url;
+  }
+
+  try {
+    const activeSessionToken = typeof window !== 'undefined' ? localStorage.getItem('jiffex_session_token') : null;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (activeSessionToken) {
+      headers['Authorization'] = `Bearer ${activeSessionToken}`;
+      headers['x-jiffex-session'] = activeSessionToken;
+    }
+
+    const response = await fetch('/api/storage/kyc-documents/signed-url', {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({
+        orderId,
+        path: storagePath
+      })
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    if (data?.signedUrl) {
+      const expiresIn = data.expiresIn || 600;
+      kycSignedUrlCache.set(cacheKey, {
+        url: data.signedUrl,
+        expiresAt: Date.now() + expiresIn * 1000
+      });
+      return data.signedUrl;
+    }
+  } catch (err) {
+    console.warn('[Storage] Failed to resolve KYC document signed URL:', err);
+  }
+
+  return null;
+}
+
+

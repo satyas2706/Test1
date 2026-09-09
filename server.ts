@@ -1390,6 +1390,153 @@ app.post("/api/storage/kyc-documents/upload-url", async (req, res) => {
   }
 });
 
+// Step 6C.2B: Secure KYC document download authorization using short-lived signed URLs
+app.post("/api/storage/kyc-documents/signed-url", async (req, res) => {
+  try {
+    // 1. Authoritative session authentication (never trust client headers)
+    const authUser = getAuthenticatedUser(req);
+    if (!authUser) {
+      return res.status(401).json({ error: "Unauthorized: Authentication required" });
+    }
+
+    // 2. Strict role access check:
+    // Allow: admin (any KYC document), agent (ONLY assigned order/pickup).
+    // Deny: customer, webmaster, customer_service.
+    if (authUser.role === 'customer' || authUser.role === 'webmaster' || authUser.role === 'customer_service') {
+      return res.status(403).json({ error: "Forbidden: Access denied for this role" });
+    }
+
+    if (authUser.role !== 'admin' && authUser.role !== 'agent') {
+      return res.status(403).json({ error: "Forbidden: Unauthorized role" });
+    }
+
+    // 3. Ensure server-only Supabase admin storage client is configured
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: "KYC documents storage is not configured." });
+    }
+
+    // 4. Validate request parameters
+    const { orderId, path: requestedPath } = req.body || {};
+    if (!orderId || !requestedPath) {
+      return res.status(400).json({ error: "orderId and path are required" });
+    }
+
+    const cleanOrderId = String(orderId).trim();
+    const cleanPath = String(requestedPath).trim();
+
+    // 5. Strict path validation:
+    // Reject path traversal and ensure path starts exactly with orders/{orderId}/documents/
+    if (cleanPath.includes('..') || cleanPath.includes('//') || cleanPath.startsWith('/') || cleanPath.includes('\\')) {
+      return res.status(400).json({ error: "Invalid storage path." });
+    }
+
+    const expectedPrefix = `orders/${cleanOrderId}/documents/`;
+    if (!cleanPath.startsWith(expectedPrefix)) {
+      return res.status(403).json({ error: "Forbidden: Path does not belong to the specified order." });
+    }
+
+    // 6. Look up order/pickup record server-side to verify existence & assignment
+    let pickupRecord: any = null;
+    let orderRecord: any = null;
+
+    if (supabase) {
+      try {
+        const { data: pData } = await supabase
+          .from('pickups')
+          .select('id, assigned_agent_id')
+          .eq('id', cleanOrderId)
+          .maybeSingle();
+        if (pData) pickupRecord = pData;
+      } catch (err: any) {
+        console.warn("[Storage] Error looking up pickup in DB for KYC signed URL:", err.message);
+      }
+    }
+
+    if (!pickupRecord) {
+      pickupRecord = memPickups.find(p => p.id === cleanOrderId);
+    }
+
+    if (!pickupRecord) {
+      if (supabase) {
+        try {
+          const { data: oData } = await supabase
+            .from('orders')
+            .select('id, assigned_agent_id')
+            .eq('id', cleanOrderId)
+            .maybeSingle();
+          if (oData) orderRecord = oData;
+        } catch (err: any) {
+          console.warn("[Storage] Error looking up order in DB for KYC signed URL:", err.message);
+        }
+      }
+      if (!orderRecord) {
+        orderRecord = memOrders.find(o => o.id === cleanOrderId);
+      }
+    }
+
+    const targetRecord = pickupRecord || orderRecord;
+    if (!targetRecord) {
+      return res.status(404).json({ error: `Order or Pickup not found with ID: ${cleanOrderId}` });
+    }
+
+    // 7. Role-based verification:
+    // Admin: allowed for any document.
+    // Agent: ONLY assigned order/pickup.
+    if (authUser.role === 'agent') {
+      const emailLower = authUser.email.toLowerCase().trim();
+      let agentId: string | null = null;
+      const prefixMatch = emailLower.match(/^(\d+)\.agent@/);
+      if (prefixMatch) {
+        agentId = prefixMatch[1];
+      } else if (supabase) {
+        try {
+          const { data: agentRecord } = await supabase
+            .from('agents')
+            .select('id')
+            .ilike('email', emailLower)
+            .maybeSingle();
+          if (agentRecord?.id) {
+            agentId = String(agentRecord.id);
+          }
+        } catch (err: any) {
+          console.warn('[Storage] Error resolving agent id for KYC signed URL:', err.message);
+        }
+      }
+
+      const assignedAgentId = String(targetRecord.assigned_agent_id || targetRecord.assignedAgentId || '');
+      if (!agentId || assignedAgentId !== agentId) {
+        return res.status(403).json({ error: "Forbidden: You are not assigned to this order/pickup." });
+      }
+    }
+
+    // 8. Generate short-lived signed download URL (10 minutes = 600 seconds)
+    const SIGNED_URL_EXPIRY_SECONDS = 600;
+    const { data, error } = await supabaseAdmin.storage
+      .from('kyc-documents')
+      .createSignedUrl(cleanPath, SIGNED_URL_EXPIRY_SECONDS);
+
+    if (error || !data?.signedUrl) {
+      const errMsg = error?.message || String(error || '');
+      const isNotFound = errMsg.toLowerCase().includes('not found') ||
+                         (error as any)?.statusCode === '404' ||
+                         (error as any)?.status === 404;
+      if (isNotFound) {
+        return res.status(404).json({ error: "KYC document not found in storage." });
+      }
+      console.warn("[Storage] Upstream warning creating signed KYC document download URL:", errMsg);
+      return res.status(503).json({ error: "KYC document is temporarily unavailable. Please try again later." });
+    }
+
+    return res.json({
+      signedUrl: data.signedUrl,
+      expiresIn: SIGNED_URL_EXPIRY_SECONDS
+    });
+  } catch (err: any) {
+    console.error("[Storage] Unexpected error generating signed KYC document download URL:", err.message || err);
+    return res.status(503).json({ error: "Failed to generate document URL." });
+  }
+});
+
 // Step 6B.2B: Secure pickup item photo download authorization using short-lived signed URLs
 app.post("/api/storage/pickup-items/signed-url", async (req, res) => {
   try {
@@ -1529,7 +1676,14 @@ app.post("/api/storage/pickup-items/signed-url", async (req, res) => {
       .createSignedUrl(cleanPath, SIGNED_URL_EXPIRY_SECONDS);
 
     if (error || !data?.signedUrl) {
-      console.error("[Storage] Upstream error creating signed download URL:", error?.message || error);
+      const errMsg = error?.message || String(error || '');
+      const isNotFound = errMsg.toLowerCase().includes('not found') ||
+                         (error as any)?.statusCode === '404' ||
+                         (error as any)?.status === 404;
+      if (isNotFound) {
+        return res.status(404).json({ error: "Pickup photo not found in storage." });
+      }
+      console.warn("[Storage] Upstream warning creating signed download URL:", errMsg);
       return res.status(503).json({ error: "Pickup photo is temporarily unavailable. Please try again later." });
     }
 
@@ -4058,9 +4212,7 @@ app.get("/api/pickups", async (req, res) => {
     'language_preference',
     'item_type',
     'vehicle_type',
-    'created_at',
-    'total_weight',
-    'total_cost'
+    'created_at'
   ];
   const lightweightProjection = lightweightFields.join(',\n      ');
 
@@ -4163,7 +4315,12 @@ app.get("/api/pickups", async (req, res) => {
 
     const { data, error } = await query;
     if (error) throw error;
-    res.json(data || []);
+    const sanitizedData = (data || []).map((p: any) => ({
+      ...p,
+      total_weight: p.total_weight !== undefined && p.total_weight !== null ? p.total_weight : (p.totalWeight || 0),
+      total_cost: p.total_cost !== undefined && p.total_cost !== null ? p.total_cost : (p.totalCost || 0)
+    }));
+    res.json(sanitizedData);
   } catch (err: any) {
     console.error("[SUPABASE GET PICKUPS ERROR]:", err.message);
     res.json(filterMemPickups());
@@ -4407,9 +4564,7 @@ const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
                 language_preference,
                 item_type,
                 vehicle_type,
-                created_at,
-                total_weight,
-                total_cost
+                created_at
               `)
               .order('created_at', { ascending: false })
               .abortSignal(pickupsController.signal)
@@ -4784,9 +4939,7 @@ app.get("/api/orders/detail/:orderId", async (req, res) => {
             item_type,
             vehicle_type,
             created_at,
-            items,
-            total_weight,
-            total_cost
+            items
           `)
           .eq('id', cleanOrderId)
           .maybeSingle();
@@ -5631,32 +5784,50 @@ const handleGetShipmentStatus = async (req: express.Request, res: express.Respon
 
     // 2. Search by Phone
     if (!foundOrder && phone) {
-      const cleanDigits = phone.replace(/\D/g, '');
-      if (cleanDigits.length >= 4) {
-        foundOrder = cachedAllOrders.find(o => {
-          const destPhone = (o.destination?.phone || o.phone || '').toString().replace(/\D/g, '');
-          return destPhone && (destPhone.includes(cleanDigits) || cleanDigits.includes(destPhone));
-        }) || memOrders.find(o => {
-          const destPhone = (o.destination?.phone || o.phone || '').toString().replace(/\D/g, '');
-          return destPhone && (destPhone.includes(cleanDigits) || cleanDigits.includes(destPhone));
-        });
+      const inputDigits = phone.replace(/\D/g, '');
+      const targetDigits =
+        inputDigits.length >= 10
+          ? inputDigits.slice(-10)
+          : inputDigits;
 
-        if (!foundOrder && supabase) {
-          const { data } = await supabase
-            .from('orders')
-            .select('id, tracking_number, shipment_status, status, shipping_date, carrier, destination, phone, customer_name, total_weight, created_at, tracking_response')
-            .order('created_at', { ascending: false })
-            .limit(30);
-          if (data) {
-            foundOrder = data.find((o: any) => {
-              let dest = o.destination;
-              if (typeof dest === 'string') {
-                try { dest = JSON.parse(dest); } catch (e) { dest = {}; }
-              }
-              const destPhone = (dest?.phone || o.phone || '').toString().replace(/\D/g, '');
-              return destPhone && (destPhone.includes(cleanDigits) || cleanDigits.includes(destPhone));
-            });
+      const isExactPhoneMatch = (o: any) => {
+        let dest = o.destination;
+        if (typeof dest === 'string') {
+          try { dest = JSON.parse(dest); } catch (e) { dest = {}; }
+        }
+        const storedDigits =
+          (dest?.phone || o.phone || '').toString().replace(/\D/g, '');
+        if (storedDigits.length < 7) return false;
+        const storedTarget =
+          storedDigits.length >= 10
+            ? storedDigits.slice(-10)
+            : storedDigits;
+        return storedDigits.length >= 7 && storedTarget === targetDigits;
+      };
+
+      if (inputDigits.length >= 7) {
+        if (supabase) {
+          try {
+            const pattern =
+              '%' + targetDigits.split('').join('%') + '%';
+
+            const { data } = await supabase
+              .from('orders')
+              .select('id, tracking_number, shipment_status, status, shipping_date, carrier, destination, total_weight, created_at, tracking_response')
+              .ilike('destination->>phone', pattern)
+              .order('created_at', { ascending: false })
+              .limit(5);
+
+            if (data && data.length > 0) {
+              foundOrder = data.find(isExactPhoneMatch);
+            }
+          } catch (dbErr: any) {
+            console.warn('[AI Assistant] Supabase phone search error:', dbErr.message);
           }
+        }
+
+        if (!foundOrder) {
+          foundOrder = cachedAllOrders.find(isExactPhoneMatch) || memOrders.find(isExactPhoneMatch);
         }
       }
     }

@@ -1,7 +1,7 @@
 import { ShippingItem, Order, Appointment, StoreProduct } from '../types';
 import { COMPANY_DETAILS } from '../constants';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { uploadPickupItemPhoto, getPickupItemSignedUrl, uploadKycDocument } from '../utils/imageCompression';
+import { uploadPickupItemPhoto, getPickupItemSignedUrl, uploadKycDocument, getKycDocumentSignedUrl } from '../utils/imageCompression';
 
 const API_URL = window.location.origin;
 
@@ -1289,5 +1289,9 @@ export const api = {
 
   async uploadKycDocument(file: File, orderId: string, documentId?: string) {
     return await uploadKycDocument(file, orderId, documentId);
+  },
+
+  async getKycDocumentSignedUrl(orderId: string, storagePath: string) {
+    return await getKycDocumentSignedUrl(orderId, storagePath);
   }
 };
