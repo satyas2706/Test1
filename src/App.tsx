@@ -11,7 +11,8 @@ import { AdminOrdersTab } from './components/AdminOrdersTab';
 import { MobileDropOffFlow } from './components/MobileDropOffFlow';
 import { RateBand, CountryRateBands } from './types';
 import { DEFAULT_RATE_BANDS, calculateShippingCost } from './utils/shipping';
-import { uploadProductImage } from './utils/imageCompression';
+import { uploadProductImage, uploadPickupItemPhoto, uploadKycDocument } from './utils/imageCompression';
+import { PickupItemThumbnail } from './components/PickupItemThumbnail';
 import { 
   Package, 
   PackageCheck, 
@@ -1682,6 +1683,11 @@ const AdminDashboard = ({
       const msg = err.message || 'Image upload failed. Please try again.';
       setProductImageUploadError(msg);
       toast.error(msg);
+      if (msg.toLowerCase().includes('session') || msg.toLowerCase().includes('sign in')) {
+        window.dispatchEvent(new CustomEvent('jiffex:open-login', { 
+          detail: { email: currentUser?.email || 'srikanth.satya@jiffex.in' } 
+        }));
+      }
     } finally {
       setIsUploadingProductImage(false);
       target.value = '';
@@ -3954,10 +3960,21 @@ const AdminDashboard = ({
                       </label>
                     </div>
                     {productImageUploadError && (
-                      <p className="text-xs font-semibold text-rose-600 flex items-center gap-1 mt-2 ml-1">
-                        <AlertTriangle size={12} />
-                        {productImageUploadError}
-                      </p>
+                      <div className="mt-2 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-rose-700 flex items-center gap-1.5">
+                          <AlertTriangle size={14} className="shrink-0" />
+                          <span>{productImageUploadError}</span>
+                        </p>
+                        {(productImageUploadError.toLowerCase().includes('session') || productImageUploadError.toLowerCase().includes('sign in')) && (
+                          <button
+                            type="button"
+                            onClick={() => window.dispatchEvent(new CustomEvent('jiffex:open-login', { detail: { email: currentUser?.email || 'srikanth.satya@jiffex.in' } }))}
+                            className="px-3 py-1 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors shrink-0"
+                          >
+                            Sign In
+                          </button>
+                        )}
+                      </div>
                     )}
                     {newProduct.image && (
                       <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 mt-2">
@@ -4941,6 +4958,7 @@ const clearActiveSession = () => {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem('jiffex_active_user_session');
+    localStorage.removeItem('jiffex_session_token');
   } catch (e) {
     console.error('[Session Manager] Failed to clear active session:', e);
   }
@@ -5611,6 +5629,8 @@ export default function App() {
   const [woDocName, setWoDocName] = useState('');
   const [woDocType, setWoDocType] = useState('Govt ID Proof');
   const [woDocImage, setWoDocImage] = useState('');
+  const [woDocFile, setWoDocFile] = useState<File | null>(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState<boolean>(false);
   const [capturingDocId, setCapturingDocId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -5672,6 +5692,8 @@ export default function App() {
       setWoDocName('');
       setWoDocType('Govt ID Proof');
       setWoDocImage('');
+      setWoDocFile(null);
+      setIsUploadingDoc(false);
       setCapturingDocId(null);
     }
   }, [activeWorkOrder]);
@@ -6137,6 +6159,28 @@ export default function App() {
       } catch (err) {
         console.warn('Supabase auth onAuthStateChange error:', err);
       }
+
+      // Sync server session
+      try {
+        const storedToken = localStorage.getItem('jiffex_session_token');
+        const headers: Record<string, string> = {};
+        if (storedToken) {
+          headers['Authorization'] = `Bearer ${storedToken}`;
+          headers['x-jiffex-session'] = storedToken;
+        }
+        const sessionRes = await fetch('/api/auth/session', {
+          credentials: 'include',
+          headers
+        });
+        if (sessionRes.ok) {
+          const sessionData = await sessionRes.json();
+          if (sessionData.authenticated && sessionData.token) {
+            localStorage.setItem('jiffex_session_token', sessionData.token);
+          }
+        }
+      } catch (err) {
+        console.warn('Server session check error:', err);
+      }
     };
 
     initializeSupabaseAndAuth();
@@ -6145,6 +6189,34 @@ export default function App() {
       if (subscription?.unsubscribe) {
         subscription.unsubscribe();
       }
+    };
+  }, []);
+
+  // Listen for session expiration and login trigger events
+  useEffect(() => {
+    const handleSessionExpired = (e: Event) => {
+      const customEvent = e as CustomEvent<{ message?: string }>;
+      const msg = customEvent.detail?.message || 'Your session has expired. Please sign in again.';
+      toast.error(msg);
+      setShowLoginModal(true);
+      setLoginTriggerSource('default');
+    };
+
+    const handleOpenLogin = (e: Event) => {
+      const customEvent = e as CustomEvent<{ email?: string }>;
+      if (customEvent.detail?.email) {
+        setGuestEmail(customEvent.detail.email);
+      }
+      setShowLoginModal(true);
+      setLoginTriggerSource('default');
+    };
+
+    window.addEventListener('jiffex:session-expired', handleSessionExpired);
+    window.addEventListener('jiffex:open-login', handleOpenLogin);
+
+    return () => {
+      window.removeEventListener('jiffex:session-expired', handleSessionExpired);
+      window.removeEventListener('jiffex:open-login', handleOpenLogin);
     };
   }, []);
 
@@ -10509,7 +10581,12 @@ export default function App() {
                                   <div key={idx} className="grid grid-cols-12 gap-2 items-center p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs">
                                     <div className="col-span-5 flex items-center gap-2.5">
                                       <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 shrink-0 overflow-hidden">
-                                        {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={16} />}
+                                        <PickupItemThumbnail 
+                                          pickupId={currentInvoice.id} 
+                                          image={item.image} 
+                                          alt={item.name} 
+                                          fallbackIconSize={16} 
+                                        />
                                       </div>
                                       <div>
                                         <div className="font-bold text-slate-900 line-clamp-1">{item.name}</div>
@@ -10712,7 +10789,12 @@ export default function App() {
                         <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                              {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                              <PickupItemThumbnail 
+                                pickupId={selectedOrderForDetails.id} 
+                                image={item.image} 
+                                alt={item.name} 
+                                fallbackIconSize={20} 
+                              />
                             </div>
                             <div>
                               <div className="text-sm font-bold text-slate-900">{item.name}</div>
@@ -11095,7 +11177,12 @@ export default function App() {
                               <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                                 <div className="flex items-center gap-3">
                                   <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                                    {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                                    <PickupItemThumbnail 
+                                      pickupId={currentInvoice.id} 
+                                      image={item.image} 
+                                      alt={item.name} 
+                                      fallbackIconSize={20} 
+                                    />
                                   </div>
                                   <div>
                                     <div className="text-sm font-bold text-slate-900">{item.name}</div>
@@ -11303,7 +11390,12 @@ export default function App() {
                               <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                                 <div className="flex items-center gap-3">
                                   <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                                    {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                                    <PickupItemThumbnail 
+                                      pickupId={currentDetails.id} 
+                                      image={item.image} 
+                                      alt={item.name} 
+                                      fallbackIconSize={20} 
+                                    />
                                   </div>
                                   <div>
                                     <div className="text-sm font-bold text-slate-900">{item.name}</div>
@@ -11421,7 +11513,12 @@ export default function App() {
                         <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                              {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                              <PickupItemThumbnail 
+                                pickupId={item.orderId} 
+                                image={item.image} 
+                                alt={item.name} 
+                                fallbackIconSize={20} 
+                              />
                             </div>
                             <div>
                               <div className="text-sm font-bold text-slate-900">{item.name}</div>
@@ -11759,22 +11856,41 @@ export default function App() {
                 accept="image/*" 
                 capture="environment" 
                 className="hidden" 
-                onChange={(e) => {
+                onChange={async (e) => {
                   const file = e.target.files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      const imgData = reader.result as string;
-                      if (capturingItemId === 'new') {
-                        setWoItemImage(imgData);
-                        toast.success("Photo captured for new item!");
-                      } else if (capturingItemId) {
-                        setWoItems(prev => prev.map(item => item.id === capturingItemId ? { ...item, image: imgData } : item));
-                        toast.success("Photo updated in the item list!");
-                      }
-                      setCapturingItemId(null);
-                    };
-                    reader.readAsDataURL(file);
+                  if (!file) return;
+                  // Clear input value so selecting the same file again triggers onChange
+                  e.target.value = '';
+
+                  const targetId = capturingItemId;
+                  const currentPickupId = activeWorkOrder?.id;
+
+                  if (!currentPickupId) {
+                    toast.error("Active work order ID is missing.");
+                    setCapturingItemId(null);
+                    return;
+                  }
+
+                  const uploadToastId = toast.loading("Compressing & uploading photo...");
+                  try {
+                    const storagePath = await uploadPickupItemPhoto(
+                      file, 
+                      String(currentPickupId), 
+                      targetId || 'new'
+                    );
+
+                    if (targetId === 'new') {
+                      setWoItemImage(storagePath);
+                      toast.success("Photo uploaded successfully!", { id: uploadToastId });
+                    } else if (targetId) {
+                      setWoItems(prev => prev.map(item => item.id === targetId ? { ...item, image: storagePath } : item));
+                      toast.success("Photo updated in item list!", { id: uploadToastId });
+                    }
+                  } catch (err: any) {
+                    console.error("[Pickup Photo Upload Error]", err);
+                    toast.error(err?.message || "Failed to upload photo to storage. Please try again.", { id: uploadToastId });
+                  } finally {
+                    setCapturingItemId(null);
                   }
                 }}
               />
@@ -11964,7 +12080,12 @@ export default function App() {
                         >
                           {item.image ? (
                             <>
-                              <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              <PickupItemThumbnail 
+                                pickupId={String(activeWorkOrder?.id)} 
+                                image={item.image} 
+                                alt={item.name} 
+                                fallbackIconSize={16} 
+                              />
                               {woIsEditingItems && (
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                   <Camera size={14} className="text-white" />
@@ -12110,19 +12231,25 @@ export default function App() {
               <input 
                 type="file" 
                 id="universal-wo-doc-camera" 
-                accept="image/*" 
-                capture="environment" 
+                accept="image/webp,image/jpeg,image/png,application/pdf" 
                 className="hidden" 
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      const imgData = reader.result as string;
-                      setWoDocImage(imgData);
-                      toast.success("Document photo loaded successfully!");
-                    };
-                    reader.readAsDataURL(file);
+                    setWoDocFile(file);
+                    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                    if (isPdf) {
+                      setWoDocImage('PDF_SELECTED');
+                      toast.success(`PDF selected: ${file.name}`);
+                    } else {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        const imgData = reader.result as string;
+                        setWoDocImage(imgData);
+                        toast.success("Document photo loaded successfully!");
+                      };
+                      reader.readAsDataURL(file);
+                    }
                   }
                 }}
               />
@@ -12172,29 +12299,40 @@ export default function App() {
                       type="button"
                       onClick={() => document.getElementById('universal-wo-doc-camera')?.click()}
                       className={`w-full py-2.5 px-3 rounded-xl border-2 border-dashed font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        woDocImage 
+                        woDocFile 
                           ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
                           : 'border-indigo-200 hover:border-indigo-400 bg-white text-indigo-700'
                       }`}
                     >
                       <Camera size={14} />
-                      {woDocImage ? 'Change Photo' : 'Take Picture'}
+                      {woDocFile ? 'Change File' : 'Select File/Photo'}
                     </button>
                   </div>
                 </div>
 
-                {woDocImage && (
+                {woDocFile && (
                   <div className="flex flex-col items-center justify-center py-2">
-                    <div className="relative w-full max-w-[200px] h-32 bg-slate-100 rounded-xl overflow-hidden border border-slate-200">
-                      <img 
-                        src={woDocImage} 
-                        alt="Document Preview" 
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
+                    <div className="relative w-full max-w-[220px] min-h-[80px] bg-slate-100 rounded-xl overflow-hidden border border-slate-200 flex items-center justify-center p-3">
+                      {woDocFile.type === 'application/pdf' || woDocFile.name.toLowerCase().endsWith('.pdf') ? (
+                        <div className="flex flex-col items-center justify-center text-slate-700 p-2 text-center">
+                          <FileText size={32} className="text-rose-500 mb-1" />
+                          <span className="text-xs font-bold line-clamp-1">{woDocFile.name}</span>
+                          <span className="text-[10px] text-slate-500">PDF Document ({(woDocFile.size / 1024).toFixed(1)} KB)</span>
+                        </div>
+                      ) : (
+                        <img 
+                          src={woDocImage} 
+                          alt="Document Preview" 
+                          className="w-full h-32 object-cover rounded-lg"
+                          referrerPolicy="no-referrer"
+                        />
+                      )}
                       <button
                         type="button"
-                        onClick={() => setWoDocImage('')}
+                        onClick={() => {
+                          setWoDocFile(null);
+                          setWoDocImage('');
+                        }}
                         className="absolute top-1 right-1 w-6 h-6 rounded-full bg-slate-900/60 hover:bg-slate-900 text-white flex items-center justify-center transition-colors"
                       >
                         <X size={12} />
@@ -12206,27 +12344,58 @@ export default function App() {
                 <div className="flex justify-end pt-1">
                   <button
                     type="button"
-                    onClick={() => {
+                    disabled={isUploadingDoc}
+                    onClick={async () => {
                       const finalName = woDocName || `${woDocType} Copy`;
-                      if (!woDocImage) {
-                        toast.error('Please snap or upload a copy of the document first.');
+                      if (!woDocFile) {
+                        toast.error('Please snap a photo or select a document file first.');
                         return;
                       }
-                      const newDoc = {
-                        id: 'doc_' + Date.now(),
-                        name: finalName,
-                        type: woDocType,
-                        image: woDocImage,
-                        uploadedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      };
-                      setWoDocuments([...woDocuments, newDoc]);
-                      setWoDocName('');
-                      setWoDocImage('');
-                      toast.success(`${woDocType} added to intermediate collected checklist!`);
+
+                      const orderId = activeWorkOrder?.id;
+                      if (!orderId) {
+                        toast.error('No active order or pickup found for document upload.');
+                        return;
+                      }
+
+                      setIsUploadingDoc(true);
+                      const uploadToastId = toast.loading('Uploading document to secure storage...');
+
+                      try {
+                        const docId = 'doc_' + Date.now();
+                        // Upload to private kyc-documents bucket via signed upload URL
+                        const storagePath = await uploadKycDocument(woDocFile, String(orderId), docId);
+
+                        const newDoc = {
+                          id: docId,
+                          name: finalName,
+                          type: woDocType,
+                          image: storagePath, // ONLY storage path stored (e.g. orders/{id}/documents/{docId}/...)
+                          uploadedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        };
+
+                        setWoDocuments([...woDocuments, newDoc]);
+                        setWoDocName('');
+                        setWoDocImage('');
+                        setWoDocFile(null);
+                        toast.success(`${woDocType} uploaded to secure storage!`, { id: uploadToastId });
+                      } catch (err: any) {
+                        console.error('[KYC Upload Error]', err);
+                        toast.error(err.message || 'Failed to upload document. Please retry.', { id: uploadToastId });
+                      } finally {
+                        setIsUploadingDoc(false);
+                      }
                     }}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl cursor-pointer flex items-center gap-1 shadow-sm"
+                    className={`px-4 py-2 text-white text-xs font-black rounded-xl cursor-pointer flex items-center gap-1 shadow-sm ${
+                      isUploadingDoc ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
+                    }`}
                   >
-                    <Plus size={14} /> Add Document
+                    {isUploadingDoc ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Plus size={14} />
+                    )}
+                    {isUploadingDoc ? 'Uploading...' : 'Add Document'}
                   </button>
                 </div>
               </div>

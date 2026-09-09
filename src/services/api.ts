@@ -1,6 +1,7 @@
 import { ShippingItem, Order, Appointment, StoreProduct } from '../types';
 import { COMPANY_DETAILS } from '../constants';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { uploadPickupItemPhoto, getPickupItemSignedUrl, uploadKycDocument } from '../utils/imageCompression';
 
 const API_URL = window.location.origin;
 
@@ -1276,5 +1277,17 @@ export const api = {
     }
 
     return { success: true };
+  },
+
+  async uploadPickupItemPhoto(file: File, pickupId: string, itemId?: string) {
+    return await uploadPickupItemPhoto(file, pickupId, itemId);
+  },
+
+  async getPickupItemSignedUrl(pickupId: string, storagePath: string) {
+    return await getPickupItemSignedUrl(pickupId, storagePath);
+  },
+
+  async uploadKycDocument(file: File, orderId: string, documentId?: string) {
+    return await uploadKycDocument(file, orderId, documentId);
   }
 };

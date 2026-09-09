@@ -150,9 +150,16 @@ export async function uploadProductImage(
   }
 
   // 2. Request signed upload authorization from server using verified session
+  const activeSessionToken = typeof window !== 'undefined' ? localStorage.getItem('jiffex_session_token') : null;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (activeSessionToken) {
+    headers['Authorization'] = `Bearer ${activeSessionToken}`;
+    headers['x-jiffex-session'] = activeSessionToken;
+  }
+
   const response = await fetch('/api/storage/product-upload-url', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     credentials: 'include',
     body: JSON.stringify({
       productId: productIdOrPrefix,
@@ -163,13 +170,19 @@ export async function uploadProductImage(
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     if (response.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('jiffex_session_token');
+        window.dispatchEvent(new CustomEvent('jiffex:session-expired', {
+          detail: { message: errorData.error || 'Your session has expired. Please sign in again.' }
+        }));
+      }
       throw new Error(errorData.error || 'Your session has expired. Please sign in again.');
     }
     if (response.status === 403) {
       throw new Error(errorData.error || 'You are not authorized to upload product images.');
     }
     if (response.status === 503) {
-      throw new Error(errorData.error || 'Product image storage is not configured.');
+      throw new Error(errorData.error || 'Product image storage is temporarily unavailable. Please try again later.');
     }
     if (response.status === 400) {
       throw new Error(errorData.error || 'Unsupported image format.');
@@ -206,3 +219,259 @@ export async function uploadProductImage(
 
   return publicUrlData.publicUrl;
 }
+
+/**
+ * Uploads an Agent pickup item photo to the private Supabase "pickup-items" storage bucket
+ * using server-authorized signed upload URLs.
+ * 
+ * 1. Resizes & compresses image (max 1600px, 0.75 quality WebP with JPEG fallback)
+ * 2. Requests signed upload authorization from server using HTTP-only session cookie / session token
+ * 3. Uploads compressed blob directly from browser to Supabase Storage via signed URL
+ * 4. Returns ONLY the Storage path (e.g., "pickups/<pickupId>/items/<itemId>/<ts>-<uuid>.webp")
+ *    DOES NOT return public URL or base64.
+ */
+export async function uploadPickupItemPhoto(
+  file: File,
+  pickupId: string,
+  itemId?: string
+): Promise<string> {
+  if (!file) {
+    throw new Error('No photo selected.');
+  }
+  if (!pickupId) {
+    throw new Error('No pickup ID specified for photo upload.');
+  }
+
+  // 1. Compress image in browser (max 1600px, 0.75 quality)
+  const compressed = await compressImage(file, 1600, 0.75);
+
+  if (!supabase) {
+    throw new Error('Supabase client is not available. Please verify configuration.');
+  }
+
+  // 2. Request signed upload authorization from server using verified session
+  const activeSessionToken = typeof window !== 'undefined' ? localStorage.getItem('jiffex_session_token') : null;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (activeSessionToken) {
+    headers['Authorization'] = `Bearer ${activeSessionToken}`;
+    headers['x-jiffex-session'] = activeSessionToken;
+  }
+
+  const response = await fetch('/api/storage/pickup-items/upload-url', {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify({
+      pickupId,
+      itemId: itemId || 'new',
+      contentType: compressed.mimeType
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('jiffex_session_token');
+        window.dispatchEvent(new CustomEvent('jiffex:session-expired', {
+          detail: { message: errorData.error || 'Your session has expired. Please sign in again.' }
+        }));
+      }
+      throw new Error(errorData.error || 'Your session has expired. Please sign in again.');
+    }
+    if (response.status === 403) {
+      throw new Error(errorData.error || 'You are not authorized to upload photos for this pickup.');
+    }
+    if (response.status === 503) {
+      throw new Error(errorData.error || 'Pickup item storage is temporarily unavailable. Please try again later.');
+    }
+    if (response.status === 400) {
+      throw new Error(errorData.error || 'Unsupported image format.');
+    }
+    throw new Error(errorData.error || 'Photo upload failed. Please retry.');
+  }
+
+  const { path: storagePath, token } = await response.json();
+  if (!storagePath || !token) {
+    throw new Error('Photo upload failed. Please retry.');
+  }
+
+  // 3. Direct browser-to-Supabase upload using the signed authorization token
+  const { error: uploadError } = await supabase.storage
+    .from('pickup-items')
+    .uploadToSignedUrl(storagePath, token, compressed.blob, {
+      contentType: compressed.mimeType,
+      cacheControl: '31536000'
+    });
+
+  if (uploadError) {
+    console.error('[Storage Signed Pickup Item Upload Error]', uploadError);
+    throw new Error('Photo upload to storage failed. Please retry.');
+  }
+
+  // 4. Return ONLY the storage path (no base64, no public URL)
+  return storagePath;
+}
+
+// In-memory cache for resolved signed URLs for current view/session
+const pickupSignedUrlCache = new Map<string, { url: string; expiresAt: number }>();
+
+/**
+ * Resolves a pickup item Storage path into a short-lived signed download URL.
+ * Checks the in-memory cache first to avoid duplicate network requests.
+ */
+export async function getPickupItemSignedUrl(
+  pickupId: string,
+  storagePath: string
+): Promise<string | null> {
+  if (!pickupId || !storagePath) return null;
+
+  // 1. Direct return for legacy base64 and standard http URLs
+  if (storagePath.startsWith('data:') || storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+    return storagePath;
+  }
+
+  // 2. Check memory cache (with 30s buffer before expiration)
+  const cacheKey = `${pickupId}:${storagePath}`;
+  const cached = pickupSignedUrlCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt - 30000) {
+    return cached.url;
+  }
+
+  try {
+    const activeSessionToken = typeof window !== 'undefined' ? localStorage.getItem('jiffex_session_token') : null;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (activeSessionToken) {
+      headers['Authorization'] = `Bearer ${activeSessionToken}`;
+      headers['x-jiffex-session'] = activeSessionToken;
+    }
+
+    const response = await fetch('/api/storage/pickup-items/signed-url', {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({
+        pickupId,
+        path: storagePath
+      })
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    if (data?.signedUrl) {
+      const expiresIn = data.expiresIn || 600;
+      pickupSignedUrlCache.set(cacheKey, {
+        url: data.signedUrl,
+        expiresAt: Date.now() + expiresIn * 1000
+      });
+      return data.signedUrl;
+    }
+  } catch (err) {
+    console.warn('[Storage] Failed to resolve pickup item signed URL:', err);
+  }
+
+  return null;
+}
+
+/**
+ * Uploads a KYC/document file (image or PDF) to the private "kyc-documents" bucket
+ * using server-authorized signed upload URLs.
+ * 
+ * - If image: compressed (max 1600px, 0.75 quality WebP/JPEG)
+ * - If PDF: uploaded directly without image compression
+ * - Stores & returns ONLY the Storage path (orders/{orderId}/documents/{docId}/...)
+ */
+export async function uploadKycDocument(
+  file: File,
+  orderId: string,
+  documentId?: string
+): Promise<string> {
+  if (!file) {
+    throw new Error('No document file selected.');
+  }
+  if (!orderId) {
+    throw new Error('No order/pickup ID specified for document upload.');
+  }
+
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  let uploadBlob: Blob = file;
+  let contentType: string = file.type || 'application/pdf';
+
+  if (!isPdf) {
+    // Compress image (max 1600px, 0.75 quality)
+    const compressed = await compressImage(file, 1600, 0.75);
+    uploadBlob = compressed.blob;
+    contentType = compressed.mimeType;
+  }
+
+  if (!supabase) {
+    throw new Error('Supabase client is not available. Please verify configuration.');
+  }
+
+  // Request signed upload authorization from server
+  const activeSessionToken = typeof window !== 'undefined' ? localStorage.getItem('jiffex_session_token') : null;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (activeSessionToken) {
+    headers['Authorization'] = `Bearer ${activeSessionToken}`;
+    headers['x-jiffex-session'] = activeSessionToken;
+  }
+
+  const response = await fetch('/api/storage/kyc-documents/upload-url', {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify({
+      orderId,
+      documentId: documentId || ('doc_' + Date.now()),
+      contentType
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('jiffex_session_token');
+        window.dispatchEvent(new CustomEvent('jiffex:session-expired', {
+          detail: { message: errorData.error || 'Your session has expired. Please sign in again.' }
+        }));
+      }
+      throw new Error(errorData.error || 'Your session has expired. Please sign in again.');
+    }
+    if (response.status === 403) {
+      throw new Error(errorData.error || 'You are not authorized to upload documents for this order/pickup.');
+    }
+    if (response.status === 503) {
+      throw new Error(errorData.error || 'KYC storage is temporarily unavailable. Please try again later.');
+    }
+    if (response.status === 400) {
+      throw new Error(errorData.error || 'Unsupported document format.');
+    }
+    throw new Error(errorData.error || 'Document upload failed. Please retry.');
+  }
+
+  const { path: storagePath, token } = await response.json();
+  if (!storagePath || !token) {
+    throw new Error('Document upload failed. Please retry.');
+  }
+
+  // Direct browser-to-Supabase upload using signed authorization token
+  const { error: uploadError } = await supabase.storage
+    .from('kyc-documents')
+    .uploadToSignedUrl(storagePath, token, uploadBlob, {
+      contentType,
+      cacheControl: '31536000'
+    });
+
+  if (uploadError) {
+    console.error('[Storage Signed KYC Upload Error]', uploadError);
+    throw new Error('Document upload to storage failed. Please retry.');
+  }
+
+  // Return ONLY the storage path
+  return storagePath;
+}
+

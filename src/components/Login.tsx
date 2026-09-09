@@ -173,6 +173,9 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '' }) =>
       const data = await response.json();
 
       if (response.ok && data.success) {
+        if (data.token) {
+          localStorage.setItem('jiffex_session_token', data.token);
+        }
         toast.success('Authentication successful! Welcome to Jiffex.');
         onSuccess(cleanEmail, data.user?.name);
       } else {

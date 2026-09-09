@@ -750,11 +750,18 @@ function parseRequestCookies(cookieHeader?: string): Record<string, string> {
 
 /**
  * Cryptographically verifies session from incoming request.
- * Does NOT fall back to x-user-role, x-customer-email, query, or body.
+ * Supports HTTP-only cookie, Authorization Bearer token, and x-jiffex-session header
+ * for cross-site iframe compatibility. Does NOT trust spoofable metadata headers.
  */
 function getAuthenticatedUser(req: express.Request): { email: string; role: string } | null {
   const cookies = parseRequestCookies(req.headers.cookie);
-  const sessionToken = cookies[SESSION_COOKIE_NAME];
+  const cookieToken = cookies[SESSION_COOKIE_NAME];
+
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  const headerToken = (req.headers['x-jiffex-session'] as string) || bearerToken;
+
+  const sessionToken = cookieToken || headerToken;
   const verified = verifySessionToken(sessionToken);
   if (!verified) return null;
 
@@ -862,6 +869,9 @@ app.post("/api/auth/send-otp", async (req, res) => {
           `
         });
         console.log(`[Auth] OTP successfully sent via SMTP to ${recipientTo}`);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[Auth DEV] Generated verification code for ${cleanEmail}: ${code}`);
+        }
         const userNotice = isAdminTarget 
           ? `Admin verification code sent to srikanth.satya@jiffex.in and arun.dubba@jiffex.in`
           : isAgentTarget
@@ -968,10 +978,12 @@ app.post("/api/auth/verify-otp", async (req, res) => {
     const sessionToken = createSessionToken(cleanEmail, assignedRole);
 
     if (sessionToken) {
+      // For cross-site iframes (AI Studio preview iframe), SameSite=None and Secure=true is required.
+      const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production';
       res.cookie(SESSION_COOKIE_NAME, sessionToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: isHttps,
+        sameSite: isHttps ? 'none' : 'lax',
         path: '/',
         maxAge: SESSION_DURATION_MS
       });
@@ -979,6 +991,7 @@ app.post("/api/auth/verify-otp", async (req, res) => {
 
     res.json({ 
       success: true, 
+      token: sessionToken,
       user: { 
         email: cleanEmail, 
         id: 'user-' + Buffer.from(cleanEmail).toString('hex').slice(0, 8),
@@ -998,21 +1011,31 @@ app.get("/api/auth/session", (req, res) => {
   if (!user) {
     return res.json({ authenticated: false });
   }
+
+  const cookies = parseRequestCookies(req.headers.cookie);
+  const cookieToken = cookies[SESSION_COOKIE_NAME];
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+  const headerToken = (req.headers['x-jiffex-session'] as string) || bearerToken;
+  const activeToken = cookieToken || headerToken;
+
   return res.json({
     authenticated: true,
     user: {
       email: user.email,
       role: user.role
-    }
+    },
+    token: activeToken || undefined
   });
 });
 
 // Step AUTH-1: Server logout endpoint (clears HTTP-only session cookie)
 app.post("/api/auth/logout", (req, res) => {
+  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https' || process.env.NODE_ENV === 'production';
   res.clearCookie(SESSION_COOKIE_NAME, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isHttps,
+    sameSite: isHttps ? 'none' : 'lax',
     path: '/'
   });
   res.json({ success: true, message: "Logged out successfully" });
@@ -1087,6 +1110,436 @@ app.post("/api/storage/product-upload-url", async (req, res) => {
     return res.status(503).json({ 
       error: "Product image storage is temporarily unavailable. Please try again later." 
     });
+  }
+});
+
+// Step 6B.2A: Secure pickup item photo upload authorization using signed upload URLs
+app.post("/api/storage/pickup-items/upload-url", async (req, res) => {
+  try {
+    // 1. Authoritative session authentication
+    const authUser = getAuthenticatedUser(req);
+    if (!authUser) {
+      return res.status(401).json({ error: "Unauthorized: Authentication required" });
+    }
+
+    // 2. Allow roles: admin, and agent (verified for assigned pickup only)
+    if (authUser.role === 'customer' || authUser.role === 'webmaster' || authUser.role === 'customer_service') {
+      return res.status(403).json({ error: "Forbidden: Access denied for this role" });
+    }
+
+    if (authUser.role !== 'admin' && authUser.role !== 'agent') {
+      return res.status(403).json({ error: "Forbidden: Unauthorized role" });
+    }
+
+    // 3. Ensure server-only Supabase admin storage client is configured
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: "Pickup items storage is not configured." });
+    }
+
+    // 4. Validate request parameters and MIME type
+    const { pickupId, itemId, contentType } = req.body || {};
+    if (!pickupId) {
+      return res.status(400).json({ error: "pickupId is required" });
+    }
+
+    const cleanPickupId = String(pickupId).trim();
+    const cleanItemId = itemId ? String(itemId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) : 'new';
+
+    const MIME_MAP: Record<string, string> = {
+      'image/webp': 'webp',
+      'image/jpeg': 'jpg',
+      'image/png': 'png'
+    };
+
+    const ext = contentType ? MIME_MAP[String(contentType).toLowerCase().trim()] : undefined;
+    if (!ext) {
+      return res.status(400).json({ error: "Unsupported image format. Allowed formats: WebP, JPEG, PNG." });
+    }
+
+    // 5. Verify pickup exists server-side (check Supabase pickups and memPickups fallback)
+    let pickupRecord: any = null;
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('pickups')
+          .select('id, assigned_agent_id')
+          .eq('id', cleanPickupId)
+          .maybeSingle();
+        if (!error && data) {
+          pickupRecord = data;
+        }
+      } catch (err: any) {
+        console.warn("[Storage] Error looking up pickup in DB:", err.message);
+      }
+    }
+
+    if (!pickupRecord) {
+      pickupRecord = memPickups.find(p => p.id === cleanPickupId);
+    }
+
+    if (!pickupRecord) {
+      return res.status(404).json({ error: `Pickup not found with ID: ${cleanPickupId}` });
+    }
+
+    // 6. Verify agent assignment server-side (never trust client headers/body)
+    if (authUser.role === 'agent') {
+      const emailLower = authUser.email.toLowerCase().trim();
+      let agentId: string | null = null;
+      const prefixMatch = emailLower.match(/^(\d+)\.agent@/);
+      if (prefixMatch) {
+        agentId = prefixMatch[1];
+      } else if (supabase) {
+        try {
+          const { data: agentRecord } = await supabase
+            .from('agents')
+            .select('id')
+            .ilike('email', emailLower)
+            .maybeSingle();
+          if (agentRecord?.id) {
+            agentId = String(agentRecord.id);
+          }
+        } catch (err: any) {
+          console.warn('[Storage] Error resolving agent id:', err.message);
+        }
+      }
+
+      const assignedAgentId = String(pickupRecord.assigned_agent_id || pickupRecord.assignedAgentId || '');
+      if (!agentId || assignedAgentId !== agentId) {
+        return res.status(403).json({ error: "Forbidden: You are not assigned to this pickup." });
+      }
+    }
+
+    // 7. Generate secure, server-controlled storage path
+    const timestamp = Date.now();
+    const safeUuid = crypto.randomUUID();
+    const storagePath = `pickups/${cleanPickupId}/items/${cleanItemId}/${timestamp}-${safeUuid}.${ext}`;
+
+    // 8. Generate signed upload URL via server-only service role client
+    const { data, error } = await supabaseAdmin.storage
+      .from('pickup-items')
+      .createSignedUploadUrl(storagePath);
+
+    if (error || !data) {
+      console.error("[Storage] Upstream error generating pickup item signed upload URL:", error?.message || error);
+      return res.status(503).json({ 
+        error: "Pickup item storage is temporarily unavailable. Please try again later." 
+      });
+    }
+
+    // 9. Return only necessary path, token, and signedUrl
+    return res.json({
+      path: storagePath,
+      token: data.token,
+      signedUrl: data.signedUrl
+    });
+  } catch (err: any) {
+    console.error("[Storage] Unexpected error generating signed pickup item upload URL:", err.message || err);
+    return res.status(503).json({ 
+      error: "Pickup item storage is temporarily unavailable. Please try again later." 
+    });
+  }
+});
+
+// Step 6C.2A: Secure KYC document upload authorization using signed upload URLs
+app.post("/api/storage/kyc-documents/upload-url", async (req, res) => {
+  try {
+    // 1. Authoritative session authentication (never trust client headers)
+    const authUser = getAuthenticatedUser(req);
+    if (!authUser) {
+      return res.status(401).json({ error: "Unauthorized: Authentication required" });
+    }
+
+    // 2. Role access check: allow admin, and agent (verified for assigned order/pickup only). Deny customer, webmaster, customer_service.
+    if (authUser.role === 'customer' || authUser.role === 'webmaster' || authUser.role === 'customer_service') {
+      return res.status(403).json({ error: "Forbidden: Access denied for this role" });
+    }
+
+    if (authUser.role !== 'admin' && authUser.role !== 'agent') {
+      return res.status(403).json({ error: "Forbidden: Unauthorized role" });
+    }
+
+    // 3. Ensure server-only Supabase admin storage client is configured
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: "KYC documents storage is not configured." });
+    }
+
+    // 4. Validate request parameters and MIME type
+    const { orderId, documentId, contentType } = req.body || {};
+    if (!orderId) {
+      return res.status(400).json({ error: "orderId is required" });
+    }
+
+    const cleanOrderId = String(orderId).trim();
+    const cleanDocId = documentId ? String(documentId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) : 'doc_' + Date.now();
+
+    const MIME_MAP: Record<string, string> = {
+      'image/webp': 'webp',
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'application/pdf': 'pdf'
+    };
+
+    const cleanContentType = contentType ? String(contentType).toLowerCase().trim() : '';
+    const ext = MIME_MAP[cleanContentType];
+    if (!ext) {
+      return res.status(400).json({ error: "Unsupported document format. Allowed formats: image/webp, image/jpeg, image/png, application/pdf." });
+    }
+
+    // 5. Look up order/pickup server-side to verify existence and agent assignment
+    let pickupRecord: any = null;
+    let orderRecord: any = null;
+
+    if (supabase) {
+      try {
+        const { data: pData } = await supabase
+          .from('pickups')
+          .select('id, assigned_agent_id')
+          .eq('id', cleanOrderId)
+          .maybeSingle();
+        if (pData) pickupRecord = pData;
+      } catch (err: any) {
+        console.warn("[Storage] Error looking up pickup in DB for KYC upload:", err.message);
+      }
+    }
+
+    if (!pickupRecord) {
+      pickupRecord = memPickups.find(p => p.id === cleanOrderId);
+    }
+
+    // If not found in pickups, check orders
+    if (!pickupRecord) {
+      if (supabase) {
+        try {
+          const { data: oData } = await supabase
+            .from('orders')
+            .select('id, assigned_agent_id')
+            .eq('id', cleanOrderId)
+            .maybeSingle();
+          if (oData) orderRecord = oData;
+        } catch (err: any) {
+          console.warn("[Storage] Error looking up order in DB for KYC upload:", err.message);
+        }
+      }
+      if (!orderRecord) {
+        orderRecord = memOrders.find(o => o.id === cleanOrderId);
+      }
+    }
+
+    const targetRecord = pickupRecord || orderRecord;
+    if (!targetRecord) {
+      return res.status(404).json({ error: `Order or Pickup not found with ID: ${cleanOrderId}` });
+    }
+
+    // 6. Verify agent assignment server-side (never trust client headers/body)
+    if (authUser.role === 'agent') {
+      const emailLower = authUser.email.toLowerCase().trim();
+      let agentId: string | null = null;
+      const prefixMatch = emailLower.match(/^(\d+)\.agent@/);
+      if (prefixMatch) {
+        agentId = prefixMatch[1];
+      } else if (supabase) {
+        try {
+          const { data: agentRecord } = await supabase
+            .from('agents')
+            .select('id')
+            .ilike('email', emailLower)
+            .maybeSingle();
+          if (agentRecord?.id) {
+            agentId = String(agentRecord.id);
+          }
+        } catch (err: any) {
+          console.warn('[Storage] Error resolving agent id for KYC upload:', err.message);
+        }
+      }
+
+      const assignedAgentId = String(targetRecord.assigned_agent_id || targetRecord.assignedAgentId || '');
+      if (!agentId || assignedAgentId !== agentId) {
+        return res.status(403).json({ error: "Forbidden: You are not assigned to this order/pickup." });
+      }
+    }
+
+    // 7. Generate secure, server-controlled storage path
+    // Path format: orders/{orderId}/documents/{documentId}/{timestamp}-{uuid}.{ext}
+    const timestamp = Date.now();
+    const safeUuid = crypto.randomUUID();
+    const storagePath = `orders/${cleanOrderId}/documents/${cleanDocId}/${timestamp}-${safeUuid}.${ext}`;
+
+    // 8. Generate signed upload URL via server-only service role client
+    const { data, error } = await supabaseAdmin.storage
+      .from('kyc-documents')
+      .createSignedUploadUrl(storagePath);
+
+    if (error || !data) {
+      console.error("[Storage] Upstream error generating KYC document signed upload URL:", error?.message || error);
+      return res.status(503).json({ 
+        error: "KYC documents storage is temporarily unavailable. Please try again later." 
+      });
+    }
+
+    // 9. Return only path and token
+    return res.json({
+      path: storagePath,
+      token: data.token,
+      signedUrl: data.signedUrl
+    });
+  } catch (err: any) {
+    console.error("[Storage] Unexpected error generating signed KYC document upload URL:", err.message || err);
+    return res.status(503).json({ 
+      error: "KYC documents storage is temporarily unavailable. Please try again later." 
+    });
+  }
+});
+
+// Step 6B.2B: Secure pickup item photo download authorization using short-lived signed URLs
+app.post("/api/storage/pickup-items/signed-url", async (req, res) => {
+  try {
+    // 1. Authoritative session authentication
+    const authUser = getAuthenticatedUser(req);
+    if (!authUser) {
+      return res.status(401).json({ error: "Unauthorized: Authentication required" });
+    }
+
+    // 2. Role access check: deny webmaster and customer_service
+    if (authUser.role === 'webmaster' || authUser.role === 'customer_service') {
+      return res.status(403).json({ error: "Forbidden: Access denied for this role" });
+    }
+
+    if (authUser.role !== 'admin' && authUser.role !== 'agent' && authUser.role !== 'customer') {
+      return res.status(403).json({ error: "Forbidden: Unauthorized role" });
+    }
+
+    // 3. Ensure server-only Supabase admin storage client is configured
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: "Pickup items storage is not configured." });
+    }
+
+    // 4. Validate request parameters
+    const { pickupId, path: requestedPath } = req.body || {};
+    if (!pickupId || !requestedPath) {
+      return res.status(400).json({ error: "pickupId and path are required" });
+    }
+
+    const cleanPickupId = String(pickupId).trim();
+    const cleanPath = String(requestedPath).trim();
+
+    // 5. Strict path validation: must not contain path traversal, must start with pickups/{pickupId}/
+    if (cleanPath.includes('..') || cleanPath.includes('//') || cleanPath.startsWith('/') || cleanPath.includes('\\')) {
+      return res.status(400).json({ error: "Invalid storage path." });
+    }
+
+    const expectedPrefix = `pickups/${cleanPickupId}/`;
+    if (!cleanPath.startsWith(expectedPrefix)) {
+      return res.status(403).json({ error: "Forbidden: Path does not belong to the specified pickup." });
+    }
+
+    // 6. Verify pickup exists server-side (check Supabase pickups and memPickups fallback)
+    let pickupRecord: any = null;
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('pickups')
+          .select('id, customer_id, email, assigned_agent_id')
+          .eq('id', cleanPickupId)
+          .maybeSingle();
+        if (!error && data) {
+          pickupRecord = data;
+        }
+      } catch (err: any) {
+        console.warn("[Storage] Error looking up pickup in DB for signed URL:", err.message);
+      }
+    }
+
+    if (!pickupRecord) {
+      pickupRecord = memPickups.find(p => p.id === cleanPickupId);
+    }
+
+    // Also check orders table / memOrders if pickup is an order ID
+    let orderRecord: any = null;
+    if (!pickupRecord) {
+      if (supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('orders')
+            .select('id, customer_id, email')
+            .eq('id', cleanPickupId)
+            .maybeSingle();
+          if (!error && data) {
+            orderRecord = data;
+          }
+        } catch (err: any) {
+          console.warn("[Storage] Error looking up order in DB for signed URL:", err.message);
+        }
+      }
+      if (!orderRecord) {
+        orderRecord = memOrders.find(o => o.id === cleanPickupId);
+      }
+    }
+
+    if (!pickupRecord && !orderRecord) {
+      return res.status(404).json({ error: `Pickup/Order not found with ID: ${cleanPickupId}` });
+    }
+
+    // 7. Role-based ownership verification
+    if (authUser.role === 'admin') {
+      // Admin: full access
+    } else if (authUser.role === 'agent') {
+      // Agent: only pickup assigned to that agent
+      const emailLower = authUser.email.toLowerCase().trim();
+      let agentId: string | null = null;
+      const prefixMatch = emailLower.match(/^(\d+)\.agent@/);
+      if (prefixMatch) {
+        agentId = prefixMatch[1];
+      } else if (supabase) {
+        try {
+          const { data: agentRecord } = await supabase
+            .from('agents')
+            .select('id')
+            .ilike('email', emailLower)
+            .maybeSingle();
+          if (agentRecord?.id) {
+            agentId = String(agentRecord.id);
+          }
+        } catch (err: any) {
+          console.warn('[Storage] Error resolving agent id for signed URL:', err.message);
+        }
+      }
+
+      const assignedAgentId = String(pickupRecord?.assigned_agent_id || pickupRecord?.assignedAgentId || '');
+      if (!agentId || assignedAgentId !== agentId) {
+        return res.status(403).json({ error: "Forbidden: You are not assigned to this pickup." });
+      }
+    } else if (authUser.role === 'customer') {
+      // Customer: only own pickup/order
+      const verifiedEmail = authUser.email.toLowerCase().trim();
+      const guestId = `guest_${verifiedEmail.replace(/[^a-z0-9]/g, '_')}`;
+
+      const recEmail = String(pickupRecord?.email || orderRecord?.email || '').toLowerCase().trim();
+      const recCustomerId = String(pickupRecord?.customer_id || pickupRecord?.customerId || orderRecord?.customer_id || orderRecord?.customerId || '').toLowerCase().trim();
+
+      const isOwner = recEmail === verifiedEmail || recCustomerId === verifiedEmail || recCustomerId === guestId;
+      if (!isOwner) {
+        return res.status(403).json({ error: "Forbidden: You do not have access to this pickup photo." });
+      }
+    }
+
+    // 8. Generate short-lived signed download URL (10 minutes = 600 seconds)
+    const SIGNED_URL_EXPIRY_SECONDS = 600;
+    const { data, error } = await supabaseAdmin.storage
+      .from('pickup-items')
+      .createSignedUrl(cleanPath, SIGNED_URL_EXPIRY_SECONDS);
+
+    if (error || !data?.signedUrl) {
+      console.error("[Storage] Upstream error creating signed download URL:", error?.message || error);
+      return res.status(503).json({ error: "Pickup photo is temporarily unavailable. Please try again later." });
+    }
+
+    return res.json({
+      signedUrl: data.signedUrl,
+      expiresIn: SIGNED_URL_EXPIRY_SECONDS
+    });
+  } catch (err: any) {
+    console.error("[Storage] Unexpected error generating signed pickup item download URL:", err.message || err);
+    return res.status(503).json({ error: "Failed to generate photo URL." });
   }
 });
 
@@ -3571,21 +4024,149 @@ app.get("/manifest/:id", async (req, res) => {
   `);
 });
 
-// API: Get all pickups from Supabase (or fallback to memory store)
+// API: Get pickups from Supabase (or fallback to memory store) - secured with role-based filtering
 app.get("/api/pickups", async (req, res) => {
-  if (!supabase) {
-    return res.json(memPickups);
+  // AUTH-2B: Authoritative session authentication
+  const authUser = getAuthenticatedUser(req);
+  if (!authUser) {
+    return res.status(401).json({ error: "Unauthorized: Authentication required" });
   }
+
+  // Deny webmaster and customer_service
+  if (authUser.role === 'webmaster' || authUser.role === 'customer_service') {
+    return res.status(403).json({ error: "Forbidden: Access denied for this role" });
+  }
+
+  if (authUser.role !== 'admin' && authUser.role !== 'agent' && authUser.role !== 'customer') {
+    return res.status(403).json({ error: "Forbidden: Unauthorized role" });
+  }
+
+  // Define lightweight projection fields (strictly excluding items, photos, images, base64)
+  const lightweightFields = [
+    'id',
+    'customer_id',
+    'customer_name',
+    'email',
+    'phone',
+    'status',
+    'pickup_date',
+    'pickup_time',
+    'address',
+    'payment_status',
+    'pickup_type',
+    'assigned_agent_id',
+    'language_preference',
+    'item_type',
+    'vehicle_type',
+    'created_at',
+    'total_weight',
+    'total_cost'
+  ];
+  const lightweightProjection = lightweightFields.join(',\n      ');
+
+  // Helper to sanitize in-memory pickup objects to the lightweight projection
+  const sanitizePickup = (p: any) => ({
+    id: p.id,
+    customer_id: p.customer_id || p.customerId,
+    customer_name: p.customer_name || p.customerName,
+    email: p.email,
+    phone: p.phone,
+    status: p.status,
+    pickup_date: p.pickup_date || p.pickupDate || p.date,
+    pickup_time: p.pickup_time || p.pickupTime || p.time,
+    address: p.address,
+    payment_status: p.payment_status || p.paymentStatus,
+    pickup_type: p.pickup_type || p.pickupType,
+    assigned_agent_id: p.assigned_agent_id || p.assignedAgentId,
+    language_preference: p.language_preference || p.languagePreference,
+    item_type: p.item_type || p.itemType,
+    vehicle_type: p.vehicle_type || p.vehicleType,
+    created_at: p.created_at || p.createdAt,
+    total_weight: p.total_weight || p.totalWeight || 0,
+    total_cost: p.total_cost || p.totalCost || 0
+  });
+
+  // Resolve agent ID if authenticated user is agent
+  let agentId: string | null = null;
+  if (authUser.role === 'agent') {
+    const emailLower = authUser.email.toLowerCase().trim();
+    // Pattern match standard agent email: e.g. 10001.agent@... or 12345.agent@...
+    const prefixMatch = emailLower.match(/^(\d+)\.agent@/);
+    if (prefixMatch) {
+      agentId = prefixMatch[1];
+    } else if (supabase) {
+      try {
+        const { data: agentRecord } = await supabase
+          .from('agents')
+          .select('id')
+          .ilike('email', emailLower)
+          .maybeSingle();
+        if (agentRecord?.id) {
+          agentId = String(agentRecord.id);
+        }
+      } catch (err: any) {
+        console.warn('[AUTH-2B] Error looking up agent id by email:', err.message);
+      }
+    }
+  }
+
+  // Memory fallback filter
+  const filterMemPickups = () => {
+    let list = memPickups;
+    if (authUser.role === 'admin') {
+      return list.map(sanitizePickup);
+    }
+    if (authUser.role === 'agent') {
+      return list
+        .filter((p: any) => {
+          const pAgentId = String(p.assigned_agent_id || p.assignedAgentId || '');
+          return agentId ? pAgentId === agentId : false;
+        })
+        .map(sanitizePickup);
+    }
+    if (authUser.role === 'customer') {
+      const verifiedEmail = authUser.email.toLowerCase().trim();
+      const guestId = `guest_${verifiedEmail.replace(/[^a-z0-9]/g, '_')}`;
+      return list
+        .filter((p: any) => {
+          const pCId = String(p.customer_id || p.customerId || '').toLowerCase().trim();
+          const pEmail = String(p.email || '').toLowerCase().trim();
+          return pEmail === verifiedEmail || pCId === verifiedEmail || pCId === guestId;
+        })
+        .map(sanitizePickup);
+    }
+    return [];
+  };
+
+  if (!supabase) {
+    return res.json(filterMemPickups());
+  }
+
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('pickups')
-      .select('*')
+      .select(lightweightProjection)
       .order('created_at', { ascending: false });
+
+    if (authUser.role === 'admin') {
+      // Admin sees all pickups
+    } else if (authUser.role === 'agent') {
+      if (!agentId) {
+        return res.json([]);
+      }
+      query = query.eq('assigned_agent_id', agentId);
+    } else if (authUser.role === 'customer') {
+      const verifiedEmail = authUser.email.toLowerCase().trim();
+      const guestId = `guest_${verifiedEmail.replace(/[^a-z0-9]/g, '_')}`;
+      query = query.or(`email.ilike.${verifiedEmail},customer_id.eq.${verifiedEmail},customer_id.eq.${guestId}`);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     res.json(data || []);
   } catch (err: any) {
     console.error("[SUPABASE GET PICKUPS ERROR]:", err.message);
-    res.json(memPickups);
+    res.json(filterMemPickups());
   }
 });
 
@@ -4131,11 +4712,27 @@ app.get("/api/orders/detail/:orderId", async (req, res) => {
     return res.status(400).json({ error: "Order ID is required" });
   }
 
+  // AUTH-2A: Authoritative session authentication
+  const authUser = getAuthenticatedUser(req);
+  if (!authUser) {
+    return res.status(401).json({ error: "Unauthorized: Authentication required" });
+  }
+
   const cleanOrderId = String(orderId).trim();
-  const requestingCustomerId = String(req.query.customerId || req.headers['x-customer-id'] || '').trim().toLowerCase();
-  const requestingEmail = String(req.query.email || req.headers['x-customer-email'] || '').trim().toLowerCase();
-  const userRole = String(req.query.role || req.headers['x-user-role'] || '').trim().toLowerCase();
-  const isAdminOrAgent = userRole === 'admin' || userRole === 'agent';
+
+  // Role validation
+  if (authUser.role === 'webmaster' || authUser.role === 'customer_service') {
+    return res.status(403).json({ error: "Forbidden: Access denied for this role" });
+  }
+
+  // AGENT: no confirmed assigned-order use case for customer-order detail endpoint
+  if (authUser.role === 'agent') {
+    return res.status(403).json({ error: "Forbidden: Agents must access pickups via the agent portal" });
+  }
+
+  if (authUser.role !== 'admin' && authUser.role !== 'customer') {
+    return res.status(403).json({ error: "Forbidden: Unauthorized role" });
+  }
 
   try {
     let orderRecord: any = null;
@@ -4212,16 +4809,21 @@ app.get("/api/orders/detail/:orderId", async (req, res) => {
       return res.status(404).json({ error: `Order not found with ID: ${orderId}` });
     }
 
-    // 4. Customer ownership verification
-    const orderCustomerId = String(orderRecord.customer_id || orderRecord.customerId || orderRecord.destination?.customerId || '').toLowerCase().trim();
-    const orderDestEmail = String(orderRecord.destination?.email || orderRecord.email || '').toLowerCase().trim();
-    const guestId = requestingEmail ? `guest_${requestingEmail.replace(/[^a-z0-9]/g, '_')}` : '';
+    // 4. Server-side authoritative ownership verification for customer
+    if (authUser.role === 'customer') {
+      const verifiedEmail = authUser.email.toLowerCase().trim();
+      const guestId = `guest_${verifiedEmail.replace(/[^a-z0-9]/g, '_')}`;
 
-    const isOwner = (requestingCustomerId && (orderCustomerId === requestingCustomerId || orderCustomerId === guestId || orderCustomerId === requestingEmail)) ||
-                    (requestingEmail && requestingEmail !== 'guest@example.com' && orderDestEmail === requestingEmail);
+      const orderCustomerId = String(orderRecord.customer_id || orderRecord.customerId || orderRecord.destination?.customerId || '').toLowerCase().trim();
+      const orderDestEmail = String(orderRecord.destination?.email || orderRecord.email || '').toLowerCase().trim();
 
-    if (!isAdminOrAgent && (requestingCustomerId || requestingEmail) && !isOwner) {
-      return res.status(403).json({ error: "Access denied: you do not have permission to view this order detail." });
+      const isOwner = orderCustomerId === verifiedEmail ||
+                      orderCustomerId === guestId ||
+                      (orderDestEmail === verifiedEmail && verifiedEmail !== 'guest@example.com');
+
+      if (!isOwner) {
+        return res.status(403).json({ error: "Access denied: you do not have permission to view this order detail." });
+      }
     }
 
     const transformed = transformDbOrder(orderRecord);
@@ -4235,15 +4837,43 @@ app.get("/api/orders/detail/:orderId", async (req, res) => {
 // Example API: Get all orders for a user
 app.get("/api/orders/:customerId", async (req, res) => {
   const { customerId } = req.params;
-  const { email, phone } = req.query;
 
-  const idsToFetch = [customerId];
-  if (email) {
-    const cleanEmail = String(email).toLowerCase().trim();
-    const guestId = `guest_${cleanEmail.replace(/[^a-z0-9]/g, '_')}`;
-    if (!idsToFetch.includes(guestId)) idsToFetch.push(guestId);
-    if (!idsToFetch.includes(cleanEmail)) idsToFetch.push(cleanEmail);
+  // AUTH-2A: Authoritative session authentication
+  const authUser = getAuthenticatedUser(req);
+  if (!authUser) {
+    return res.status(401).json({ error: "Unauthorized: Authentication required" });
   }
+
+  // Role validation
+  if (authUser.role === 'webmaster' || authUser.role === 'customer_service') {
+    return res.status(403).json({ error: "Forbidden: Access denied for this role" });
+  }
+
+  // AGENT: no confirmed assigned-order use case for customer-order list endpoint
+  if (authUser.role === 'agent') {
+    return res.status(403).json({ error: "Forbidden: Agents must access pickups via the agent portal" });
+  }
+
+  if (authUser.role !== 'admin' && authUser.role !== 'customer') {
+    return res.status(403).json({ error: "Forbidden: Unauthorized role" });
+  }
+
+  // Customer ownership check: requested customerId must match verified email or its guest ID (or admin)
+  const verifiedEmail = authUser.email.toLowerCase().trim();
+  const guestId = `guest_${verifiedEmail.replace(/[^a-z0-9]/g, '_')}`;
+  const reqCId = String(customerId).toLowerCase().trim();
+
+  if (authUser.role === 'customer') {
+    const isIdAllowed = reqCId === verifiedEmail || reqCId === guestId;
+    if (!isIdAllowed) {
+      return res.status(403).json({ error: "Access denied: cannot access orders for another customer." });
+    }
+  }
+
+  // Server-side determined identities to fetch (never trust query/header parameters)
+  const idsToFetch = authUser.role === 'admin' 
+    ? [customerId] 
+    : [verifiedEmail, guestId];
 
   if (!supabase) {
     const userOrders = memOrders.filter(o => {
@@ -4251,12 +4881,13 @@ app.get("/api/orders/:customerId", async (req, res) => {
       const isIdMatch = idsToFetch.some(id => String(cId).toLowerCase() === String(id).toLowerCase());
       
       const destEmail = o.destination?.email || o.email || "";
-      const isEmailMatch = email && destEmail && String(destEmail).toLowerCase() === String(email).toLowerCase();
-      
-      const destPhone = o.destination?.phone || o.phone || "";
-      const isPhoneMatch = phone && destPhone && String(destPhone) === String(phone);
+      const isEmailMatch = destEmail && (
+        authUser.role === 'customer' 
+          ? String(destEmail).toLowerCase() === verifiedEmail
+          : false
+      );
 
-      return isIdMatch || isEmailMatch || isPhoneMatch;
+      return isIdMatch || isEmailMatch;
     });
     return res.json(await deduplicateOrders(userOrders.map(transformDbOrder)));
   }
@@ -4288,10 +4919,10 @@ app.get("/api/orders/:customerId", async (req, res) => {
     
     let mergedOrders = [...(data || [])];
 
-    // Also fetch orders matching destination email if available
-    if (email) {
+    // Fetch orders matching verified destination email
+    const emailToMatch = authUser.role === 'customer' ? verifiedEmail : null;
+    if (emailToMatch) {
       try {
-        const emailLower = String(email).toLowerCase().trim();
         const { data: emailData } = await supabase
           .from('orders')
           .select(`
@@ -4310,7 +4941,7 @@ app.get("/api/orders/:customerId", async (req, res) => {
             shipment_date,
             last_tracking_update
           `)
-          .ilike('destination->>email', emailLower)
+          .ilike('destination->>email', emailToMatch)
           .order('created_at', { ascending: false })
           .limit(100);
         
@@ -4331,11 +4962,9 @@ app.get("/api/orders/:customerId", async (req, res) => {
       const cId = o.customer_id || o.customerId || o.destination?.customerId || o.destination?.customer_id;
       const isIdMatch = idsToFetch.some(id => String(cId).toLowerCase() === String(id).toLowerCase());
       const destEmail = o.destination?.email || o.email || "";
-      const isEmailMatch = email && destEmail && String(destEmail).toLowerCase() === String(email).toLowerCase();
-      const destPhone = o.destination?.phone || o.phone || "";
-      const isPhoneMatch = phone && destPhone && String(destPhone) === String(phone);
+      const isEmailMatch = emailToMatch && destEmail && String(destEmail).toLowerCase() === emailToMatch;
 
-      if (isIdMatch || isEmailMatch || isPhoneMatch) {
+      if (isIdMatch || isEmailMatch) {
         if (!mergedOrders.some((existing: any) => existing.id === o.id)) {
           mergedOrders.push(o);
         }
@@ -4352,18 +4981,17 @@ app.get("/api/orders/:customerId", async (req, res) => {
     cachedAllOrders.forEach((o: any) => mergedSet.set(o.id, o));
     memOrders.map(transformDbOrder).forEach((o: any) => mergedSet.set(o.id, o));
 
+    const emailToMatch = authUser.role === 'customer' ? verifiedEmail : null;
+
     const fallback = Array.from(mergedSet.values())
       .filter((o: any) => {
         const cId = o.customer_id || o.customerId || o.destination?.customerId || o.destination?.customer_id;
         const isIdMatch = idsToFetch.some(id => String(cId).toLowerCase() === String(id).toLowerCase());
         
         const destEmail = o.destination?.email || o.email || "";
-        const isEmailMatch = email && destEmail && String(destEmail).toLowerCase() === String(email).toLowerCase();
-        
-        const destPhone = o.destination?.phone || o.phone || "";
-        const isPhoneMatch = phone && destPhone && String(destPhone) === String(phone);
+        const isEmailMatch = emailToMatch && destEmail && String(destEmail).toLowerCase() === emailToMatch;
 
-        return isIdMatch || isEmailMatch || isPhoneMatch;
+        return isIdMatch || isEmailMatch;
       })
       .sort((a: any, b: any) => {
         const dateA = new Date(a.created_at || a.createdAt || 0).getTime();
@@ -5016,7 +5644,7 @@ const handleGetShipmentStatus = async (req: express.Request, res: express.Respon
         if (!foundOrder && supabase) {
           const { data } = await supabase
             .from('orders')
-            .select('*')
+            .select('id, tracking_number, shipment_status, status, shipping_date, carrier, destination, phone, customer_name, total_weight, created_at, tracking_response')
             .order('created_at', { ascending: false })
             .limit(30);
           if (data) {

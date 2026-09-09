@@ -6,6 +6,7 @@ import { User, Order } from '../../types';
 import { WAREHOUSE_ADDRESS, COMPANY_DETAILS } from '../../constants';
 import { api } from '../../services/api';
 import { toast } from 'sonner';
+import { PickupItemThumbnail } from '../PickupItemThumbnail';
 
 interface CustomerHistoryProps {
   currentUser: User | null;
@@ -257,7 +258,12 @@ const CustomerHistory = ({
                       <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                            {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={20} />}
+                            <PickupItemThumbnail 
+                              pickupId={selectedOrderForInvoice?.id} 
+                              image={item.image} 
+                              alt={item.name} 
+                              fallbackIconSize={20} 
+                            />
                           </div>
                           <div>
                             <div className="text-sm font-bold text-slate-900">{item.name}</div>

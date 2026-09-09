@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { CreditCard, Truck, Package, CheckCircle2, MapPin, ArrowRight, ChevronRight, Clock, ShieldCheck } from 'lucide-react';
 import { ShippingItem } from '../../types';
 import { WAREHOUSE_ADDRESS } from '../../constants';
+import { PickupItemThumbnail } from '../PickupItemThumbnail';
 
 interface WorkOrderSectionProps {
   items: ShippingItem[];
@@ -41,7 +42,12 @@ const WorkOrderSection = ({
               <div key={item.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center justify-between group">
                 <div className="flex items-center gap-6">
                   <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                    {item.image ? <img src={item.image} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package size={24} />}
+                    <PickupItemThumbnail 
+                      pickupId={pickupDetails?.id} 
+                      image={item.image} 
+                      alt={item.name} 
+                      fallbackIconSize={24} 
+                    />
                   </div>
                   <div>
                     <div className="text-lg font-black text-slate-900">{item.name}</div>

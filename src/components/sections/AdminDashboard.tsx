@@ -195,6 +195,11 @@ const AdminDashboard = ({
       const msg = err.message || 'Image upload failed. Please try again.';
       setProductImageUploadError(msg);
       toast.error(msg);
+      if (msg.toLowerCase().includes('session') || msg.toLowerCase().includes('sign in')) {
+        window.dispatchEvent(new CustomEvent('jiffex:open-login', { 
+          detail: { email: currentUser?.email || 'srikanth.satya@jiffex.in' } 
+        }));
+      }
     } finally {
       setIsUploadingProductImage(false);
       target.value = '';
@@ -806,10 +811,21 @@ const AdminDashboard = ({
                       </label>
                     </div>
                     {productImageUploadError && (
-                      <p className="text-xs font-semibold text-rose-600 flex items-center gap-1 mt-1">
-                        <AlertTriangle size={12} />
-                        {productImageUploadError}
-                      </p>
+                      <div className="mt-2 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-rose-700 flex items-center gap-1.5">
+                          <AlertTriangle size={14} className="shrink-0" />
+                          <span>{productImageUploadError}</span>
+                        </p>
+                        {(productImageUploadError.toLowerCase().includes('session') || productImageUploadError.toLowerCase().includes('sign in')) && (
+                          <button
+                            type="button"
+                            onClick={() => window.dispatchEvent(new CustomEvent('jiffex:open-login', { detail: { email: currentUser?.email || 'srikanth.satya@jiffex.in' } }))}
+                            className="px-3 py-1 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors shrink-0"
+                          >
+                            Sign In
+                          </button>
+                        )}
+                      </div>
                     )}
                     {newProduct.image && (
                       <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200">
