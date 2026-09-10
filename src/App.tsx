@@ -105,6 +105,9 @@ import {
   Mic,
   Bot,
   Radio,
+  Headset,
+  Layers,
+  MousePointerClick,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -5005,6 +5008,142 @@ export default function App() {
   const [showNewOrderMenu, setShowNewOrderMenu] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [navbarTrackingId, setNavbarTrackingId] = useState('');
+  const [isOmniAgentOpen, setIsOmniAgentOpen] = useState(false);
+
+  useEffect(() => {
+    const checkOmniStatus = () => {
+      const iframe = document.querySelector(
+        '#chat-iframe-container iframe, #omni-widget-component iframe, iframe[src*="omnidim"]'
+      ) as HTMLElement | null;
+
+      if (iframe) {
+        const parentDiv = iframe.closest('#chat-iframe-container > div') as HTMLElement | null;
+        const isParentHidden = parentDiv && parentDiv.style.display === 'none';
+        const rect = iframe.getBoundingClientRect();
+        const isVisible = !isParentHidden && 
+                          iframe.style.display !== 'none' && 
+                          iframe.style.visibility !== 'hidden' &&
+                          rect.height > 60 &&
+                          rect.width > 60;
+        setIsOmniAgentOpen(Boolean(isVisible));
+      } else {
+        setIsOmniAgentOpen(false);
+      }
+    };
+
+    const observer = new MutationObserver(() => {
+      checkOmniStatus();
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'class', 'hidden']
+    });
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        if (typeof event.data === 'string') {
+          if (event.data.includes('closed') || event.data.includes('restored') || event.data.includes('minimized') || event.data.includes('minimize')) {
+            setIsOmniAgentOpen(false);
+          } else if (event.data.includes('opened') || event.data.includes('show')) {
+            setIsOmniAgentOpen(true);
+          }
+        } else if (event.data && typeof event.data === 'object') {
+          const action = (event.data as any).action || (event.data as any).type || '';
+          if (action === 'restored' || action === 'closed' || action === 'hidden' || action === 'minimize' || action === 'minimized') {
+            setIsOmniAgentOpen(false);
+          } else if (action === 'open' || action === 'opened' || action === 'show') {
+            setIsOmniAgentOpen(true);
+          }
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('message', handleMessage);
+    };
+  }, []);
+
+  const triggerMobileOmniAgent = useCallback(() => {
+    const iframe = document.querySelector(
+      '#chat-iframe-container iframe, #omni-widget-component iframe, iframe[src*="omnidim"]'
+    ) as HTMLElement | null;
+    const parentDiv = iframe?.closest('#chat-iframe-container > div') as HTMLElement | null;
+    const isActuallyOpen = Boolean(
+      isOmniAgentOpen ||
+      (iframe && (!parentDiv || parentDiv.style.display !== 'none') && iframe.getBoundingClientRect().height > 60)
+    );
+
+    if (isActuallyOpen) {
+      if (typeof (window as any).OmniDimension?.close === 'function') {
+        (window as any).OmniDimension.close();
+      }
+      const closeBtn = document.querySelector(
+        '#chat-iframe-container div[title="Minimize"], #chat-iframe-container [title*="Minim" i], #chat-iframe-container button, #omni-widget-component button'
+      ) as HTMLElement | null;
+      if (closeBtn) {
+        closeBtn.click();
+      }
+      try {
+        window.postMessage({ action: 'minimize', source: 'omnidim-widget' }, '*');
+        const iframes = document.querySelectorAll('#chat-iframe-container iframe, iframe[src*="omnidim"]');
+        iframes.forEach((f) => {
+          try {
+            (f as HTMLIFrameElement).contentWindow?.postMessage({ action: 'minimize', source: 'omnidim-widget' }, '*');
+          } catch (e) {}
+        });
+      } catch (e) {}
+      setIsOmniAgentOpen(false);
+      return;
+    }
+
+    if (typeof (window as any).OmniDimension?.open === 'function') {
+      (window as any).OmniDimension.open();
+      setIsOmniAgentOpen(true);
+      return;
+    }
+
+    // 1. If previously opened and now minimized into #omni-minimized-pill:
+    const pill = document.getElementById('omni-minimized-pill');
+    if (pill) {
+      pill.click();
+      setIsOmniAgentOpen(true);
+      return;
+    }
+
+    // 2. If initial state before first opening (#chat-helper-button or container):
+    const helperBtn = document.getElementById('chat-helper-button') || document.getElementById('chat-helper-button-container');
+    if (helperBtn) {
+      helperBtn.click();
+      setIsOmniAgentOpen(true);
+      return;
+    }
+
+    // 3. Fallbacks to other launchers or query selectors
+    const selectors = [
+      '#omni-open-widget-btn',
+      '.chat-helper-button',
+      '.chat-helper-button-container',
+      '#omnidim-widget',
+      '#omni-widget-component button',
+      'button[aria-label*="chat" i]',
+      'button[aria-label*="bot" i]'
+    ];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel) as HTMLElement | null;
+      if (el) {
+        el.click();
+        setIsOmniAgentOpen(true);
+        return;
+      }
+    }
+
+    navigateTo('support');
+  }, [isOmniAgentOpen]);
 
   const navigateTo = (tab: Tab) => {
     if (tab === 'finalize') {
@@ -9279,25 +9418,25 @@ export default function App() {
 
               {/* Mobile View Header Text & Image (Right Side) */}
               <div className="md:hidden w-[90%] mx-auto px-1 text-left flex items-center justify-between gap-3">
-                <div className="flex-1 space-y-1.5 pr-1">
+                <div className="flex-1 space-y-1 pr-1">
                   <motion.h1 
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-xl font-black tracking-tight leading-tight text-white"
+                    className="text-lg sm:text-xl font-black tracking-tight leading-tight text-white"
                   >
-                    Send Anything from India to Abroad—<span className="relative inline-block text-amber-400">Hassle-Free</span>
+                    Shop, Pick Up & Ship <span className="relative inline-block text-amber-400">from India to the World</span>
                   </motion.h1>
                   <motion.p 
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="text-[10px] text-slate-300 font-medium leading-normal"
+                    className="text-[10px] text-slate-300 font-medium leading-relaxed"
                   >
-                    Shop online, schedule pickup, or send your own items. We handle packing & delivery.
+                    Buy from Indian stores, schedule a home pickup, or ask us to collect items from anywhere in Hyderabad. We consolidate, pack, and ship internationally.
                   </motion.p>
                 </div>
                 {/* Image on the right above the card container */}
-                <div className="w-[110px] shrink-0">
+                <div className="w-[100px] shrink-0">
                   <motion.img 
                     initial={{ opacity: 0, scale: 0.85 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -9305,40 +9444,86 @@ export default function App() {
                     src="https://lh3.googleusercontent.com/d/1m7ORvWwf92WuUJRS_-ySzPQhoInEnAU4"
                     alt="Jiffex Delivery"
                     referrerPolicy="no-referrer"
-                    className="w-full h-auto object-contain"
+                    className="w-full h-auto object-contain max-h-20"
                   />
                 </div>
               </div>
 
-              {/* Mobile View Badges (Secure Packing, Global Delivery, On-time Guaranteed) */}
-              <div className="md:hidden w-[90%] mx-auto grid grid-cols-3 gap-1.5 pt-1">
-                {[
-                  { icon: ShieldCheck, text: "Secure Packing", color: "text-emerald-400 border-emerald-500/25 bg-emerald-500/5" },
-                  { icon: Globe, text: "Global Delivery", color: "text-sky-400 border-sky-500/25 bg-sky-500/5" },
-                  { icon: Clock, text: "On-time Guaranteed", color: "text-amber-400 border-amber-500/25 bg-amber-500/5" }
-                ].map((badge, idx) => {
-                  const Icon = badge.icon;
-                  return (
-                    <motion.div 
-                      key={idx}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 + idx * 0.05 }}
-                      className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg border ${badge.color}`}
-                    >
-                      <Icon size={9} className="shrink-0" />
-                      <span className="font-extrabold text-[8px] tracking-tight whitespace-nowrap leading-none">{badge.text}</span>
-                    </motion.div>
-                  );
-                })}
-              </div>
-
               {/* Mobile View: Dedicated Unified Single Page Layout Container */}
               <div className="md:hidden w-[95%] mx-auto px-0 mt-3">
-                <div className="bg-white rounded-3xl p-5 shadow-xl border border-slate-100 text-slate-800 space-y-6 text-left">
+                <div className="bg-white rounded-3xl p-4 sm:p-5 shadow-xl border border-slate-100 text-slate-800 space-y-5 text-left">
                   
-                  {/* SECTION 1: WHAT WOULD YOU LIKE TO DO */}
-                  <div className="space-y-4">
+                  {/* SECTION 1: HOW JIFFEX WORKS (BEFORE Quick Actions) */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                          <Sparkles size={13} className="stroke-[2.5]" />
+                        </div>
+                        <h3 className="text-xs font-black text-slate-900 tracking-tight uppercase">How Jiffex Works</h3>
+                      </div>
+                      <span className="text-[8px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100/60">
+                        3 Simple Steps
+                      </span>
+                    </div>
+
+                    {/* 3 Compact Mobile Steps */}
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {/* Step 1 */}
+                      <div className="bg-slate-50/80 hover:bg-indigo-50/30 border border-slate-100/90 rounded-xl p-2.5 flex items-start gap-2.5 transition-colors shadow-xs">
+                        <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                          <MousePointerClick size={12} className="stroke-[2.5]" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[8px] font-black text-indigo-600 uppercase tracking-wider">Step 1</span>
+                            <span className="text-[8px] text-slate-300">•</span>
+                            <h4 className="font-extrabold text-[10px] text-slate-900 leading-tight">You Choose</h4>
+                          </div>
+                          <p className="text-[9px] text-slate-500 font-medium leading-snug mt-0.5">
+                            Shop yourself, schedule pickup, or tell us where to collect.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Step 2 */}
+                      <div className="bg-slate-50/80 hover:bg-amber-50/30 border border-slate-100/90 rounded-xl p-2.5 flex items-start gap-2.5 transition-colors shadow-xs">
+                        <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                          <Boxes size={12} className="stroke-[2.5]" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[8px] font-black text-amber-600 uppercase tracking-wider">Step 2</span>
+                            <span className="text-[8px] text-slate-300">•</span>
+                            <h4 className="font-extrabold text-[10px] text-slate-900 leading-tight">We Collect & Combine</h4>
+                          </div>
+                          <p className="text-[9px] text-slate-500 font-medium leading-snug mt-0.5">
+                            We collect, consolidate, check and securely pack your items.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Step 3 */}
+                      <div className="bg-slate-50/80 hover:bg-emerald-50/30 border border-slate-100/90 rounded-xl p-2.5 flex items-start gap-2.5 transition-colors shadow-xs">
+                        <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                          <Plane size={12} className="stroke-[2.5]" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[8px] font-black text-emerald-600 uppercase tracking-wider">Step 3</span>
+                            <span className="text-[8px] text-slate-300">•</span>
+                            <h4 className="font-extrabold text-[10px] text-slate-900 leading-tight">We Ship</h4>
+                          </div>
+                          <p className="text-[9px] text-slate-500 font-medium leading-snug mt-0.5">
+                            We ship internationally and help you track delivery.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECTION 2: QUICK ACTIONS & BENEFITS */}
+                  <div className="space-y-3">
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
                         <PlusCircle size={14} className="stroke-[2.5]" />
@@ -9394,27 +9579,24 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Below service cards, put how jiffex works side by side horizontally under the same white background */}
-                    <div className="pt-2">
-                      <div className="bg-slate-50/50 rounded-xl p-2 border border-slate-100/80 grid grid-cols-4 divide-x divide-slate-200/50">
+                    {/* 5. BENEFITS ROW */}
+                    <div className="pt-1">
+                      <div className="bg-slate-50/70 rounded-xl p-2 border border-slate-100/80 grid grid-cols-4 divide-x divide-slate-200/50">
                         {[
-                          { icon: Calendar, title: "Book in 30 Seconds", desc: "Quick & easy pickup", color: "bg-indigo-50 text-indigo-600" },
-                          { icon: ShoppingBag, title: "Add items from Anywhere", desc: "From home, shop or any store", color: "bg-amber-50 text-amber-600" },
-                          { icon: Truck, title: "We Combine Everything", desc: "Pack & store in our warehouse", color: "bg-emerald-50 text-emerald-600" },
-                          { icon: CheckCircle2, title: "Delivered to Your Doorstep", desc: "Global delivery made easy", color: "bg-blue-50 text-blue-600" }
-                        ].map((step, idx) => {
-                          const StepIcon = step.icon;
+                          { icon: Zap, title: "Fast Booking", color: "bg-indigo-50 text-indigo-600" },
+                          { icon: MapPin, title: "Collect From Anywhere", color: "bg-amber-50 text-amber-600" },
+                          { icon: Layers, title: "Smart Consolidation", color: "bg-emerald-50 text-emerald-600" },
+                          { icon: Home, title: "Doorstep Delivery", color: "bg-blue-50 text-blue-600" }
+                        ].map((benefit, idx) => {
+                          const BIcon = benefit.icon;
                           return (
                             <div key={idx} className="flex flex-col items-center text-center px-1 py-1 first:pl-0 last:pr-0">
-                              <div className={`w-6 h-6 rounded-md ${step.color} flex items-center justify-center shrink-0 mb-1`}>
-                                <StepIcon size={12} className="font-black" />
+                              <div className={`w-6 h-6 rounded-md ${benefit.color} flex items-center justify-center shrink-0 mb-1`}>
+                                <BIcon size={12} className="stroke-[2.5]" />
                               </div>
-                              <h5 className="font-black text-[8px] sm:text-[9px] text-slate-900 leading-tight min-h-[22px] flex items-center justify-center">
-                                {step.title}
+                              <h5 className="font-extrabold text-[8px] sm:text-[9px] text-slate-800 leading-tight min-h-[22px] flex items-center justify-center text-center">
+                                {benefit.title}
                               </h5>
-                              <p className="text-[7px] text-slate-400 font-medium leading-tight mt-0.5">
-                                {step.desc}
-                              </p>
                             </div>
                           );
                         })}
@@ -19357,6 +19539,31 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Mobile Fixed OmniDimension Customer Care Widget */}
+      {(!currentUser || (['customer', 'guest'].includes((currentUser.role || '').toLowerCase()))) && (
+        <div 
+          id="mobile-customer-care-widget"
+          className="md:hidden fixed bottom-[calc(60px+env(safe-area-inset-bottom,0px))] right-4 z-[85] pointer-events-auto"
+        >
+          <button
+            id="mobile-customer-care-trigger-btn"
+            onClick={triggerMobileOmniAgent}
+            aria-label={isOmniAgentOpen ? "Close Customer Care Assistant" : "Open OmniDimension Customer Care"}
+            title="Customer Support"
+            className="w-[52px] h-[52px] rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-600 to-indigo-700 text-white flex items-center justify-center shadow-[0_6px_20px_rgba(79,70,229,0.4)] border-2 border-white/95 active:scale-90 transition-transform duration-200 cursor-pointer relative"
+          >
+            {isOmniAgentOpen ? (
+              <X size={22} className="stroke-[2.5]" />
+            ) : (
+              <>
+                <Headset size={24} className="stroke-[2.2]" />
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-white shadow-xs" />
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Mobile Bottom Navigation Bar */}
       {(!currentUser || (['customer', 'guest'].includes((currentUser.role || '').toLowerCase()))) && (

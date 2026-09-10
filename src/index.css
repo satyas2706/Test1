@@ -71,3 +71,54 @@ body {
   transform: translateY(-6px);
   box-shadow: 0 20px 40px rgba(0,0,0,0.15);
 }
+
+/* Mobile OmniDimension widget styling:
+   Strictly hide the raw dark OmniDimension launcher bar / pill on mobile screens (max-width: 768px)
+   so our dedicated circular purple customer-care button is the ONLY launcher,
+   preventing duplicate widgets or interference with bottom navigation. */
+@media (max-width: 768px) {
+  #chat-helper-button-container,
+  #chat-helper-button,
+  .chat-helper-button-container,
+  .chat-helper-button,
+  #omni-minimized-pill,
+  #omni-open-widget-btn,
+  [id*="chat-helper-button"],
+  [id*="omni-minimized"],
+  div:has(> #chat-helper-button),
+  div:has(> #omni-minimized-pill) {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    position: fixed !important;
+    top: -9999px !important;
+    left: -9999px !important;
+    width: 0 !important;
+    height: 0 !important;
+    max-width: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    clip-path: inset(50%) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    z-index: -100 !important;
+  }
+
+  /* When the OmniDimension widget is closed/minimized on mobile,
+     ensure its wrapper container does not capture clicks or block the bottom navigation */
+  #chat-iframe-container {
+    pointer-events: none !important;
+  }
+
+  /* When the agent is opened, allow pointer events on the iframe and its active panel */
+  #chat-iframe-container > div,
+  #chat-iframe-container iframe,
+  #chat-iframe-container div[title="Minimize"],
+  #chat-iframe-container button {
+    pointer-events: auto !important;
+  }
+}
+
