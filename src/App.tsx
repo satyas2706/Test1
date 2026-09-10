@@ -9430,9 +9430,9 @@ export default function App() {
 
     const HomeSection = useMemo(() => {
       return (
-        <div className="flex flex-col gap-8 sm:gap-14 md:gap-24 pb-12 md:pb-24">
+        <div className="flex flex-col gap-12 sm:gap-16 md:gap-24 pb-16 md:pb-24">
           {/* JIFFEX Truck Hero Section */}
-          <div className="relative overflow-hidden rounded-b-[2rem] md:rounded-[4rem] bg-transparent text-white px-3 sm:px-8 md:px-16 pt-7 sm:pt-10 md:pt-16 pb-6 md:pb-16 shadow-2xl">
+          <div className="relative overflow-hidden rounded-b-[2rem] md:rounded-[4rem] bg-transparent text-white px-3 sm:px-8 md:px-16 pt-7 sm:pt-10 md:pt-16 pb-8 md:pb-16 shadow-2xl">
             <div 
               className="absolute inset-0 pointer-events-none z-0"
               style={{
@@ -9496,8 +9496,58 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Mobile-only "How Jiffex Works" - Rephrased Point by Point before Service Selectors */}
+              <div className="md:hidden w-full space-y-2.5 pt-1">
+                <div className="bg-white/[0.09] backdrop-blur-md border border-white/15 rounded-2xl p-3.5 sm:p-4 text-left shadow-lg space-y-3">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles size={14} className="text-amber-400" />
+                      <h3 className="text-xs font-black tracking-wider uppercase text-white">How Jiffex Works</h3>
+                    </div>
+                    <span className="text-[10px] font-bold text-amber-300 bg-amber-400/20 px-2 py-0.5 rounded-full border border-amber-400/30">
+                      4 Simple Steps
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {[
+                      {
+                        step: 1,
+                        title: "Book Doorstep Pickup",
+                        desc: "Schedule in 30 seconds at your convenient date & time."
+                      },
+                      {
+                        step: 2,
+                        title: "Combine Any Package",
+                        desc: "Add home items, shop products, or warehouse drop-offs."
+                      },
+                      {
+                        step: 3,
+                        title: "Doorstep Weighing & Packing",
+                        desc: "Our agent arrives, packs securely, and weighs on digital scales."
+                      },
+                      {
+                        step: 4,
+                        title: "Global Doorstep Delivery",
+                        desc: "Smooth customs clearance & fast tracked delivery abroad."
+                      }
+                    ].map((item) => (
+                      <div key={item.step} className="flex items-start gap-2.5 p-2 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+                        <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-900 font-black text-[10px] flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                          {item.step}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-white leading-tight">{item.title}</div>
+                          <div className="text-[10px] text-slate-300 leading-snug mt-0.5">{item.desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               {/* Responsive Service Selectors */}
-              <div className="space-y-3 sm:space-y-6 md:space-y-8 w-full">
+              <div className="space-y-3 sm:space-y-6 md:space-y-8 w-full pt-2 sm:pt-0">
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -9602,7 +9652,7 @@ export default function App() {
                         element.scrollIntoView({ behavior: 'smooth' });
                       }
                     }}
-                    className="px-4 sm:px-6 py-1.5 sm:py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-full font-bold items-center gap-2 transition-all group text-xs sm:text-sm md:text-base flex"
+                    className="hidden sm:flex px-4 sm:px-6 py-1.5 sm:py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-full font-bold items-center gap-2 transition-all group text-xs sm:text-sm md:text-base"
                   >
                     Not sure? <span className="underline underline-offset-4 transition-colors">See how it works</span>
                   </button>
@@ -9617,8 +9667,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* How Jiffex Works - Value Prop */}
-          <div id="how-it-works" className="space-y-6 sm:space-y-10 md:space-y-12 scroll-mt-24 px-3 sm:px-6 md:px-0">
+          {/* How Jiffex Works - Value Prop (Desktop Only) */}
+          <div id="how-it-works" className="hidden md:block space-y-6 sm:space-y-10 md:space-y-12 scroll-mt-24 px-3 sm:px-6 md:px-0">
             <div className="text-center space-y-2 sm:space-y-4">
               <h3 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">How Jiffex Works</h3>
               <p className="text-xs sm:text-base text-slate-500 max-w-2xl mx-auto leading-relaxed">A seamless, unified shipping experience designed for your convenience.</p>
@@ -9659,7 +9709,7 @@ export default function App() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="relative overflow-hidden rounded-2xl sm:rounded-3xl md:rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-700 p-6 sm:p-8 md:p-12 text-white shadow-2xl mx-2 sm:mx-0"
+            className="relative overflow-hidden rounded-2xl sm:rounded-3xl md:rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-700 p-6 sm:p-8 md:p-12 text-white shadow-2xl mx-3 sm:mx-0"
           >
             <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl" />
