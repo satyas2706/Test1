@@ -9432,7 +9432,7 @@ export default function App() {
       return (
         <div className="flex flex-col gap-8 sm:gap-14 md:gap-24 pb-12 md:pb-24">
           {/* JIFFEX Truck Hero Section */}
-          <div className="relative overflow-hidden rounded-b-[2rem] md:rounded-[4rem] bg-transparent text-white px-4 sm:px-8 md:px-16 pt-5 sm:pt-10 md:pt-16 pb-6 md:pb-16 shadow-2xl">
+          <div className="relative overflow-hidden rounded-b-[2rem] md:rounded-[4rem] bg-transparent text-white px-3 sm:px-8 md:px-16 pt-7 sm:pt-10 md:pt-16 pb-6 md:pb-16 shadow-2xl">
             <div 
               className="absolute inset-0 pointer-events-none z-0"
               style={{
@@ -9440,10 +9440,10 @@ export default function App() {
               }}
             />
 
-            <div className="relative z-10 flex flex-col items-center text-center space-y-5 sm:space-y-8 md:space-y-12 w-full max-w-6xl mx-auto">
+            <div className="relative z-10 flex flex-col items-center text-center space-y-4 sm:space-y-8 md:space-y-12 w-full max-w-6xl mx-auto">
               {/* Responsive Hero Header: Title, Subtext, Benefit Pills, and Delivery Image (Desktop only) */}
               <div className="flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-8 md:gap-12 w-full text-center md:text-left">
-                <div className="w-full md:flex-1 space-y-3 sm:space-y-4 md:space-y-6">
+                <div className="w-full md:flex-1 space-y-2.5 sm:space-y-4 md:space-y-6">
                   <motion.h1 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -9497,12 +9497,12 @@ export default function App() {
               </div>
 
               {/* Responsive Service Selectors */}
-              <div className="space-y-4 sm:space-y-6 md:space-y-8 w-full">
+              <div className="space-y-3 sm:space-y-6 md:space-y-8 w-full">
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.3 }}
-                  className="text-xs sm:text-sm font-bold text-indigo-300 md:text-indigo-400 uppercase tracking-widest text-center md:text-left"
+                  className="text-[11px] sm:text-sm font-bold text-indigo-300 md:text-indigo-400 uppercase tracking-widest text-center md:text-left"
                 >
                   Choose how you want to send:
                 </motion.p>
@@ -9511,76 +9511,79 @@ export default function App() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4 md:gap-6 max-w-5xl mx-auto w-full"
+                  className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-6 max-w-5xl mx-auto w-full items-stretch"
                 >
                   {/* Card 1: Pickup from Home */}
                   <div 
                     onClick={() => navigateTo('pickup')}
-                    className="relative cursor-pointer bg-white border-slate-100 p-4 sm:p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] shadow-lg md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-3 md:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-slate-900"
+                    className="relative cursor-pointer bg-white border-slate-100 p-2.5 sm:p-5 md:p-8 rounded-xl sm:rounded-2xl md:rounded-[2.5rem] shadow-md sm:shadow-lg md:shadow-xl border flex flex-col items-center text-center gap-1.5 sm:gap-3 md:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-slate-900 justify-between h-full"
                   >
-                    <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap">
-                      <span className="px-2.5 py-0.5 bg-amber-500 text-white text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase tracking-widest rounded-full shadow-md">
+                    <div className="absolute -top-2 sm:-top-2.5 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap">
+                      <span className="px-1.5 sm:px-2.5 py-0.5 bg-amber-500 text-white text-[7px] sm:text-[9px] md:text-[10px] font-black uppercase tracking-wider rounded-full shadow-xs sm:shadow-md">
                         Most Popular
                       </span>
                     </div>
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-20 md:h-20 bg-indigo-50 rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0 mt-1 sm:mt-0">
-                      <Truck className="w-6 h-6 sm:w-7 sm:h-7 md:w-10 md:h-10 text-indigo-600" />
+                    <div className="w-9 h-9 sm:w-14 sm:h-14 md:w-20 md:h-20 bg-indigo-50 rounded-xl sm:rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0 mt-0.5 sm:mt-0">
+                      <Truck className="w-4 h-4 sm:w-7 sm:h-7 md:w-10 md:h-10 text-indigo-600" />
                     </div>
-                    <div className="space-y-1 sm:space-y-1.5 md:space-y-3 flex-grow">
-                      <h3 className="font-black text-base sm:text-lg md:text-2xl text-slate-900 leading-tight">Schedule Pickup</h3>
-                      <p className="text-xs sm:text-xs md:text-sm text-slate-500 leading-relaxed">
-                        We collect items from your doorstep, pack & ship internationally
+                    <div className="space-y-0.5 sm:space-y-1.5 md:space-y-3 flex-grow flex flex-col justify-center">
+                      <h3 className="font-black text-[11px] sm:text-base md:text-2xl text-slate-900 leading-tight flex items-center justify-center">Schedule Pickup</h3>
+                      <p className="hidden sm:block text-xs md:text-sm text-slate-500 leading-relaxed">
+                        We collect from your doorstep & deliver abroad
                       </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); navigateTo('pickup'); }}
-                      className="w-full py-2 sm:py-2.5 md:py-4 bg-indigo-600 text-white rounded-xl md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-xs sm:text-xs md:text-sm"
+                      className="w-full py-1.5 sm:py-2.5 md:py-4 bg-indigo-600 text-white rounded-lg sm:rounded-xl md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xs sm:shadow-md active:scale-95 flex items-center justify-center text-[10px] sm:text-xs md:text-sm leading-tight px-1 mt-auto whitespace-nowrap"
                     >
-                      Schedule Pickup
+                      <span className="sm:hidden">Schedule</span>
+                      <span className="hidden sm:inline">Schedule Pickup</span>
                     </button>
                   </div>
 
                   {/* Card 2: Send to Our Warehouse */}
                   <div 
                     onClick={() => navigateTo('warehouse')}
-                    className="cursor-pointer bg-white border-slate-100 p-4 sm:p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] shadow-lg md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-3 md:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-slate-900"
+                    className="cursor-pointer bg-white border-slate-100 p-2.5 sm:p-5 md:p-8 rounded-xl sm:rounded-2xl md:rounded-[2.5rem] shadow-md sm:shadow-lg md:shadow-xl border flex flex-col items-center text-center gap-1.5 sm:gap-3 md:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-slate-900 justify-between h-full"
                   >
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-20 md:h-20 bg-indigo-50 rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0 mt-1 sm:mt-0">
-                      <Package className="w-6 h-6 sm:w-7 sm:h-7 md:w-10 md:h-10 text-indigo-600" />
+                    <div className="w-9 h-9 sm:w-14 sm:h-14 md:w-20 md:h-20 bg-indigo-50 rounded-xl sm:rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0 mt-0.5 sm:mt-0">
+                      <Package className="w-4 h-4 sm:w-7 sm:h-7 md:w-10 md:h-10 text-indigo-600" />
                     </div>
-                    <div className="space-y-1 sm:space-y-1.5 md:space-y-3 flex-grow">
-                      <h3 className="font-black text-base sm:text-lg md:text-2xl text-slate-900 leading-tight">Drop Off Package</h3>
-                      <p className="text-xs sm:text-xs md:text-sm text-slate-500 leading-relaxed">
-                        Ship your items to our warehouse—we pack & deliver abroad
+                    <div className="space-y-0.5 sm:space-y-1.5 md:space-y-3 flex-grow flex flex-col justify-center">
+                      <h3 className="font-black text-[11px] sm:text-base md:text-2xl text-slate-900 leading-tight flex items-center justify-center">Drop Off Package</h3>
+                      <p className="hidden sm:block text-xs md:text-sm text-slate-500 leading-relaxed">
+                        Ship to warehouse—we pack & deliver abroad
                       </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); navigateTo('warehouse'); }}
-                      className="w-full py-2 sm:py-2.5 md:py-4 bg-indigo-600 text-white rounded-xl md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-xs sm:text-xs md:text-sm"
+                      className="w-full py-1.5 sm:py-2.5 md:py-4 bg-indigo-600 text-white rounded-lg sm:rounded-xl md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xs sm:shadow-md active:scale-95 flex items-center justify-center text-[10px] sm:text-xs md:text-sm leading-tight px-1 mt-auto whitespace-nowrap"
                     >
-                      Drop Off Package
+                      <span className="sm:hidden">Drop Off</span>
+                      <span className="hidden sm:inline">Drop Off Package</span>
                     </button>
                   </div>
 
                   {/* Card 3: Shop & Send */}
                   <div 
                     onClick={() => navigateTo('store')}
-                    className="cursor-pointer bg-white border-slate-100 p-4 sm:p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] shadow-lg md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-3 md:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-slate-900"
+                    className="cursor-pointer bg-white border-slate-100 p-2.5 sm:p-5 md:p-8 rounded-xl sm:rounded-2xl md:rounded-[2.5rem] shadow-md sm:shadow-lg md:shadow-xl border flex flex-col items-center text-center gap-1.5 sm:gap-3 md:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-slate-900 justify-between h-full"
                   >
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-20 md:h-20 bg-indigo-50 rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0 mt-1 sm:mt-0">
-                      <ShoppingBag className="w-6 h-6 sm:w-7 sm:h-7 md:w-10 md:h-10 text-indigo-600" />
+                    <div className="w-9 h-9 sm:w-14 sm:h-14 md:w-20 md:h-20 bg-indigo-50 rounded-xl sm:rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0 mt-0.5 sm:mt-0">
+                      <ShoppingBag className="w-4 h-4 sm:w-7 sm:h-7 md:w-10 md:h-10 text-indigo-600" />
                     </div>
-                    <div className="space-y-1 sm:space-y-1.5 md:space-y-3 flex-grow">
-                      <h3 className="font-black text-base sm:text-lg md:text-2xl text-slate-900 leading-tight">Shop & Ship</h3>
-                      <p className="text-xs sm:text-xs md:text-sm text-slate-500 leading-relaxed">
-                        Buy authentic Indian products—we deliver anywhere abroad
+                    <div className="space-y-0.5 sm:space-y-1.5 md:space-y-3 flex-grow flex flex-col justify-center">
+                      <h3 className="font-black text-[11px] sm:text-base md:text-2xl text-slate-900 leading-tight flex items-center justify-center">Shop & Ship</h3>
+                      <p className="hidden sm:block text-xs md:text-sm text-slate-500 leading-relaxed">
+                        Buy authentic Indian items—we deliver abroad
                       </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); navigateTo('store'); }}
-                      className="w-full py-2 sm:py-2.5 md:py-4 bg-indigo-600 text-white rounded-xl md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-xs sm:text-xs md:text-sm"
+                      className="w-full py-1.5 sm:py-2.5 md:py-4 bg-indigo-600 text-white rounded-lg sm:rounded-xl md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xs sm:shadow-md active:scale-95 flex items-center justify-center text-[10px] sm:text-xs md:text-sm leading-tight px-1 mt-auto whitespace-nowrap"
                     >
-                      Shop Now
+                      <span className="sm:hidden">Shop</span>
+                      <span className="hidden sm:inline">Shop Now</span>
                     </button>
                   </div>
                 </motion.div>
