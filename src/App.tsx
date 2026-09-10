@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Logo } from './components/Logo';
 import { MobilePickupFlow } from './components/MobilePickupFlow';
 import { SinglePagePickupForm } from './components/SinglePagePickupForm';
@@ -4987,7 +4988,7 @@ const isAdminEmail = (email: string | null | undefined): boolean => {
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [sessionGuestId] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -5009,6 +5010,8 @@ export default function App() {
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [navbarTrackingId, setNavbarTrackingId] = useState('');
   const [isOmniAgentOpen, setIsOmniAgentOpen] = useState(false);
+  const [isConnectingOmni, setIsConnectingOmni] = useState(false);
+  const omniRetryTimerRef = useRef<any>(null);
 
   useEffect(() => {
     const checkOmniStatus = () => {
@@ -5065,6 +5068,9 @@ export default function App() {
     return () => {
       observer.disconnect();
       window.removeEventListener('message', handleMessage);
+      if (omniRetryTimerRef.current) {
+        clearInterval(omniRetryTimerRef.current);
+      }
     };
   }, []);
 
@@ -5080,7 +5086,7 @@ export default function App() {
 
     if (isActuallyOpen) {
       if (typeof (window as any).OmniDimension?.close === 'function') {
-        (window as any).OmniDimension.close();
+        try { (window as any).OmniDimension.close(); } catch (e) {}
       }
       const closeBtn = document.querySelector(
         '#chat-iframe-container div[title="Minimize"], #chat-iframe-container [title*="Minim" i], #chat-iframe-container button, #omni-widget-component button'
@@ -5098,51 +5104,78 @@ export default function App() {
         });
       } catch (e) {}
       setIsOmniAgentOpen(false);
+      setIsConnectingOmni(false);
       return;
     }
 
-    if (typeof (window as any).OmniDimension?.open === 'function') {
-      (window as any).OmniDimension.open();
-      setIsOmniAgentOpen(true);
-      return;
-    }
-
-    // 1. If previously opened and now minimized into #omni-minimized-pill:
-    const pill = document.getElementById('omni-minimized-pill');
-    if (pill) {
-      pill.click();
-      setIsOmniAgentOpen(true);
-      return;
-    }
-
-    // 2. If initial state before first opening (#chat-helper-button or container):
-    const helperBtn = document.getElementById('chat-helper-button') || document.getElementById('chat-helper-button-container');
-    if (helperBtn) {
-      helperBtn.click();
-      setIsOmniAgentOpen(true);
-      return;
-    }
-
-    // 3. Fallbacks to other launchers or query selectors
-    const selectors = [
-      '#omni-open-widget-btn',
-      '.chat-helper-button',
-      '.chat-helper-button-container',
-      '#omnidim-widget',
-      '#omni-widget-component button',
-      'button[aria-label*="chat" i]',
-      'button[aria-label*="bot" i]'
-    ];
-    for (const sel of selectors) {
-      const el = document.querySelector(sel) as HTMLElement | null;
-      if (el) {
-        el.click();
-        setIsOmniAgentOpen(true);
-        return;
+    const tryOpenOmni = (): boolean => {
+      // 1. OmniDimension public JS API
+      if (typeof (window as any).OmniDimension?.open === 'function') {
+        try {
+          (window as any).OmniDimension.open();
+          setIsOmniAgentOpen(true);
+          return true;
+        } catch (e) {}
       }
+
+      // 2. Previously minimized pill
+      const pill = document.getElementById('omni-minimized-pill');
+      if (pill) {
+        pill.click();
+        setIsOmniAgentOpen(true);
+        return true;
+      }
+
+      // 3. Native initial launcher
+      const helperBtn = document.getElementById('chat-helper-button') || document.getElementById('chat-helper-button-container');
+      if (helperBtn) {
+        helperBtn.click();
+        setIsOmniAgentOpen(true);
+        return true;
+      }
+
+      // 4. Other query selectors
+      const selectors = [
+        '#omni-open-widget-btn',
+        '.chat-helper-button',
+        '.chat-helper-button-container',
+        '#omnidim-widget',
+        '#omni-widget-component button',
+        'button[aria-label*="chat" i]',
+        'button[aria-label*="bot" i]'
+      ];
+      for (const sel of selectors) {
+        const el = document.querySelector(sel) as HTMLElement | null;
+        if (el) {
+          el.click();
+          setIsOmniAgentOpen(true);
+          return true;
+        }
+      }
+
+      return false;
+    };
+
+    if (tryOpenOmni()) {
+      setIsConnectingOmni(false);
+      return;
     }
 
-    navigateTo('support');
+    // If OmniDimension widget is still downloading/initializing in production:
+    // Show spinner and poll every 150ms until the launcher mounts, then trigger it immediately
+    setIsConnectingOmni(true);
+    if (omniRetryTimerRef.current) {
+      clearInterval(omniRetryTimerRef.current);
+    }
+    let elapsed = 0;
+    omniRetryTimerRef.current = setInterval(() => {
+      elapsed += 150;
+      if (tryOpenOmni() || elapsed >= 8000) {
+        clearInterval(omniRetryTimerRef.current);
+        omniRetryTimerRef.current = null;
+        setIsConnectingOmni(false);
+      }
+    }, 150);
   }, [isOmniAgentOpen]);
 
   const navigateTo = (tab: Tab) => {
@@ -6249,15 +6282,22 @@ export default function App() {
     );
   };
 
-  // Check backend health and Supabase connection
+  // Check backend health and Supabase connection non-blockingly
   useEffect(() => {
     let subscription: any;
 
+    const timeoutPromise = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))
+      ]);
+    };
+
     const initializeSupabaseAndAuth = async () => {
+      // 1. Fetch runtime Supabase configuration with fast 1.5s timeout
       try {
-        // Fetch runtime Supabase configuration from the server
-        const configRes = await fetch('/api/supabase-config');
-        if (configRes.ok) {
+        const configRes = await timeoutPromise(fetch('/api/supabase-config'), 1500, null as any);
+        if (configRes && configRes.ok) {
           const configData = await configRes.json();
           if (configData.supabaseUrl && configData.supabaseAnonKey) {
             updateSupabaseConfig(configData.supabaseUrl, configData.supabaseAnonKey);
@@ -6267,29 +6307,34 @@ export default function App() {
         console.warn('Unable to reach runtime configuration api:', err);
       }
 
-      // Check backend health
+      // 2. Concurrently check health and get session with fast timeouts so neither blocks the other
       try {
-        const res = await api.checkHealth();
-        setDbStatus({ connected: res.supabaseConnected, checked: true });
-      } catch (err) {
-        setDbStatus({ connected: false, checked: true });
-      }
+        const [healthRes, sessionRes] = await Promise.allSettled([
+          timeoutPromise(api.checkHealth(), 2000, { status: 'ok', supabaseConnected: true, emailConfigured: true }),
+          timeoutPromise(supabase.auth.getSession(), 2000, { data: { session: null } })
+        ]);
 
-      // Initialize auth session
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        if (session?.user?.email) {
-          saveActiveSession(session.user.email, session.user.user_metadata?.full_name);
+        if (healthRes.status === 'fulfilled' && healthRes.value) {
+          setDbStatus({ connected: !!(healthRes.value as any).supabaseConnected, checked: true });
+        } else {
+          setDbStatus({ connected: false, checked: true });
         }
-        setAuthLoading(false);
+
+        if (sessionRes.status === 'fulfilled' && sessionRes.value?.data?.session) {
+          const activeSession = sessionRes.value.data.session;
+          setSession(activeSession);
+          if (activeSession?.user?.email) {
+            saveActiveSession(activeSession.user.email, activeSession.user.user_metadata?.full_name);
+          }
+        }
       } catch (err) {
-        console.warn('Supabase auth getSession error:', err);
+        console.warn('Init auth/health error:', err);
+      } finally {
         setAuthLoading(false);
       }
 
       try {
-        const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
           setSession(session);
           if (session?.user?.email) {
             saveActiveSession(session.user.email, session.user.user_metadata?.full_name);
@@ -6300,7 +6345,7 @@ export default function App() {
         console.warn('Supabase auth onAuthStateChange error:', err);
       }
 
-      // Sync server session
+      // Sync server session non-blockingly
       try {
         const storedToken = localStorage.getItem('jiffex_session_token');
         const headers: Record<string, string> = {};
@@ -6308,11 +6353,12 @@ export default function App() {
           headers['Authorization'] = `Bearer ${storedToken}`;
           headers['x-jiffex-session'] = storedToken;
         }
-        const sessionRes = await fetch('/api/auth/session', {
-          credentials: 'include',
-          headers
-        });
-        if (sessionRes.ok) {
+        const sessionRes = await timeoutPromise(
+          fetch('/api/auth/session', { credentials: 'include', headers }),
+          2000,
+          null as any
+        );
+        if (sessionRes && sessionRes.ok) {
           const sessionData = await sessionRes.json();
           if (sessionData.authenticated && sessionData.token) {
             localStorage.setItem('jiffex_session_token', sessionData.token);
@@ -9384,485 +9430,167 @@ export default function App() {
 
     const HomeSection = useMemo(() => {
       return (
-        <div className="flex flex-col gap-0 md:gap-24 pb-3 md:pb-24">
+        <div className="flex flex-col gap-8 sm:gap-14 md:gap-24 pb-12 md:pb-24">
           {/* JIFFEX Truck Hero Section */}
-          <div className="relative overflow-hidden rounded-none md:rounded-[4rem] bg-transparent text-white px-0 pt-4 pb-0 sm:p-12 md:p-20 shadow-2xl">
+          <div className="relative overflow-hidden rounded-b-[2rem] md:rounded-[4rem] bg-transparent text-white px-4 sm:px-8 md:px-16 pt-5 sm:pt-10 md:pt-16 pb-6 md:pb-16 shadow-2xl">
             <div 
-              className="absolute inset-x-0 top-0 bottom-[180px] md:bottom-0 pointer-events-none z-0"
+              className="absolute inset-0 pointer-events-none z-0"
               style={{
                 background: `radial-gradient(circle at 30% 20%, #1e2a78 0%, #0b1220 60%, #05070f 100%)`,
               }}
             />
 
-            <div className="relative z-10 flex flex-col items-center text-center space-y-5 md:space-y-12 w-full">
-              {/* Laptop / Desktop View Header Text */}
-              <div className="hidden md:block space-y-4 md:space-y-8 max-w-4xl px-4 md:px-0">
-                <div className="space-y-2 md:space-y-6">
+            <div className="relative z-10 flex flex-col items-center text-center space-y-5 sm:space-y-8 md:space-y-12 w-full max-w-6xl mx-auto">
+              {/* Responsive Hero Header: Title, Subtext, Benefit Pills, and Delivery Image (Desktop only) */}
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-8 md:gap-12 w-full text-center md:text-left">
+                <div className="w-full md:flex-1 space-y-3 sm:space-y-4 md:space-y-6">
                   <motion.h1 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-2xl sm:text-5xl md:text-8xl font-black tracking-tighter leading-tight text-white"
+                    className="text-2xl sm:text-4xl md:text-6xl lg:text-7xl font-black tracking-tight md:tracking-tighter leading-tight text-white"
                   >
-                    Send Anything from India to Abroad—<span className="relative inline-block">Hassle-Free<div className="absolute -bottom-1 md:-bottom-2 left-1/2 -translate-x-1/2 w-2/3 h-1 md:h-1.5 bg-amber-500 rounded-full" /></span>
+                    Send Anything from India to Abroad—<span className="relative inline-block text-amber-400 md:text-white">Hassle-Free<div className="hidden md:block absolute -bottom-1 md:-bottom-2 left-1/2 -translate-x-1/2 w-2/3 h-1 md:h-1.5 bg-amber-500 rounded-full" /></span>
                   </motion.h1>
                   <motion.p 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="text-sm sm:text-xl md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto"
+                    className="text-xs sm:text-base md:text-xl text-slate-300 md:text-slate-400 font-medium max-w-2xl mx-auto md:mx-0 leading-relaxed"
                   >
                     Shop online, schedule pickup, or send your own items. We handle packing & delivery.
                   </motion.p>
-                </div>
-              </div>
 
-              {/* Mobile View Header Text & Image (Right Side) */}
-              <div className="md:hidden w-[90%] mx-auto px-1 text-left flex items-center justify-between gap-3">
-                <div className="flex-1 space-y-1 pr-1">
-                  <motion.h1 
-                    initial={{ opacity: 0, y: 15 }}
+                  {/* 3 Benefit Pills */}
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-lg sm:text-xl font-black tracking-tight leading-tight text-white"
-                  >
-                    Shop, Pick Up & Ship <span className="relative inline-block text-amber-400">from India to the World</span>
-                  </motion.h1>
-                  <motion.p 
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="text-[10px] text-slate-300 font-medium leading-relaxed"
-                  >
-                    Buy from Indian stores, schedule a home pickup, or ask us to collect items from anywhere in Hyderabad. We consolidate, pack, and ship internationally.
-                  </motion.p>
-                </div>
-                {/* Image on the right above the card container */}
-                <div className="w-[100px] shrink-0">
-                  <motion.img 
-                    initial={{ opacity: 0, scale: 0.85 }}
-                    animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.15 }}
+                    className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 sm:gap-2.5 pt-1 sm:pt-2"
+                  >
+                    <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-white text-[10px] sm:text-xs font-bold shadow-xs">
+                      <ShieldCheck size={13} className="text-emerald-400 stroke-[2.5]" />
+                      Secure Packing
+                    </span>
+                    <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-white text-[10px] sm:text-xs font-bold shadow-xs">
+                      <Globe size={13} className="text-blue-400 stroke-[2.5]" />
+                      Global Delivery
+                    </span>
+                    <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-white text-[10px] sm:text-xs font-bold shadow-xs">
+                      <Clock size={13} className="text-amber-400 stroke-[2.5]" />
+                      On-time Guaranteed
+                    </span>
+                  </motion.div>
+                </div>
+
+                {/* Hero Delivery Image - Hidden on mobile view */}
+                <div className="hidden md:block shrink-0 md:w-64 lg:w-72">
+                  <motion.img 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.2 }}
                     src="https://lh3.googleusercontent.com/d/1m7ORvWwf92WuUJRS_-ySzPQhoInEnAU4"
                     alt="Jiffex Delivery"
                     referrerPolicy="no-referrer"
-                    className="w-full h-auto object-contain max-h-20"
+                    className="w-full h-auto object-contain max-h-44 md:max-h-60 filter drop-shadow-xl"
                   />
                 </div>
               </div>
 
-              {/* Mobile View: Dedicated Unified Single Page Layout Container */}
-              <div className="md:hidden w-[95%] mx-auto px-0 mt-3">
-                <div className="bg-white rounded-3xl p-4 sm:p-5 shadow-xl border border-slate-100 text-slate-800 space-y-5 text-left">
-                  
-                  {/* SECTION 1: HOW JIFFEX WORKS (BEFORE Quick Actions) */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                          <Sparkles size={13} className="stroke-[2.5]" />
-                        </div>
-                        <h3 className="text-xs font-black text-slate-900 tracking-tight uppercase">How Jiffex Works</h3>
-                      </div>
-                      <span className="text-[8px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100/60">
-                        3 Simple Steps
-                      </span>
-                    </div>
-
-                    {/* 3 Compact Mobile Steps */}
-                    <div className="grid grid-cols-1 gap-1.5">
-                      {/* Step 1 */}
-                      <div className="bg-slate-50/80 hover:bg-indigo-50/30 border border-slate-100/90 rounded-xl p-2.5 flex items-start gap-2.5 transition-colors shadow-xs">
-                        <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                          <MousePointerClick size={12} className="stroke-[2.5]" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1">
-                            <span className="text-[8px] font-black text-indigo-600 uppercase tracking-wider">Step 1</span>
-                            <span className="text-[8px] text-slate-300">•</span>
-                            <h4 className="font-extrabold text-[10px] text-slate-900 leading-tight">You Choose</h4>
-                          </div>
-                          <p className="text-[9px] text-slate-500 font-medium leading-snug mt-0.5">
-                            Shop yourself, schedule pickup, or tell us where to collect.
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Step 2 */}
-                      <div className="bg-slate-50/80 hover:bg-amber-50/30 border border-slate-100/90 rounded-xl p-2.5 flex items-start gap-2.5 transition-colors shadow-xs">
-                        <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                          <Boxes size={12} className="stroke-[2.5]" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1">
-                            <span className="text-[8px] font-black text-amber-600 uppercase tracking-wider">Step 2</span>
-                            <span className="text-[8px] text-slate-300">•</span>
-                            <h4 className="font-extrabold text-[10px] text-slate-900 leading-tight">We Collect & Combine</h4>
-                          </div>
-                          <p className="text-[9px] text-slate-500 font-medium leading-snug mt-0.5">
-                            We collect, consolidate, check and securely pack your items.
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Step 3 */}
-                      <div className="bg-slate-50/80 hover:bg-emerald-50/30 border border-slate-100/90 rounded-xl p-2.5 flex items-start gap-2.5 transition-colors shadow-xs">
-                        <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                          <Plane size={12} className="stroke-[2.5]" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1">
-                            <span className="text-[8px] font-black text-emerald-600 uppercase tracking-wider">Step 3</span>
-                            <span className="text-[8px] text-slate-300">•</span>
-                            <h4 className="font-extrabold text-[10px] text-slate-900 leading-tight">We Ship</h4>
-                          </div>
-                          <p className="text-[9px] text-slate-500 font-medium leading-snug mt-0.5">
-                            We ship internationally and help you track delivery.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* SECTION 2: QUICK ACTIONS & BENEFITS */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                        <PlusCircle size={14} className="stroke-[2.5]" />
-                      </div>
-                      <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase">Quick Actions</h3>
-                    </div>
-
-                    {/* Three Side-by-Side Cards */}
-                    <div className="grid grid-cols-3 gap-2">
-                      {/* Card 1: Schedule Pickup */}
-                      <div 
-                        onClick={() => {
-                          navigateTo('pickup');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                      >
-                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
-                          <Truck className="w-5 h-5 text-indigo-600" />
-                        </div>
-                        <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Schedule Pickup</h4>
-                        <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Schedule</span>
-                      </div>
-
-                      {/* Card 2: Drop off package */}
-                      <div 
-                        onClick={() => {
-                          navigateTo('warehouse');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                      >
-                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
-                          <Package className="w-5 h-5 text-indigo-600" />
-                        </div>
-                        <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Drop Off Package</h4>
-                        <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Drop Off</span>
-                      </div>
-
-                      {/* Card 3: Shop & Ship */}
-                      <div 
-                        onClick={() => {
-                          navigateTo('store');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                      >
-                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
-                          <ShoppingBag className="w-5 h-5 text-indigo-600" />
-                        </div>
-                        <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Shop & Ship</h4>
-                        <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Shop</span>
-                      </div>
-                    </div>
-
-                    {/* 5. BENEFITS ROW */}
-                    <div className="pt-1">
-                      <div className="bg-slate-50/70 rounded-xl p-2 border border-slate-100/80 grid grid-cols-4 divide-x divide-slate-200/50">
-                        {[
-                          { icon: Zap, title: "Fast Booking", color: "bg-indigo-50 text-indigo-600" },
-                          { icon: MapPin, title: "Collect From Anywhere", color: "bg-amber-50 text-amber-600" },
-                          { icon: Layers, title: "Smart Consolidation", color: "bg-emerald-50 text-emerald-600" },
-                          { icon: Home, title: "Doorstep Delivery", color: "bg-blue-50 text-blue-600" }
-                        ].map((benefit, idx) => {
-                          const BIcon = benefit.icon;
-                          return (
-                            <div key={idx} className="flex flex-col items-center text-center px-1 py-1 first:pl-0 last:pr-0">
-                              <div className={`w-6 h-6 rounded-md ${benefit.color} flex items-center justify-center shrink-0 mb-1`}>
-                                <BIcon size={12} className="stroke-[2.5]" />
-                              </div>
-                              <h5 className="font-extrabold text-[8px] sm:text-[9px] text-slate-800 leading-tight min-h-[22px] flex items-center justify-center text-center">
-                                {benefit.title}
-                              </h5>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Section Divider 1 */}
-                  <div className="border-t border-slate-100" />
-
-                  {/* SECTION 2: SHOP DEALS */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                        <ShoppingBag size={14} className="stroke-[2.5]" />
-                      </div>
-                      <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase">Shop Authentic Indian Goods</h3>
-                    </div>
-
-                    <motion.div 
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.25 }}
-                      onClick={() => {
-                        navigateTo('store');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="relative overflow-hidden bg-gradient-to-r from-amber-500/10 via-amber-600/5 to-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-md active:scale-[0.98] transition-all cursor-pointer"
-                    >
-                      {/* Decorative background circle */}
-                      <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
-                      
-                      <div className="flex gap-2.5 items-start">
-                        <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center shrink-0 text-amber-600 border border-amber-100/30">
-                          <ShoppingBag size={20} className="animate-pulse" />
-                        </div>
-                        <div className="space-y-1 text-left">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-extrabold text-[12px] text-amber-950 tracking-tight leading-none">Shop Indian Goods</span>
-                            <span className="bg-amber-600 text-white text-[7px] font-black uppercase px-1 py-0.5 rounded tracking-wide leading-none">Catalog</span>
-                          </div>
-                          <p className="text-[10px] text-slate-600 font-medium leading-normal max-w-[210px]">
-                            Craving home flavors, festive sweets, or premium ethnic wear? Buy from top Indian stores and we'll deliver them abroad!
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="shrink-0 flex flex-col items-center justify-center bg-amber-600 text-white p-2 px-3 rounded-xl shadow-sm hover:bg-amber-700 active:scale-95 transition-all">
-                        <span className="text-[9px] font-black tracking-tight leading-none">Shop</span>
-                        <ArrowRight size={12} className="mt-1" />
-                      </div>
-                    </motion.div>
-                  </div>
-
-                  {/* Section Divider 2 */}
-                  <div className="border-t border-slate-100" />
-
-                  {/* SECTION 3: QUICK SHIPPING QUOTE */}
-                  <div id="mobile-quick-quote" className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
-                        <Calculator size={14} className="stroke-[2.5]" />
-                      </div>
-                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Quick Shipping Quote</h3>
-                    </div>
-
-                    <div className="space-y-3.5">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Destination</label>
-                          <select 
-                            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold text-slate-800"
-                            value={qCountry}
-                            onChange={(e) => setQCountry(e.target.value)}
-                          >
-                            {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Weight (kg)</label>
-                          <input 
-                            type="number" 
-                            min="0.1" 
-                            step="0.1"
-                            className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold bg-slate-50 text-slate-800"
-                            value={qWeight}
-                            onChange={(e) => setQWeight(Number(e.target.value))}
-                          />
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Shipping Method</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {[
-                            { id: 'Standard', label: 'Standard', days: '10-14 Days', multiplier: 0.7 },
-                            { id: 'Express', label: 'Express', days: '5-7 Days', multiplier: 1.0 }
-                          ].map((method) => (
-                            <button
-                              key={method.id}
-                              onClick={() => setQMethod(method.id as any)}
-                              className={`p-2.5 rounded-xl border-2 transition-all text-left ${
-                                qMethod === method.id 
-                                  ? 'border-indigo-600 bg-indigo-50/50 ring-4 ring-indigo-600/5' 
-                                  : 'border-slate-100 bg-white hover:border-slate-200'
-                              }`}
-                            >
-                              <div className={`text-[10px] font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
-                                {method.label}
-                              </div>
-                              <div className="text-[7px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                                {method.days}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="p-4 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
-                        <div className="flex justify-between items-end">
-                          <div>
-                            <span className="text-indigo-100 text-[8px] font-bold uppercase tracking-widest">
-                              Estimated Cost ({qMethod})
-                            </span>
-                            <div className="text-xl font-black">
-                              ₹{(() => {
-                                const res = calculateShippingCost({
-                                  country: qCountry,
-                                  weightKg: qWeight,
-                                  method: qMethod,
-                                  rates: shippingRates,
-                                  rateBands: shippingRateBands,
-                                  discounts: shippingDiscounts
-                                });
-                                return res.finalPriceInr.toLocaleString('en-IN');
-                              })()}
-                            </div>
-                            {(() => {
-                              const res = calculateShippingCost({
-                                country: qCountry,
-                                weightKg: qWeight,
-                                method: qMethod,
-                                rates: shippingRates,
-                                rateBands: shippingRateBands,
-                                discounts: shippingDiscounts
-                              });
-                              if (res.discountPercent > 0) {
-                                return (
-                                  <div className="text-[7px] font-bold text-rose-300 mt-0.5">
-                                    Discount of {res.discountPercent}% Applied for {qCountry}! (Save ₹{Math.round(res.discountAmount).toLocaleString('en-IN')}) [Band: {res.appliedBandLabel}]
-                                  </div>
-                                );
-                              }
-                              return (
-                                <div className="text-[7px] font-bold text-indigo-200 mt-0.5">
-                                  Band: {res.appliedBandLabel} (₹{res.baseRatePerKg}{res.isFlatRate ? ' flat' : '/kg'})
-                                </div>
-                              );
-                            })()}
-                            <div className="text-[7px] font-bold text-indigo-200 uppercase tracking-widest mt-1.5 flex items-center gap-1">
-                              <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
-                            </div>
-                          </div>
-                          <Truck className="opacity-25 shrink-0" size={28} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-
-              {/* Laptop / Desktop only view for the service selectors */}
-              <div className="hidden md:block space-y-6 md:space-y-8 w-full">
+              {/* Responsive Service Selectors */}
+              <div className="space-y-4 sm:space-y-6 md:space-y-8 w-full">
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.3 }}
-                  className="text-xs sm:text-sm font-bold text-indigo-400 uppercase tracking-widest"
+                  className="text-xs sm:text-sm font-bold text-indigo-300 md:text-indigo-400 uppercase tracking-widest text-center md:text-left"
                 >
-                  <span className="hidden md:inline">Choose how you want to send:</span>
+                  Choose how you want to send:
                 </motion.p>
 
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="grid grid-cols-3 md:grid-cols-3 gap-2 md:gap-6 max-w-5xl mx-auto"
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4 md:gap-6 max-w-5xl mx-auto w-full"
                 >
                   {/* Card 1: Pickup from Home */}
                   <div 
                     onClick={() => navigateTo('pickup')}
-                    className="relative cursor-pointer bg-indigo-50/90 border-indigo-100 md:bg-white md:border-slate-100 p-2.5 sm:p-8 rounded-[1.2rem] md:rounded-[2.5rem] shadow-md md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                    className="relative cursor-pointer bg-white border-slate-100 p-4 sm:p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] shadow-lg md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-3 md:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-slate-900"
                   >
-                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap">
-                      <span className="px-1.5 py-0.5 bg-amber-500 text-white text-[6px] md:text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-amber-200">
+                    <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap">
+                      <span className="px-2.5 py-0.5 bg-amber-500 text-white text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase tracking-widest rounded-full shadow-md">
                         Most Popular
                       </span>
                     </div>
-                    <div className="w-10 h-10 md:w-20 md:h-20 bg-indigo-100/80 md:bg-indigo-50 rounded-xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <Truck className="w-5 h-5 md:w-10 md:h-10 text-indigo-600" />
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-20 md:h-20 bg-indigo-50 rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0 mt-1 sm:mt-0">
+                      <Truck className="w-6 h-6 sm:w-7 sm:h-7 md:w-10 md:h-10 text-indigo-600" />
                     </div>
-                    <div className="space-y-1 md:space-y-3 flex-grow">
-                      <h3 className="font-black text-[10px] xs:text-xs md:text-2xl text-indigo-950 md:text-slate-900 leading-tight">Schedule Pickup</h3>
-                      <p className="hidden md:block text-xs sm:text-sm text-slate-500 leading-relaxed">
+                    <div className="space-y-1 sm:space-y-1.5 md:space-y-3 flex-grow">
+                      <h3 className="font-black text-base sm:text-lg md:text-2xl text-slate-900 leading-tight">Schedule Pickup</h3>
+                      <p className="text-xs sm:text-xs md:text-sm text-slate-500 leading-relaxed">
                         We collect items from your doorstep, pack & ship internationally
                       </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); navigateTo('pickup'); }}
-                      className="w-full py-1.5 md:py-4 bg-indigo-600 text-white rounded-lg md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-[9px] md:text-sm"
+                      className="w-full py-2 sm:py-2.5 md:py-4 bg-indigo-600 text-white rounded-xl md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-xs sm:text-xs md:text-sm"
                     >
-                      Schedule
+                      Schedule Pickup
                     </button>
                   </div>
 
                   {/* Card 2: Send to Our Warehouse */}
                   <div 
                     onClick={() => navigateTo('warehouse')}
-                    className="cursor-pointer bg-emerald-50/90 border-emerald-100 md:bg-white md:border-slate-100 p-2.5 sm:p-8 rounded-[1.2rem] md:rounded-[2.5rem] shadow-md md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                    className="cursor-pointer bg-white border-slate-100 p-4 sm:p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] shadow-lg md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-3 md:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-slate-900"
                   >
-                    <div className="w-10 h-10 md:w-20 md:h-20 bg-emerald-100/80 md:bg-indigo-50 rounded-xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <Package className="w-5 h-5 md:w-10 md:h-10 text-emerald-600 md:text-indigo-600" />
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-20 md:h-20 bg-indigo-50 rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0 mt-1 sm:mt-0">
+                      <Package className="w-6 h-6 sm:w-7 sm:h-7 md:w-10 md:h-10 text-indigo-600" />
                     </div>
-                    <div className="space-y-1 md:space-y-3 flex-grow">
-                      <h3 className="font-black text-[10px] xs:text-xs md:text-2xl text-emerald-950 md:text-slate-900 leading-tight">Drop Off Package</h3>
-                      <p className="hidden md:block text-xs sm:text-sm text-slate-500 leading-relaxed">
+                    <div className="space-y-1 sm:space-y-1.5 md:space-y-3 flex-grow">
+                      <h3 className="font-black text-base sm:text-lg md:text-2xl text-slate-900 leading-tight">Drop Off Package</h3>
+                      <p className="text-xs sm:text-xs md:text-sm text-slate-500 leading-relaxed">
                         Ship your items to our warehouse—we pack & deliver abroad
                       </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); navigateTo('warehouse'); }}
-                      className="w-full py-1.5 md:py-4 bg-emerald-600 md:bg-indigo-600 text-white rounded-lg md:rounded-2xl font-bold hover:bg-emerald-700 md:hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-[9px] md:text-sm"
+                      className="w-full py-2 sm:py-2.5 md:py-4 bg-indigo-600 text-white rounded-xl md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-xs sm:text-xs md:text-sm"
                     >
-                      Drop Off
+                      Drop Off Package
                     </button>
                   </div>
 
                   {/* Card 3: Shop & Send */}
                   <div 
                     onClick={() => navigateTo('store')}
-                    className="cursor-pointer bg-amber-50/90 border-amber-100 md:bg-white md:border-slate-100 p-2.5 sm:p-8 rounded-[1.2rem] md:rounded-[2.5rem] shadow-md md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                    className="cursor-pointer bg-white border-slate-100 p-4 sm:p-5 md:p-8 rounded-2xl md:rounded-[2.5rem] shadow-lg md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-3 md:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-slate-900"
                   >
-                    <div className="w-10 h-10 md:w-20 md:h-20 bg-amber-100/80 md:bg-indigo-50 rounded-xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <ShoppingBag className="w-5 h-5 md:w-10 md:h-10 text-amber-600 md:text-indigo-600" />
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-20 md:h-20 bg-indigo-50 rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0 mt-1 sm:mt-0">
+                      <ShoppingBag className="w-6 h-6 sm:w-7 sm:h-7 md:w-10 md:h-10 text-indigo-600" />
                     </div>
-                    <div className="space-y-1 md:space-y-3 flex-grow">
-                      <h3 className="font-black text-[10px] xs:text-xs md:text-2xl text-amber-950 md:text-slate-900 leading-tight">Shop & Ship</h3>
-                      <p className="hidden md:block text-xs sm:text-sm text-slate-500 leading-relaxed">
+                    <div className="space-y-1 sm:space-y-1.5 md:space-y-3 flex-grow">
+                      <h3 className="font-black text-base sm:text-lg md:text-2xl text-slate-900 leading-tight">Shop & Ship</h3>
+                      <p className="text-xs sm:text-xs md:text-sm text-slate-500 leading-relaxed">
                         Buy authentic Indian products—we deliver anywhere abroad
                       </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); navigateTo('store'); }}
-                      className="w-full py-1.5 md:py-4 bg-amber-500 md:bg-indigo-600 text-white rounded-lg md:rounded-2xl font-bold hover:bg-amber-600 md:hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-[9px] md:text-sm"
+                      className="w-full py-2 sm:py-2.5 md:py-4 bg-indigo-600 text-white rounded-xl md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-xs sm:text-xs md:text-sm"
                     >
                       Shop Now
                     </button>
                   </div>
                 </motion.div>
 
+                {/* Trust Proof & See how it works button */}
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.5 }}
-                  className="hidden md:flex flex-col sm:flex-row items-center justify-center gap-8 pt-4"
+                  className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 md:gap-8 pt-2 sm:pt-4"
                 >
                   <button 
                     onClick={() => {
@@ -9871,15 +9599,15 @@ export default function App() {
                         element.scrollIntoView({ behavior: 'smooth' });
                       }
                     }}
-                    className="hidden md:flex px-6 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-full font-bold items-center gap-2 transition-all group text-lg"
+                    className="px-4 sm:px-6 py-1.5 sm:py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-full font-bold items-center gap-2 transition-all group text-xs sm:text-sm md:text-base flex"
                   >
                     Not sure? <span className="underline underline-offset-4 transition-colors">See how it works</span>
                   </button>
                   
-                  <div className="h-6 w-px bg-slate-800 hidden md:block" />
+                  <div className="h-4 sm:h-6 w-px bg-slate-800 hidden sm:block" />
                   
-                  <div className="flex items-center gap-3 text-slate-400 font-medium text-lg">
-                    <span className="text-amber-400 text-2xl">⭐</span> Trusted by 1000+ customers • Delivered worldwide
+                  <div className="flex items-center gap-2 text-slate-300 md:text-slate-400 font-medium text-xs sm:text-sm md:text-lg">
+                    <span className="text-amber-400 text-base sm:text-xl md:text-2xl">⭐</span> Trusted by 1000+ customers • Delivered worldwide
                   </div>
                 </motion.div>
               </div>
@@ -9887,15 +9615,15 @@ export default function App() {
           </div>
 
           {/* How Jiffex Works - Value Prop */}
-          <div id="how-it-works" className="hidden md:block space-y-12 scroll-mt-24">
-            <div className="text-center space-y-4">
-              <h3 className="text-4xl font-black text-slate-900 tracking-tight">How Jiffex Works</h3>
-              <p className="text-slate-500 max-w-2xl mx-auto">A seamless, unified shipping experience designed for your convenience.</p>
+          <div id="how-it-works" className="space-y-6 sm:space-y-10 md:space-y-12 scroll-mt-24 px-3 sm:px-6 md:px-0">
+            <div className="text-center space-y-2 sm:space-y-4">
+              <h3 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">How Jiffex Works</h3>
+              <p className="text-xs sm:text-base text-slate-500 max-w-2xl mx-auto leading-relaxed">A seamless, unified shipping experience designed for your convenience.</p>
             </div>
 
             <div className="relative">
               <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 -translate-y-1/2 hidden lg:block" />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 relative">
                 {[
                   { icon: Calendar, title: "Book a Pickup in 30 Seconds", desc: "Start by scheduling an agent pickup. This becomes the heart of your shipment process.", color: "bg-indigo-600", shadow: "shadow-indigo-200" },
                   { icon: ShoppingBag, title: "Add Items from Anywhere", desc: "Add items from your home, our Shop, or even items you've sent to our warehouse.", color: "bg-amber-500", shadow: "shadow-amber-200" },
@@ -9910,12 +9638,12 @@ export default function App() {
                     transition={{ delay: i * 0.1 }}
                     className="relative group"
                   >
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 flex flex-col items-center text-center h-full">
-                      <div className={`w-16 h-16 ${step.color} text-white rounded-3xl flex items-center justify-center mb-6 shadow-2xl ${step.shadow} group-hover:scale-110 transition-transform duration-500`}>
-                        <step.icon size={32} />
+                    <div className="bg-white p-5 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 flex flex-col items-center text-center h-full">
+                      <div className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 ${step.color} text-white rounded-2xl md:rounded-3xl flex items-center justify-center mb-3 sm:mb-4 md:mb-6 shadow-xl ${step.shadow} group-hover:scale-110 transition-transform duration-500`}>
+                        <step.icon size={26} className="md:w-8 md:h-8" />
                       </div>
-                      <h4 className="text-xl font-black text-slate-900 mb-3">{step.title}</h4>
-                      <p className="text-sm text-slate-500 leading-relaxed">{step.desc}</p>
+                      <h4 className="text-base sm:text-lg md:text-xl font-black text-slate-900 mb-1.5 sm:mb-2 md:mb-3">{step.title}</h4>
+                      <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">{step.desc}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -9928,58 +9656,58 @@ export default function App() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="hidden md:block relative overflow-hidden rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-700 p-12 text-white shadow-2xl"
+            className="relative overflow-hidden rounded-2xl sm:rounded-3xl md:rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-700 p-6 sm:p-8 md:p-12 text-white shadow-2xl mx-2 sm:mx-0"
           >
             <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl" />
             
-            <div className="relative z-10 max-w-3xl mx-auto text-center space-y-6">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur rounded-full text-xs font-bold uppercase tracking-widest">
+            <div className="relative z-10 max-w-3xl mx-auto text-center space-y-4 sm:space-y-6">
+              <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-white/10 backdrop-blur rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-widest">
                 <Heart size={14} className="text-pink-300 fill-pink-300" /> Made for the Global Indian
               </div>
-              <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
+              <h2 className="text-2xl sm:text-3xl md:text-5xl font-black tracking-tight leading-tight">
                 Stop waiting for a <span className="text-indigo-200 italic">friend's suitcase.</span>
               </h2>
-              <p className="text-xl text-indigo-100 leading-relaxed font-medium">
+              <p className="text-sm sm:text-base md:text-xl text-indigo-100 leading-relaxed font-medium">
                 Your connection to home shouldn't depend on someone else's travel plans. 
                 Whether it's your mother's handmade sweets, that specific wedding outfit, or the comfort of Indian spices—we bring India to your doorstep.
               </p>
-              <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-6">
+              <div className="pt-2 sm:pt-4 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                    <Clock size={24} />
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/10 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0">
+                    <Clock size={20} className="sm:w-6 sm:h-6" />
                   </div>
                   <div className="text-left">
-                    <div className="text-sm font-bold">No More Waiting</div>
-                    <div className="text-xs text-indigo-200">Ship whenever you want</div>
+                    <div className="text-xs sm:text-sm font-bold">No More Waiting</div>
+                    <div className="text-[11px] sm:text-xs text-indigo-200">Ship whenever you want</div>
                   </div>
                 </div>
                 <div className="w-px h-8 bg-white/20 hidden sm:block" />
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                    <Users size={24} />
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/10 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0">
+                    <Users size={20} className="sm:w-6 sm:h-6" />
                   </div>
                   <div className="text-left">
-                    <div className="text-sm font-bold">No More Asking</div>
-                    <div className="text-xs text-indigo-200">Independence in shipping</div>
+                    <div className="text-xs sm:text-sm font-bold">No More Asking</div>
+                    <div className="text-[11px] sm:text-xs text-indigo-200">Independence in shipping</div>
                   </div>
                 </div>
               </div>
             </div>
           </motion.div>
 
-          <div ref={quoteRef} id="desktop-quick-quote" className="hidden md:grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
-            <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white p-3 md:p-8 rounded-2xl md:rounded-3xl shadow-xl md:shadow-indigo-500/5 border border-slate-100">
-                <h2 className="text-xs md:text-2xl font-black mb-3 md:mb-6 flex items-center gap-1.5 uppercase tracking-wider text-slate-900">
-                  <Calculator className="text-indigo-600 shrink-0" size={14} md:size={20} /> Quick Quote
+          <div ref={quoteRef} id="desktop-quick-quote" className="grid grid-cols-1 lg:grid-cols-5 gap-6 sm:gap-8 md:gap-12 items-start px-3 sm:px-6 md:px-0">
+            <div className="w-full lg:col-span-2 space-y-6 max-w-xl mx-auto lg:max-w-none">
+              <div className="bg-white p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl md:rounded-3xl shadow-xl md:shadow-indigo-500/5 border border-slate-100">
+                <h2 className="text-base sm:text-xl md:text-2xl font-black mb-3 md:mb-6 flex items-center gap-2 uppercase tracking-wider text-slate-900">
+                  <Calculator className="text-indigo-600 shrink-0 w-5 h-5 md:w-6 md:h-6" /> Quick Quote
                 </h2>
-                <div className="space-y-3.5 md:space-y-5">
-                  <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-5">
+                <div className="space-y-3 sm:space-y-4 md:space-y-5">
+                  <div className="grid grid-cols-2 md:grid-cols-1 gap-2.5 sm:gap-3 md:gap-5">
                     <div>
-                      <label className="block text-[7.5px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Destination</label>
+                      <label className="block text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Destination</label>
                       <select 
-                        className="w-full p-1.5 md:p-4 rounded-xl md:rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none text-[16px] md:text-base"
+                        className="w-full p-2 sm:p-3 md:p-4 rounded-xl md:rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none text-xs sm:text-sm md:text-base font-bold text-slate-800"
                         value={qCountry}
                         onChange={(e) => setQCountry(e.target.value)}
                       >
@@ -9987,12 +9715,12 @@ export default function App() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[7.5px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Weight (kg)</label>
+                      <label className="block text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Weight (kg)</label>
                       <input 
                         type="number" 
                         min="0.1" 
                         step="0.1"
-                        className="w-full p-1.5 md:p-4 rounded-xl md:rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-[16px] md:text-base"
+                        className="w-full p-2 sm:p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs sm:text-sm md:text-base font-bold bg-slate-50 text-slate-800"
                         value={qWeight}
                         onChange={(e) => setQWeight(Number(e.target.value))}
                       />
@@ -10000,7 +9728,7 @@ export default function App() {
                   </div>
                   
                   <div>
-                    <label className="block text-[7.5px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-3">Shipping Method</label>
+                    <label className="block text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-3">Shipping Method</label>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { id: 'Standard', label: 'Standard', days: '10-14 Days', multiplier: 0.7 },
@@ -10009,16 +9737,16 @@ export default function App() {
                         <button
                           key={method.id}
                           onClick={() => setQMethod(method.id as any)}
-                          className={`p-1.5 md:p-4 rounded-xl md:rounded-2xl border-2 transition-all text-left ${
+                          className={`p-2 sm:p-3 md:p-4 rounded-xl md:rounded-2xl border-2 transition-all text-left ${
                             qMethod === method.id 
                               ? 'border-indigo-600 bg-indigo-50 ring-4 ring-indigo-600/5' 
                               : 'border-slate-100 bg-white hover:border-slate-200'
                           }`}
                         >
-                          <div className={`text-[9px] md:text-sm font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
+                          <div className={`text-[10px] sm:text-xs md:text-sm font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
                             {method.label}
                           </div>
-                          <div className="text-[7px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                          <div className="text-[8px] sm:text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
                             {method.days}
                           </div>
                         </button>
@@ -10026,13 +9754,13 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="p-2 md:p-6 bg-indigo-600 rounded-xl md:rounded-2xl text-white shadow-lg shadow-indigo-200">
+                  <div className="p-3 sm:p-4 md:p-6 bg-indigo-600 rounded-xl md:rounded-2xl text-white shadow-lg shadow-indigo-200">
                     <div className="flex justify-between items-end">
                       <div>
-                        <span className="text-indigo-100 text-[7px] md:text-xs font-bold uppercase tracking-widest">
+                        <span className="text-indigo-100 text-[8px] sm:text-xs font-bold uppercase tracking-widest">
                           Estimated Cost ({qMethod})
                         </span>
-                        <div className="text-lg md:text-4xl font-black">
+                        <div className="text-xl sm:text-2xl md:text-4xl font-black">
                           ₹{(() => {
                             const res = calculateShippingCost({
                               country: qCountry,
@@ -10056,39 +9784,39 @@ export default function App() {
                           });
                           if (res.discountPercent > 0) {
                             return (
-                              <div className="text-[7px] md:text-xs font-bold text-rose-300 mt-0.5">
+                              <div className="text-[8px] sm:text-xs font-bold text-rose-300 mt-0.5">
                                 Discount of {res.discountPercent}% Applied for {qCountry}! (Save ₹{Math.round(res.discountAmount).toLocaleString('en-IN')}) [Band: {res.appliedBandLabel}]
                               </div>
                             );
                           }
                           return (
-                            <div className="text-[7px] md:text-xs font-bold text-indigo-200 mt-0.5">
+                            <div className="text-[8px] sm:text-xs font-bold text-indigo-200 mt-0.5">
                               Band: {res.appliedBandLabel} (₹{res.baseRatePerKg}{res.isFlatRate ? ' flat' : '/kg'})
                             </div>
                           );
                         })()}
-                        <div className="text-[7px] md:text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-1 flex items-center gap-1">
+                        <div className="text-[8px] sm:text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-1 flex items-center gap-1">
                           <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
                         </div>
                       </div>
-                      <Truck className="opacity-20 shrink-0" size={20} md:size={48} />
+                      <Truck className="opacity-20 shrink-0 w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12" />
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="hidden md:block lg:col-span-3">
-              <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-10 rounded-[3rem] text-white flex flex-col md:flex-row items-center gap-10 relative overflow-hidden h-full">
+            <div className="hidden md:block lg:col-span-3 h-full">
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 sm:p-8 md:p-10 rounded-2xl sm:rounded-3xl md:rounded-[3rem] text-white flex flex-col md:flex-row items-center gap-5 sm:gap-8 md:gap-10 relative overflow-hidden h-full">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -mr-32 -mt-32" />
                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -ml-32 -mb-32" />
                 
-                <div className="w-24 h-24 bg-white/10 backdrop-blur-xl rounded-[2rem] flex items-center justify-center shrink-0 border border-white/20 shadow-2xl">
-                  <Info size={48} className="text-indigo-400" />
+                <div className="w-14 h-14 sm:w-18 sm:h-18 md:w-24 md:h-24 bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl md:rounded-[2rem] flex items-center justify-center shrink-0 border border-white/20 shadow-2xl">
+                  <Info size={28} className="text-indigo-400 sm:w-10 sm:h-10 md:w-12 md:h-12" />
                 </div>
-                <div className="space-y-3 relative z-10">
-                  <h4 className="text-2xl font-black">Unified Shipping Protocol</h4>
-                  <p className="text-slate-400 leading-relaxed">
+                <div className="space-y-2 sm:space-y-3 relative z-10 text-center md:text-left">
+                  <h4 className="text-lg sm:text-xl md:text-2xl font-black">Unified Shipping Protocol</h4>
+                  <p className="text-xs sm:text-sm md:text-base text-slate-300 md:text-slate-400 leading-relaxed">
                     When you schedule an agent pickup, Jiffex activates the <span className="text-white font-bold">Home-First Protocol</span>. All your items—whether from Shop or our warehouse—are consolidated at your doorstep for a truly personalized shipping experience.
                   </p>
                 </div>
@@ -10097,53 +9825,53 @@ export default function App() {
           </div>
 
           {/* Featured Products from Shop - Moved to Last */}
-          <div className="hidden md:block space-y-8">
+          <div className="space-y-4 sm:space-y-6 md:space-y-8 px-3 sm:px-6 md:px-0">
             <div className="flex items-end justify-between">
               <div>
-                <h3 className="text-3xl font-black text-slate-900">
+                <h3 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900">
                   Featured from <span className="bg-gradient-to-r from-deep-blue to-indigo-600 bg-clip-text text-transparent">Shop</span>
                 </h3>
-                <p className="text-slate-500">Premium products curated for your special occasions.</p>
+                <p className="text-xs sm:text-sm md:text-base text-slate-500">Premium products curated for your special occasions.</p>
               </div>
               <button 
                 onClick={() => navigateTo('store')}
-                className="text-indigo-600 font-bold flex items-center gap-1 hover:underline"
+                className="text-xs sm:text-sm md:text-base text-indigo-600 font-bold flex items-center gap-1 hover:underline shrink-0"
               >
-                View All <ChevronRight size={18} />
+                View All <ChevronRight size={16} className="md:w-[18px] md:h-[18px]" />
               </button>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
               {storeProducts.slice(0, 4).map(product => {
                 const cartItem = items.find(i => i.name === product.name && i.source === 'Store' && !orderedItemIds.has(i.id));
                 const itemCount = cartItem?.quantity || 0;
                 
                 return (
-                  <div key={product.id} className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative flex flex-col">
+                  <div key={product.id} className="bg-white rounded-xl sm:rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative flex flex-col">
                     <AnimatePresence>
                       {itemCount > 0 && (
                         <motion.div 
                           initial={{ scale: 0, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
                           exit={{ scale: 0, opacity: 0 }}
-                          className="absolute top-3 right-3 z-10 w-7 h-7 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg border-2 border-white"
+                          className="absolute top-2 right-2 sm:top-3 sm:right-3 z-10 w-6 h-6 sm:w-7 sm:h-7 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-[9px] sm:text-[10px] font-bold shadow-lg border-2 border-white"
                         >
                           {itemCount}
                         </motion.div>
                       )}
                     </AnimatePresence>
-                    <div className="relative aspect-square rounded-2xl overflow-hidden mb-4 bg-slate-50">
+                    <div className="relative aspect-square rounded-lg sm:rounded-xl md:rounded-2xl overflow-hidden mb-2 sm:mb-3 md:mb-4 bg-slate-50 m-2 sm:m-3 mb-0">
                       <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
-                      <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                      <div className="absolute top-2 left-2 px-1.5 py-0.5 sm:px-2 sm:py-1 bg-white/90 backdrop-blur rounded-md md:rounded-lg text-[8px] sm:text-[10px] font-bold uppercase tracking-widest text-slate-600">
                         {product.category}
                       </div>
                     </div>
-                    <div className="p-4 flex-1 flex flex-col">
-                      <h4 className="font-bold text-slate-900 mb-1 truncate">{product.name}</h4>
-                      <div className="flex flex-col gap-3 mt-auto">
+                    <div className="p-2.5 sm:p-3 md:p-4 flex-1 flex flex-col pt-0 sm:pt-0">
+                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm md:text-base mb-1 truncate">{product.name}</h4>
+                      <div className="flex flex-col gap-2 sm:gap-3 mt-auto">
                         <div className="flex items-center justify-between">
-                          <span className="text-indigo-600 font-bold">₹{product.price}</span>
-                          <span className="text-[10px] text-slate-400 font-medium">{product.weight}kg</span>
+                          <span className="text-indigo-600 font-bold text-xs sm:text-sm md:text-base">₹{product.price}</span>
+                          <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium">{product.weight}kg</span>
                         </div>
                         
                         <div className="flex justify-center">
@@ -10151,9 +9879,9 @@ export default function App() {
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                             onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                            className="w-10 h-10 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10"
+                            className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10"
                           >
-                            <Plus size={16} />
+                            <Plus size={14} className="md:w-4 md:h-4" />
                           </motion.button>
                         </div>
                       </div>
@@ -18395,14 +18123,7 @@ export default function App() {
     );
   }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser, currentUser?.id, handleFinalPayment, shippingPreference, appointments, pickupAddress, pickupName, pickupPhone, orderedItemIds, shopConsolidationOption, isMobile, activeCheckoutStep, couponCodeInput, appliedCoupon, coupons, setAppliedCoupon, setCouponCodeInput, goBack, navigateTo]);
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="animate-spin text-indigo-600" size={48} />
-      </div>
-    );
-  }
-
+  // Non-blocking UI rendering: Auth and sessions load in the background without freezing the screen
   const handleLogout = async () => {
     // 1. Immediately and synchronously clear all local state and items to avoid transition lag or state re-fetching
     clearActiveSession();
@@ -18571,10 +18292,10 @@ export default function App() {
 
         {/* Navigation */}
         <nav className="bg-white/95 border-b border-slate-100 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.04)] sticky top-0 z-[100] backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 md:h-20 flex items-center justify-between gap-4 flex-nowrap">
-            {/* Mobile View Logo - Only visible below md screens */}
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 md:h-20 flex items-center justify-between gap-2 sm:gap-4 flex-nowrap">
+            {/* Mobile View Logo - Only visible below md screens (Zoomed in 20%) */}
             <div 
-              className="flex md:hidden items-center gap-2 cursor-pointer shrink-0" 
+              className="flex md:hidden items-center cursor-pointer shrink-0 scale-120 origin-left pl-1" 
               onClick={() => {
                 if (currentUser?.role === 'admin' || currentUser?.role === 'Admin') navigateTo('admin');
                 else if (currentUser?.role === 'agent' || currentUser?.role === 'Agent') {
@@ -18583,7 +18304,7 @@ export default function App() {
                 } else navigateTo('home');
               }}
             >
-              <Logo size={22} className="h-7" />
+              <Logo size={26} className="h-8" />
             </div>
             
             {/* Desktop Navigation Group - Only visible on md screens & up */}
@@ -18832,7 +18553,17 @@ export default function App() {
           </div>
 
             {/* Mobile View Group - Only visible below md screens */}
-            <div className="flex md:hidden items-center gap-2 ml-auto shrink-0">
+            <div className="flex md:hidden items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
+              {currentUser?.role !== 'agent' && (
+                <button 
+                  onClick={handleQuickQuoteClick}
+                  className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 px-2.5 py-1.5 rounded-xl shadow-xs active:scale-95 transition-all text-nowrap shrink-0 flex items-center gap-1"
+                >
+                  <Calculator size={13} className="shrink-0" />
+                  <span>Quick Quote</span>
+                </button>
+              )}
+
               {currentUser?.role !== 'agent' && (
                 <button 
                   onClick={() => navigateTo('cart')}
@@ -19541,10 +19272,10 @@ export default function App() {
       </AnimatePresence>
 
       {/* Mobile Fixed OmniDimension Customer Care Widget */}
-      {(!currentUser || (['customer', 'guest'].includes((currentUser.role || '').toLowerCase()))) && (
+      {typeof document !== 'undefined' && document.body && createPortal(
         <div 
           id="mobile-customer-care-widget"
-          className="md:hidden fixed bottom-[calc(60px+env(safe-area-inset-bottom,0px))] right-4 z-[85] pointer-events-auto"
+          className="md:hidden fixed bottom-[calc(72px+env(safe-area-inset-bottom,0px))] right-4 z-[9999] pointer-events-auto"
         >
           <button
             id="mobile-customer-care-trigger-btn"
@@ -19553,7 +19284,9 @@ export default function App() {
             title="Customer Support"
             className="w-[52px] h-[52px] rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-600 to-indigo-700 text-white flex items-center justify-center shadow-[0_6px_20px_rgba(79,70,229,0.4)] border-2 border-white/95 active:scale-90 transition-transform duration-200 cursor-pointer relative"
           >
-            {isOmniAgentOpen ? (
+            {isConnectingOmni ? (
+              <Loader2 size={22} className="animate-spin stroke-[2.5]" />
+            ) : isOmniAgentOpen ? (
               <X size={22} className="stroke-[2.5]" />
             ) : (
               <>
@@ -19562,7 +19295,8 @@ export default function App() {
               </>
             )}
           </button>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Mobile Bottom Navigation Bar */}

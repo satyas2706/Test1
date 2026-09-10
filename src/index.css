@@ -74,7 +74,7 @@ body {
 
 /* Mobile OmniDimension widget styling:
    Strictly hide the raw dark OmniDimension launcher bar / pill on mobile screens (max-width: 768px)
-   so our dedicated circular purple customer-care button is the ONLY launcher,
+   so our dedicated circular customer-care button is the ONLY launcher,
    preventing duplicate widgets or interference with bottom navigation. */
 @media (max-width: 768px) {
   #chat-helper-button-container,
@@ -83,10 +83,7 @@ body {
   .chat-helper-button,
   #omni-minimized-pill,
   #omni-open-widget-btn,
-  [id*="chat-helper-button"],
-  [id*="omni-minimized"],
-  div:has(> #chat-helper-button),
-  div:has(> #omni-minimized-pill) {
+  #omni-widget-component > div:not(#chat-iframe-container) {
     display: none !important;
     visibility: hidden !important;
     pointer-events: none !important;
@@ -113,12 +110,30 @@ body {
     pointer-events: none !important;
   }
 
-  /* When the agent is opened, allow pointer events on the iframe and its active panel */
-  #chat-iframe-container > div,
+  /* When the agent is opened, allow pointer events on the iframe and its active panel elements */
   #chat-iframe-container iframe,
   #chat-iframe-container div[title="Minimize"],
+  #chat-iframe-container [title*="Minim" i],
   #chat-iframe-container button {
     pointer-events: auto !important;
+  }
+}
+
+/* Dedicated guaranteed styling for our Custom Mobile Customer Care Floating Button */
+#mobile-customer-care-widget {
+  display: flex !important;
+  position: fixed !important;
+  right: 16px !important;
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+}
+
+@media (min-width: 769px) {
+  #mobile-customer-care-widget {
+    display: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
   }
 }
 
