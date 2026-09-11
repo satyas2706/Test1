@@ -1,27 +1,186 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { MessageSquare, Mail, HelpCircle, ArrowRight, Bot, Sparkles, Truck, Calculator, Calendar, CheckCircle2 } from 'lucide-react';
+import { Mail, HelpCircle, ArrowRight, Sparkles, Truck, Calculator, Calendar, CheckCircle2, PhoneCall, LogIn } from 'lucide-react';
+import { toast } from 'sonner';
 
-export const triggerOmniDimensionWidget = (prefillMessage?: string) => {
-  try {
-    const omniElements = document.querySelectorAll(
-      '#omnidimension-web-widget, [id*="omnidim"], [class*="omnidim"], button[aria-label*="chat"], button[aria-label*="bot"], iframe[id*="omnidim"]'
-    );
-    if (omniElements.length > 0) {
-      (omniElements[0] as HTMLElement).click();
-      return;
+export const triggerOmniDimensionWidget = () => {
+  const scriptLoaded = Boolean(document.getElementById('omnidimension-web-widget'));
+  console.log('[Diagnostic] OmniDimension script loaded:', scriptLoaded);
+
+  const dispatchSyntheticClick = (el: HTMLElement) => {
+    try {
+      el.click();
+    } catch (e) {}
+    try {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    } catch (e) {}
+  };
+
+  const attemptOpen = (): boolean => {
+    const iframeContainer = document.getElementById('chat-iframe-container');
+    const minimizedPill = document.getElementById('omni-minimized-pill');
+    const openBtn = document.getElementById('omni-open-widget-btn');
+    const helperBtn = document.getElementById('chat-helper-button');
+    const helperContainer = document.getElementById('chat-helper-button-container');
+
+    console.log('[Diagnostic] launcher/container found:', {
+      hasContainer: Boolean(iframeContainer),
+      hasPill: Boolean(minimizedPill),
+      hasOpenBtn: Boolean(openBtn),
+      isOpenBtnReady: Boolean((openBtn as any)?._omniReady),
+      hasHelperBtn: Boolean(helperBtn),
+      hasHelperContainer: Boolean(helperContainer),
+    });
+
+    // 1. If iframe container already exists in DOM (e.g. from previous call or session)
+    if (iframeContainer) {
+      iframeContainer.style.display = 'block';
+      iframeContainer.style.opacity = '1';
+      iframeContainer.style.pointerEvents = 'auto';
+      iframeContainer.style.visibility = 'visible';
+
+      // Ensure inner wrapper is unhidden
+      const innerDiv = iframeContainer.querySelector('div') as HTMLElement | null;
+      if (innerDiv) {
+        innerDiv.style.display = '';
+        innerDiv.style.opacity = '1';
+        innerDiv.style.transform = '';
+      }
+
+      if (minimizedPill) {
+        console.log('[Diagnostic] open action attempted: restoring via minimized pill');
+        dispatchSyntheticClick(minimizedPill);
+      } else if (openBtn) {
+        console.log('[Diagnostic] open action attempted: restoring via omni-open-widget-btn');
+        dispatchSyntheticClick(openBtn);
+      } else if (helperBtn) {
+        console.log('[Diagnostic] open action attempted: restoring via chat-helper-button');
+        dispatchSyntheticClick(helperBtn);
+      }
+
+      const iframe = iframeContainer.querySelector('iframe');
+      if (iframe && iframe.contentWindow) {
+        try {
+          iframe.contentWindow.postMessage({ action: 'show' }, '*');
+          iframe.contentWindow.postMessage({ action: 'restored' }, '*');
+        } catch (e) {}
+      }
+
+      console.log('[Diagnostic] Open action result: success (restored existing container)');
+      toast.success('Connecting to Jiffex Support...');
+      return true;
     }
-    if (typeof (window as any).OmniDimension?.open === 'function') {
-      (window as any).OmniDimension.open();
-      return;
+
+    // 2. If omni-open-widget-btn hook is attached and ready
+    if (openBtn && (openBtn as any)._omniReady) {
+      console.log('[Diagnostic] open action attempted: clicking omni-open-widget-btn (ready)');
+      dispatchSyntheticClick(openBtn);
+      console.log('[Diagnostic] Open action result: success');
+      toast.success('Connecting to Jiffex Support...');
+      return true;
     }
-  } catch (e) {
-    console.log('OmniDimension widget trigger:', e);
+
+    // 3. If native chat-helper-button is in DOM
+    if (helperBtn) {
+      console.log('[Diagnostic] open action attempted: clicking chat-helper-button');
+      dispatchSyntheticClick(helperBtn);
+      console.log('[Diagnostic] Open action result: success');
+      toast.success('Connecting to Jiffex Support...');
+      return true;
+    }
+
+    // 4. If container exists
+    if (helperContainer) {
+      const child = helperContainer.querySelector('div, button') as HTMLElement | null;
+      const target = child || helperContainer;
+      console.log('[Diagnostic] open action attempted: clicking chat-helper-button-container');
+      dispatchSyntheticClick(target);
+      console.log('[Diagnostic] Open action result: success');
+      toast.success('Connecting to Jiffex Support...');
+      return true;
+    }
+
+    return false;
+  };
+
+  if (attemptOpen()) {
+    return;
   }
+
+  // Asynchronous wait/retry loop
+  console.log('[Diagnostic] OmniDimension widget not ready yet; waiting/retrying asynchronously...');
+  let attempts = 0;
+  const maxAttempts = 28; // ~4.2 seconds
+  const interval = setInterval(() => {
+    attempts++;
+    if (attemptOpen()) {
+      clearInterval(interval);
+      return;
+    }
+    // Tentative click on omni-open-widget-btn after a brief delay
+    if (attempts > 5) {
+      const openBtn = document.getElementById('omni-open-widget-btn');
+      if (openBtn) {
+        console.log('[Diagnostic] open action attempted: tentative click on omni-open-widget-btn');
+        dispatchSyntheticClick(openBtn);
+        const container = document.getElementById('chat-iframe-container');
+        if (container) {
+          clearInterval(interval);
+          console.log('[Diagnostic] Open action result: success');
+          toast.success('Connecting to Jiffex Support...');
+          return;
+        }
+      }
+    }
+    if (attempts >= maxAttempts) {
+      clearInterval(interval);
+      console.warn('[Diagnostic] Open action result: failure (timeout waiting for widget initialization)');
+      toast.error('Jiffex Support is still loading. Please try again in a moment.');
+    }
+  }, 150);
 };
 
-const SupportSection = () => {
-  const handleOpenOmniDimension = () => {
+interface SupportSectionProps {
+  currentUser?: any;
+  onOpenLogin?: () => void;
+}
+
+const SupportSection: React.FC<SupportSectionProps> = ({ currentUser, onOpenLogin }) => {
+  const isUserLoggedIn = (): boolean => {
+    if (currentUser?.email) return true;
+    try {
+      const rawUser = localStorage.getItem('jiffex_active_user_session');
+      if (rawUser) {
+        const parsed = JSON.parse(rawUser);
+        if (parsed?.email && (!parsed.expiresAt || parsed.expiresAt > Date.now())) return true;
+      }
+      const raw = localStorage.getItem('jiffex_active_session');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.email && (!parsed.expiresAt || new Date(parsed.expiresAt).getTime() > Date.now())) {
+          return true;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return false;
+  };
+
+  const handleCallSupport = () => {
+    const loggedIn = isUserLoggedIn();
+    console.log('[Diagnostic] Support button clicked');
+    console.log('[Diagnostic] Auth status:', loggedIn ? 'logged-in' : 'logged-out');
+
+    if (!loggedIn) {
+      if (onOpenLogin) {
+        onOpenLogin();
+      } else {
+        window.dispatchEvent(new CustomEvent('jiffex:open-login', { detail: { source: 'support' } }));
+      }
+      return;
+    }
+
     triggerOmniDimensionWidget();
   };
 
@@ -29,11 +188,19 @@ const SupportSection = () => {
     window.location.href = 'mailto:support@jiffex.com';
   };
 
+  const supportTopics = [
+    "Shipping quotes",
+    "Pickup scheduling",
+    "Shipment tracking",
+    "Items allowed/not allowed",
+    "Existing orders"
+  ];
+
   const agentCapabilities = [
     {
       icon: Truck,
       title: "Live Shipment Tracking",
-      desc: "Ask the agent to check the live status of any package, latest hub checkpoints, or estimated delivery date.",
+      desc: "Ask Jiffex Support to check the live status of any package, latest hub checkpoints, or estimated delivery date.",
       example: '"What is the status of shipment #JFX-89421?"',
       color: "text-blue-500",
       bg: "bg-blue-50/80",
@@ -59,54 +226,80 @@ const SupportSection = () => {
     }
   ];
 
+  const loggedIn = isUserLoggedIn();
+
   return (
     <div className="space-y-12 pb-24">
       <div className="text-center space-y-4">
         <h3 className="text-4xl font-black text-slate-900 tracking-tight">Need Help?</h3>
-        <p className="text-slate-500 max-w-2xl mx-auto">Our 24/7 Jiffex AI Agent & logistics support team are here to assist you with tracking, instant quotes, and bookings.</p>
+        <p className="text-slate-500 max-w-2xl mx-auto">Our 24/7 Jiffex Support & logistics operations team are here to assist you with tracking, instant quotes, and bookings.</p>
       </div>
 
-      {/* Featured Jiffex Agent Banner */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-[2.5rem] p-8 md:p-10 shadow-2xl border border-indigo-500/30 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8"
-      >
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="space-y-3 max-w-xl text-left relative z-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-black uppercase tracking-wider">
-            <Sparkles size={14} className="animate-spin text-indigo-400" />
-            <span>Jiffex Agent Active • OmniDimension Powered</span>
+      {/* Customer Care Card */}
+      <div className="bg-white rounded-[2.5rem] p-8 md:p-10 border border-slate-200 shadow-sm relative overflow-hidden">
+        <div className="max-w-2xl space-y-6">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Jiffex Support • 24/7 Available</span>
           </div>
-          <h4 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-            Instant 24/7 Logistics Assistant
-          </h4>
-          <p className="text-sm text-slate-300 leading-relaxed font-medium">
-            Equipped with real-time tools for <strong className="text-white">Live Tracking</strong>, <strong className="text-white">Shipping Rate Calculations</strong>, and <strong className="text-white">Doorstep Pickup Scheduling</strong>.
-          </p>
-        </div>
 
-        <button
-          onClick={handleOpenOmniDimension}
-          className="relative z-10 shrink-0 px-8 py-5 bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-black text-base rounded-2xl shadow-xl shadow-indigo-500/25 flex items-center gap-3 transition-all active:scale-95 cursor-pointer group"
-        >
-          <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Bot size={18} />
+          <div className="space-y-2">
+            <h4 className="text-3xl font-black text-slate-900 tracking-tight">Need Help?</h4>
+            <p className="text-base font-bold text-slate-700">
+              Talk to Jiffex Support for help with:
+            </p>
           </div>
-          <span>Talk to Jiffex Agent</span>
-        </button>
-      </motion.div>
+
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-slate-600 font-medium">
+            {supportTopics.map((topic) => (
+              <li key={topic} className="flex items-center gap-2.5 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-100">
+                <span className="text-indigo-600 font-black">•</span>
+                <span>{topic}</span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="pt-2 flex flex-wrap items-center gap-4">
+            <button
+              id="btn-call-jiffex-support-section"
+              type="button"
+              onClick={handleCallSupport}
+              className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-base rounded-2xl shadow-xl shadow-indigo-200 active:scale-95 transition flex items-center gap-3 cursor-pointer"
+            >
+              {loggedIn ? (
+                <>
+                  <PhoneCall size={18} />
+                  <span>Call Jiffex Support</span>
+                </>
+              ) : (
+                <>
+                  <LogIn size={18} />
+                  <span>Sign in to Call Support</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSupportContact}
+              className="px-6 py-4 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-sm rounded-2xl border border-slate-200 flex items-center gap-2 transition active:scale-95 cursor-pointer"
+            >
+              <Mail size={16} className="text-slate-500" />
+              <span>Email Support</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* 3 Core Agent Functions Grid */}
       <div className="space-y-4">
         <div className="flex items-center justify-between px-2">
           <h4 className="text-lg font-black text-slate-900 flex items-center gap-2">
-            <Bot className="text-indigo-600" size={20} />
-            What the Jiffex Agent can do for you:
+            <Sparkles className="text-indigo-600" size={20} />
+            What Jiffex Support can do for you:
           </h4>
           <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/50 flex items-center gap-1">
-            <CheckCircle2 size={12} /> Live API Tools Active
+            <CheckCircle2 size={12} /> Live Support Active
           </span>
         </div>
 
@@ -117,7 +310,7 @@ const SupportSection = () => {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
-              onClick={handleOpenOmniDimension}
+              onClick={handleCallSupport}
               className={`p-6 rounded-3xl bg-white border ${cap.border} shadow-sm hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col justify-between`}
             >
               <div className="space-y-4">
@@ -126,7 +319,7 @@ const SupportSection = () => {
                     <cap.icon size={24} />
                   </div>
                   <span className="text-[11px] font-bold text-slate-400 group-hover:text-indigo-600 transition-colors flex items-center gap-1">
-                    Try with Agent <ArrowRight size={12} />
+                    Ask Support <ArrowRight size={12} />
                   </span>
                 </div>
                 <div>
@@ -144,56 +337,31 @@ const SupportSection = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {[
-          { 
-            icon: Bot, 
-            title: "Jiffex Agent", 
-            desc: "24/7 AI Assistant for immediate answers, rates calculation, tracking, and pickup booking.",
-            action: "Open Jiffex Agent",
-            color: "text-indigo-600",
-            bg: "bg-indigo-50",
-            onClick: handleOpenOmniDimension
-          },
-          { 
-            icon: Mail, 
-            title: "Email Support", 
-            desc: "Send us your queries and our human operations team will respond within 24 hours.",
-            action: "support@jiffex.com",
-            color: "text-emerald-600",
-            bg: "bg-emerald-50",
-            onClick: handleSupportContact
-          },
-          { 
-            icon: HelpCircle, 
-            title: "Help Center & FAQs", 
-            desc: "Browse international shipping customs guides, prohibited goods, and packaging standards.",
-            action: "View Guidelines",
-            color: "text-amber-600",
-            bg: "bg-amber-50",
-            onClick: undefined
-          }
-        ].map((item, i) => (
-          <motion.div
-            key={item.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group"
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
+          <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+            <Mail size={28} />
+          </div>
+          <h4 className="text-xl font-black text-slate-900 mb-2">Email Support</h4>
+          <p className="text-sm text-slate-500 mb-6 leading-relaxed">Send us your queries and our human operations team will respond within 24 hours.</p>
+          <button 
+            onClick={handleSupportContact}
+            className="text-sm font-bold text-emerald-600 flex items-center gap-2 hover:underline cursor-pointer"
           >
-            <div className={`w-14 h-14 ${item.bg} ${item.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
-              <item.icon size={28} />
-            </div>
-            <h4 className="text-xl font-black text-slate-900 mb-2">{item.title}</h4>
-            <p className="text-sm text-slate-500 mb-6 leading-relaxed">{item.desc}</p>
-            <button 
-              onClick={item.onClick}
-              className={`text-sm font-bold ${item.color} flex items-center gap-2 hover:underline cursor-pointer`}
-            >
-              {item.action} <ArrowRight size={16} />
-            </button>
-          </motion.div>
-        ))}
+            support@jiffex.com <ArrowRight size={16} />
+          </button>
+        </div>
+
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
+          <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+            <HelpCircle size={28} />
+          </div>
+          <h4 className="text-xl font-black text-slate-900 mb-2">Help Center & FAQs</h4>
+          <p className="text-sm text-slate-500 mb-6 leading-relaxed">Browse international shipping customs guides, prohibited goods, and packaging standards.</p>
+          <span className="text-sm font-bold text-amber-600 flex items-center gap-2">
+            View Guidelines Below <ArrowRight size={16} />
+          </span>
+        </div>
       </div>
 
       {/* Simple FAQ Accordion */}
@@ -201,9 +369,9 @@ const SupportSection = () => {
         <h4 className="text-2xl font-black text-slate-900 mb-8 text-center">Frequently Asked Questions</h4>
         <div className="space-y-4">
           {[
-            { q: "How do I track my international shipment?", a: "Enter your Jiffex tracking number in the tracking tab, or ask the Jiffex Agent 'Track my package JFX-XXXXX' for instant live checkpoint details." },
-            { q: "How is the shipping cost calculated?", a: "Costs are based on chargeable weight (the greater of actual weight vs volumetric weight) and the destination country tier. The Jiffex Agent can calculate instant quotes for you." },
-            { q: "Can I book a doorstep pickup for free?", a: "Yes! Doorstep pickup is completely free across all serviceable cities. You can schedule it anytime via the website or directly with the Jiffex Agent." },
+            { q: "How do I track my international shipment?", a: "Enter your Jiffex tracking number in the tracking tab, or ask Jiffex Support for instant live checkpoint details." },
+            { q: "How is the shipping cost calculated?", a: "Costs are based on chargeable weight (the greater of actual weight vs volumetric weight) and the destination country tier. Jiffex Support can calculate instant quotes for you." },
+            { q: "Can I book a doorstep pickup for free?", a: "Yes! Doorstep pickup is completely free across all serviceable cities. You can schedule it anytime via the website or directly with Jiffex Support." },
             { q: "What items are prohibited?", a: "We cannot ship hazardous materials, flammable items, currency, or restricted electronics. Please consult our support team for specialized commodities." }
           ].map((faq, i) => (
             <div key={i} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">

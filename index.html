@@ -76,12 +76,36 @@
         }
       })();
     </script>
+    <!-- OmniDimension AI Voice Agent Widget (Agent ID: 242008) -->
+    <script id="omnidimension-web-widget" async src="https://omnidim.io/web_widget.js?secret_key=13ffcc695fa8af9dcc4d8cd2a5231b78"></script>
   </head>
-  <body>
+  <body data-active-tab="home">
+    <!-- OmniDimension custom trigger element: recognized natively by web_widget.js -->
+    <button
+      id="omni-open-widget-btn"
+      type="button"
+      aria-hidden="true"
+      tabindex="-1"
+      style="position:fixed;bottom:-9999px;right:-9999px;width:1px;height:1px;opacity:0;overflow:hidden;border:none;padding:0;margin:0;"
+    ></button>
+    <script>
+      (function() {
+        var btn = document.getElementById('omni-open-widget-btn');
+        if (btn) {
+          var originalAdd = btn.addEventListener;
+          btn._omniReady = false;
+          btn.addEventListener = function(type, fn, opts) {
+            if (type === 'click') {
+              btn._omniReady = true;
+              console.log('[Diagnostic] OmniDimension attached click listener to #omni-open-widget-btn');
+            }
+            return originalAdd.call(this, type, fn, opts);
+          };
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <!-- OmniDimension AI Voice Agent Widget (Agent ID: 242008) loaded with defer -->
-    <script id="omnidimension-web-widget" defer src="https://omnidim.io/web_widget.js?secret_key=13ffcc695fa8af9dcc4d8cd2a5231b78"></script>
   </body>
 </html>
 

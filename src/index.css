@@ -72,68 +72,41 @@ body {
   box-shadow: 0 20px 40px rgba(0,0,0,0.15);
 }
 
-/* Mobile OmniDimension widget styling:
-   Strictly hide the raw dark OmniDimension launcher bar / pill on mobile screens (max-width: 768px)
-   so our dedicated circular customer-care button is the ONLY launcher,
-   preventing duplicate widgets or interference with bottom navigation. */
-@media (max-width: 768px) {
-  #chat-helper-button-container,
-  #chat-helper-button,
-  .chat-helper-button-container,
-  .chat-helper-button,
-  #omni-minimized-pill,
-  #omni-open-widget-btn,
-  #omni-widget-component > div:not(#chat-iframe-container) {
-    display: none !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-    opacity: 0 !important;
-    position: fixed !important;
-    top: -9999px !important;
-    left: -9999px !important;
-    width: 0 !important;
-    height: 0 !important;
-    max-width: 0 !important;
-    max-height: 0 !important;
-    overflow: hidden !important;
-    clip: rect(0, 0, 0, 0) !important;
-    clip-path: inset(50%) !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    z-index: -100 !important;
-  }
+/* ==========================================================================
+   OmniDimension Customer-Care Voice Widget Visibility & Isolation Rules
+   ========================================================================== */
 
-  /* When the OmniDimension widget is closed/minimized on mobile,
-     ensure its wrapper container does not capture clicks or block the bottom navigation */
-  #chat-iframe-container {
-    pointer-events: none !important;
-  }
-
-  /* When the agent is opened, allow pointer events on the iframe and its active panel elements */
-  #chat-iframe-container iframe,
-  #chat-iframe-container div[title="Minimize"],
-  #chat-iframe-container [title*="Minim" i],
-  #chat-iframe-container button {
-    pointer-events: auto !important;
-  }
-}
-
-/* Dedicated guaranteed styling for our Custom Mobile Customer Care Floating Button */
-#mobile-customer-care-widget {
-  display: flex !important;
+/* 1. Completely isolate and hide the native OmniDimension launcher, buttons, branding text, and minimized pill globally.
+      Crucial: Do not use display: none or pointer-events: none on the trigger elements,
+      because WebKit/iOS and various browser dispatchers block programmatic .click() events on unrendered DOM nodes.
+      Instead, position them offscreen with zero opacity and 1px dimensions so programmatic clicks execute reliably. */
+#chat-helper-button-container,
+#chat-helper-button,
+#omni-open-widget-btn,
+#omni-minimized-pill,
+[id*="omni-minimized"],
+[id*="chat-helper"] {
   position: fixed !important;
-  right: 16px !important;
-  bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
-  z-index: 9999 !important;
-  pointer-events: auto !important;
+  bottom: -9999px !important;
+  right: -9999px !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  z-index: -999 !important;
 }
 
-@media (min-width: 769px) {
-  #mobile-customer-care-widget {
-    display: none !important;
-    pointer-events: none !important;
-    visibility: hidden !important;
-  }
+/* 2. Hide the voice call modal/iframe container on all pages EXCEPT support */
+body:not([data-active-tab="support"]) #chat-iframe-container,
+html:not([data-active-tab="support"]) #chat-iframe-container {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* 3. On support page, display voice agent iframe container with proper positioning and z-index */
+body[data-active-tab="support"] #chat-iframe-container {
+  z-index: 9999 !important;
 }
 

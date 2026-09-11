@@ -4,7 +4,6 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { Logo } from './components/Logo';
 import { MobilePickupFlow } from './components/MobilePickupFlow';
 import { SinglePagePickupForm } from './components/SinglePagePickupForm';
@@ -106,9 +105,7 @@ import {
   Mic,
   Bot,
   Radio,
-  Headset,
-  Layers,
-  MousePointerClick,
+  PhoneCall,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -980,16 +977,164 @@ const SupportDeskDashboard = ({ orders, tickets, setTickets, refundRequests, set
   );
 };
 
+export const triggerJiffexVoiceCall = () => {
+  const scriptLoaded = Boolean(document.getElementById('omnidimension-web-widget'));
+  console.log('[Diagnostic] OmniDimension script loaded:', scriptLoaded);
+
+  const dispatchSyntheticClick = (el: HTMLElement) => {
+    try {
+      el.click();
+    } catch (e) {}
+    try {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    } catch (e) {}
+  };
+
+  const attemptOpen = (): boolean => {
+    const iframeContainer = document.getElementById('chat-iframe-container');
+    const minimizedPill = document.getElementById('omni-minimized-pill');
+    const openBtn = document.getElementById('omni-open-widget-btn');
+    const helperBtn = document.getElementById('chat-helper-button');
+    const helperContainer = document.getElementById('chat-helper-button-container');
+
+    console.log('[Diagnostic] launcher/container found:', {
+      hasContainer: Boolean(iframeContainer),
+      hasPill: Boolean(minimizedPill),
+      hasOpenBtn: Boolean(openBtn),
+      isOpenBtnReady: Boolean((openBtn as any)?._omniReady),
+      hasHelperBtn: Boolean(helperBtn),
+      hasHelperContainer: Boolean(helperContainer),
+    });
+
+    // 1. If iframe container already exists in DOM (e.g. from previous call or session)
+    if (iframeContainer) {
+      iframeContainer.style.display = 'block';
+      iframeContainer.style.opacity = '1';
+      iframeContainer.style.pointerEvents = 'auto';
+      iframeContainer.style.visibility = 'visible';
+
+      // Ensure inner wrapper is unhidden
+      const innerDiv = iframeContainer.querySelector('div') as HTMLElement | null;
+      if (innerDiv) {
+        innerDiv.style.display = '';
+        innerDiv.style.opacity = '1';
+        innerDiv.style.transform = '';
+      }
+
+      if (minimizedPill) {
+        console.log('[Diagnostic] open action attempted: restoring via minimized pill');
+        dispatchSyntheticClick(minimizedPill);
+      } else if (openBtn) {
+        console.log('[Diagnostic] open action attempted: restoring via omni-open-widget-btn');
+        dispatchSyntheticClick(openBtn);
+      } else if (helperBtn) {
+        console.log('[Diagnostic] open action attempted: restoring via chat-helper-button');
+        dispatchSyntheticClick(helperBtn);
+      }
+
+      const iframe = iframeContainer.querySelector('iframe');
+      if (iframe && iframe.contentWindow) {
+        try {
+          iframe.contentWindow.postMessage({ action: 'show' }, '*');
+          iframe.contentWindow.postMessage({ action: 'restored' }, '*');
+        } catch (e) {}
+      }
+
+      console.log('[Diagnostic] Open action result: success (restored existing container)');
+      toast.success('Connecting to Jiffex Support...');
+      return true;
+    }
+
+    // 2. If omni-open-widget-btn hook is attached and ready
+    if (openBtn && (openBtn as any)._omniReady) {
+      console.log('[Diagnostic] open action attempted: clicking omni-open-widget-btn (ready)');
+      dispatchSyntheticClick(openBtn);
+      console.log('[Diagnostic] Open action result: success');
+      toast.success('Connecting to Jiffex Support...');
+      return true;
+    }
+
+    // 3. If native chat-helper-button is in DOM
+    if (helperBtn) {
+      console.log('[Diagnostic] open action attempted: clicking chat-helper-button');
+      dispatchSyntheticClick(helperBtn);
+      console.log('[Diagnostic] Open action result: success');
+      toast.success('Connecting to Jiffex Support...');
+      return true;
+    }
+
+    // 4. If container exists
+    if (helperContainer) {
+      const child = helperContainer.querySelector('div, button') as HTMLElement | null;
+      const target = child || helperContainer;
+      console.log('[Diagnostic] open action attempted: clicking chat-helper-button-container');
+      dispatchSyntheticClick(target);
+      console.log('[Diagnostic] Open action result: success');
+      toast.success('Connecting to Jiffex Support...');
+      return true;
+    }
+
+    return false;
+  };
+
+  if (attemptOpen()) {
+    return;
+  }
+
+  // Asynchronous wait/retry loop
+  console.log('[Diagnostic] OmniDimension widget not ready yet; waiting/retrying asynchronously...');
+  let attempts = 0;
+  const maxAttempts = 28; // ~4.2 seconds
+  const interval = setInterval(() => {
+    attempts++;
+    if (attemptOpen()) {
+      clearInterval(interval);
+      return;
+    }
+    // Tentative click on omni-open-widget-btn after a brief delay
+    if (attempts > 5) {
+      const openBtn = document.getElementById('omni-open-widget-btn');
+      if (openBtn) {
+        console.log('[Diagnostic] open action attempted: tentative click on omni-open-widget-btn');
+        dispatchSyntheticClick(openBtn);
+        const container = document.getElementById('chat-iframe-container');
+        if (container) {
+          clearInterval(interval);
+          console.log('[Diagnostic] Open action result: success');
+          toast.success('Connecting to Jiffex Support...');
+          return;
+        }
+      }
+    }
+    if (attempts >= maxAttempts) {
+      clearInterval(interval);
+      console.warn('[Diagnostic] Open action result: failure (timeout waiting for widget initialization)');
+      toast.error('Jiffex Support is still loading. Please try again in a moment.');
+    }
+  }, 150);
+};
+
 interface SupportSectionProps {
   currentUser: User | null;
+  session?: Session | null;
   orders: Order[];
   tickets: Ticket[];
   setTickets: React.Dispatch<React.SetStateAction<Ticket[]>>;
   refundRequests: RefundRequest[];
   setRefundRequests: React.Dispatch<React.SetStateAction<RefundRequest[]>>;
+  onOpenLogin?: () => void;
 }
 
-const SupportSection = ({ currentUser, orders, tickets, setTickets, refundRequests, setRefundRequests }: SupportSectionProps) => {
+const SupportSection = ({ 
+  currentUser, 
+  session, 
+  orders, 
+  tickets, 
+  setTickets, 
+  refundRequests, 
+  setRefundRequests, 
+  onOpenLogin 
+}: SupportSectionProps) => {
   if (currentUser?.role === 'customer_service') {
     return (
       <SupportDeskDashboard 
@@ -1004,6 +1149,35 @@ const SupportSection = ({ currentUser, orders, tickets, setTickets, refundReques
   }
 
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+
+  const isAuthenticated = Boolean(
+    (currentUser && currentUser.email) ||
+    (session && session.user && session.user.email) ||
+    (getValidActiveSession() && getValidActiveSession()?.email)
+  );
+
+  const handleCallSupport = () => {
+    console.log('[Diagnostic] Support button clicked');
+    console.log('[Diagnostic] Auth status:', isAuthenticated ? 'logged-in' : 'logged-out');
+
+    if (!isAuthenticated) {
+      if (onOpenLogin) {
+        onOpenLogin();
+      } else {
+        window.dispatchEvent(new CustomEvent('jiffex:open-login', { detail: { source: 'support' } }));
+      }
+      return;
+    }
+    triggerJiffexVoiceCall();
+  };
+
+  const supportTopics = [
+    "Shipping quotes",
+    "Pickup scheduling",
+    "Shipment tracking",
+    "Items allowed/not allowed",
+    "Existing orders"
+  ];
 
   const mobileFaqs = [
     { q: "How long does shipping to the US take?", a: "Express shipments typically take 5-7 business days. Standard shipping takes 10-14 business days. These times depend on customs clearance and the final destination city." },
@@ -1046,66 +1220,57 @@ const SupportSection = ({ currentUser, orders, tickets, setTickets, refundReques
         <div className="space-y-3.5">
           <h2 className="text-sm font-black text-[#0A142F] tracking-tight">How can we help you today?</h2>
           
-          {/* Jiffex Agent Card */}
-          <div 
-            onClick={() => {
-              try {
-                const omniEl = document.querySelector('#omnidimension-web-widget, [id*="omnidim"], [class*="omnidim"], button[aria-label*="chat"], button[aria-label*="bot"], iframe[id*="omnidim"]') as HTMLElement | null;
-                if (omniEl) omniEl.click();
-                else toast.success('Jiffex Agent is active in the bottom-right corner.');
-              } catch (e) {
-                toast.success('Jiffex Agent is active.');
-              }
-            }}
-            className="flex items-center justify-between p-3.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl shadow-md border border-indigo-500/30 cursor-pointer active:scale-[0.99] transition relative overflow-hidden"
-          >
-            <div className="flex items-center space-x-3 relative z-10">
-              <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/40 shrink-0">
-                <Bot className="w-5 h-5 text-white" />
+          {/* Customer Care Card */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-sm space-y-3.5">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/60 text-emerald-700 text-[10px] font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Jiffex Support • 24/7 Available</span>
               </div>
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-1.5">
-                  <h3 className="text-xs font-black text-white">Jiffex AI Agent</h3>
-                  <span className="text-[8px] bg-indigo-500/40 text-indigo-200 px-1.5 py-0.5 rounded-full font-bold">Online</span>
-                </div>
-                <p className="text-[9px] text-blue-200/90 font-medium leading-tight max-w-[170px]">Instant 24/7 AI logistics support & rate inquiries.</p>
-              </div>
+              <h3 className="text-base font-black text-slate-900 tracking-tight">Need Help?</h3>
+              <p className="text-xs font-bold text-slate-700">
+                Talk to Jiffex Support for help with:
+              </p>
             </div>
-            <button 
-              type="button"
-              className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-[9px] font-extrabold rounded-full flex items-center space-x-1 shadow-md shadow-indigo-500/30 shrink-0 relative z-10"
-            >
-              <span>Chat Now</span>
-              <ChevronRight className="w-2.5 h-2.5" />
-            </button>
-          </div>
 
-          {/* Live Chat Card */}
-          <div className="flex items-center justify-between p-3.5 bg-[#F5F3FF] border border-[#E0DBFF] rounded-2xl shadow-sm">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-[#E0DBFF]/40 shrink-0">
-                <MessageSquare className="w-5 h-5 text-[#4F2EF7]" />
-              </div>
-              <div className="space-y-0.5">
-                <h3 className="text-xs font-black text-[#0A142F]">Live Chat</h3>
-                <p className="text-[9px] text-slate-500 font-medium leading-tight max-w-[170px]">Chat with our support team for instant assistance.</p>
-              </div>
+            <ul className="space-y-1.5 text-xs text-slate-600 font-medium">
+              {supportTopics.map((topic) => (
+                <li key={topic} className="flex items-center gap-2">
+                  <span className="text-indigo-600 font-bold">•</span>
+                  <span>{topic}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="pt-1 flex flex-col gap-2">
+              <button
+                id="btn-call-jiffex-support-mobile"
+                type="button"
+                onClick={handleCallSupport}
+                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md shadow-indigo-200 flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer"
+              >
+                {isAuthenticated ? (
+                  <>
+                    <PhoneCall size={14} />
+                    <span>Call Jiffex Support</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn size={14} />
+                    <span>Sign in to Call Support</span>
+                  </>
+                )}
+              </button>
+
+              <a
+                id="btn-email-support-mobile-action"
+                href="mailto:support@jiffex.com"
+                className="w-full py-2.5 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 flex items-center justify-center gap-1.5 active:scale-95 transition"
+              >
+                <Mail size={13} className="text-slate-500" />
+                <span>Email Support</span>
+              </a>
             </div>
-            <button 
-              onClick={() => {
-                try {
-                  const omniEl = document.querySelector('#omnidimension-web-widget, [id*="omnidim"], [class*="omnidim"], button[aria-label*="chat"], button[aria-label*="bot"], iframe[id*="omnidim"]') as HTMLElement | null;
-                  if (omniEl) omniEl.click();
-                  else toast.success('Connecting to Live Support...');
-                } catch (e) {
-                  toast.success('Connecting to Live Support...');
-                }
-              }}
-              className="px-3 py-1.5 bg-[#4F2EF7] text-white text-[9px] font-extrabold rounded-full flex items-center space-x-1 hover:bg-[#3F22D6] active:scale-95 transition shadow-md shadow-indigo-200 shrink-0"
-            >
-              <span>Chat Now</span>
-              <ChevronRight className="w-2.5 h-2.5" />
-            </button>
           </div>
 
           {/* Email Support Card */}
@@ -1242,104 +1407,88 @@ const SupportSection = ({ currentUser, orders, tickets, setTickets, refundReques
           <p className="text-slate-500 max-w-2xl mx-auto">Our support team and 24/7 Jiffex Agent are here to ensure your shipping experience is flawless.</p>
         </div>
 
-        {/* Featured Jiffex Agent Banner */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-[2.5rem] p-8 md:p-10 shadow-2xl border border-indigo-500/30 relative overflow-hidden flex flex-col lg:flex-row items-center justify-between gap-8"
-        >
-          <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
-          
-          <div className="space-y-3 max-w-xl text-left relative z-10">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-black uppercase tracking-wider">
-              <Sparkles size={14} className="text-indigo-400 animate-spin" />
-              <span>Jiffex AI Support Agent</span>
+        {/* Customer Care Card */}
+        <div className="bg-white rounded-[2.5rem] p-8 md:p-10 border border-slate-200/90 shadow-sm relative overflow-hidden">
+          <div className="max-w-2xl space-y-6">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Jiffex Support • 24/7 Available</span>
             </div>
-            <h4 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-              Instant Jiffex Fulfilment Support
-            </h4>
-            <p className="text-sm text-slate-300 leading-relaxed font-medium">
-              Have questions about shipping rates, scheduling doorstep pickup, shop & ship consolidation, or tracking? Use our 24/7 Jiffex assistant for instant resolution.
-            </p>
+
+            <div className="space-y-2">
+              <h4 className="text-3xl font-black text-slate-900 tracking-tight">Need Help?</h4>
+              <p className="text-base font-bold text-slate-700">
+                Talk to Jiffex Support for help with:
+              </p>
+            </div>
+
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-slate-600 font-medium">
+              {supportTopics.map((topic) => (
+                <li key={topic} className="flex items-center gap-2.5 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-100">
+                  <span className="text-indigo-600 font-black">•</span>
+                  <span>{topic}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="pt-2 flex flex-wrap items-center gap-4">
+              <button
+                id="btn-call-jiffex-support-desktop"
+                type="button"
+                onClick={handleCallSupport}
+                className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-base rounded-2xl shadow-xl shadow-indigo-200 active:scale-95 transition flex items-center gap-3 cursor-pointer"
+              >
+                {isAuthenticated ? (
+                  <>
+                    <PhoneCall size={18} />
+                    <span>Call Jiffex Support</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn size={18} />
+                    <span>Sign in to Call Support</span>
+                  </>
+                )}
+              </button>
+
+              <a
+                id="btn-email-support-desktop-action"
+                href="mailto:support@jiffex.com"
+                className="px-6 py-4 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-sm rounded-2xl border border-slate-200 flex items-center gap-2 transition active:scale-95 cursor-pointer"
+              >
+                <Mail size={16} className="text-slate-500" />
+                <span>Email Support</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* Support Channels & Guides Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
+            <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+              <Mail size={28} />
+            </div>
+            <h4 className="text-xl font-black text-slate-900 mb-2">Email Support</h4>
+            <p className="text-sm text-slate-500 mb-6 leading-relaxed">Send us your queries and our team will get back to you within 24 hours.</p>
+            <a 
+              href="mailto:support@jiffex.com"
+              className="text-sm font-bold text-emerald-600 flex items-center gap-2 hover:underline cursor-pointer"
+            >
+              support@jiffex.com <ArrowRight size={16} />
+            </a>
           </div>
 
-          <button
-            onClick={() => {
-              try {
-                const omniEl = document.querySelector('#omnidimension-web-widget, [id*="omnidim"], [class*="omnidim"], button[aria-label*="chat"], button[aria-label*="bot"], iframe[id*="omnidim"]') as HTMLElement | null;
-                if (omniEl) omniEl.click();
-                else toast.success('Jiffex Agent is active in the bottom-right corner.');
-              } catch (e) {
-                toast.success('Jiffex Agent is active.');
-              }
-            }}
-            className="relative z-10 shrink-0 px-8 py-5 bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-black text-base rounded-2xl shadow-xl shadow-indigo-500/30 flex items-center gap-3 transition-all active:scale-95 cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Bot size={20} className="text-white" />
+          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group">
+            <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+              <HelpCircle size={28} />
             </div>
-            <span>Open Jiffex Agent</span>
-          </button>
-        </motion.div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {[
-            { 
-              icon: Bot, 
-              title: "Jiffex Agent", 
-              desc: "Instant 24/7 AI assistance for rate calculations, tracking, and logistics guidance.",
-              action: "Open Jiffex Agent",
-              color: "text-indigo-600",
-              bg: "bg-indigo-50",
-              onClick: () => {
-                try {
-                  const omniEl = document.querySelector('#omnidimension-web-widget, [id*="omnidim"], [class*="omnidim"], button[aria-label*="chat"], button[aria-label*="bot"], iframe[id*="omnidim"]') as HTMLElement | null;
-                  if (omniEl) omniEl.click();
-                  else toast.success('Jiffex Agent is active in the bottom-right corner.');
-                } catch (e) {
-                  toast.success('Jiffex Agent is active.');
-                }
-              }
-            },
-            { 
-              icon: Mail, 
-              title: "Email Support", 
-              desc: "Send us your queries and we'll get back to you within 24 hours.",
-              action: "support@jiffex.com",
-              color: "text-emerald-600",
-              bg: "bg-emerald-50",
-              onClick: () => { window.location.href = 'mailto:support@jiffex.com'; }
-            },
-            { 
-              icon: HelpCircle, 
-              title: "Help Center", 
-              desc: "Browse our extensive library of FAQs and shipping guides.",
-              action: "Visit FAQ",
-              color: "text-amber-600",
-              bg: "bg-amber-50",
-              onClick: undefined
-            }
-          ].map((item, i) => (
-            <motion.div
-              key={item.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group"
-            >
-              <div className={`w-14 h-14 ${item.bg} ${item.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
-                <item.icon size={28} />
-              </div>
-              <h4 className="text-xl font-black text-slate-900 mb-2">{item.title}</h4>
-              <p className="text-sm text-slate-500 mb-6 leading-relaxed">{item.desc}</p>
-              <button 
-                onClick={item.onClick}
-                className={`text-sm font-bold ${item.color} flex items-center gap-2 hover:underline cursor-pointer`}
-              >
-                {item.action} <ArrowRight size={16} />
-              </button>
-            </motion.div>
-          ))}
+            <h4 className="text-xl font-black text-slate-900 mb-2">Help Center & FAQs</h4>
+            <p className="text-sm text-slate-500 mb-6 leading-relaxed">Browse our extensive library of FAQs, customs guides, and packaging rules.</p>
+            <div className="text-sm font-bold text-amber-600 flex items-center gap-2">
+              Browse FAQs Below <ArrowRight size={16} />
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
@@ -4988,7 +5137,7 @@ const isAdminEmail = (email: string | null | undefined): boolean => {
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
-  const [authLoading, setAuthLoading] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [sessionGuestId] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -5009,174 +5158,6 @@ export default function App() {
   const [showNewOrderMenu, setShowNewOrderMenu] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [navbarTrackingId, setNavbarTrackingId] = useState('');
-  const [isOmniAgentOpen, setIsOmniAgentOpen] = useState(false);
-  const [isConnectingOmni, setIsConnectingOmni] = useState(false);
-  const omniRetryTimerRef = useRef<any>(null);
-
-  useEffect(() => {
-    const checkOmniStatus = () => {
-      const iframe = document.querySelector(
-        '#chat-iframe-container iframe, #omni-widget-component iframe, iframe[src*="omnidim"]'
-      ) as HTMLElement | null;
-
-      if (iframe) {
-        const parentDiv = iframe.closest('#chat-iframe-container > div') as HTMLElement | null;
-        const isParentHidden = parentDiv && parentDiv.style.display === 'none';
-        const rect = iframe.getBoundingClientRect();
-        const isVisible = !isParentHidden && 
-                          iframe.style.display !== 'none' && 
-                          iframe.style.visibility !== 'hidden' &&
-                          rect.height > 60 &&
-                          rect.width > 60;
-        setIsOmniAgentOpen(Boolean(isVisible));
-      } else {
-        setIsOmniAgentOpen(false);
-      }
-    };
-
-    const observer = new MutationObserver(() => {
-      checkOmniStatus();
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['style', 'class', 'hidden']
-    });
-
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        if (typeof event.data === 'string') {
-          if (event.data.includes('closed') || event.data.includes('restored') || event.data.includes('minimized') || event.data.includes('minimize')) {
-            setIsOmniAgentOpen(false);
-          } else if (event.data.includes('opened') || event.data.includes('show')) {
-            setIsOmniAgentOpen(true);
-          }
-        } else if (event.data && typeof event.data === 'object') {
-          const action = (event.data as any).action || (event.data as any).type || '';
-          if (action === 'restored' || action === 'closed' || action === 'hidden' || action === 'minimize' || action === 'minimized') {
-            setIsOmniAgentOpen(false);
-          } else if (action === 'open' || action === 'opened' || action === 'show') {
-            setIsOmniAgentOpen(true);
-          }
-        }
-      } catch (e) {}
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('message', handleMessage);
-      if (omniRetryTimerRef.current) {
-        clearInterval(omniRetryTimerRef.current);
-      }
-    };
-  }, []);
-
-  const triggerMobileOmniAgent = useCallback(() => {
-    const iframe = document.querySelector(
-      '#chat-iframe-container iframe, #omni-widget-component iframe, iframe[src*="omnidim"]'
-    ) as HTMLElement | null;
-    const parentDiv = iframe?.closest('#chat-iframe-container > div') as HTMLElement | null;
-    const isActuallyOpen = Boolean(
-      isOmniAgentOpen ||
-      (iframe && (!parentDiv || parentDiv.style.display !== 'none') && iframe.getBoundingClientRect().height > 60)
-    );
-
-    if (isActuallyOpen) {
-      if (typeof (window as any).OmniDimension?.close === 'function') {
-        try { (window as any).OmniDimension.close(); } catch (e) {}
-      }
-      const closeBtn = document.querySelector(
-        '#chat-iframe-container div[title="Minimize"], #chat-iframe-container [title*="Minim" i], #chat-iframe-container button, #omni-widget-component button'
-      ) as HTMLElement | null;
-      if (closeBtn) {
-        closeBtn.click();
-      }
-      try {
-        window.postMessage({ action: 'minimize', source: 'omnidim-widget' }, '*');
-        const iframes = document.querySelectorAll('#chat-iframe-container iframe, iframe[src*="omnidim"]');
-        iframes.forEach((f) => {
-          try {
-            (f as HTMLIFrameElement).contentWindow?.postMessage({ action: 'minimize', source: 'omnidim-widget' }, '*');
-          } catch (e) {}
-        });
-      } catch (e) {}
-      setIsOmniAgentOpen(false);
-      setIsConnectingOmni(false);
-      return;
-    }
-
-    const tryOpenOmni = (): boolean => {
-      // 1. OmniDimension public JS API
-      if (typeof (window as any).OmniDimension?.open === 'function') {
-        try {
-          (window as any).OmniDimension.open();
-          setIsOmniAgentOpen(true);
-          return true;
-        } catch (e) {}
-      }
-
-      // 2. Previously minimized pill
-      const pill = document.getElementById('omni-minimized-pill');
-      if (pill) {
-        pill.click();
-        setIsOmniAgentOpen(true);
-        return true;
-      }
-
-      // 3. Native initial launcher
-      const helperBtn = document.getElementById('chat-helper-button') || document.getElementById('chat-helper-button-container');
-      if (helperBtn) {
-        helperBtn.click();
-        setIsOmniAgentOpen(true);
-        return true;
-      }
-
-      // 4. Other query selectors
-      const selectors = [
-        '#omni-open-widget-btn',
-        '.chat-helper-button',
-        '.chat-helper-button-container',
-        '#omnidim-widget',
-        '#omni-widget-component button',
-        'button[aria-label*="chat" i]',
-        'button[aria-label*="bot" i]'
-      ];
-      for (const sel of selectors) {
-        const el = document.querySelector(sel) as HTMLElement | null;
-        if (el) {
-          el.click();
-          setIsOmniAgentOpen(true);
-          return true;
-        }
-      }
-
-      return false;
-    };
-
-    if (tryOpenOmni()) {
-      setIsConnectingOmni(false);
-      return;
-    }
-
-    // If OmniDimension widget is still downloading/initializing in production:
-    // Show spinner and poll every 150ms until the launcher mounts, then trigger it immediately
-    setIsConnectingOmni(true);
-    if (omniRetryTimerRef.current) {
-      clearInterval(omniRetryTimerRef.current);
-    }
-    let elapsed = 0;
-    omniRetryTimerRef.current = setInterval(() => {
-      elapsed += 150;
-      if (tryOpenOmni() || elapsed >= 8000) {
-        clearInterval(omniRetryTimerRef.current);
-        omniRetryTimerRef.current = null;
-        setIsConnectingOmni(false);
-      }
-    }, 150);
-  }, [isOmniAgentOpen]);
 
   const navigateTo = (tab: Tab) => {
     if (tab === 'finalize') {
@@ -5429,7 +5410,7 @@ export default function App() {
     return s ? (s.name || '') : '';
   });
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [loginTriggerSource, setLoginTriggerSource] = useState<'default' | 'checkout' | 'pickup'>('default');
+  const [loginTriggerSource, setLoginTriggerSource] = useState<'default' | 'checkout' | 'pickup' | 'support'>('default');
   const [showPickupConfirmModal, setShowPickupConfirmModal] = useState(false);
   const [activePickupStep, setActivePickupStep] = useState(1);
   const [activeCheckoutStep, setActiveCheckoutStep] = useState(1);
@@ -6282,22 +6263,15 @@ export default function App() {
     );
   };
 
-  // Check backend health and Supabase connection non-blockingly
+  // Check backend health and Supabase connection
   useEffect(() => {
     let subscription: any;
 
-    const timeoutPromise = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
-      return Promise.race([
-        promise,
-        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))
-      ]);
-    };
-
     const initializeSupabaseAndAuth = async () => {
-      // 1. Fetch runtime Supabase configuration with fast 1.5s timeout
       try {
-        const configRes = await timeoutPromise(fetch('/api/supabase-config'), 1500, null as any);
-        if (configRes && configRes.ok) {
+        // Fetch runtime Supabase configuration from the server
+        const configRes = await fetch('/api/supabase-config');
+        if (configRes.ok) {
           const configData = await configRes.json();
           if (configData.supabaseUrl && configData.supabaseAnonKey) {
             updateSupabaseConfig(configData.supabaseUrl, configData.supabaseAnonKey);
@@ -6307,34 +6281,29 @@ export default function App() {
         console.warn('Unable to reach runtime configuration api:', err);
       }
 
-      // 2. Concurrently check health and get session with fast timeouts so neither blocks the other
+      // Check backend health
       try {
-        const [healthRes, sessionRes] = await Promise.allSettled([
-          timeoutPromise(api.checkHealth(), 2000, { status: 'ok', supabaseConnected: true, emailConfigured: true }),
-          timeoutPromise(supabase.auth.getSession(), 2000, { data: { session: null } })
-        ]);
-
-        if (healthRes.status === 'fulfilled' && healthRes.value) {
-          setDbStatus({ connected: !!(healthRes.value as any).supabaseConnected, checked: true });
-        } else {
-          setDbStatus({ connected: false, checked: true });
-        }
-
-        if (sessionRes.status === 'fulfilled' && sessionRes.value?.data?.session) {
-          const activeSession = sessionRes.value.data.session;
-          setSession(activeSession);
-          if (activeSession?.user?.email) {
-            saveActiveSession(activeSession.user.email, activeSession.user.user_metadata?.full_name);
-          }
-        }
+        const res = await api.checkHealth();
+        setDbStatus({ connected: res.supabaseConnected, checked: true });
       } catch (err) {
-        console.warn('Init auth/health error:', err);
-      } finally {
+        setDbStatus({ connected: false, checked: true });
+      }
+
+      // Initialize auth session
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        if (session?.user?.email) {
+          saveActiveSession(session.user.email, session.user.user_metadata?.full_name);
+        }
+        setAuthLoading(false);
+      } catch (err) {
+        console.warn('Supabase auth getSession error:', err);
         setAuthLoading(false);
       }
 
       try {
-        const { data } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+        const { data } = supabase.auth.onAuthStateChange((_event, session) => {
           setSession(session);
           if (session?.user?.email) {
             saveActiveSession(session.user.email, session.user.user_metadata?.full_name);
@@ -6345,7 +6314,7 @@ export default function App() {
         console.warn('Supabase auth onAuthStateChange error:', err);
       }
 
-      // Sync server session non-blockingly
+      // Sync server session
       try {
         const storedToken = localStorage.getItem('jiffex_session_token');
         const headers: Record<string, string> = {};
@@ -6353,12 +6322,11 @@ export default function App() {
           headers['Authorization'] = `Bearer ${storedToken}`;
           headers['x-jiffex-session'] = storedToken;
         }
-        const sessionRes = await timeoutPromise(
-          fetch('/api/auth/session', { credentials: 'include', headers }),
-          2000,
-          null as any
-        );
-        if (sessionRes && sessionRes.ok) {
+        const sessionRes = await fetch('/api/auth/session', {
+          credentials: 'include',
+          headers
+        });
+        if (sessionRes.ok) {
           const sessionData = await sessionRes.json();
           if (sessionData.authenticated && sessionData.token) {
             localStorage.setItem('jiffex_session_token', sessionData.token);
@@ -6389,12 +6357,12 @@ export default function App() {
     };
 
     const handleOpenLogin = (e: Event) => {
-      const customEvent = e as CustomEvent<{ email?: string }>;
+      const customEvent = e as CustomEvent<{ email?: string; source?: 'default' | 'checkout' | 'pickup' | 'support' }>;
       if (customEvent.detail?.email) {
         setGuestEmail(customEvent.detail.email);
       }
       setShowLoginModal(true);
-      setLoginTriggerSource('default');
+      setLoginTriggerSource(customEvent.detail?.source || 'default');
     };
 
     window.addEventListener('jiffex:session-expired', handleSessionExpired);
@@ -6405,6 +6373,23 @@ export default function App() {
       window.removeEventListener('jiffex:open-login', handleOpenLogin);
     };
   }, []);
+
+  // Sync data-active-tab on body and ensure OmniDimension voice agent iframe is hidden when not on support tab
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.body.setAttribute('data-active-tab', activeTab);
+      const iframeContainer = document.getElementById('chat-iframe-container');
+      if (iframeContainer) {
+        if (activeTab !== 'support') {
+          iframeContainer.style.display = 'none';
+          iframeContainer.style.opacity = '0';
+          iframeContainer.style.pointerEvents = 'none';
+        } else {
+          iframeContainer.style.pointerEvents = 'auto';
+        }
+      }
+    }
+  }, [activeTab]);
 
   // Periodic check for 1-day session expiration
   useEffect(() => {
@@ -9430,220 +9415,442 @@ export default function App() {
 
     const HomeSection = useMemo(() => {
       return (
-        <div className="flex flex-col gap-12 sm:gap-16 md:gap-24 pb-16 md:pb-24">
+        <div className="flex flex-col gap-0 md:gap-24 pb-3 md:pb-24">
           {/* JIFFEX Truck Hero Section */}
-          <div className="relative overflow-hidden rounded-b-[2rem] md:rounded-[4rem] bg-transparent text-white px-3 sm:px-8 md:px-16 pt-7 sm:pt-10 md:pt-16 pb-8 md:pb-16 shadow-2xl">
+          <div className="relative overflow-hidden rounded-none md:rounded-[4rem] bg-transparent text-white px-0 pt-4 pb-0 sm:p-12 md:p-20 shadow-2xl">
             <div 
-              className="absolute inset-0 pointer-events-none z-0"
+              className="absolute inset-x-0 top-0 bottom-[180px] md:bottom-0 pointer-events-none z-0"
               style={{
                 background: `radial-gradient(circle at 30% 20%, #1e2a78 0%, #0b1220 60%, #05070f 100%)`,
               }}
             />
 
-            <div className="relative z-10 flex flex-col items-center text-center space-y-4 sm:space-y-8 md:space-y-12 w-full max-w-6xl mx-auto">
-              {/* Responsive Hero Header: Title, Subtext, Benefit Pills, and Delivery Image (Desktop only) */}
-              <div className="flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-8 md:gap-12 w-full text-center md:text-left">
-                <div className="w-full md:flex-1 space-y-2.5 sm:space-y-4 md:space-y-6">
+            <div className="relative z-10 flex flex-col items-center text-center space-y-5 md:space-y-12 w-full">
+              {/* Laptop / Desktop View Header Text */}
+              <div className="hidden md:block space-y-4 md:space-y-8 max-w-4xl px-4 md:px-0">
+                <div className="space-y-2 md:space-y-6">
                   <motion.h1 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-2xl sm:text-4xl md:text-6xl lg:text-7xl font-black tracking-tight md:tracking-tighter leading-tight text-white"
+                    className="text-2xl sm:text-5xl md:text-8xl font-black tracking-tighter leading-tight text-white"
                   >
-                    Send Anything from India to Abroad—<span className="relative inline-block text-amber-400 md:text-white">Hassle-Free<div className="hidden md:block absolute -bottom-1 md:-bottom-2 left-1/2 -translate-x-1/2 w-2/3 h-1 md:h-1.5 bg-amber-500 rounded-full" /></span>
+                    Send Anything from India to Abroad—<span className="relative inline-block">Hassle-Free<div className="absolute -bottom-1 md:-bottom-2 left-1/2 -translate-x-1/2 w-2/3 h-1 md:h-1.5 bg-amber-500 rounded-full" /></span>
                   </motion.h1>
                   <motion.p 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="text-xs sm:text-base md:text-xl text-slate-300 md:text-slate-400 font-medium max-w-2xl mx-auto md:mx-0 leading-relaxed"
+                    className="text-sm sm:text-xl md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto"
                   >
                     Shop online, schedule pickup, or send your own items. We handle packing & delivery.
                   </motion.p>
-
-                  {/* 3 Benefit Pills */}
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.15 }}
-                    className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 sm:gap-2.5 pt-1 sm:pt-2"
-                  >
-                    <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-white text-[10px] sm:text-xs font-bold shadow-xs">
-                      <ShieldCheck size={13} className="text-emerald-400 stroke-[2.5]" />
-                      Secure Packing
-                    </span>
-                    <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-white text-[10px] sm:text-xs font-bold shadow-xs">
-                      <Globe size={13} className="text-blue-400 stroke-[2.5]" />
-                      Global Delivery
-                    </span>
-                    <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-white text-[10px] sm:text-xs font-bold shadow-xs">
-                      <Clock size={13} className="text-amber-400 stroke-[2.5]" />
-                      On-time Guaranteed
-                    </span>
-                  </motion.div>
                 </div>
+              </div>
 
-                {/* Hero Delivery Image - Hidden on mobile view */}
-                <div className="hidden md:block shrink-0 md:w-64 lg:w-72">
+              {/* Mobile View Header Text & Image (Right Side) */}
+              <div className="md:hidden w-[90%] mx-auto px-1 text-left flex items-center justify-between gap-3">
+                <div className="flex-1 space-y-1.5 pr-1">
+                  <motion.h1 
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-xl font-black tracking-tight leading-tight text-white"
+                  >
+                    Send Anything from India to Abroad—<span className="relative inline-block text-amber-400">Hassle-Free</span>
+                  </motion.h1>
+                  <motion.p 
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="text-[10px] text-slate-300 font-medium leading-normal"
+                  >
+                    Shop online, schedule pickup, or send your own items. We handle packing & delivery.
+                  </motion.p>
+                </div>
+                {/* Image on the right above the card container */}
+                <div className="w-[110px] shrink-0">
                   <motion.img 
-                    initial={{ opacity: 0, scale: 0.9 }}
+                    initial={{ opacity: 0, scale: 0.85 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.2 }}
+                    transition={{ delay: 0.15 }}
                     src="https://lh3.googleusercontent.com/d/1m7ORvWwf92WuUJRS_-ySzPQhoInEnAU4"
                     alt="Jiffex Delivery"
                     referrerPolicy="no-referrer"
-                    className="w-full h-auto object-contain max-h-44 md:max-h-60 filter drop-shadow-xl"
+                    className="w-full h-auto object-contain"
                   />
                 </div>
               </div>
 
-              {/* Mobile-only "How Jiffex Works" - Rephrased Point by Point before Service Selectors */}
-              <div className="md:hidden w-full space-y-2.5 pt-1">
-                <div className="bg-white/[0.09] backdrop-blur-md border border-white/15 rounded-2xl p-3.5 sm:p-4 text-left shadow-lg space-y-3">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                    <div className="flex items-center gap-1.5">
-                      <Sparkles size={14} className="text-amber-400" />
-                      <h3 className="text-xs font-black tracking-wider uppercase text-white">How Jiffex Works</h3>
+              {/* Mobile View Badges (Secure Packing, Global Delivery, On-time Guaranteed) */}
+              <div className="md:hidden w-[90%] mx-auto grid grid-cols-3 gap-1.5 pt-1">
+                {[
+                  { icon: ShieldCheck, text: "Secure Packing", color: "text-emerald-400 border-emerald-500/25 bg-emerald-500/5" },
+                  { icon: Globe, text: "Global Delivery", color: "text-sky-400 border-sky-500/25 bg-sky-500/5" },
+                  { icon: Clock, text: "On-time Guaranteed", color: "text-amber-400 border-amber-500/25 bg-amber-500/5" }
+                ].map((badge, idx) => {
+                  const Icon = badge.icon;
+                  return (
+                    <motion.div 
+                      key={idx}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 + idx * 0.05 }}
+                      className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg border ${badge.color}`}
+                    >
+                      <Icon size={9} className="shrink-0" />
+                      <span className="font-extrabold text-[8px] tracking-tight whitespace-nowrap leading-none">{badge.text}</span>
+                    </motion.div>
+                  );
+                })}
+              </div>
+
+              {/* Mobile View: Dedicated Unified Single Page Layout Container */}
+              <div className="md:hidden w-[95%] mx-auto px-0 mt-3">
+                <div className="bg-white rounded-3xl p-5 shadow-xl border border-slate-100 text-slate-800 space-y-6 text-left">
+                  
+                  {/* SECTION 1: WHAT WOULD YOU LIKE TO DO */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                        <PlusCircle size={14} className="stroke-[2.5]" />
+                      </div>
+                      <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase">Quick Actions</h3>
                     </div>
-                    <span className="text-[10px] font-bold text-amber-300 bg-amber-400/20 px-2 py-0.5 rounded-full border border-amber-400/30">
-                      4 Simple Steps
-                    </span>
+
+                    {/* Three Side-by-Side Cards */}
+                    <div className="grid grid-cols-3 gap-2">
+                      {/* Card 1: Schedule Pickup */}
+                      <div 
+                        onClick={() => {
+                          navigateTo('pickup');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      >
+                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+                          <Truck className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Schedule Pickup</h4>
+                        <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Schedule</span>
+                      </div>
+
+                      {/* Card 2: Drop off package */}
+                      <div 
+                        onClick={() => {
+                          navigateTo('warehouse');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      >
+                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+                          <Package className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Drop Off Package</h4>
+                        <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Drop Off</span>
+                      </div>
+
+                      {/* Card 3: Shop & Ship */}
+                      <div 
+                        onClick={() => {
+                          navigateTo('store');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      >
+                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+                          <ShoppingBag className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Shop & Ship</h4>
+                        <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Shop</span>
+                      </div>
+                    </div>
+
+                    {/* Below service cards, put how jiffex works side by side horizontally under the same white background */}
+                    <div className="pt-2">
+                      <div className="bg-slate-50/50 rounded-xl p-2 border border-slate-100/80 grid grid-cols-4 divide-x divide-slate-200/50">
+                        {[
+                          { icon: Calendar, title: "Book in 30 Seconds", desc: "Quick & easy pickup", color: "bg-indigo-50 text-indigo-600" },
+                          { icon: ShoppingBag, title: "Add items from Anywhere", desc: "From home, shop or any store", color: "bg-amber-50 text-amber-600" },
+                          { icon: Truck, title: "We Combine Everything", desc: "Pack & store in our warehouse", color: "bg-emerald-50 text-emerald-600" },
+                          { icon: CheckCircle2, title: "Delivered to Your Doorstep", desc: "Global delivery made easy", color: "bg-blue-50 text-blue-600" }
+                        ].map((step, idx) => {
+                          const StepIcon = step.icon;
+                          return (
+                            <div key={idx} className="flex flex-col items-center text-center px-1 py-1 first:pl-0 last:pr-0">
+                              <div className={`w-6 h-6 rounded-md ${step.color} flex items-center justify-center shrink-0 mb-1`}>
+                                <StepIcon size={12} className="font-black" />
+                              </div>
+                              <h5 className="font-black text-[8px] sm:text-[9px] text-slate-900 leading-tight min-h-[22px] flex items-center justify-center">
+                                {step.title}
+                              </h5>
+                              <p className="text-[7px] text-slate-400 font-medium leading-tight mt-0.5">
+                                {step.desc}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    {[
-                      {
-                        step: 1,
-                        title: "Book Doorstep Pickup",
-                        desc: "Schedule in 30 seconds at your convenient date & time."
-                      },
-                      {
-                        step: 2,
-                        title: "Combine Any Package",
-                        desc: "Add home items, shop products, or warehouse drop-offs."
-                      },
-                      {
-                        step: 3,
-                        title: "Doorstep Weighing & Packing",
-                        desc: "Our agent arrives, packs securely, and weighs on digital scales."
-                      },
-                      {
-                        step: 4,
-                        title: "Global Doorstep Delivery",
-                        desc: "Smooth customs clearance & fast tracked delivery abroad."
-                      }
-                    ].map((item) => (
-                      <div key={item.step} className="flex items-start gap-2.5 p-2 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-                        <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-900 font-black text-[10px] flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                          {item.step}
-                        </span>
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold text-white leading-tight">{item.title}</div>
-                          <div className="text-[10px] text-slate-300 leading-snug mt-0.5">{item.desc}</div>
+                  {/* Section Divider 1 */}
+                  <div className="border-t border-slate-100" />
+
+                  {/* SECTION 2: SHOP DEALS */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                        <ShoppingBag size={14} className="stroke-[2.5]" />
+                      </div>
+                      <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase">Shop Authentic Indian Goods</h3>
+                    </div>
+
+                    <motion.div 
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.25 }}
+                      onClick={() => {
+                        navigateTo('store');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="relative overflow-hidden bg-gradient-to-r from-amber-500/10 via-amber-600/5 to-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-md active:scale-[0.98] transition-all cursor-pointer"
+                    >
+                      {/* Decorative background circle */}
+                      <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
+                      
+                      <div className="flex gap-2.5 items-start">
+                        <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center shrink-0 text-amber-600 border border-amber-100/30">
+                          <ShoppingBag size={20} className="animate-pulse" />
+                        </div>
+                        <div className="space-y-1 text-left">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-extrabold text-[12px] text-amber-950 tracking-tight leading-none">Shop Indian Goods</span>
+                            <span className="bg-amber-600 text-white text-[7px] font-black uppercase px-1 py-0.5 rounded tracking-wide leading-none">Catalog</span>
+                          </div>
+                          <p className="text-[10px] text-slate-600 font-medium leading-normal max-w-[210px]">
+                            Craving home flavors, festive sweets, or premium ethnic wear? Buy from top Indian stores and we'll deliver them abroad!
+                          </p>
                         </div>
                       </div>
-                    ))}
+                      
+                      <div className="shrink-0 flex flex-col items-center justify-center bg-amber-600 text-white p-2 px-3 rounded-xl shadow-sm hover:bg-amber-700 active:scale-95 transition-all">
+                        <span className="text-[9px] font-black tracking-tight leading-none">Shop</span>
+                        <ArrowRight size={12} className="mt-1" />
+                      </div>
+                    </motion.div>
                   </div>
+
+                  {/* Section Divider 2 */}
+                  <div className="border-t border-slate-100" />
+
+                  {/* SECTION 3: QUICK SHIPPING QUOTE */}
+                  <div id="mobile-quick-quote" className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+                        <Calculator size={14} className="stroke-[2.5]" />
+                      </div>
+                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Quick Shipping Quote</h3>
+                    </div>
+
+                    <div className="space-y-3.5">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Destination</label>
+                          <select 
+                            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold text-slate-800"
+                            value={qCountry}
+                            onChange={(e) => setQCountry(e.target.value)}
+                          >
+                            {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Weight (kg)</label>
+                          <input 
+                            type="number" 
+                            min="0.1" 
+                            step="0.1"
+                            className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold bg-slate-50 text-slate-800"
+                            value={qWeight}
+                            onChange={(e) => setQWeight(Number(e.target.value))}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Shipping Method</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { id: 'Standard', label: 'Standard', days: '10-14 Days', multiplier: 0.7 },
+                            { id: 'Express', label: 'Express', days: '5-7 Days', multiplier: 1.0 }
+                          ].map((method) => (
+                            <button
+                              key={method.id}
+                              onClick={() => setQMethod(method.id as any)}
+                              className={`p-2.5 rounded-xl border-2 transition-all text-left ${
+                                qMethod === method.id 
+                                  ? 'border-indigo-600 bg-indigo-50/50 ring-4 ring-indigo-600/5' 
+                                  : 'border-slate-100 bg-white hover:border-slate-200'
+                              }`}
+                            >
+                              <div className={`text-[10px] font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
+                                {method.label}
+                              </div>
+                              <div className="text-[7px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                {method.days}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
+                        <div className="flex justify-between items-end">
+                          <div>
+                            <span className="text-indigo-100 text-[8px] font-bold uppercase tracking-widest">
+                              Estimated Cost ({qMethod})
+                            </span>
+                            <div className="text-xl font-black">
+                              ₹{(() => {
+                                const res = calculateShippingCost({
+                                  country: qCountry,
+                                  weightKg: qWeight,
+                                  method: qMethod,
+                                  rates: shippingRates,
+                                  rateBands: shippingRateBands,
+                                  discounts: shippingDiscounts
+                                });
+                                return res.finalPriceInr.toLocaleString('en-IN');
+                              })()}
+                            </div>
+                            {(() => {
+                              const res = calculateShippingCost({
+                                country: qCountry,
+                                weightKg: qWeight,
+                                method: qMethod,
+                                rates: shippingRates,
+                                rateBands: shippingRateBands,
+                                discounts: shippingDiscounts
+                              });
+                              if (res.discountPercent > 0) {
+                                return (
+                                  <div className="text-[7px] font-bold text-rose-300 mt-0.5">
+                                    Discount of {res.discountPercent}% Applied for {qCountry}! (Save ₹{Math.round(res.discountAmount).toLocaleString('en-IN')}) [Band: {res.appliedBandLabel}]
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="text-[7px] font-bold text-indigo-200 mt-0.5">
+                                  Band: {res.appliedBandLabel} (₹{res.baseRatePerKg}{res.isFlatRate ? ' flat' : '/kg'})
+                                </div>
+                              );
+                            })()}
+                            <div className="text-[7px] font-bold text-indigo-200 uppercase tracking-widest mt-1.5 flex items-center gap-1">
+                              <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
+                            </div>
+                          </div>
+                          <Truck className="opacity-25 shrink-0" size={28} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               </div>
 
-              {/* Responsive Service Selectors */}
-              <div className="space-y-3 sm:space-y-6 md:space-y-8 w-full pt-2 sm:pt-0">
+              {/* Laptop / Desktop only view for the service selectors */}
+              <div className="hidden md:block space-y-6 md:space-y-8 w-full">
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.3 }}
-                  className="text-[11px] sm:text-sm font-bold text-indigo-300 md:text-indigo-400 uppercase tracking-widest text-center md:text-left"
+                  className="text-xs sm:text-sm font-bold text-indigo-400 uppercase tracking-widest"
                 >
-                  Choose how you want to send:
+                  <span className="hidden md:inline">Choose how you want to send:</span>
                 </motion.p>
 
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-6 max-w-5xl mx-auto w-full items-stretch"
+                  className="grid grid-cols-3 md:grid-cols-3 gap-2 md:gap-6 max-w-5xl mx-auto"
                 >
                   {/* Card 1: Pickup from Home */}
                   <div 
                     onClick={() => navigateTo('pickup')}
-                    className="relative cursor-pointer bg-white border-slate-100 p-2.5 sm:p-5 md:p-8 rounded-xl sm:rounded-2xl md:rounded-[2.5rem] shadow-md sm:shadow-lg md:shadow-xl border flex flex-col items-center text-center gap-1.5 sm:gap-3 md:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-slate-900 justify-between h-full"
+                    className="relative cursor-pointer bg-indigo-50/90 border-indigo-100 md:bg-white md:border-slate-100 p-2.5 sm:p-8 rounded-[1.2rem] md:rounded-[2.5rem] shadow-md md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
                   >
-                    <div className="absolute -top-2 sm:-top-2.5 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap">
-                      <span className="px-1.5 sm:px-2.5 py-0.5 bg-amber-500 text-white text-[7px] sm:text-[9px] md:text-[10px] font-black uppercase tracking-wider rounded-full shadow-xs sm:shadow-md">
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap">
+                      <span className="px-1.5 py-0.5 bg-amber-500 text-white text-[6px] md:text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-amber-200">
                         Most Popular
                       </span>
                     </div>
-                    <div className="w-9 h-9 sm:w-14 sm:h-14 md:w-20 md:h-20 bg-indigo-50 rounded-xl sm:rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0 mt-0.5 sm:mt-0">
-                      <Truck className="w-4 h-4 sm:w-7 sm:h-7 md:w-10 md:h-10 text-indigo-600" />
+                    <div className="w-10 h-10 md:w-20 md:h-20 bg-indigo-100/80 md:bg-indigo-50 rounded-xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <Truck className="w-5 h-5 md:w-10 md:h-10 text-indigo-600" />
                     </div>
-                    <div className="space-y-0.5 sm:space-y-1.5 md:space-y-3 flex-grow flex flex-col justify-center">
-                      <h3 className="font-black text-[11px] sm:text-base md:text-2xl text-slate-900 leading-tight flex items-center justify-center">Schedule Pickup</h3>
-                      <p className="hidden sm:block text-xs md:text-sm text-slate-500 leading-relaxed">
-                        We collect from your doorstep & deliver abroad
+                    <div className="space-y-1 md:space-y-3 flex-grow">
+                      <h3 className="font-black text-[10px] xs:text-xs md:text-2xl text-indigo-950 md:text-slate-900 leading-tight">Schedule Pickup</h3>
+                      <p className="hidden md:block text-xs sm:text-sm text-slate-500 leading-relaxed">
+                        We collect items from your doorstep, pack & ship internationally
                       </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); navigateTo('pickup'); }}
-                      className="w-full py-1.5 sm:py-2.5 md:py-4 bg-indigo-600 text-white rounded-lg sm:rounded-xl md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xs sm:shadow-md active:scale-95 flex items-center justify-center text-[10px] sm:text-xs md:text-sm leading-tight px-1 mt-auto whitespace-nowrap"
+                      className="w-full py-1.5 md:py-4 bg-indigo-600 text-white rounded-lg md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-[9px] md:text-sm"
                     >
-                      <span className="sm:hidden">Schedule</span>
-                      <span className="hidden sm:inline">Schedule Pickup</span>
+                      Schedule
                     </button>
                   </div>
 
                   {/* Card 2: Send to Our Warehouse */}
                   <div 
                     onClick={() => navigateTo('warehouse')}
-                    className="cursor-pointer bg-white border-slate-100 p-2.5 sm:p-5 md:p-8 rounded-xl sm:rounded-2xl md:rounded-[2.5rem] shadow-md sm:shadow-lg md:shadow-xl border flex flex-col items-center text-center gap-1.5 sm:gap-3 md:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-slate-900 justify-between h-full"
+                    className="cursor-pointer bg-emerald-50/90 border-emerald-100 md:bg-white md:border-slate-100 p-2.5 sm:p-8 rounded-[1.2rem] md:rounded-[2.5rem] shadow-md md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
                   >
-                    <div className="w-9 h-9 sm:w-14 sm:h-14 md:w-20 md:h-20 bg-indigo-50 rounded-xl sm:rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0 mt-0.5 sm:mt-0">
-                      <Package className="w-4 h-4 sm:w-7 sm:h-7 md:w-10 md:h-10 text-indigo-600" />
+                    <div className="w-10 h-10 md:w-20 md:h-20 bg-emerald-100/80 md:bg-indigo-50 rounded-xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <Package className="w-5 h-5 md:w-10 md:h-10 text-emerald-600 md:text-indigo-600" />
                     </div>
-                    <div className="space-y-0.5 sm:space-y-1.5 md:space-y-3 flex-grow flex flex-col justify-center">
-                      <h3 className="font-black text-[11px] sm:text-base md:text-2xl text-slate-900 leading-tight flex items-center justify-center">Drop Off Package</h3>
-                      <p className="hidden sm:block text-xs md:text-sm text-slate-500 leading-relaxed">
-                        Ship to warehouse—we pack & deliver abroad
+                    <div className="space-y-1 md:space-y-3 flex-grow">
+                      <h3 className="font-black text-[10px] xs:text-xs md:text-2xl text-emerald-950 md:text-slate-900 leading-tight">Drop Off Package</h3>
+                      <p className="hidden md:block text-xs sm:text-sm text-slate-500 leading-relaxed">
+                        Ship your items to our warehouse—we pack & deliver abroad
                       </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); navigateTo('warehouse'); }}
-                      className="w-full py-1.5 sm:py-2.5 md:py-4 bg-indigo-600 text-white rounded-lg sm:rounded-xl md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xs sm:shadow-md active:scale-95 flex items-center justify-center text-[10px] sm:text-xs md:text-sm leading-tight px-1 mt-auto whitespace-nowrap"
+                      className="w-full py-1.5 md:py-4 bg-emerald-600 md:bg-indigo-600 text-white rounded-lg md:rounded-2xl font-bold hover:bg-emerald-700 md:hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-[9px] md:text-sm"
                     >
-                      <span className="sm:hidden">Drop Off</span>
-                      <span className="hidden sm:inline">Drop Off Package</span>
+                      Drop Off
                     </button>
                   </div>
 
                   {/* Card 3: Shop & Send */}
                   <div 
                     onClick={() => navigateTo('store')}
-                    className="cursor-pointer bg-white border-slate-100 p-2.5 sm:p-5 md:p-8 rounded-xl sm:rounded-2xl md:rounded-[2.5rem] shadow-md sm:shadow-lg md:shadow-xl border flex flex-col items-center text-center gap-1.5 sm:gap-3 md:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 text-slate-900 justify-between h-full"
+                    className="cursor-pointer bg-amber-50/90 border-amber-100 md:bg-white md:border-slate-100 p-2.5 sm:p-8 rounded-[1.2rem] md:rounded-[2.5rem] shadow-md md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
                   >
-                    <div className="w-9 h-9 sm:w-14 sm:h-14 md:w-20 md:h-20 bg-indigo-50 rounded-xl sm:rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shrink-0 mt-0.5 sm:mt-0">
-                      <ShoppingBag className="w-4 h-4 sm:w-7 sm:h-7 md:w-10 md:h-10 text-indigo-600" />
+                    <div className="w-10 h-10 md:w-20 md:h-20 bg-amber-100/80 md:bg-indigo-50 rounded-xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <ShoppingBag className="w-5 h-5 md:w-10 md:h-10 text-amber-600 md:text-indigo-600" />
                     </div>
-                    <div className="space-y-0.5 sm:space-y-1.5 md:space-y-3 flex-grow flex flex-col justify-center">
-                      <h3 className="font-black text-[11px] sm:text-base md:text-2xl text-slate-900 leading-tight flex items-center justify-center">Shop & Ship</h3>
-                      <p className="hidden sm:block text-xs md:text-sm text-slate-500 leading-relaxed">
-                        Buy authentic Indian items—we deliver abroad
+                    <div className="space-y-1 md:space-y-3 flex-grow">
+                      <h3 className="font-black text-[10px] xs:text-xs md:text-2xl text-amber-950 md:text-slate-900 leading-tight">Shop & Ship</h3>
+                      <p className="hidden md:block text-xs sm:text-sm text-slate-500 leading-relaxed">
+                        Buy authentic Indian products—we deliver anywhere abroad
                       </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); navigateTo('store'); }}
-                      className="w-full py-1.5 sm:py-2.5 md:py-4 bg-indigo-600 text-white rounded-lg sm:rounded-xl md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-xs sm:shadow-md active:scale-95 flex items-center justify-center text-[10px] sm:text-xs md:text-sm leading-tight px-1 mt-auto whitespace-nowrap"
+                      className="w-full py-1.5 md:py-4 bg-amber-500 md:bg-indigo-600 text-white rounded-lg md:rounded-2xl font-bold hover:bg-amber-600 md:hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-[9px] md:text-sm"
                     >
-                      <span className="sm:hidden">Shop</span>
-                      <span className="hidden sm:inline">Shop Now</span>
+                      Shop Now
                     </button>
                   </div>
                 </motion.div>
 
-                {/* Trust Proof & See how it works button */}
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.5 }}
-                  className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 md:gap-8 pt-2 sm:pt-4"
+                  className="hidden md:flex flex-col sm:flex-row items-center justify-center gap-8 pt-4"
                 >
                   <button 
                     onClick={() => {
@@ -9652,31 +9859,31 @@ export default function App() {
                         element.scrollIntoView({ behavior: 'smooth' });
                       }
                     }}
-                    className="hidden sm:flex px-4 sm:px-6 py-1.5 sm:py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-full font-bold items-center gap-2 transition-all group text-xs sm:text-sm md:text-base"
+                    className="hidden md:flex px-6 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-full font-bold items-center gap-2 transition-all group text-lg"
                   >
                     Not sure? <span className="underline underline-offset-4 transition-colors">See how it works</span>
                   </button>
                   
-                  <div className="h-4 sm:h-6 w-px bg-slate-800 hidden sm:block" />
+                  <div className="h-6 w-px bg-slate-800 hidden md:block" />
                   
-                  <div className="flex items-center gap-2 text-slate-300 md:text-slate-400 font-medium text-xs sm:text-sm md:text-lg">
-                    <span className="text-amber-400 text-base sm:text-xl md:text-2xl">⭐</span> Trusted by 1000+ customers • Delivered worldwide
+                  <div className="flex items-center gap-3 text-slate-400 font-medium text-lg">
+                    <span className="text-amber-400 text-2xl">⭐</span> Trusted by 1000+ customers • Delivered worldwide
                   </div>
                 </motion.div>
               </div>
             </div>
           </div>
 
-          {/* How Jiffex Works - Value Prop (Desktop Only) */}
-          <div id="how-it-works" className="hidden md:block space-y-6 sm:space-y-10 md:space-y-12 scroll-mt-24 px-3 sm:px-6 md:px-0">
-            <div className="text-center space-y-2 sm:space-y-4">
-              <h3 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">How Jiffex Works</h3>
-              <p className="text-xs sm:text-base text-slate-500 max-w-2xl mx-auto leading-relaxed">A seamless, unified shipping experience designed for your convenience.</p>
+          {/* How Jiffex Works - Value Prop */}
+          <div id="how-it-works" className="hidden md:block space-y-12 scroll-mt-24">
+            <div className="text-center space-y-4">
+              <h3 className="text-4xl font-black text-slate-900 tracking-tight">How Jiffex Works</h3>
+              <p className="text-slate-500 max-w-2xl mx-auto">A seamless, unified shipping experience designed for your convenience.</p>
             </div>
 
             <div className="relative">
               <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 -translate-y-1/2 hidden lg:block" />
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 relative">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
                 {[
                   { icon: Calendar, title: "Book a Pickup in 30 Seconds", desc: "Start by scheduling an agent pickup. This becomes the heart of your shipment process.", color: "bg-indigo-600", shadow: "shadow-indigo-200" },
                   { icon: ShoppingBag, title: "Add Items from Anywhere", desc: "Add items from your home, our Shop, or even items you've sent to our warehouse.", color: "bg-amber-500", shadow: "shadow-amber-200" },
@@ -9691,12 +9898,12 @@ export default function App() {
                     transition={{ delay: i * 0.1 }}
                     className="relative group"
                   >
-                    <div className="bg-white p-5 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl md:rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 flex flex-col items-center text-center h-full">
-                      <div className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 ${step.color} text-white rounded-2xl md:rounded-3xl flex items-center justify-center mb-3 sm:mb-4 md:mb-6 shadow-xl ${step.shadow} group-hover:scale-110 transition-transform duration-500`}>
-                        <step.icon size={26} className="md:w-8 md:h-8" />
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 flex flex-col items-center text-center h-full">
+                      <div className={`w-16 h-16 ${step.color} text-white rounded-3xl flex items-center justify-center mb-6 shadow-2xl ${step.shadow} group-hover:scale-110 transition-transform duration-500`}>
+                        <step.icon size={32} />
                       </div>
-                      <h4 className="text-base sm:text-lg md:text-xl font-black text-slate-900 mb-1.5 sm:mb-2 md:mb-3">{step.title}</h4>
-                      <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">{step.desc}</p>
+                      <h4 className="text-xl font-black text-slate-900 mb-3">{step.title}</h4>
+                      <p className="text-sm text-slate-500 leading-relaxed">{step.desc}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -9709,58 +9916,58 @@ export default function App() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="relative overflow-hidden rounded-2xl sm:rounded-3xl md:rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-700 p-6 sm:p-8 md:p-12 text-white shadow-2xl mx-3 sm:mx-0"
+            className="hidden md:block relative overflow-hidden rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-700 p-12 text-white shadow-2xl"
           >
             <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl" />
             
-            <div className="relative z-10 max-w-3xl mx-auto text-center space-y-4 sm:space-y-6">
-              <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-white/10 backdrop-blur rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-widest">
+            <div className="relative z-10 max-w-3xl mx-auto text-center space-y-6">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur rounded-full text-xs font-bold uppercase tracking-widest">
                 <Heart size={14} className="text-pink-300 fill-pink-300" /> Made for the Global Indian
               </div>
-              <h2 className="text-2xl sm:text-3xl md:text-5xl font-black tracking-tight leading-tight">
+              <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
                 Stop waiting for a <span className="text-indigo-200 italic">friend's suitcase.</span>
               </h2>
-              <p className="text-sm sm:text-base md:text-xl text-indigo-100 leading-relaxed font-medium">
+              <p className="text-xl text-indigo-100 leading-relaxed font-medium">
                 Your connection to home shouldn't depend on someone else's travel plans. 
                 Whether it's your mother's handmade sweets, that specific wedding outfit, or the comfort of Indian spices—we bring India to your doorstep.
               </p>
-              <div className="pt-2 sm:pt-4 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
+              <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/10 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0">
-                    <Clock size={20} className="sm:w-6 sm:h-6" />
+                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                    <Clock size={24} />
                   </div>
                   <div className="text-left">
-                    <div className="text-xs sm:text-sm font-bold">No More Waiting</div>
-                    <div className="text-[11px] sm:text-xs text-indigo-200">Ship whenever you want</div>
+                    <div className="text-sm font-bold">No More Waiting</div>
+                    <div className="text-xs text-indigo-200">Ship whenever you want</div>
                   </div>
                 </div>
                 <div className="w-px h-8 bg-white/20 hidden sm:block" />
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/10 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0">
-                    <Users size={20} className="sm:w-6 sm:h-6" />
+                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                    <Users size={24} />
                   </div>
                   <div className="text-left">
-                    <div className="text-xs sm:text-sm font-bold">No More Asking</div>
-                    <div className="text-[11px] sm:text-xs text-indigo-200">Independence in shipping</div>
+                    <div className="text-sm font-bold">No More Asking</div>
+                    <div className="text-xs text-indigo-200">Independence in shipping</div>
                   </div>
                 </div>
               </div>
             </div>
           </motion.div>
 
-          <div ref={quoteRef} id="desktop-quick-quote" className="grid grid-cols-1 lg:grid-cols-5 gap-6 sm:gap-8 md:gap-12 items-start px-3 sm:px-6 md:px-0">
-            <div className="w-full lg:col-span-2 space-y-6 max-w-xl mx-auto lg:max-w-none">
-              <div className="bg-white p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl md:rounded-3xl shadow-xl md:shadow-indigo-500/5 border border-slate-100">
-                <h2 className="text-base sm:text-xl md:text-2xl font-black mb-3 md:mb-6 flex items-center gap-2 uppercase tracking-wider text-slate-900">
-                  <Calculator className="text-indigo-600 shrink-0 w-5 h-5 md:w-6 md:h-6" /> Quick Quote
+          <div ref={quoteRef} id="desktop-quick-quote" className="hidden md:grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-white p-3 md:p-8 rounded-2xl md:rounded-3xl shadow-xl md:shadow-indigo-500/5 border border-slate-100">
+                <h2 className="text-xs md:text-2xl font-black mb-3 md:mb-6 flex items-center gap-1.5 uppercase tracking-wider text-slate-900">
+                  <Calculator className="text-indigo-600 shrink-0" size={14} md:size={20} /> Quick Quote
                 </h2>
-                <div className="space-y-3 sm:space-y-4 md:space-y-5">
-                  <div className="grid grid-cols-2 md:grid-cols-1 gap-2.5 sm:gap-3 md:gap-5">
+                <div className="space-y-3.5 md:space-y-5">
+                  <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-5">
                     <div>
-                      <label className="block text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Destination</label>
+                      <label className="block text-[7.5px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Destination</label>
                       <select 
-                        className="w-full p-2 sm:p-3 md:p-4 rounded-xl md:rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none text-xs sm:text-sm md:text-base font-bold text-slate-800"
+                        className="w-full p-1.5 md:p-4 rounded-xl md:rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none text-[16px] md:text-base"
                         value={qCountry}
                         onChange={(e) => setQCountry(e.target.value)}
                       >
@@ -9768,12 +9975,12 @@ export default function App() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Weight (kg)</label>
+                      <label className="block text-[7.5px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Weight (kg)</label>
                       <input 
                         type="number" 
                         min="0.1" 
                         step="0.1"
-                        className="w-full p-2 sm:p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs sm:text-sm md:text-base font-bold bg-slate-50 text-slate-800"
+                        className="w-full p-1.5 md:p-4 rounded-xl md:rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-[16px] md:text-base"
                         value={qWeight}
                         onChange={(e) => setQWeight(Number(e.target.value))}
                       />
@@ -9781,7 +9988,7 @@ export default function App() {
                   </div>
                   
                   <div>
-                    <label className="block text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-3">Shipping Method</label>
+                    <label className="block text-[7.5px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-3">Shipping Method</label>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { id: 'Standard', label: 'Standard', days: '10-14 Days', multiplier: 0.7 },
@@ -9790,16 +9997,16 @@ export default function App() {
                         <button
                           key={method.id}
                           onClick={() => setQMethod(method.id as any)}
-                          className={`p-2 sm:p-3 md:p-4 rounded-xl md:rounded-2xl border-2 transition-all text-left ${
+                          className={`p-1.5 md:p-4 rounded-xl md:rounded-2xl border-2 transition-all text-left ${
                             qMethod === method.id 
                               ? 'border-indigo-600 bg-indigo-50 ring-4 ring-indigo-600/5' 
                               : 'border-slate-100 bg-white hover:border-slate-200'
                           }`}
                         >
-                          <div className={`text-[10px] sm:text-xs md:text-sm font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
+                          <div className={`text-[9px] md:text-sm font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
                             {method.label}
                           </div>
-                          <div className="text-[8px] sm:text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                          <div className="text-[7px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
                             {method.days}
                           </div>
                         </button>
@@ -9807,13 +10014,13 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="p-3 sm:p-4 md:p-6 bg-indigo-600 rounded-xl md:rounded-2xl text-white shadow-lg shadow-indigo-200">
+                  <div className="p-2 md:p-6 bg-indigo-600 rounded-xl md:rounded-2xl text-white shadow-lg shadow-indigo-200">
                     <div className="flex justify-between items-end">
                       <div>
-                        <span className="text-indigo-100 text-[8px] sm:text-xs font-bold uppercase tracking-widest">
+                        <span className="text-indigo-100 text-[7px] md:text-xs font-bold uppercase tracking-widest">
                           Estimated Cost ({qMethod})
                         </span>
-                        <div className="text-xl sm:text-2xl md:text-4xl font-black">
+                        <div className="text-lg md:text-4xl font-black">
                           ₹{(() => {
                             const res = calculateShippingCost({
                               country: qCountry,
@@ -9837,39 +10044,39 @@ export default function App() {
                           });
                           if (res.discountPercent > 0) {
                             return (
-                              <div className="text-[8px] sm:text-xs font-bold text-rose-300 mt-0.5">
+                              <div className="text-[7px] md:text-xs font-bold text-rose-300 mt-0.5">
                                 Discount of {res.discountPercent}% Applied for {qCountry}! (Save ₹{Math.round(res.discountAmount).toLocaleString('en-IN')}) [Band: {res.appliedBandLabel}]
                               </div>
                             );
                           }
                           return (
-                            <div className="text-[8px] sm:text-xs font-bold text-indigo-200 mt-0.5">
+                            <div className="text-[7px] md:text-xs font-bold text-indigo-200 mt-0.5">
                               Band: {res.appliedBandLabel} (₹{res.baseRatePerKg}{res.isFlatRate ? ' flat' : '/kg'})
                             </div>
                           );
                         })()}
-                        <div className="text-[8px] sm:text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-1 flex items-center gap-1">
+                        <div className="text-[7px] md:text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-1 flex items-center gap-1">
                           <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
                         </div>
                       </div>
-                      <Truck className="opacity-20 shrink-0 w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12" />
+                      <Truck className="opacity-20 shrink-0" size={20} md:size={48} />
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="hidden md:block lg:col-span-3 h-full">
-              <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 sm:p-8 md:p-10 rounded-2xl sm:rounded-3xl md:rounded-[3rem] text-white flex flex-col md:flex-row items-center gap-5 sm:gap-8 md:gap-10 relative overflow-hidden h-full">
+            <div className="hidden md:block lg:col-span-3">
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-10 rounded-[3rem] text-white flex flex-col md:flex-row items-center gap-10 relative overflow-hidden h-full">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -mr-32 -mt-32" />
                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -ml-32 -mb-32" />
                 
-                <div className="w-14 h-14 sm:w-18 sm:h-18 md:w-24 md:h-24 bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl md:rounded-[2rem] flex items-center justify-center shrink-0 border border-white/20 shadow-2xl">
-                  <Info size={28} className="text-indigo-400 sm:w-10 sm:h-10 md:w-12 md:h-12" />
+                <div className="w-24 h-24 bg-white/10 backdrop-blur-xl rounded-[2rem] flex items-center justify-center shrink-0 border border-white/20 shadow-2xl">
+                  <Info size={48} className="text-indigo-400" />
                 </div>
-                <div className="space-y-2 sm:space-y-3 relative z-10 text-center md:text-left">
-                  <h4 className="text-lg sm:text-xl md:text-2xl font-black">Unified Shipping Protocol</h4>
-                  <p className="text-xs sm:text-sm md:text-base text-slate-300 md:text-slate-400 leading-relaxed">
+                <div className="space-y-3 relative z-10">
+                  <h4 className="text-2xl font-black">Unified Shipping Protocol</h4>
+                  <p className="text-slate-400 leading-relaxed">
                     When you schedule an agent pickup, Jiffex activates the <span className="text-white font-bold">Home-First Protocol</span>. All your items—whether from Shop or our warehouse—are consolidated at your doorstep for a truly personalized shipping experience.
                   </p>
                 </div>
@@ -9878,53 +10085,53 @@ export default function App() {
           </div>
 
           {/* Featured Products from Shop - Moved to Last */}
-          <div className="space-y-4 sm:space-y-6 md:space-y-8 px-3 sm:px-6 md:px-0">
+          <div className="hidden md:block space-y-8">
             <div className="flex items-end justify-between">
               <div>
-                <h3 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900">
+                <h3 className="text-3xl font-black text-slate-900">
                   Featured from <span className="bg-gradient-to-r from-deep-blue to-indigo-600 bg-clip-text text-transparent">Shop</span>
                 </h3>
-                <p className="text-xs sm:text-sm md:text-base text-slate-500">Premium products curated for your special occasions.</p>
+                <p className="text-slate-500">Premium products curated for your special occasions.</p>
               </div>
               <button 
                 onClick={() => navigateTo('store')}
-                className="text-xs sm:text-sm md:text-base text-indigo-600 font-bold flex items-center gap-1 hover:underline shrink-0"
+                className="text-indigo-600 font-bold flex items-center gap-1 hover:underline"
               >
-                View All <ChevronRight size={16} className="md:w-[18px] md:h-[18px]" />
+                View All <ChevronRight size={18} />
               </button>
             </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {storeProducts.slice(0, 4).map(product => {
                 const cartItem = items.find(i => i.name === product.name && i.source === 'Store' && !orderedItemIds.has(i.id));
                 const itemCount = cartItem?.quantity || 0;
                 
                 return (
-                  <div key={product.id} className="bg-white rounded-xl sm:rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative flex flex-col">
+                  <div key={product.id} className="bg-white rounded-2xl overflow-hidden border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative flex flex-col">
                     <AnimatePresence>
                       {itemCount > 0 && (
                         <motion.div 
                           initial={{ scale: 0, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
                           exit={{ scale: 0, opacity: 0 }}
-                          className="absolute top-2 right-2 sm:top-3 sm:right-3 z-10 w-6 h-6 sm:w-7 sm:h-7 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-[9px] sm:text-[10px] font-bold shadow-lg border-2 border-white"
+                          className="absolute top-3 right-3 z-10 w-7 h-7 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg border-2 border-white"
                         >
                           {itemCount}
                         </motion.div>
                       )}
                     </AnimatePresence>
-                    <div className="relative aspect-square rounded-lg sm:rounded-xl md:rounded-2xl overflow-hidden mb-2 sm:mb-3 md:mb-4 bg-slate-50 m-2 sm:m-3 mb-0">
+                    <div className="relative aspect-square rounded-2xl overflow-hidden mb-4 bg-slate-50">
                       <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
-                      <div className="absolute top-2 left-2 px-1.5 py-0.5 sm:px-2 sm:py-1 bg-white/90 backdrop-blur rounded-md md:rounded-lg text-[8px] sm:text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                      <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-600">
                         {product.category}
                       </div>
                     </div>
-                    <div className="p-2.5 sm:p-3 md:p-4 flex-1 flex flex-col pt-0 sm:pt-0">
-                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm md:text-base mb-1 truncate">{product.name}</h4>
-                      <div className="flex flex-col gap-2 sm:gap-3 mt-auto">
+                    <div className="p-4 flex-1 flex flex-col">
+                      <h4 className="font-bold text-slate-900 mb-1 truncate">{product.name}</h4>
+                      <div className="flex flex-col gap-3 mt-auto">
                         <div className="flex items-center justify-between">
-                          <span className="text-indigo-600 font-bold text-xs sm:text-sm md:text-base">₹{product.price}</span>
-                          <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium">{product.weight}kg</span>
+                          <span className="text-indigo-600 font-bold">₹{product.price}</span>
+                          <span className="text-[10px] text-slate-400 font-medium">{product.weight}kg</span>
                         </div>
                         
                         <div className="flex justify-center">
@@ -9932,9 +10139,9 @@ export default function App() {
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                             onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                            className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10"
+                            className="w-10 h-10 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10"
                           >
-                            <Plus size={14} className="md:w-4 md:h-4" />
+                            <Plus size={16} />
                           </motion.button>
                         </div>
                       </div>
@@ -18176,7 +18383,14 @@ export default function App() {
     );
   }, [isPaid, orderId, address, selectedDate, paymentMethod, items, totalWeight, totalCost, dbStatus.connected, currentUser, currentUser?.id, handleFinalPayment, shippingPreference, appointments, pickupAddress, pickupName, pickupPhone, orderedItemIds, shopConsolidationOption, isMobile, activeCheckoutStep, couponCodeInput, appliedCoupon, coupons, setAppliedCoupon, setCouponCodeInput, goBack, navigateTo]);
 
-  // Non-blocking UI rendering: Auth and sessions load in the background without freezing the screen
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-indigo-600" size={48} />
+      </div>
+    );
+  }
+
   const handleLogout = async () => {
     // 1. Immediately and synchronously clear all local state and items to avoid transition lag or state re-fetching
     clearActiveSession();
@@ -18345,10 +18559,10 @@ export default function App() {
 
         {/* Navigation */}
         <nav className="bg-white/95 border-b border-slate-100 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.04)] sticky top-0 z-[100] backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 md:h-20 flex items-center justify-between gap-2 sm:gap-4 flex-nowrap">
-            {/* Mobile View Logo - Only visible below md screens (Zoomed in 20%) */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 md:h-20 flex items-center justify-between gap-4 flex-nowrap">
+            {/* Mobile View Logo - Only visible below md screens */}
             <div 
-              className="flex md:hidden items-center cursor-pointer shrink-0 scale-120 origin-left pl-1" 
+              className="flex md:hidden items-center gap-2 cursor-pointer shrink-0" 
               onClick={() => {
                 if (currentUser?.role === 'admin' || currentUser?.role === 'Admin') navigateTo('admin');
                 else if (currentUser?.role === 'agent' || currentUser?.role === 'Agent') {
@@ -18357,7 +18571,7 @@ export default function App() {
                 } else navigateTo('home');
               }}
             >
-              <Logo size={26} className="h-8" />
+              <Logo size={22} className="h-7" />
             </div>
             
             {/* Desktop Navigation Group - Only visible on md screens & up */}
@@ -18606,17 +18820,7 @@ export default function App() {
           </div>
 
             {/* Mobile View Group - Only visible below md screens */}
-            <div className="flex md:hidden items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
-              {currentUser?.role !== 'agent' && (
-                <button 
-                  onClick={handleQuickQuoteClick}
-                  className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 px-2.5 py-1.5 rounded-xl shadow-xs active:scale-95 transition-all text-nowrap shrink-0 flex items-center gap-1"
-                >
-                  <Calculator size={13} className="shrink-0" />
-                  <span>Quick Quote</span>
-                </button>
-              )}
-
+            <div className="flex md:hidden items-center gap-2 ml-auto shrink-0">
               {currentUser?.role !== 'agent' && (
                 <button 
                   onClick={() => navigateTo('cart')}
@@ -18856,11 +19060,16 @@ export default function App() {
             {activeTab === 'support' && (
               <SupportSection 
                 currentUser={currentUser} 
+                session={session}
                 orders={orders}
                 tickets={tickets}
                 setTickets={setTickets}
                 refundRequests={refundRequests}
                 setRefundRequests={setRefundRequests}
+                onOpenLogin={() => {
+                  setLoginTriggerSource('support');
+                  setShowLoginModal(true);
+                }}
               />
             )}
             {activeTab === 'store' && StoreSection}
@@ -19084,13 +19293,21 @@ export default function App() {
                     <Logo height="h-14 sm:h-16" />
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
-                    {loginTriggerSource === 'checkout' ? 'Almost There!' : loginTriggerSource === 'pickup' ? 'One Last Step!' : 'Welcome to Jiffex'}
+                    {loginTriggerSource === 'checkout' 
+                      ? 'Almost There!' 
+                      : loginTriggerSource === 'pickup' 
+                      ? 'One Last Step!' 
+                      : loginTriggerSource === 'support'
+                      ? 'Sign in to Call Support'
+                      : 'Welcome to Jiffex'}
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed">
                     {loginTriggerSource === 'checkout' 
                       ? 'Sign in or create an account to complete your secure checkout' 
                       : loginTriggerSource === 'pickup'
                       ? 'Verify your identity to confirm your pickup'
+                      : loginTriggerSource === 'support'
+                      ? 'Please sign in to your Jiffex account to speak with customer care.'
                       : 'Sign in or create an account to continue'}
                   </p>
                 </div>
@@ -19114,6 +19331,8 @@ export default function App() {
                     confirmPickup('AllAgent', guestId, email, name || pickupName);
                   } else if (loginTriggerSource === 'checkout') {
                     navigateTo('finalize');
+                  } else if (loginTriggerSource === 'support') {
+                    navigateTo('support');
                   }
                 }} />
               </div>
@@ -19323,34 +19542,6 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
-
-      {/* Mobile Fixed OmniDimension Customer Care Widget */}
-      {typeof document !== 'undefined' && document.body && createPortal(
-        <div 
-          id="mobile-customer-care-widget"
-          className="md:hidden fixed bottom-[calc(72px+env(safe-area-inset-bottom,0px))] right-4 z-[9999] pointer-events-auto"
-        >
-          <button
-            id="mobile-customer-care-trigger-btn"
-            onClick={triggerMobileOmniAgent}
-            aria-label={isOmniAgentOpen ? "Close Customer Care Assistant" : "Open OmniDimension Customer Care"}
-            title="Customer Support"
-            className="w-[52px] h-[52px] rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-600 to-indigo-700 text-white flex items-center justify-center shadow-[0_6px_20px_rgba(79,70,229,0.4)] border-2 border-white/95 active:scale-90 transition-transform duration-200 cursor-pointer relative"
-          >
-            {isConnectingOmni ? (
-              <Loader2 size={22} className="animate-spin stroke-[2.5]" />
-            ) : isOmniAgentOpen ? (
-              <X size={22} className="stroke-[2.5]" />
-            ) : (
-              <>
-                <Headset size={24} className="stroke-[2.2]" />
-                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-white shadow-xs" />
-              </>
-            )}
-          </button>
-        </div>,
-        document.body
-      )}
 
       {/* Mobile Bottom Navigation Bar */}
       {(!currentUser || (['customer', 'guest'].includes((currentUser.role || '').toLowerCase()))) && (
