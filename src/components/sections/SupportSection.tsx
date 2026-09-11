@@ -1,144 +1,8 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Mail, HelpCircle, ArrowRight, Sparkles, Truck, Calculator, Calendar, CheckCircle2, PhoneCall, LogIn } from 'lucide-react';
-import { toast } from 'sonner';
-
-export const triggerOmniDimensionWidget = () => {
-  const scriptLoaded = Boolean(document.getElementById('omnidimension-web-widget'));
-  console.log('[Diagnostic] OmniDimension script loaded:', scriptLoaded);
-
-  const dispatchSyntheticClick = (el: HTMLElement) => {
-    try {
-      el.click();
-    } catch (e) {}
-    try {
-      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-    } catch (e) {}
-  };
-
-  const attemptOpen = (): boolean => {
-    const iframeContainer = document.getElementById('chat-iframe-container');
-    const minimizedPill = document.getElementById('omni-minimized-pill');
-    const openBtn = document.getElementById('omni-open-widget-btn');
-    const helperBtn = document.getElementById('chat-helper-button');
-    const helperContainer = document.getElementById('chat-helper-button-container');
-
-    console.log('[Diagnostic] launcher/container found:', {
-      hasContainer: Boolean(iframeContainer),
-      hasPill: Boolean(minimizedPill),
-      hasOpenBtn: Boolean(openBtn),
-      isOpenBtnReady: Boolean((openBtn as any)?._omniReady),
-      hasHelperBtn: Boolean(helperBtn),
-      hasHelperContainer: Boolean(helperContainer),
-    });
-
-    // 1. If iframe container already exists in DOM (e.g. from previous call or session)
-    if (iframeContainer) {
-      iframeContainer.style.display = 'block';
-      iframeContainer.style.opacity = '1';
-      iframeContainer.style.pointerEvents = 'auto';
-      iframeContainer.style.visibility = 'visible';
-
-      // Ensure inner wrapper is unhidden
-      const innerDiv = iframeContainer.querySelector('div') as HTMLElement | null;
-      if (innerDiv) {
-        innerDiv.style.display = '';
-        innerDiv.style.opacity = '1';
-        innerDiv.style.transform = '';
-      }
-
-      if (minimizedPill) {
-        console.log('[Diagnostic] open action attempted: restoring via minimized pill');
-        dispatchSyntheticClick(minimizedPill);
-      } else if (openBtn) {
-        console.log('[Diagnostic] open action attempted: restoring via omni-open-widget-btn');
-        dispatchSyntheticClick(openBtn);
-      } else if (helperBtn) {
-        console.log('[Diagnostic] open action attempted: restoring via chat-helper-button');
-        dispatchSyntheticClick(helperBtn);
-      }
-
-      const iframe = iframeContainer.querySelector('iframe');
-      if (iframe && iframe.contentWindow) {
-        try {
-          iframe.contentWindow.postMessage({ action: 'show' }, '*');
-          iframe.contentWindow.postMessage({ action: 'restored' }, '*');
-        } catch (e) {}
-      }
-
-      console.log('[Diagnostic] Open action result: success (restored existing container)');
-      toast.success('Connecting to Jiffex Support...');
-      return true;
-    }
-
-    // 2. If omni-open-widget-btn hook is attached and ready
-    if (openBtn && (openBtn as any)._omniReady) {
-      console.log('[Diagnostic] open action attempted: clicking omni-open-widget-btn (ready)');
-      dispatchSyntheticClick(openBtn);
-      console.log('[Diagnostic] Open action result: success');
-      toast.success('Connecting to Jiffex Support...');
-      return true;
-    }
-
-    // 3. If native chat-helper-button is in DOM
-    if (helperBtn) {
-      console.log('[Diagnostic] open action attempted: clicking chat-helper-button');
-      dispatchSyntheticClick(helperBtn);
-      console.log('[Diagnostic] Open action result: success');
-      toast.success('Connecting to Jiffex Support...');
-      return true;
-    }
-
-    // 4. If container exists
-    if (helperContainer) {
-      const child = helperContainer.querySelector('div, button') as HTMLElement | null;
-      const target = child || helperContainer;
-      console.log('[Diagnostic] open action attempted: clicking chat-helper-button-container');
-      dispatchSyntheticClick(target);
-      console.log('[Diagnostic] Open action result: success');
-      toast.success('Connecting to Jiffex Support...');
-      return true;
-    }
-
-    return false;
-  };
-
-  if (attemptOpen()) {
-    return;
-  }
-
-  // Asynchronous wait/retry loop
-  console.log('[Diagnostic] OmniDimension widget not ready yet; waiting/retrying asynchronously...');
-  let attempts = 0;
-  const maxAttempts = 28; // ~4.2 seconds
-  const interval = setInterval(() => {
-    attempts++;
-    if (attemptOpen()) {
-      clearInterval(interval);
-      return;
-    }
-    // Tentative click on omni-open-widget-btn after a brief delay
-    if (attempts > 5) {
-      const openBtn = document.getElementById('omni-open-widget-btn');
-      if (openBtn) {
-        console.log('[Diagnostic] open action attempted: tentative click on omni-open-widget-btn');
-        dispatchSyntheticClick(openBtn);
-        const container = document.getElementById('chat-iframe-container');
-        if (container) {
-          clearInterval(interval);
-          console.log('[Diagnostic] Open action result: success');
-          toast.success('Connecting to Jiffex Support...');
-          return;
-        }
-      }
-    }
-    if (attempts >= maxAttempts) {
-      clearInterval(interval);
-      console.warn('[Diagnostic] Open action result: failure (timeout waiting for widget initialization)');
-      toast.error('Jiffex Support is still loading. Please try again in a moment.');
-    }
-  }, 150);
-};
+import { Mail, HelpCircle, ArrowRight, Sparkles, Truck, Calculator, Calendar, CheckCircle2 } from 'lucide-react';
+import { useJiffexVoiceCall } from '../../hooks/useJiffexVoiceCall';
+import { JiffexVoiceCallPanel } from '../support/JiffexVoiceCallPanel';
 
 interface SupportSectionProps {
   currentUser?: any;
@@ -167,21 +31,11 @@ const SupportSection: React.FC<SupportSectionProps> = ({ currentUser, onOpenLogi
     return false;
   };
 
+  const loggedIn = isUserLoggedIn();
+  const voiceCall = useJiffexVoiceCall(onOpenLogin);
+
   const handleCallSupport = () => {
-    const loggedIn = isUserLoggedIn();
-    console.log('[Diagnostic] Support button clicked');
-    console.log('[Diagnostic] Auth status:', loggedIn ? 'logged-in' : 'logged-out');
-
-    if (!loggedIn) {
-      if (onOpenLogin) {
-        onOpenLogin();
-      } else {
-        window.dispatchEvent(new CustomEvent('jiffex:open-login', { detail: { source: 'support' } }));
-      }
-      return;
-    }
-
-    triggerOmniDimensionWidget();
+    voiceCall.startCall(loggedIn);
   };
 
   const handleSupportContact = () => {
@@ -226,8 +80,6 @@ const SupportSection: React.FC<SupportSectionProps> = ({ currentUser, onOpenLogi
     }
   ];
 
-  const loggedIn = isUserLoggedIn();
-
   return (
     <div className="space-y-12 pb-24">
       <div className="text-center space-y-4">
@@ -260,24 +112,16 @@ const SupportSection: React.FC<SupportSectionProps> = ({ currentUser, onOpenLogi
           </ul>
 
           <div className="pt-2 flex flex-wrap items-center gap-4">
-            <button
-              id="btn-call-jiffex-support-section"
-              type="button"
-              onClick={handleCallSupport}
-              className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-base rounded-2xl shadow-xl shadow-indigo-200 active:scale-95 transition flex items-center gap-3 cursor-pointer"
-            >
-              {loggedIn ? (
-                <>
-                  <PhoneCall size={18} />
-                  <span>Call Jiffex Support</span>
-                </>
-              ) : (
-                <>
-                  <LogIn size={18} />
-                  <span>Sign in to Call Support</span>
-                </>
-              )}
-            </button>
+            <JiffexVoiceCallPanel
+              idPrefix="btn-call-jiffex-support-section"
+              isAuthenticated={loggedIn}
+              callStatus={voiceCall.callStatus}
+              isMuted={voiceCall.isMuted}
+              lastTranscript={voiceCall.lastTranscript}
+              onStartCall={handleCallSupport}
+              onEndCall={voiceCall.endCall}
+              onToggleMute={voiceCall.toggleMute}
+            />
 
             <button
               type="button"

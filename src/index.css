@@ -76,37 +76,25 @@ body {
    OmniDimension Customer-Care Voice Widget Visibility & Isolation Rules
    ========================================================================== */
 
-/* 1. Completely isolate and hide the native OmniDimension launcher, buttons, branding text, and minimized pill globally.
-      Crucial: Do not use display: none or pointer-events: none on the trigger elements,
-      because WebKit/iOS and various browser dispatchers block programmatic .click() events on unrendered DOM nodes.
-      Instead, position them offscreen with zero opacity and 1px dimensions so programmatic clicks execute reliably. */
+/* Keep the native OmniDimension launcher, buttons, and branding hidden globally.
+   All voice calling is handled directly via @omnidim-ai/client WebSession in Jiffex UI. */
 #chat-helper-button-container,
 #chat-helper-button,
 #omni-open-widget-btn,
 #omni-minimized-pill,
 [id*="omni-minimized"],
-[id*="chat-helper"] {
-  position: fixed !important;
-  bottom: -9999px !important;
-  right: -9999px !important;
-  width: 1px !important;
-  height: 1px !important;
-  opacity: 0 !important;
-  overflow: hidden !important;
-  z-index: -999 !important;
-}
-
-/* 2. Hide the voice call modal/iframe container on all pages EXCEPT support */
-body:not([data-active-tab="support"]) #chat-iframe-container,
-html:not([data-active-tab="support"]) #chat-iframe-container {
+[id*="chat-helper"],
+#chat-iframe-container {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
-}
-
-/* 3. On support page, display voice agent iframe container with proper positioning and z-index */
-body[data-active-tab="support"] #chat-iframe-container {
-  z-index: 9999 !important;
+  position: fixed !important;
+  bottom: -9999px !important;
+  right: -9999px !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  z-index: -9999 !important;
 }
 

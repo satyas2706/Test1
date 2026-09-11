@@ -6215,6 +6215,74 @@ app.get("/api/omnidim-test", (req, res) => {
   });
 });
 
+// ==========================================
+// JIFFEX SUPPORT VOICE CALL SESSION (OmniDimension Web SDK)
+// ==========================================
+app.post("/api/support/call-session", async (req, res) => {
+  const authUser = getAuthenticatedUser(req);
+  if (!authUser) {
+    return res.status(401).json({ error: "Unauthorized. Please log in to start a Jiffex Support call." });
+  }
+
+  const apiKey = process.env.OMNIDIM_API_KEY;
+  if (!apiKey) {
+    console.error("[Support Call] Missing OMNIDIM_API_KEY server environment variable");
+    return res.status(503).json({
+      error: "Voice support service is temporarily unconfigured or unavailable."
+    });
+  }
+
+  const agentIdRaw = process.env.OMNIDIM_AGENT_ID || 242008;
+  const agentId = Number(agentIdRaw) || agentIdRaw;
+
+  try {
+    const upstreamRes = await fetch("https://omnidim.io/api/v1/sessions/create", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        agent_id: agentId,
+        type: "voice",
+        custom_variables: {
+          email: authUser.email
+        },
+        metadata: {
+          source: "jiffex_support_web"
+        }
+      })
+    });
+
+    if (!upstreamRes.ok) {
+      const errorText = await upstreamRes.text().catch(() => "");
+      console.error(`[Support Call] Upstream OmniDimension error (HTTP ${upstreamRes.status}):`, errorText);
+
+      if (upstreamRes.status === 401 || upstreamRes.status === 403) {
+        return res.status(502).json({ error: "Support voice service authentication error. Please contact administrator." });
+      }
+      if (upstreamRes.status === 402 || upstreamRes.status === 429) {
+        return res.status(503).json({ error: "Support voice lines are currently at capacity. Please try again in a few moments." });
+      }
+      return res.status(503).json({ error: "Unable to establish voice session with support agent. Please try again." });
+    }
+
+    const sessionData: any = await upstreamRes.json();
+    if (!sessionData || !sessionData.ws_url) {
+      console.error("[Support Call] Upstream response missing ws_url:", sessionData);
+      return res.status(502).json({ error: "Invalid session response from support voice service." });
+    }
+
+    // Return ONLY required short-lived session information to browser
+    return res.json({
+      ws_url: sessionData.ws_url
+    });
+  } catch (err: any) {
+    console.error("[Support Call] Network/Internal error creating voice session:", err?.message || err);
+    return res.status(503).json({ error: "Failed to connect to voice support service. Please try again." });
+  }
+});
+
 async function startServer() {
   console.log("[Server Initialization] Seeding Supabase database if empty...");
   seedDatabaseIfEmpty().catch(err => {

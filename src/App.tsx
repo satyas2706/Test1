@@ -154,6 +154,8 @@ import AccountSection from './components/sections/AccountSection';
 import AboutSection from './components/sections/AboutSection';
 import { MobileStoreSection } from './components/sections/MobileStoreSection';
 import { MobileCartSection } from './components/sections/MobileCartSection';
+import { useJiffexVoiceCall } from './hooks/useJiffexVoiceCall';
+import { JiffexVoiceCallPanel } from './components/support/JiffexVoiceCallPanel';
 
 interface AutoScrollingShopProductsProps {
   storeProducts: any[];
@@ -978,140 +980,7 @@ const SupportDeskDashboard = ({ orders, tickets, setTickets, refundRequests, set
 };
 
 export const triggerJiffexVoiceCall = () => {
-  const scriptLoaded = Boolean(document.getElementById('omnidimension-web-widget'));
-  console.log('[Diagnostic] OmniDimension script loaded:', scriptLoaded);
-
-  const dispatchSyntheticClick = (el: HTMLElement) => {
-    try {
-      el.click();
-    } catch (e) {}
-    try {
-      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-    } catch (e) {}
-  };
-
-  const attemptOpen = (): boolean => {
-    const iframeContainer = document.getElementById('chat-iframe-container');
-    const minimizedPill = document.getElementById('omni-minimized-pill');
-    const openBtn = document.getElementById('omni-open-widget-btn');
-    const helperBtn = document.getElementById('chat-helper-button');
-    const helperContainer = document.getElementById('chat-helper-button-container');
-
-    console.log('[Diagnostic] launcher/container found:', {
-      hasContainer: Boolean(iframeContainer),
-      hasPill: Boolean(minimizedPill),
-      hasOpenBtn: Boolean(openBtn),
-      isOpenBtnReady: Boolean((openBtn as any)?._omniReady),
-      hasHelperBtn: Boolean(helperBtn),
-      hasHelperContainer: Boolean(helperContainer),
-    });
-
-    // 1. If iframe container already exists in DOM (e.g. from previous call or session)
-    if (iframeContainer) {
-      iframeContainer.style.display = 'block';
-      iframeContainer.style.opacity = '1';
-      iframeContainer.style.pointerEvents = 'auto';
-      iframeContainer.style.visibility = 'visible';
-
-      // Ensure inner wrapper is unhidden
-      const innerDiv = iframeContainer.querySelector('div') as HTMLElement | null;
-      if (innerDiv) {
-        innerDiv.style.display = '';
-        innerDiv.style.opacity = '1';
-        innerDiv.style.transform = '';
-      }
-
-      if (minimizedPill) {
-        console.log('[Diagnostic] open action attempted: restoring via minimized pill');
-        dispatchSyntheticClick(minimizedPill);
-      } else if (openBtn) {
-        console.log('[Diagnostic] open action attempted: restoring via omni-open-widget-btn');
-        dispatchSyntheticClick(openBtn);
-      } else if (helperBtn) {
-        console.log('[Diagnostic] open action attempted: restoring via chat-helper-button');
-        dispatchSyntheticClick(helperBtn);
-      }
-
-      const iframe = iframeContainer.querySelector('iframe');
-      if (iframe && iframe.contentWindow) {
-        try {
-          iframe.contentWindow.postMessage({ action: 'show' }, '*');
-          iframe.contentWindow.postMessage({ action: 'restored' }, '*');
-        } catch (e) {}
-      }
-
-      console.log('[Diagnostic] Open action result: success (restored existing container)');
-      toast.success('Connecting to Jiffex Support...');
-      return true;
-    }
-
-    // 2. If omni-open-widget-btn hook is attached and ready
-    if (openBtn && (openBtn as any)._omniReady) {
-      console.log('[Diagnostic] open action attempted: clicking omni-open-widget-btn (ready)');
-      dispatchSyntheticClick(openBtn);
-      console.log('[Diagnostic] Open action result: success');
-      toast.success('Connecting to Jiffex Support...');
-      return true;
-    }
-
-    // 3. If native chat-helper-button is in DOM
-    if (helperBtn) {
-      console.log('[Diagnostic] open action attempted: clicking chat-helper-button');
-      dispatchSyntheticClick(helperBtn);
-      console.log('[Diagnostic] Open action result: success');
-      toast.success('Connecting to Jiffex Support...');
-      return true;
-    }
-
-    // 4. If container exists
-    if (helperContainer) {
-      const child = helperContainer.querySelector('div, button') as HTMLElement | null;
-      const target = child || helperContainer;
-      console.log('[Diagnostic] open action attempted: clicking chat-helper-button-container');
-      dispatchSyntheticClick(target);
-      console.log('[Diagnostic] Open action result: success');
-      toast.success('Connecting to Jiffex Support...');
-      return true;
-    }
-
-    return false;
-  };
-
-  if (attemptOpen()) {
-    return;
-  }
-
-  // Asynchronous wait/retry loop
-  console.log('[Diagnostic] OmniDimension widget not ready yet; waiting/retrying asynchronously...');
-  let attempts = 0;
-  const maxAttempts = 28; // ~4.2 seconds
-  const interval = setInterval(() => {
-    attempts++;
-    if (attemptOpen()) {
-      clearInterval(interval);
-      return;
-    }
-    // Tentative click on omni-open-widget-btn after a brief delay
-    if (attempts > 5) {
-      const openBtn = document.getElementById('omni-open-widget-btn');
-      if (openBtn) {
-        console.log('[Diagnostic] open action attempted: tentative click on omni-open-widget-btn');
-        dispatchSyntheticClick(openBtn);
-        const container = document.getElementById('chat-iframe-container');
-        if (container) {
-          clearInterval(interval);
-          console.log('[Diagnostic] Open action result: success');
-          toast.success('Connecting to Jiffex Support...');
-          return;
-        }
-      }
-    }
-    if (attempts >= maxAttempts) {
-      clearInterval(interval);
-      console.warn('[Diagnostic] Open action result: failure (timeout waiting for widget initialization)');
-      toast.error('Jiffex Support is still loading. Please try again in a moment.');
-    }
-  }, 150);
+  window.dispatchEvent(new CustomEvent('jiffex:start-voice-call'));
 };
 
 interface SupportSectionProps {
@@ -1156,20 +1025,21 @@ const SupportSection = ({
     (getValidActiveSession() && getValidActiveSession()?.email)
   );
 
-  const handleCallSupport = () => {
-    console.log('[Diagnostic] Support button clicked');
-    console.log('[Diagnostic] Auth status:', isAuthenticated ? 'logged-in' : 'logged-out');
+  const voiceCall = useJiffexVoiceCall(onOpenLogin);
 
-    if (!isAuthenticated) {
-      if (onOpenLogin) {
-        onOpenLogin();
-      } else {
-        window.dispatchEvent(new CustomEvent('jiffex:open-login', { detail: { source: 'support' } }));
-      }
-      return;
-    }
-    triggerJiffexVoiceCall();
+  const handleCallSupport = () => {
+    voiceCall.startCall(isAuthenticated);
   };
+
+  useEffect(() => {
+    const handleVoiceCallEvent = () => {
+      handleCallSupport();
+    };
+    window.addEventListener('jiffex:start-voice-call', handleVoiceCallEvent);
+    return () => {
+      window.removeEventListener('jiffex:start-voice-call', handleVoiceCallEvent);
+    };
+  }, [isAuthenticated, handleCallSupport]);
 
   const supportTopics = [
     "Shipping quotes",
@@ -1243,24 +1113,18 @@ const SupportSection = ({
             </ul>
 
             <div className="pt-1 flex flex-col gap-2">
-              <button
-                id="btn-call-jiffex-support-mobile"
-                type="button"
-                onClick={handleCallSupport}
-                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md shadow-indigo-200 flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer"
-              >
-                {isAuthenticated ? (
-                  <>
-                    <PhoneCall size={14} />
-                    <span>Call Jiffex Support</span>
-                  </>
-                ) : (
-                  <>
-                    <LogIn size={14} />
-                    <span>Sign in to Call Support</span>
-                  </>
-                )}
-              </button>
+              <JiffexVoiceCallPanel
+                idPrefix="btn-call-jiffex-support-mobile"
+                isAuthenticated={isAuthenticated}
+                callStatus={voiceCall.callStatus}
+                isMuted={voiceCall.isMuted}
+                lastTranscript={voiceCall.lastTranscript}
+                onStartCall={handleCallSupport}
+                onEndCall={voiceCall.endCall}
+                onToggleMute={voiceCall.toggleMute}
+                size="sm"
+                className="w-full"
+              />
 
               <a
                 id="btn-email-support-mobile-action"
@@ -1432,24 +1296,17 @@ const SupportSection = ({
             </ul>
 
             <div className="pt-2 flex flex-wrap items-center gap-4">
-              <button
-                id="btn-call-jiffex-support-desktop"
-                type="button"
-                onClick={handleCallSupport}
-                className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-base rounded-2xl shadow-xl shadow-indigo-200 active:scale-95 transition flex items-center gap-3 cursor-pointer"
-              >
-                {isAuthenticated ? (
-                  <>
-                    <PhoneCall size={18} />
-                    <span>Call Jiffex Support</span>
-                  </>
-                ) : (
-                  <>
-                    <LogIn size={18} />
-                    <span>Sign in to Call Support</span>
-                  </>
-                )}
-              </button>
+              <JiffexVoiceCallPanel
+                idPrefix="btn-call-jiffex-support-desktop"
+                isAuthenticated={isAuthenticated}
+                callStatus={voiceCall.callStatus}
+                isMuted={voiceCall.isMuted}
+                lastTranscript={voiceCall.lastTranscript}
+                onStartCall={handleCallSupport}
+                onEndCall={voiceCall.endCall}
+                onToggleMute={voiceCall.toggleMute}
+                size="md"
+              />
 
               <a
                 id="btn-email-support-desktop-action"
