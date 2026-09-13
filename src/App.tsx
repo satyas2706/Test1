@@ -106,6 +106,7 @@ import {
   Bot,
   Radio,
   PhoneCall,
+  MessageSquareText,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -156,6 +157,178 @@ import { MobileStoreSection } from './components/sections/MobileStoreSection';
 import { MobileCartSection } from './components/sections/MobileCartSection';
 import { useJiffexVoiceCall } from './hooks/useJiffexVoiceCall';
 import { JiffexVoiceCallPanel } from './components/support/JiffexVoiceCallPanel';
+import { JiffexChatPanel } from './components/support/JiffexChatPanel';
+import jiffexDoorstepShipping from './assets/images/jiffex_shipping_doorstep_1789287238407.jpg';
+
+const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 1 day (24 hours)
+
+export interface StoredActiveSession {
+  email: string;
+  name?: string;
+  loginTime: number;
+  expiresAt: number;
+}
+
+export function getValidActiveSession(): StoredActiveSession | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem('jiffex_active_user_session');
+    if (!raw) return null;
+    const sessionData: StoredActiveSession = JSON.parse(raw);
+    if (!sessionData || !sessionData.expiresAt || !sessionData.email) {
+      localStorage.removeItem('jiffex_active_user_session');
+      return null;
+    }
+    if (Date.now() > sessionData.expiresAt) {
+      console.log('[Session Manager] Session expired (> 1 day old). Clearing active session.');
+      localStorage.removeItem('jiffex_active_user_session');
+      return null;
+    }
+    return sessionData;
+  } catch (e) {
+    console.error('[Session Manager] Error parsing active user session:', e);
+    localStorage.removeItem('jiffex_active_user_session');
+    return null;
+  }
+}
+
+export function saveActiveSession(email: string, name?: string) {
+  if (typeof window === 'undefined' || !email) return;
+  try {
+    const now = Date.now();
+    const sessionData: StoredActiveSession = {
+      email: email.trim(),
+      name: (name || '').trim(),
+      loginTime: now,
+      expiresAt: now + SESSION_EXPIRY_MS // 1 day duration
+    };
+    localStorage.setItem('jiffex_active_user_session', JSON.stringify(sessionData));
+    console.log('[Session Manager] Saved 1-day user session valid until:', new Date(sessionData.expiresAt).toLocaleString());
+  } catch (e) {
+    console.error('[Session Manager] Failed to save active user session:', e);
+  }
+}
+
+export function clearActiveSession() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem('jiffex_active_user_session');
+    localStorage.removeItem('jiffex_session_token');
+  } catch (e) {
+    console.error('[Session Manager] Failed to clear active session:', e);
+  }
+}
+
+export const ADMIN_EMAILS = [
+  'admin@jiffex.com',
+  'admin@jiffex.in',
+  'admin@jiffex.org',
+  'srikanth@jiffex.com',
+  'srikanth.satya@jiffex.com',
+  'srikanth.satya@jiffex.in',
+  'arun@jiffex.com',
+  'arun.dubba@jiffex.com',
+  'arun.dubba@jiffex.in',
+  'sanjeevaraosb@gmail.com',
+  'srikanthsatya6@gmail.com',
+  'arundubba7@gmail.com'
+];
+
+export function isAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const e = email.trim().toLowerCase();
+  return (
+    ADMIN_EMAILS.some(admin => admin.toLowerCase() === e) ||
+    e.startsWith('admin@') || 
+    e.endsWith('@jiffex.admin') ||
+    e === 'admin@jiffex.com' ||
+    e === 'admin@jiffex.in' ||
+    e === 'admin@jiffex.org' ||
+    e === 'srikanth.satya@jiffex.in' ||
+    e === 'arun.dubba@jiffex.in'
+  );
+}
+
+export function ShipmentTrackingEditor({ order, onUpdate }: { order: any, onUpdate: (carrier: string, trackingNumber: string) => void }) {
+  const [carrier, setCarrier] = useState(order.carrier || 'FedEx');
+  const [trackingNumber, setTrackingNumber] = useState(order.trackingNumber || order.tracking_number || '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    setCarrier(order.carrier || 'FedEx');
+    setTrackingNumber(order.trackingNumber || order.tracking_number || '');
+  }, [order.id, order.carrier, order.trackingNumber, order.tracking_number]);
+
+  const handleSave = async () => {
+    const cleanNum = trackingNumber.trim();
+    if (!cleanNum) {
+      toast.error('Tracking number is required.');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await api.updateOrder(order.id, {
+        carrier,
+        trackingNumber: cleanNum,
+        tracking_number: cleanNum,
+        shipmentStatus: order.shipmentStatus || order.shipment_status || 'In Warehouse'
+      } as any);
+      onUpdate(carrier, cleanNum);
+      toast.success(`Shipment details for Order ${order.id} saved successfully!`);
+    } catch (err: any) {
+      console.error('Save shipment info failed:', err);
+      toast.error('Could not save shipment info: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-slate-50 p-5 rounded-[2rem] border border-slate-100 space-y-4 shadow-sm">
+      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pb-1 border-b border-slate-200/50">
+        <Truck size={14} className="text-indigo-500" /> Dispatch Carrier & Tracking
+      </p>
+      
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Carrier Partner</label>
+          <div className="relative">
+            <select
+              className="w-full p-3 pr-10 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 appearance-none transition-all cursor-pointer shadow-sm hover:border-indigo-200"
+              value={carrier}
+              onChange={(e) => setCarrier(e.target.value)}
+            >
+              <option value="FedEx">FedEx International</option>
+              <option value="UPS">UPS Express</option>
+              <option value="DHL">DHL Worldwide Express</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Carrier Tracking #</label>
+          <input
+            type="text"
+            className="w-full p-3 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500"
+            placeholder="e.g. TRACKING123"
+            value={trackingNumber}
+            onChange={(e) => setTrackingNumber(e.target.value)}
+          />
+        </div>
+
+        <button
+          type="button"
+          disabled={isSaving}
+          onClick={handleSave}
+          className="w-full py-3 bg-indigo-600 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-indigo-100 disabled:opacity-50"
+        >
+          {isSaving ? 'Synchronizing...' : 'Save Dispatch Courier'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 interface AutoScrollingShopProductsProps {
   storeProducts: any[];
@@ -1018,6 +1191,7 @@ const SupportSection = ({
   }
 
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const isAuthenticated = Boolean(
     (currentUser && currentUser.email) ||
@@ -1029,6 +1203,18 @@ const SupportSection = ({
 
   const handleCallSupport = () => {
     voiceCall.startCall(isAuthenticated);
+  };
+
+  const handleChatWithJiffex = () => {
+    if (!isAuthenticated) {
+      if (onOpenLogin) {
+        onOpenLogin();
+      } else {
+        window.dispatchEvent(new CustomEvent('jiffex:open-login', { detail: { source: 'support-chat' } }));
+      }
+      return;
+    }
+    setIsChatOpen(true);
   };
 
   useEffect(() => {
@@ -1112,7 +1298,26 @@ const SupportSection = ({
               ))}
             </ul>
 
-            <div className="pt-1 flex flex-col gap-2">
+            <div className="pt-1 flex flex-col gap-2.5">
+              <button
+                id="btn-chat-jiffex-support-mobile"
+                type="button"
+                onClick={handleChatWithJiffex}
+                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md shadow-indigo-200 active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isAuthenticated ? (
+                  <>
+                    <MessageSquareText size={15} />
+                    <span>Chat with Jiffex</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn size={15} />
+                    <span>Sign in to Chat with Jiffex</span>
+                  </>
+                )}
+              </button>
+
               <JiffexVoiceCallPanel
                 idPrefix="btn-call-jiffex-support-mobile"
                 isAuthenticated={isAuthenticated}
@@ -1296,6 +1501,25 @@ const SupportSection = ({
             </ul>
 
             <div className="pt-2 flex flex-wrap items-center gap-4">
+              <button
+                id="btn-chat-jiffex-support-desktop"
+                type="button"
+                onClick={handleChatWithJiffex}
+                className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-base rounded-2xl shadow-xl shadow-indigo-200 active:scale-95 transition flex items-center justify-center gap-3 cursor-pointer"
+              >
+                {isAuthenticated ? (
+                  <>
+                    <MessageSquareText size={18} />
+                    <span>Chat with Jiffex</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn size={18} />
+                    <span>Sign in to Chat with Jiffex</span>
+                  </>
+                )}
+              </button>
+
               <JiffexVoiceCallPanel
                 idPrefix="btn-call-jiffex-support-desktop"
                 isAuthenticated={isAuthenticated}
@@ -1408,6 +1632,15 @@ const SupportSection = ({
           </div>
         </div>
       </div>
+
+      {/* Jiffex Support Text Chat Panel (Support Page Only) */}
+      <JiffexChatPanel
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        userEmail={currentUser?.email || (session?.user?.email) || (getValidActiveSession()?.email)}
+        onOpenLogin={onOpenLogin}
+        orders={orders}
+      />
     </>
   );
 };
@@ -1678,10 +1911,10 @@ const AdminDashboard = ({
   });
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const inputElement = e.target;
+    const file = inputElement.files?.[0];
     if (!file) return;
 
-    const target = e.target;
     setIsUploadingProductImage(true);
     setProductImageUploadError(null);
 
@@ -1701,7 +1934,7 @@ const AdminDashboard = ({
       }
     } finally {
       setIsUploadingProductImage(false);
-      target.value = '';
+      inputElement.value = '';
     }
   };
 
@@ -4817,87 +5050,6 @@ const getSafeOrderTotalWeight = (order: any): number => {
   return 1.5;
 };
 
-const ShipmentTrackingEditor = ({ order, onUpdate }: { order: any, onUpdate: (carrier: string, trackingNumber: string) => void }) => {
-  const [carrier, setCarrier] = useState(order.carrier || 'FedEx');
-  const [trackingNumber, setTrackingNumber] = useState(order.trackingNumber || order.tracking_number || '');
-  const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    setCarrier(order.carrier || 'FedEx');
-    setTrackingNumber(order.trackingNumber || order.tracking_number || '');
-  }, [order.id, order.carrier, order.trackingNumber, order.tracking_number]);
-
-  const handleSave = async () => {
-    const cleanNum = trackingNumber.trim();
-    if (!cleanNum) {
-      toast.error('Tracking number is required.');
-      return;
-    }
-    setIsSaving(true);
-    try {
-      await api.updateOrder(order.id, {
-        carrier,
-        trackingNumber: cleanNum,
-        tracking_number: cleanNum,
-        shipmentStatus: order.shipmentStatus || order.shipment_status || 'In Warehouse'
-      } as any);
-      onUpdate(carrier, cleanNum);
-      toast.success(`Shipment details for Order ${order.id} saved successfully!`);
-    } catch (err: any) {
-      console.error('Save shipment info failed:', err);
-      toast.error('Could not save shipment info: ' + err.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <div className="bg-slate-50 p-5 rounded-[2rem] border border-slate-100 space-y-4 shadow-sm">
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 pb-1 border-b border-slate-200/50">
-        <Truck size={14} className="text-indigo-500" /> Dispatch Carrier & Tracking
-      </p>
-      
-      <div className="space-y-3">
-        <div className="space-y-1">
-          <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Carrier Partner</label>
-          <div className="relative">
-            <select
-              className="w-full p-3 pr-10 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500 appearance-none transition-all cursor-pointer shadow-sm hover:border-indigo-200"
-              value={carrier}
-              onChange={(e) => setCarrier(e.target.value)}
-            >
-              <option value="FedEx">FedEx International</option>
-              <option value="UPS">UPS Express</option>
-              <option value="DHL">DHL Worldwide Express</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Carrier Tracking #</label>
-          <input
-            type="text"
-            className="w-full p-3 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-500"
-            placeholder="e.g. TRACKING123"
-            value={trackingNumber}
-            onChange={(e) => setTrackingNumber(e.target.value)}
-          />
-        </div>
-
-        <button
-          type="button"
-          disabled={isSaving}
-          onClick={handleSave}
-          className="w-full py-3 bg-indigo-600 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-indigo-100 disabled:opacity-50"
-        >
-          {isSaving ? 'Synchronizing...' : 'Save Dispatch Courier'}
-        </button>
-      </div>
-    </div>
-  );
-};
-
 const loadRazorpayScript = (): Promise<boolean> => {
   return new Promise((resolve) => {
     if (typeof window === 'undefined') {
@@ -4914,82 +5066,6 @@ const loadRazorpayScript = (): Promise<boolean> => {
     script.onerror = () => resolve(false);
     document.body.appendChild(script);
   });
-};
-
-const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 1 day (24 hours)
-
-interface StoredActiveSession {
-  email: string;
-  name?: string;
-  loginTime: number;
-  expiresAt: number;
-}
-
-const getValidActiveSession = (): StoredActiveSession | null => {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem('jiffex_active_user_session');
-    if (!raw) return null;
-    const sessionData: StoredActiveSession = JSON.parse(raw);
-    if (!sessionData || !sessionData.expiresAt || !sessionData.email) {
-      localStorage.removeItem('jiffex_active_user_session');
-      return null;
-    }
-    if (Date.now() > sessionData.expiresAt) {
-      console.log('[Session Manager] Session expired (> 1 day old). Clearing active session.');
-      localStorage.removeItem('jiffex_active_user_session');
-      return null;
-    }
-    return sessionData;
-  } catch (e) {
-    console.error('[Session Manager] Error parsing active user session:', e);
-    localStorage.removeItem('jiffex_active_user_session');
-    return null;
-  }
-};
-
-const saveActiveSession = (email: string, name?: string) => {
-  if (typeof window === 'undefined' || !email) return;
-  try {
-    const now = Date.now();
-    const sessionData: StoredActiveSession = {
-      email: email.trim(),
-      name: (name || '').trim(),
-      loginTime: now,
-      expiresAt: now + SESSION_EXPIRY_MS // 1 day duration
-    };
-    localStorage.setItem('jiffex_active_user_session', JSON.stringify(sessionData));
-    console.log('[Session Manager] Saved 1-day user session valid until:', new Date(sessionData.expiresAt).toLocaleString());
-  } catch (e) {
-    console.error('[Session Manager] Failed to save active user session:', e);
-  }
-};
-
-const clearActiveSession = () => {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.removeItem('jiffex_active_user_session');
-    localStorage.removeItem('jiffex_session_token');
-  } catch (e) {
-    console.error('[Session Manager] Failed to clear active session:', e);
-  }
-};
-
-const ADMIN_EMAILS = [
-  'srikanth.satya@jiffex.in',
-  'arun.dubba@jiffex.in'
-];
-
-const isAdminEmail = (email: string | null | undefined): boolean => {
-  if (!email) return false;
-  const e = email.trim().toLowerCase();
-  return (
-    e === 'srikanth.satya@jiffex.in' ||
-    e === 'arun.dubba@jiffex.in' ||
-    e === 'admin@jiffex.com' ||
-    e === 'admin@jiffex.in' ||
-    e === 'admin@jiffex.org'
-  );
 };
 
 export default function App() {
@@ -5808,33 +5884,6 @@ export default function App() {
     }
   };
 
-  const handleSchedulePickup = () => {
-    const missingFields = [];
-    if (!pickupName) missingFields.push('Your Name');
-    if (!pickupPhone) missingFields.push('Contact Number');
-    if (!pickupAddress.street) missingFields.push('Street Address');
-    if (!pickupAddress.city) missingFields.push('City');
-    if (!pickupAddress.zip) missingFields.push('ZIP Code');
-
-    if (missingFields.length > 0) {
-      toast.error(`${missingFields.join(', ')} is not entered. Enter to schedule.`);
-      return;
-    }
-
-    if (pickupPhone.length !== 10 || !/^\d+$/.test(pickupPhone)) {
-      toast.error('Contact Number must be exactly 10 digits.');
-      return;
-    }
-
-    if (!currentUser) {
-      setLoginTriggerSource('pickup');
-      setShowLoginModal(true);
-      return;
-    }
-
-    confirmPickup('AllAgent');
-  };
-
   const generateNewOrderId = useCallback((source: 'Store' | 'Warehouse' | 'Pickup') => {
     let prefix = 'BB';
     if (source === 'Store') prefix = 'SH';
@@ -6033,6 +6082,33 @@ export default function App() {
     setShowPickupChoiceModal(false);
   };
 
+  const handleSchedulePickup = () => {
+    const missingFields = [];
+    if (!pickupName) missingFields.push('Your Name');
+    if (!pickupPhone) missingFields.push('Contact Number');
+    if (!pickupAddress.street) missingFields.push('Street Address');
+    if (!pickupAddress.city) missingFields.push('City');
+    if (!pickupAddress.zip) missingFields.push('ZIP Code');
+
+    if (missingFields.length > 0) {
+      toast.error(`${missingFields.join(', ')} is not entered. Enter to schedule.`);
+      return;
+    }
+
+    if (pickupPhone.length !== 10 || !/^\d+$/.test(pickupPhone)) {
+      toast.error('Contact Number must be exactly 10 digits.');
+      return;
+    }
+
+    if (!currentUser) {
+      setLoginTriggerSource('pickup');
+      setShowLoginModal(true);
+      return;
+    }
+
+    confirmPickup('AllAgent');
+  };
+
   const clearPickupInputs = () => {
     setPickupName('');
     setPickupEmail('');
@@ -6118,6 +6194,128 @@ export default function App() {
         </div>
       </div>
     );
+  };
+
+  const handleLogout = async () => {
+    // 1. Immediately and synchronously clear all local state and items to avoid transition lag or state re-fetching
+    clearActiveSession();
+    setItems([]);
+    ordersRef.current = [];
+    setOrders([]);
+    setIsOrdersLoading(true);
+    setOrdersLoadError(null);
+    setSession(null);
+    setCurrentUser(null);
+    setIsGuestMode(false);
+    setGuestEmail('');
+    setActivePickupStep(1);
+    setLastBookingRef(null);
+    setIsSchedulingNewPickup(false);
+    setShowPickupConfirmModal(false);
+    
+    // 2. Perform background server session logout and Supabase signOut
+    try {
+      fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('SignOut background error:', err);
+    }
+    
+    setAddress({
+      fullName: '',
+      email: '',
+      phone: '',
+      addressLine1: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: COUNTRIES[0],
+    });
+    setPickupAddress({
+      street: '',
+      apartment: '',
+      city: '',
+      state: '',
+      zip: ''
+    });
+    setPickupDetailsTab('pickup');
+    setPickupDestination({
+      fullName: '',
+      email: '',
+      phone: '',
+      addressLine1: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: COUNTRIES[0],
+    });
+    setPickupName('');
+    setPickupPhone('');
+    setPickupLanguage('English');
+    setPickupItemType('Everyday Items');
+    setPickupVehicleType('Less than 5 kg');
+    setPickupSpecialInstructions('');
+    setPickupCategory('Personal Effects');
+    setPickupEstimatedWeight('Less than 5 kg');
+    setCartItemName('');
+    setCartItemWeight('');
+    setCartItemQuantity(1);
+    setCartItemFragile(false);
+    setCartItemInvoiceNumber('');
+    setCartItemRemarks('');
+    setIsPaid(false);
+    setOrderId(null);
+    setActiveTab('home');
+    setTabHistory(['home']);
+  };
+
+  const handleAssignAgent = async (orderId: string, agent: AgentProfile | null) => {
+    try {
+      const previousOrder = orders.find(o => o.id === orderId);
+      const prevAgent = previousOrder?.assignedAgent;
+      
+      await api.updateOrder(orderId, { 
+        assignedAgent: agent || undefined, 
+        assignedAgentId: agent ? agent.id : undefined 
+      });
+      setOrders(prev => prev.map(o => o.id === orderId ? { 
+        ...o, 
+        assignedAgent: agent || undefined, 
+        assignedAgentId: agent ? agent.id : undefined 
+      } : o));
+
+      // Also update 'pickups' table in Supabase
+      if (dbStatus.connected) {
+        try {
+          await api.updatePickup(orderId, {
+            assignedAgentId: agent ? agent.id : null,
+          });
+        } catch (e) {
+          console.warn('Failed to update pickup agent assignment in Supabase:', e);
+        }
+      }
+
+      if (agent) {
+        logAgentActionToSupabase(
+          'ASSIGN',
+          agent.id,
+          agent.name,
+          { orderId },
+          currentUser?.email || 'admin@jiffex.com'
+        );
+      } else if (prevAgent) {
+        logAgentActionToSupabase(
+          'DEASSIGN',
+          prevAgent.id,
+          prevAgent.name,
+          { orderId },
+          currentUser?.email || 'admin@jiffex.com'
+        );
+      }
+    } catch (err) {
+      console.error('Failed to assign agent:', err);
+      throw err;
+    }
   };
 
   // Check backend health and Supabase connection
@@ -6222,12 +6420,24 @@ export default function App() {
       setLoginTriggerSource(customEvent.detail?.source || 'default');
     };
 
+    const handleNavigateTab = (e: Event) => {
+      const customEvent = e as CustomEvent<{ tab?: any; trackingNumber?: string }>;
+      if (customEvent.detail?.tab) {
+        setActiveTab(customEvent.detail.tab);
+      }
+      if (customEvent.detail?.trackingNumber) {
+        setTrackingId(customEvent.detail.trackingNumber);
+      }
+    };
+
     window.addEventListener('jiffex:session-expired', handleSessionExpired);
     window.addEventListener('jiffex:open-login', handleOpenLogin);
+    window.addEventListener('jiffex:navigate-tab', handleNavigateTab);
 
     return () => {
       window.removeEventListener('jiffex:session-expired', handleSessionExpired);
       window.removeEventListener('jiffex:open-login', handleOpenLogin);
+      window.removeEventListener('jiffex:navigate-tab', handleNavigateTab);
     };
   }, []);
 
@@ -9272,19 +9482,19 @@ export default function App() {
 
     const HomeSection = useMemo(() => {
       return (
-        <div className="flex flex-col gap-0 md:gap-24 pb-3 md:pb-24">
+        <div className="flex flex-col gap-10 sm:gap-16 md:gap-24 pb-12 md:pb-24">
           {/* JIFFEX Truck Hero Section */}
-          <div className="relative overflow-hidden rounded-none md:rounded-[4rem] bg-transparent text-white px-0 pt-4 pb-0 sm:p-12 md:p-20 shadow-2xl">
+          <div className="relative overflow-hidden rounded-[2rem] sm:rounded-[3rem] md:rounded-[4rem] bg-transparent text-white px-4 py-8 sm:p-12 md:p-20 shadow-2xl mx-3 sm:mx-4 md:mx-0">
             <div 
-              className="absolute inset-x-0 top-0 bottom-[180px] md:bottom-0 pointer-events-none z-0"
+              className="absolute inset-0 pointer-events-none z-0"
               style={{
                 background: `radial-gradient(circle at 30% 20%, #1e2a78 0%, #0b1220 60%, #05070f 100%)`,
               }}
             />
 
-            <div className="relative z-10 flex flex-col items-center text-center space-y-5 md:space-y-12 w-full">
-              {/* Laptop / Desktop View Header Text */}
-              <div className="hidden md:block space-y-4 md:space-y-8 max-w-4xl px-4 md:px-0">
+            <div className="relative z-10 flex flex-col items-center text-center space-y-6 md:space-y-12 w-full">
+              {/* Header Text */}
+              <div className="space-y-3 md:space-y-8 max-w-4xl px-2 sm:px-4 md:px-0">
                 <div className="space-y-2 md:space-y-6">
                   <motion.h1 
                     initial={{ opacity: 0, y: 20 }}
@@ -9297,384 +9507,333 @@ export default function App() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="text-sm sm:text-xl md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto"
+                    className="text-xs sm:text-xl md:text-2xl text-slate-300 md:text-slate-400 font-medium max-w-2xl mx-auto leading-relaxed"
                   >
                     Shop online, schedule pickup, or send your own items. We handle packing & delivery.
                   </motion.p>
                 </div>
-              </div>
 
-              {/* Mobile View Header Text & Image (Right Side) */}
-              <div className="md:hidden w-[90%] mx-auto px-1 text-left flex items-center justify-between gap-3">
-                <div className="flex-1 space-y-1.5 pr-1">
-                  <motion.h1 
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-xl font-black tracking-tight leading-tight text-white"
-                  >
-                    Send Anything from India to Abroad—<span className="relative inline-block text-amber-400">Hassle-Free</span>
-                  </motion.h1>
-                  <motion.p 
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="text-[10px] text-slate-300 font-medium leading-normal"
-                  >
-                    Shop online, schedule pickup, or send your own items. We handle packing & delivery.
-                  </motion.p>
-                </div>
-                {/* Image on the right above the card container */}
-                <div className="w-[110px] shrink-0">
-                  <motion.img 
-                    initial={{ opacity: 0, scale: 0.85 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.15 }}
-                    src="https://lh3.googleusercontent.com/d/1m7ORvWwf92WuUJRS_-ySzPQhoInEnAU4"
-                    alt="Jiffex Delivery"
-                    referrerPolicy="no-referrer"
-                    className="w-full h-auto object-contain"
-                  />
-                </div>
-              </div>
-
-              {/* Mobile View Badges (Secure Packing, Global Delivery, On-time Guaranteed) */}
-              <div className="md:hidden w-[90%] mx-auto grid grid-cols-3 gap-1.5 pt-1">
-                {[
-                  { icon: ShieldCheck, text: "Secure Packing", color: "text-emerald-400 border-emerald-500/25 bg-emerald-500/5" },
-                  { icon: Globe, text: "Global Delivery", color: "text-sky-400 border-sky-500/25 bg-sky-500/5" },
-                  { icon: Clock, text: "On-time Guaranteed", color: "text-amber-400 border-amber-500/25 bg-amber-500/5" }
-                ].map((badge, idx) => {
-                  const Icon = badge.icon;
-                  return (
-                    <motion.div 
-                      key={idx}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 + idx * 0.05 }}
-                      className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg border ${badge.color}`}
-                    >
-                      <Icon size={9} className="shrink-0" />
-                      <span className="font-extrabold text-[8px] tracking-tight whitespace-nowrap leading-none">{badge.text}</span>
-                    </motion.div>
-                  );
-                })}
-              </div>
-
-              {/* Mobile View: Dedicated Unified Single Page Layout Container */}
-              <div className="md:hidden w-[95%] mx-auto px-0 mt-3">
-                <div className="bg-white rounded-3xl p-5 shadow-xl border border-slate-100 text-slate-800 space-y-6 text-left">
-                  
-                  {/* SECTION 1: WHAT WOULD YOU LIKE TO DO */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                        <PlusCircle size={14} className="stroke-[2.5]" />
-                      </div>
-                      <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase">Quick Actions</h3>
-                    </div>
-
-                    {/* Three Side-by-Side Cards */}
-                    <div className="grid grid-cols-3 gap-2">
-                      {/* Card 1: Schedule Pickup */}
-                      <div 
-                        onClick={() => {
-                          navigateTo('pickup');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                      >
-                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
-                          <Truck className="w-5 h-5 text-indigo-600" />
-                        </div>
-                        <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Schedule Pickup</h4>
-                        <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Schedule</span>
-                      </div>
-
-                      {/* Card 2: Drop off package */}
-                      <div 
-                        onClick={() => {
-                          navigateTo('warehouse');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                      >
-                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
-                          <Package className="w-5 h-5 text-indigo-600" />
-                        </div>
-                        <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Drop Off Package</h4>
-                        <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Drop Off</span>
-                      </div>
-
-                      {/* Card 3: Shop & Ship */}
-                      <div 
-                        onClick={() => {
-                          navigateTo('store');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className="cursor-pointer bg-white border border-slate-100 hover:border-indigo-100 p-2 rounded-xl flex flex-col items-center text-center gap-1.5 shadow-sm active:scale-95 transition-all"
-                      >
-                        <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
-                          <ShoppingBag className="w-5 h-5 text-indigo-600" />
-                        </div>
-                        <h4 className="font-extrabold text-[9px] text-indigo-950 leading-tight">Shop & Ship</h4>
-                        <span className="text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold mt-auto w-full">Shop</span>
-                      </div>
-                    </div>
-
-                    {/* Below service cards, put how jiffex works side by side horizontally under the same white background */}
-                    <div className="pt-2">
-                      <div className="bg-slate-50/50 rounded-xl p-2 border border-slate-100/80 grid grid-cols-4 divide-x divide-slate-200/50">
-                        {[
-                          { icon: Calendar, title: "Book in 30 Seconds", desc: "Quick & easy pickup", color: "bg-indigo-50 text-indigo-600" },
-                          { icon: ShoppingBag, title: "Add items from Anywhere", desc: "From home, shop or any store", color: "bg-amber-50 text-amber-600" },
-                          { icon: Truck, title: "We Combine Everything", desc: "Pack & store in our warehouse", color: "bg-emerald-50 text-emerald-600" },
-                          { icon: CheckCircle2, title: "Delivered to Your Doorstep", desc: "Global delivery made easy", color: "bg-blue-50 text-blue-600" }
-                        ].map((step, idx) => {
-                          const StepIcon = step.icon;
-                          return (
-                            <div key={idx} className="flex flex-col items-center text-center px-1 py-1 first:pl-0 last:pr-0">
-                              <div className={`w-6 h-6 rounded-md ${step.color} flex items-center justify-center shrink-0 mb-1`}>
-                                <StepIcon size={12} className="font-black" />
-                              </div>
-                              <h5 className="font-black text-[8px] sm:text-[9px] text-slate-900 leading-tight min-h-[22px] flex items-center justify-center">
-                                {step.title}
-                              </h5>
-                              <p className="text-[7px] text-slate-400 font-medium leading-tight mt-0.5">
-                                {step.desc}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
+                {/* Mobile View Only: Business image placed between tagline and How Jiffex Works */}
+                <motion.div 
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.15 }}
+                  className="block md:hidden w-full max-w-xl mx-auto pt-2"
+                >
+                  <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-blue-400/30 bg-blue-950/40">
+                    <img 
+                      src={jiffexDoorstepShipping} 
+                      alt="Jiffex Doorstep International Courier and Packaging Partner" 
+                      className="w-full h-44 sm:h-52 object-cover"
+                      referrerPolicy="no-referrer" 
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent pointer-events-none" />
+                    <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white text-[10px] font-bold">
+                      <span className="bg-blue-600/90 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-blue-400/30 flex items-center gap-1 shadow-sm">
+                        <span>📦</span> Doorstep Pickup & Packing
+                      </span>
+                      <span className="bg-amber-500 text-slate-950 font-black px-2.5 py-0.5 rounded-full shadow-sm">
+                        India to Abroad
+                      </span>
                     </div>
                   </div>
+                </motion.div>
+              </div>
 
-                  {/* Section Divider 1 */}
-                  <div className="border-t border-slate-100" />
-
-                  {/* SECTION 2: SHOP DEALS */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                        <ShoppingBag size={14} className="stroke-[2.5]" />
-                      </div>
-                      <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase">Shop Authentic Indian Goods</h3>
+              {/* Service Selectors */}
+              <div className="space-y-5 md:space-y-8 w-full">
+                {/* Mobile View Only: 'What is Jiffex?' Section - Placed before How Jiffex Works */}
+                <div className="block md:hidden w-full max-w-xl mx-auto py-1">
+                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3.5 text-slate-900">
+                    {/* BIG & Centered 'What is Jiffex?' Title */}
+                    <div className="text-center space-y-1.5 pb-2 border-b border-slate-100">
+                      <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                        What is Jiffex?
+                      </h2>
+                      <p className="text-xs sm:text-sm font-bold text-indigo-700 tracking-tight">
+                        Your bridge between India and the world.
+                      </p>
                     </div>
 
-                    <motion.div 
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.25 }}
-                      onClick={() => {
-                        navigateTo('store');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="relative overflow-hidden bg-gradient-to-r from-amber-500/10 via-amber-600/5 to-amber-500/10 border border-amber-500/20 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-md active:scale-[0.98] transition-all cursor-pointer"
-                    >
-                      {/* Decorative background circle */}
-                      <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
-                      
-                      <div className="flex gap-2.5 items-start">
-                        <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center shrink-0 text-amber-600 border border-amber-100/30">
-                          <ShoppingBag size={20} className="animate-pulse" />
-                        </div>
-                        <div className="space-y-1 text-left">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-extrabold text-[12px] text-amber-950 tracking-tight leading-none">Shop Indian Goods</span>
-                            <span className="bg-amber-600 text-white text-[7px] font-black uppercase px-1 py-0.5 rounded tracking-wide leading-none">Catalog</span>
+                    <div className="space-y-2 text-xs text-slate-600 leading-relaxed text-center sm:text-left">
+                      <p>
+                        Jiffex makes it easy to get the things you love from India delivered to you abroad. Shop from your favorite Indian stores, send your own items, or tell us where to collect them.
+                      </p>
+                      <p className="font-medium text-slate-700">
+                        We pick up, consolidate, securely pack, and ship everything to your doorstep — so you don't have to manage multiple deliveries or shipping arrangements.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2.5 pt-1">
+                      <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-800">
+                        With Jiffex, you can:
+                      </h4>
+
+                      <div className="space-y-2">
+                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                          <span className="text-base shrink-0 select-none">🛍️</span>
+                          <div className="text-xs leading-snug">
+                            <span className="font-black text-slate-900">Shop in India</span>
+                            <span className="text-slate-600"> — Buy from Indian stores and ship internationally.</span>
                           </div>
-                          <p className="text-[10px] text-slate-600 font-medium leading-normal max-w-[210px]">
-                            Craving home flavors, festive sweets, or premium ethnic wear? Buy from top Indian stores and we'll deliver them abroad!
-                          </p>
+                        </div>
+
+                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                          <span className="text-base shrink-0 select-none">🚚</span>
+                          <div className="text-xs leading-snug">
+                            <span className="font-black text-slate-900">Let us collect</span>
+                            <span className="text-slate-600"> — We can pick up items from your home, a store, or another location.</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                          <span className="text-base shrink-0 select-none">📦</span>
+                          <div className="text-xs leading-snug">
+                            <span className="font-black text-slate-900">Combine & Ship</span>
+                            <span className="text-slate-600"> — Consolidate multiple items into one international shipment.</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                          <span className="text-base shrink-0 select-none">🌎</span>
+                          <div className="text-xs leading-snug">
+                            <span className="font-black text-slate-900">Track to your doorstep</span>
+                            <span className="text-slate-600"> — Follow your shipment until delivery.</span>
+                          </div>
                         </div>
                       </div>
-                      
-                      <div className="shrink-0 flex flex-col items-center justify-center bg-amber-600 text-white p-2 px-3 rounded-xl shadow-sm hover:bg-amber-700 active:scale-95 transition-all">
-                        <span className="text-[9px] font-black tracking-tight leading-none">Shop</span>
-                        <ArrowRight size={12} className="mt-1" />
-                      </div>
-                    </motion.div>
-                  </div>
-
-                  {/* Section Divider 2 */}
-                  <div className="border-t border-slate-100" />
-
-                  {/* SECTION 3: QUICK SHIPPING QUOTE */}
-                  <div id="mobile-quick-quote" className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
-                        <Calculator size={14} className="stroke-[2.5]" />
-                      </div>
-                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Quick Shipping Quote</h3>
                     </div>
 
-                    <div className="space-y-3.5">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Destination</label>
-                          <select 
-                            className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold text-slate-800"
-                            value={qCountry}
-                            onChange={(e) => setQCountry(e.target.value)}
-                          >
-                            {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Weight (kg)</label>
-                          <input 
-                            type="number" 
-                            min="0.1" 
-                            step="0.1"
-                            className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-xs font-bold bg-slate-50 text-slate-800"
-                            value={qWeight}
-                            onChange={(e) => setQWeight(Number(e.target.value))}
-                          />
-                        </div>
+                    <div className="pt-1">
+                      <div className="p-3 bg-gradient-to-r from-indigo-50 via-amber-50/60 to-indigo-50 border border-indigo-100 rounded-xl text-center shadow-xs">
+                        <p className="text-xs font-black text-indigo-950 tracking-tight flex items-center justify-center gap-1.5">
+                          <span>🇮🇳</span>
+                          <span>India is closer with Jiffex.</span>
+                          <span>✈️</span>
+                        </p>
                       </div>
-                      
-                      <div>
-                        <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Shipping Method</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {[
-                            { id: 'Standard', label: 'Standard', days: '10-14 Days', multiplier: 0.7 },
-                            { id: 'Express', label: 'Express', days: '5-7 Days', multiplier: 1.0 }
-                          ].map((method) => (
-                            <button
-                              key={method.id}
-                              onClick={() => setQMethod(method.id as any)}
-                              className={`p-2.5 rounded-xl border-2 transition-all text-left ${
-                                qMethod === method.id 
-                                  ? 'border-indigo-600 bg-indigo-50/50 ring-4 ring-indigo-600/5' 
-                                  : 'border-slate-100 bg-white hover:border-slate-200'
-                              }`}
-                            >
-                              <div className={`text-[10px] font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
-                                {method.label}
-                              </div>
-                              <div className="text-[7px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                                {method.days}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                    </div>
+                  </div>
+                </div>
 
-                      <div className="p-4 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
-                        <div className="flex justify-between items-end">
-                          <div>
-                            <span className="text-indigo-100 text-[8px] font-bold uppercase tracking-widest">
-                              Estimated Cost ({qMethod})
+                {/* Mobile View Only: 'Why Jiffex?' Section - Placed right after 'What is Jiffex' */}
+                <div className="block md:hidden w-full max-w-xl mx-auto py-1">
+                  <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3.5 text-slate-900">
+                    {/* BIG & Centered 'Why Jiffex?' Title */}
+                    <div className="text-center space-y-1.5 pb-2 border-b border-slate-100">
+                      <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                        Why Jiffex?
+                      </h2>
+                      <p className="text-xs sm:text-sm font-bold text-indigo-700 tracking-tight">
+                        Shipping from India should be simple, reliable, and stress-free.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 text-xs text-slate-600 leading-relaxed text-center sm:text-left">
+                      <p>
+                        Jiffex brings everything together — from collecting your items in India to packing, consolidating, shipping, and tracking them until they reach you.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2.5 pt-1">
+                      <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-800">
+                        Why choose Jiffex?
+                      </h4>
+
+                      <div className="space-y-2">
+                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                          <span className="text-base shrink-0 select-none">🚚</span>
+                          <div className="text-xs leading-snug">
+                            <span className="font-black text-slate-900">Pickup Made Easy</span>
+                            <span className="text-slate-600"> — We collect from your home, stores, or other locations.</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                          <span className="text-base shrink-0 select-none">📦</span>
+                          <div className="text-xs leading-snug">
+                            <span className="font-black text-slate-900">Smart Consolidation</span>
+                            <span className="text-slate-600"> — Combine multiple purchases into one shipment and avoid sending separate packages.</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                          <span className="text-base shrink-0 select-none">🛡️</span>
+                          <div className="text-xs leading-snug">
+                            <span className="font-black text-slate-900">Secure Packing</span>
+                            <span className="text-slate-600"> — Your items are carefully consolidated and packed for international shipping.</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                          <span className="text-base shrink-0 select-none">🌎</span>
+                          <div className="text-xs leading-snug">
+                            <span className="font-black text-slate-900">Reliable International Shipping</span>
+                            <span className="text-slate-600"> — We work with trusted global carriers to get your shipment delivered.</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                          <span className="text-base shrink-0 select-none">📍</span>
+                          <div className="text-xs leading-snug">
+                            <span className="font-black text-slate-900">Easy Tracking</span>
+                            <span className="text-slate-600"> — Track your shipment and stay updated throughout its journey.</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                          <span className="text-base shrink-0 select-none">🎧</span>
+                          <div className="text-xs leading-snug">
+                            <span className="font-black text-slate-900">Jiffex Support</span>
+                            <span className="text-slate-600"> — Get help through chat or voice whenever you need assistance.</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-1">
+                      <div className="p-3 bg-gradient-to-r from-amber-50 via-indigo-50/60 to-amber-50 border border-amber-200/70 rounded-xl text-center shadow-xs">
+                        <p className="text-xs font-black text-slate-900 tracking-tight">
+                          One pickup. One package. One simple journey with Jiffex.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mobile View Only: How Jiffex Works (Step by Step) - Placed above 'Choose how you want to send:' */}
+                <div id="mobile-how-it-works" className="block md:hidden w-full max-w-xl mx-auto text-left py-2">
+                  <div className="bg-gradient-to-b from-[#172554]/90 via-[#1e3a8a]/85 to-[#0f172a]/90 border border-blue-400/30 backdrop-blur-md rounded-2xl p-4 shadow-xl shadow-blue-950/30 space-y-3.5 text-white">
+                    <div className="flex items-center justify-between border-b border-blue-800/60 pb-2.5">
+                      <h3 className="text-base font-black text-white tracking-tight flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                        <span>How Jiffex Works</span>
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-200 text-[10px] font-bold">
+                        4 Simple Steps
+                      </span>
+                    </div>
+
+                    <div className="space-y-2.5 relative">
+                      {/* Connecting vertical line */}
+                      <div className="absolute left-[17px] top-4 bottom-4 w-0.5 bg-blue-400/30 z-0" />
+
+                      {[
+                        {
+                          step: 1,
+                          icon: Calendar,
+                          title: "Book a Pickup in 30 Seconds",
+                          desc: "Start by scheduling an agent pickup. This becomes the heart of your shipment process.",
+                          iconBg: "bg-indigo-600 text-white shadow-indigo-500/30",
+                          badgeColor: "bg-indigo-500/20 text-indigo-200 border-indigo-400/40"
+                        },
+                        {
+                          step: 2,
+                          icon: ShoppingBag,
+                          title: "Add Items from Anywhere",
+                          desc: "Add items from your home, our Shop, or even items you've sent to our warehouse.",
+                          iconBg: "bg-amber-500 text-white shadow-amber-500/30",
+                          badgeColor: "bg-amber-500/20 text-amber-200 border-amber-400/40"
+                        },
+                        {
+                          step: 3,
+                          icon: Truck,
+                          title: "We Combine Everything for You",
+                          desc: "Our agent brings your warehouse and store items to your home for a final unified collection.",
+                          iconBg: "bg-emerald-600 text-white shadow-emerald-500/30",
+                          badgeColor: "bg-emerald-500/20 text-emerald-200 border-emerald-400/40"
+                        },
+                        {
+                          step: 4,
+                          icon: CheckCircle2,
+                          title: "Delivered to Your Doorstep",
+                          desc: "Everything is weighed and packed at your home, then shipped globally in one go.",
+                          iconBg: "bg-blue-600 text-white shadow-blue-500/30",
+                          badgeColor: "bg-blue-500/20 text-blue-200 border-blue-400/40"
+                        }
+                      ].map((item) => (
+                        <div 
+                          key={item.step} 
+                          className="relative z-10 flex items-start gap-3 bg-blue-900/35 hover:bg-blue-900/50 border border-blue-400/25 rounded-xl p-2.5 transition-all shadow-xs"
+                        >
+                          <div className={`w-8 h-8 rounded-xl ${item.iconBg} flex items-center justify-center shrink-0 shadow-sm font-black text-xs relative`}>
+                            <item.icon size={16} />
+                            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-blue-950 border border-blue-400/40 text-[9px] font-black text-white flex items-center justify-center shadow-xs">
+                              {item.step}
                             </span>
-                            <div className="text-xl font-black">
-                              ₹{(() => {
-                                const res = calculateShippingCost({
-                                  country: qCountry,
-                                  weightKg: qWeight,
-                                  method: qMethod,
-                                  rates: shippingRates,
-                                  rateBands: shippingRateBands,
-                                  discounts: shippingDiscounts
-                                });
-                                return res.finalPriceInr.toLocaleString('en-IN');
-                              })()}
-                            </div>
-                            {(() => {
-                              const res = calculateShippingCost({
-                                country: qCountry,
-                                weightKg: qWeight,
-                                method: qMethod,
-                                rates: shippingRates,
-                                rateBands: shippingRateBands,
-                                discounts: shippingDiscounts
-                              });
-                              if (res.discountPercent > 0) {
-                                return (
-                                  <div className="text-[7px] font-bold text-rose-300 mt-0.5">
-                                    Discount of {res.discountPercent}% Applied for {qCountry}! (Save ₹{Math.round(res.discountAmount).toLocaleString('en-IN')}) [Band: {res.appliedBandLabel}]
-                                  </div>
-                                );
-                              }
-                              return (
-                                <div className="text-[7px] font-bold text-indigo-200 mt-0.5">
-                                  Band: {res.appliedBandLabel} (₹{res.baseRatePerKg}{res.isFlatRate ? ' flat' : '/kg'})
-                                </div>
-                              );
-                            })()}
-                            <div className="text-[7px] font-bold text-indigo-200 uppercase tracking-widest mt-1.5 flex items-center gap-1">
-                              <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
-                            </div>
                           </div>
-                          <Truck className="opacity-25 shrink-0" size={28} />
+                          <div className="space-y-0.5 flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border ${item.badgeColor}`}>Step {item.step}</span>
+                            </div>
+                            <h4 className="text-xs font-bold text-white leading-tight">{item.title}</h4>
+                            <p className="text-[11px] text-blue-100/85 leading-relaxed font-medium">{item.desc}</p>
+                          </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
                   </div>
-
                 </div>
-              </div>
 
-              {/* Laptop / Desktop only view for the service selectors */}
-              <div className="hidden md:block space-y-6 md:space-y-8 w-full">
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.3 }}
                   className="text-xs sm:text-sm font-bold text-indigo-400 uppercase tracking-widest"
                 >
-                  <span className="hidden md:inline">Choose how you want to send:</span>
+                  <span>Choose how you want to send:</span>
                 </motion.p>
 
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="grid grid-cols-3 md:grid-cols-3 gap-2 md:gap-6 max-w-5xl mx-auto"
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-6 max-w-5xl mx-auto w-full px-1 sm:px-0"
                 >
                   {/* Card 1: Pickup from Home */}
                   <div 
                     onClick={() => navigateTo('pickup')}
-                    className="relative cursor-pointer bg-indigo-50/90 border-indigo-100 md:bg-white md:border-slate-100 p-2.5 sm:p-8 rounded-[1.2rem] md:rounded-[2.5rem] shadow-md md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                    className="relative cursor-pointer bg-white md:bg-white border border-slate-100 p-4 sm:p-6 md:p-8 rounded-2xl md:rounded-[2.5rem] shadow-lg md:shadow-xl flex flex-col items-center text-center gap-3 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
                   >
-                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap">
-                      <span className="px-1.5 py-0.5 bg-amber-500 text-white text-[6px] md:text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-amber-200">
+                    <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap">
+                      <span className="px-2.5 py-0.5 bg-amber-500 text-white text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-amber-200">
                         Most Popular
                       </span>
                     </div>
-                    <div className="w-10 h-10 md:w-20 md:h-20 bg-indigo-100/80 md:bg-indigo-50 rounded-xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <Truck className="w-5 h-5 md:w-10 md:h-10 text-indigo-600" />
+                    <div className="w-12 h-12 md:w-20 md:h-20 bg-indigo-50 rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <Truck className="w-6 h-6 md:w-10 md:h-10 text-indigo-600" />
                     </div>
                     <div className="space-y-1 md:space-y-3 flex-grow">
-                      <h3 className="font-black text-[10px] xs:text-xs md:text-2xl text-indigo-950 md:text-slate-900 leading-tight">Schedule Pickup</h3>
-                      <p className="hidden md:block text-xs sm:text-sm text-slate-500 leading-relaxed">
+                      <h3 className="font-black text-base md:text-2xl text-slate-900 leading-tight">Schedule Pickup</h3>
+                      <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
                         We collect items from your doorstep, pack & ship internationally
                       </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); navigateTo('pickup'); }}
-                      className="w-full py-1.5 md:py-4 bg-indigo-600 text-white rounded-lg md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-[9px] md:text-sm"
+                      className="w-full py-2.5 md:py-4 bg-indigo-600 text-white rounded-xl md:rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-xs md:text-sm"
                     >
-                      Schedule
+                      Schedule Pickup
                     </button>
                   </div>
 
                   {/* Card 2: Send to Our Warehouse */}
                   <div 
                     onClick={() => navigateTo('warehouse')}
-                    className="cursor-pointer bg-emerald-50/90 border-emerald-100 md:bg-white md:border-slate-100 p-2.5 sm:p-8 rounded-[1.2rem] md:rounded-[2.5rem] shadow-md md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                    className="cursor-pointer bg-white md:bg-white border border-slate-100 p-4 sm:p-6 md:p-8 rounded-2xl md:rounded-[2.5rem] shadow-lg md:shadow-xl flex flex-col items-center text-center gap-3 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
                   >
-                    <div className="w-10 h-10 md:w-20 md:h-20 bg-emerald-100/80 md:bg-indigo-50 rounded-xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <Package className="w-5 h-5 md:w-10 md:h-10 text-emerald-600 md:text-indigo-600" />
+                    <div className="w-12 h-12 md:w-20 md:h-20 bg-emerald-50 md:bg-indigo-50 rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <Package className="w-6 h-6 md:w-10 md:h-10 text-emerald-600 md:text-indigo-600" />
                     </div>
                     <div className="space-y-1 md:space-y-3 flex-grow">
-                      <h3 className="font-black text-[10px] xs:text-xs md:text-2xl text-emerald-950 md:text-slate-900 leading-tight">Drop Off Package</h3>
-                      <p className="hidden md:block text-xs sm:text-sm text-slate-500 leading-relaxed">
+                      <h3 className="font-black text-base md:text-2xl text-slate-900 leading-tight">Drop Off Package</h3>
+                      <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
                         Ship your items to our warehouse—we pack & deliver abroad
                       </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); navigateTo('warehouse'); }}
-                      className="w-full py-1.5 md:py-4 bg-emerald-600 md:bg-indigo-600 text-white rounded-lg md:rounded-2xl font-bold hover:bg-emerald-700 md:hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-[9px] md:text-sm"
+                      className="w-full py-2.5 md:py-4 bg-emerald-600 md:bg-indigo-600 text-white rounded-xl md:rounded-2xl font-bold hover:bg-emerald-700 md:hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-xs md:text-sm"
                     >
                       Drop Off
                     </button>
@@ -9683,20 +9842,20 @@ export default function App() {
                   {/* Card 3: Shop & Send */}
                   <div 
                     onClick={() => navigateTo('store')}
-                    className="cursor-pointer bg-amber-50/90 border-amber-100 md:bg-white md:border-slate-100 p-2.5 sm:p-8 rounded-[1.2rem] md:rounded-[2.5rem] shadow-md md:shadow-xl border flex flex-col items-center text-center gap-2 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+                    className="cursor-pointer bg-white md:bg-white border border-slate-100 p-4 sm:p-6 md:p-8 rounded-2xl md:rounded-[2.5rem] shadow-lg md:shadow-xl flex flex-col items-center text-center gap-3 sm:gap-6 group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
                   >
-                    <div className="w-10 h-10 md:w-20 md:h-20 bg-amber-100/80 md:bg-indigo-50 rounded-xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                      <ShoppingBag className="w-5 h-5 md:w-10 md:h-10 text-amber-600 md:text-indigo-600" />
+                    <div className="w-12 h-12 md:w-20 md:h-20 bg-amber-50 md:bg-indigo-50 rounded-2xl md:rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                      <ShoppingBag className="w-6 h-6 md:w-10 md:h-10 text-amber-600 md:text-indigo-600" />
                     </div>
                     <div className="space-y-1 md:space-y-3 flex-grow">
-                      <h3 className="font-black text-[10px] xs:text-xs md:text-2xl text-amber-950 md:text-slate-900 leading-tight">Shop & Ship</h3>
-                      <p className="hidden md:block text-xs sm:text-sm text-slate-500 leading-relaxed">
+                      <h3 className="font-black text-base md:text-2xl text-slate-900 leading-tight">Shop & Ship</h3>
+                      <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
                         Buy authentic Indian products—we deliver anywhere abroad
                       </p>
                     </div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); navigateTo('store'); }}
-                      className="w-full py-1.5 md:py-4 bg-amber-500 md:bg-indigo-600 text-white rounded-lg md:rounded-2xl font-bold hover:bg-amber-600 md:hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-[9px] md:text-sm"
+                      className="w-full py-2.5 md:py-4 bg-amber-500 md:bg-indigo-600 text-white rounded-xl md:rounded-2xl font-bold hover:bg-amber-600 md:hover:bg-indigo-700 transition-all shadow-md active:scale-95 flex items-center justify-center gap-1 text-xs md:text-sm"
                     >
                       Shop Now
                     </button>
@@ -9707,40 +9866,40 @@ export default function App() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.5 }}
-                  className="hidden md:flex flex-col sm:flex-row items-center justify-center gap-8 pt-4"
+                  className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-8 pt-3 md:pt-4"
                 >
                   <button 
                     onClick={() => {
-                      const element = document.getElementById('how-it-works');
+                      const element = (window.innerWidth < 768 ? document.getElementById('mobile-how-it-works') : document.getElementById('how-it-works')) || document.getElementById('how-it-works');
                       if (element) {
                         element.scrollIntoView({ behavior: 'smooth' });
                       }
                     }}
-                    className="hidden md:flex px-6 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-full font-bold items-center gap-2 transition-all group text-lg"
+                    className="flex px-4 sm:px-6 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-full font-bold items-center gap-2 transition-all group text-xs sm:text-base md:text-lg"
                   >
                     Not sure? <span className="underline underline-offset-4 transition-colors">See how it works</span>
                   </button>
                   
-                  <div className="h-6 w-px bg-slate-800 hidden md:block" />
+                  <div className="h-4 sm:h-6 w-px bg-slate-800 hidden sm:block" />
                   
-                  <div className="flex items-center gap-3 text-slate-400 font-medium text-lg">
-                    <span className="text-amber-400 text-2xl">⭐</span> Trusted by 1000+ customers • Delivered worldwide
+                  <div className="flex items-center gap-2 sm:gap-3 text-slate-400 font-medium text-xs sm:text-base md:text-lg">
+                    <span className="text-amber-400 text-base sm:text-2xl">⭐</span> Trusted by 1000+ customers • Delivered worldwide
                   </div>
                 </motion.div>
               </div>
             </div>
           </div>
 
-          {/* How Jiffex Works - Value Prop */}
-          <div id="how-it-works" className="hidden md:block space-y-12 scroll-mt-24">
-            <div className="text-center space-y-4">
-              <h3 className="text-4xl font-black text-slate-900 tracking-tight">How Jiffex Works</h3>
-              <p className="text-slate-500 max-w-2xl mx-auto">A seamless, unified shipping experience designed for your convenience.</p>
+          {/* How Jiffex Works - Value Prop (Desktop, Laptop & Tablet Only) */}
+          <div id="how-it-works" className="hidden md:block space-y-8 md:space-y-12 scroll-mt-24 px-2 sm:px-4 md:px-0">
+            <div className="text-center space-y-2 md:space-y-4">
+              <h3 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight">How Jiffex Works</h3>
+              <p className="text-xs sm:text-sm md:text-base text-slate-500 max-w-2xl mx-auto">A seamless, unified shipping experience designed for your convenience.</p>
             </div>
 
             <div className="relative">
               <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 -translate-y-1/2 hidden lg:block" />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 relative">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8 relative">
                 {[
                   { icon: Calendar, title: "Book a Pickup in 30 Seconds", desc: "Start by scheduling an agent pickup. This becomes the heart of your shipment process.", color: "bg-indigo-600", shadow: "shadow-indigo-200" },
                   { icon: ShoppingBag, title: "Add Items from Anywhere", desc: "Add items from your home, our Shop, or even items you've sent to our warehouse.", color: "bg-amber-500", shadow: "shadow-amber-200" },
@@ -9755,12 +9914,12 @@ export default function App() {
                     transition={{ delay: i * 0.1 }}
                     className="relative group"
                   >
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 flex flex-col items-center text-center h-full">
-                      <div className={`w-16 h-16 ${step.color} text-white rounded-3xl flex items-center justify-center mb-6 shadow-2xl ${step.shadow} group-hover:scale-110 transition-transform duration-500`}>
-                        <step.icon size={32} />
+                    <div className="bg-white p-5 sm:p-6 md:p-8 rounded-2xl md:rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 flex flex-col items-center text-center h-full">
+                      <div className={`w-12 h-12 md:w-16 md:h-16 ${step.color} text-white rounded-2xl md:rounded-3xl flex items-center justify-center mb-4 md:mb-6 shadow-xl ${step.shadow} group-hover:scale-110 transition-transform duration-500`}>
+                        <step.icon className="w-6 h-6 md:w-8 md:h-8" />
                       </div>
-                      <h4 className="text-xl font-black text-slate-900 mb-3">{step.title}</h4>
-                      <p className="text-sm text-slate-500 leading-relaxed">{step.desc}</p>
+                      <h4 className="text-base sm:text-lg md:text-xl font-black text-slate-900 mb-1.5 md:mb-3">{step.title}</h4>
+                      <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">{step.desc}</p>
                     </div>
                   </motion.div>
                 ))}
@@ -9773,58 +9932,58 @@ export default function App() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="hidden md:block relative overflow-hidden rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-700 p-12 text-white shadow-2xl"
+            className="relative overflow-hidden rounded-2xl sm:rounded-[2.5rem] md:rounded-[3rem] bg-gradient-to-br from-indigo-600 to-violet-700 p-6 sm:p-8 md:p-12 text-white shadow-2xl mx-1 sm:mx-0"
           >
-            <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
-            <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl" />
+            <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-96 h-96 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none" />
             
-            <div className="relative z-10 max-w-3xl mx-auto text-center space-y-6">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur rounded-full text-xs font-bold uppercase tracking-widest">
+            <div className="relative z-10 max-w-3xl mx-auto text-center space-y-4 md:space-y-6">
+              <div className="inline-flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 bg-white/10 backdrop-blur rounded-full text-[10px] md:text-xs font-bold uppercase tracking-widest">
                 <Heart size={14} className="text-pink-300 fill-pink-300" /> Made for the Global Indian
               </div>
-              <h2 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">
+              <h2 className="text-2xl sm:text-3xl md:text-5xl font-black tracking-tight leading-tight">
                 Stop waiting for a <span className="text-indigo-200 italic">friend's suitcase.</span>
               </h2>
-              <p className="text-xl text-indigo-100 leading-relaxed font-medium">
+              <p className="text-xs sm:text-base md:text-xl text-indigo-100 leading-relaxed font-medium">
                 Your connection to home shouldn't depend on someone else's travel plans. 
                 Whether it's your mother's handmade sweets, that specific wedding outfit, or the comfort of Indian spices—we bring India to your doorstep.
               </p>
-              <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-6">
+              <div className="pt-2 md:pt-4 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                    <Clock size={24} />
+                  <div className="w-10 h-10 md:w-12 md:h-12 bg-white/10 rounded-xl md:rounded-2xl flex items-center justify-center shrink-0">
+                    <Clock className="w-5 h-5 md:w-6 md:h-6" />
                   </div>
                   <div className="text-left">
-                    <div className="text-sm font-bold">No More Waiting</div>
-                    <div className="text-xs text-indigo-200">Ship whenever you want</div>
+                    <div className="text-xs md:text-sm font-bold">No More Waiting</div>
+                    <div className="text-[10px] md:text-xs text-indigo-200">Ship whenever you want</div>
                   </div>
                 </div>
                 <div className="w-px h-8 bg-white/20 hidden sm:block" />
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                    <Users size={24} />
+                  <div className="w-10 h-10 md:w-12 md:h-12 bg-white/10 rounded-xl md:rounded-2xl flex items-center justify-center shrink-0">
+                    <Users className="w-5 h-5 md:w-6 md:h-6" />
                   </div>
                   <div className="text-left">
-                    <div className="text-sm font-bold">No More Asking</div>
-                    <div className="text-xs text-indigo-200">Independence in shipping</div>
+                    <div className="text-xs md:text-sm font-bold">No More Asking</div>
+                    <div className="text-[10px] md:text-xs text-indigo-200">Independence in shipping</div>
                   </div>
                 </div>
               </div>
             </div>
           </motion.div>
 
-          <div ref={quoteRef} id="desktop-quick-quote" className="hidden md:grid grid-cols-1 lg:grid-cols-5 gap-12 items-start">
+          <div ref={quoteRef} id="desktop-quick-quote" className="grid grid-cols-1 lg:grid-cols-5 gap-6 md:gap-12 items-start px-2 sm:px-4 md:px-0">
             <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white p-3 md:p-8 rounded-2xl md:rounded-3xl shadow-xl md:shadow-indigo-500/5 border border-slate-100">
-                <h2 className="text-xs md:text-2xl font-black mb-3 md:mb-6 flex items-center gap-1.5 uppercase tracking-wider text-slate-900">
-                  <Calculator className="text-indigo-600 shrink-0" size={14} md:size={20} /> Quick Quote
+              <div className="bg-white p-4 sm:p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-xl md:shadow-indigo-500/5 border border-slate-100">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-black mb-4 md:mb-6 flex items-center gap-2 uppercase tracking-wider text-slate-900">
+                  <Calculator className="w-5 h-5 md:w-6 md:h-6 text-indigo-600 shrink-0" /> Quick Quote
                 </h2>
                 <div className="space-y-3.5 md:space-y-5">
                   <div className="grid grid-cols-2 md:grid-cols-1 gap-3 md:gap-5">
                     <div>
-                      <label className="block text-[7.5px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Destination</label>
+                      <label className="block text-[9px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Destination</label>
                       <select 
-                        className="w-full p-1.5 md:p-4 rounded-xl md:rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none text-[16px] md:text-base"
+                        className="w-full p-2.5 md:p-4 rounded-xl md:rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none text-sm md:text-base font-bold text-slate-800"
                         value={qCountry}
                         onChange={(e) => setQCountry(e.target.value)}
                       >
@@ -9832,12 +9991,12 @@ export default function App() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[7.5px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Weight (kg)</label>
+                      <label className="block text-[9px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Weight (kg)</label>
                       <input 
                         type="number" 
                         min="0.1" 
                         step="0.1"
-                        className="w-full p-1.5 md:p-4 rounded-xl md:rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-[16px] md:text-base"
+                        className="w-full p-2.5 md:p-4 rounded-xl md:rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm md:text-base font-bold bg-slate-50 text-slate-800"
                         value={qWeight}
                         onChange={(e) => setQWeight(Number(e.target.value))}
                       />
@@ -9845,7 +10004,7 @@ export default function App() {
                   </div>
                   
                   <div>
-                    <label className="block text-[7.5px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-3">Shipping Method</label>
+                    <label className="block text-[9px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 md:mb-3">Shipping Method</label>
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { id: 'Standard', label: 'Standard', days: '10-14 Days', multiplier: 0.7 },
@@ -9854,16 +10013,16 @@ export default function App() {
                         <button
                           key={method.id}
                           onClick={() => setQMethod(method.id as any)}
-                          className={`p-1.5 md:p-4 rounded-xl md:rounded-2xl border-2 transition-all text-left ${
+                          className={`p-2.5 md:p-4 rounded-xl md:rounded-2xl border-2 transition-all text-left ${
                             qMethod === method.id 
                               ? 'border-indigo-600 bg-indigo-50 ring-4 ring-indigo-600/5' 
                               : 'border-slate-100 bg-white hover:border-slate-200'
                           }`}
                         >
-                          <div className={`text-[9px] md:text-sm font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
+                          <div className={`text-xs md:text-sm font-black ${qMethod === method.id ? 'text-indigo-600' : 'text-slate-900'}`}>
                             {method.label}
                           </div>
-                          <div className="text-[7px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                          <div className="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
                             {method.days}
                           </div>
                         </button>
@@ -9871,13 +10030,13 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="p-2 md:p-6 bg-indigo-600 rounded-xl md:rounded-2xl text-white shadow-lg shadow-indigo-200">
+                  <div className="p-4 md:p-6 bg-indigo-600 rounded-xl md:rounded-2xl text-white shadow-lg shadow-indigo-200">
                     <div className="flex justify-between items-end">
                       <div>
-                        <span className="text-indigo-100 text-[7px] md:text-xs font-bold uppercase tracking-widest">
+                        <span className="text-indigo-100 text-[8px] md:text-xs font-bold uppercase tracking-widest">
                           Estimated Cost ({qMethod})
                         </span>
-                        <div className="text-lg md:text-4xl font-black">
+                        <div className="text-2xl md:text-4xl font-black">
                           ₹{(() => {
                             const res = calculateShippingCost({
                               country: qCountry,
@@ -9901,39 +10060,40 @@ export default function App() {
                           });
                           if (res.discountPercent > 0) {
                             return (
-                              <div className="text-[7px] md:text-xs font-bold text-rose-300 mt-0.5">
+                              <div className="text-[8px] md:text-xs font-bold text-rose-300 mt-0.5">
                                 Discount of {res.discountPercent}% Applied for {qCountry}! (Save ₹{Math.round(res.discountAmount).toLocaleString('en-IN')}) [Band: {res.appliedBandLabel}]
                               </div>
                             );
                           }
                           return (
-                            <div className="text-[7px] md:text-xs font-bold text-indigo-200 mt-0.5">
+                            <div className="text-[8px] md:text-xs font-bold text-indigo-200 mt-0.5">
                               Band: {res.appliedBandLabel} (₹{res.baseRatePerKg}{res.isFlatRate ? ' flat' : '/kg'})
                             </div>
                           );
                         })()}
-                        <div className="text-[7px] md:text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-1 flex items-center gap-1">
+                        <div className="text-[8px] md:text-[10px] font-bold text-indigo-200 uppercase tracking-widest mt-1 flex items-center gap-1">
                           <Clock size={10} /> Est. Delivery: {qMethod === 'Express' ? '5-7' : '10-14'} Business Days
                         </div>
                       </div>
-                      <Truck className="opacity-20 shrink-0" size={20} md:size={48} />
+                      <Truck className="w-8 h-8 md:w-12 md:h-12 opacity-20 shrink-0" />
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
+            {/* Unified Shipping Protocol - Hidden on Mobile view, visible on Tablet, Laptop, and Desktop */}
             <div className="hidden md:block lg:col-span-3">
-              <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-10 rounded-[3rem] text-white flex flex-col md:flex-row items-center gap-10 relative overflow-hidden h-full">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -mr-32 -mt-32" />
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -ml-32 -mb-32" />
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 md:p-10 rounded-2xl md:rounded-[3rem] text-white flex flex-col sm:flex-row items-center gap-5 md:gap-10 relative overflow-hidden h-full">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none" />
                 
-                <div className="w-24 h-24 bg-white/10 backdrop-blur-xl rounded-[2rem] flex items-center justify-center shrink-0 border border-white/20 shadow-2xl">
-                  <Info size={48} className="text-indigo-400" />
+                <div className="w-14 h-14 md:w-24 md:h-24 bg-white/10 backdrop-blur-xl rounded-2xl md:rounded-[2rem] flex items-center justify-center shrink-0 border border-white/20 shadow-2xl">
+                  <Info className="w-7 h-7 md:w-12 md:h-12 text-indigo-400" />
                 </div>
-                <div className="space-y-3 relative z-10">
-                  <h4 className="text-2xl font-black">Unified Shipping Protocol</h4>
-                  <p className="text-slate-400 leading-relaxed">
+                <div className="space-y-2 md:space-y-3 relative z-10 text-center sm:text-left">
+                  <h4 className="text-lg md:text-2xl font-black">Unified Shipping Protocol</h4>
+                  <p className="text-xs sm:text-sm md:text-base text-slate-400 leading-relaxed">
                     When you schedule an agent pickup, Jiffex activates the <span className="text-white font-bold">Home-First Protocol</span>. All your items—whether from Shop or our warehouse—are consolidated at your doorstep for a truly personalized shipping experience.
                   </p>
                 </div>
@@ -9942,23 +10102,23 @@ export default function App() {
           </div>
 
           {/* Featured Products from Shop - Moved to Last */}
-          <div className="hidden md:block space-y-8">
+          <div className="space-y-6 md:space-y-8 px-2 sm:px-4 md:px-0">
             <div className="flex items-end justify-between">
               <div>
-                <h3 className="text-3xl font-black text-slate-900">
+                <h3 className="text-2xl sm:text-3xl font-black text-slate-900">
                   Featured from <span className="bg-gradient-to-r from-deep-blue to-indigo-600 bg-clip-text text-transparent">Shop</span>
                 </h3>
-                <p className="text-slate-500">Premium products curated for your special occasions.</p>
+                <p className="text-xs sm:text-sm md:text-base text-slate-500">Premium products curated for your special occasions.</p>
               </div>
               <button 
                 onClick={() => navigateTo('store')}
-                className="text-indigo-600 font-bold flex items-center gap-1 hover:underline"
+                className="text-xs sm:text-sm md:text-base text-indigo-600 font-bold flex items-center gap-1 hover:underline"
               >
                 View All <ChevronRight size={18} />
               </button>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
               {storeProducts.slice(0, 4).map(product => {
                 const cartItem = items.find(i => i.name === product.name && i.source === 'Store' && !orderedItemIds.has(i.id));
                 const itemCount = cartItem?.quantity || 0;
@@ -9971,24 +10131,24 @@ export default function App() {
                           initial={{ scale: 0, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
                           exit={{ scale: 0, opacity: 0 }}
-                          className="absolute top-3 right-3 z-10 w-7 h-7 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg border-2 border-white"
+                          className="absolute top-2.5 right-2.5 z-10 w-6 h-6 md:w-7 md:h-7 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-[9px] md:text-[10px] font-bold shadow-lg border-2 border-white"
                         >
                           {itemCount}
                         </motion.div>
                       )}
                     </AnimatePresence>
-                    <div className="relative aspect-square rounded-2xl overflow-hidden mb-4 bg-slate-50">
+                    <div className="relative aspect-square rounded-xl md:rounded-2xl overflow-hidden mb-2 sm:mb-4 bg-slate-50">
                       <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
-                      <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                      <div className="absolute top-2 left-2 md:top-3 md:left-3 px-1.5 py-0.5 md:px-2 md:py-1 bg-white/90 backdrop-blur rounded md:rounded-lg text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-slate-600">
                         {product.category}
                       </div>
                     </div>
-                    <div className="p-4 flex-1 flex flex-col">
-                      <h4 className="font-bold text-slate-900 mb-1 truncate">{product.name}</h4>
-                      <div className="flex flex-col gap-3 mt-auto">
+                    <div className="p-3 sm:p-4 flex-1 flex flex-col">
+                      <h4 className="font-bold text-slate-900 text-xs sm:text-base mb-1 truncate">{product.name}</h4>
+                      <div className="flex flex-col gap-2 md:gap-3 mt-auto">
                         <div className="flex items-center justify-between">
-                          <span className="text-indigo-600 font-bold">₹{product.price}</span>
-                          <span className="text-[10px] text-slate-400 font-medium">{product.weight}kg</span>
+                          <span className="text-indigo-600 font-bold text-xs sm:text-base">₹{product.price}</span>
+                          <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium">{product.weight}kg</span>
                         </div>
                         
                         <div className="flex justify-center">
@@ -9996,9 +10156,9 @@ export default function App() {
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                             onClick={() => addItem({ name: product.name, weight: product.weight, price: product.price, image: product.image }, 'Store')}
-                            className="w-10 h-10 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10"
+                            className="w-8 h-8 md:w-10 md:h-10 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10"
                           >
-                            <Plus size={16} />
+                            <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
                           </motion.button>
                         </div>
                       </div>
@@ -10007,7 +10167,6 @@ export default function App() {
                 );
               })}
             </div>
-
           </div>
         </div>
       );
@@ -18248,128 +18407,6 @@ export default function App() {
     );
   }
 
-  const handleLogout = async () => {
-    // 1. Immediately and synchronously clear all local state and items to avoid transition lag or state re-fetching
-    clearActiveSession();
-    setItems([]);
-    ordersRef.current = [];
-    setOrders([]);
-    setIsOrdersLoading(true);
-    setOrdersLoadError(null);
-    setSession(null);
-    setCurrentUser(null);
-    setIsGuestMode(false);
-    setGuestEmail('');
-    setActivePickupStep(1);
-    setLastBookingRef(null);
-    setIsSchedulingNewPickup(false);
-    setShowPickupConfirmModal(false);
-    
-    // 2. Perform background server session logout and Supabase signOut
-    try {
-      fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.warn('SignOut background error:', err);
-    }
-    
-    setAddress({
-      fullName: '',
-      email: '',
-      phone: '',
-      addressLine1: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: COUNTRIES[0],
-    });
-    setPickupAddress({
-      street: '',
-      apartment: '',
-      city: '',
-      state: '',
-      zip: ''
-    });
-    setPickupDetailsTab('pickup');
-    setPickupDestination({
-      fullName: '',
-      email: '',
-      phone: '',
-      addressLine1: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: COUNTRIES[0],
-    });
-    setPickupName('');
-    setPickupPhone('');
-    setPickupLanguage('English');
-    setPickupItemType('Everyday Items');
-    setPickupVehicleType('Less than 5 kg');
-    setPickupSpecialInstructions('');
-    setPickupCategory('Personal Effects');
-    setPickupEstimatedWeight('Less than 5 kg');
-    setCartItemName('');
-    setCartItemWeight('');
-    setCartItemQuantity(1);
-    setCartItemFragile(false);
-    setCartItemInvoiceNumber('');
-    setCartItemRemarks('');
-    setIsPaid(false);
-    setOrderId(null);
-    setActiveTab('home');
-    setTabHistory(['home']);
-  };
-
-  const handleAssignAgent = async (orderId: string, agent: AgentProfile | null) => {
-    try {
-      const previousOrder = orders.find(o => o.id === orderId);
-      const prevAgent = previousOrder?.assignedAgent;
-      
-      await api.updateOrder(orderId, { 
-        assignedAgent: agent || undefined, 
-        assignedAgentId: agent ? agent.id : undefined 
-      });
-      setOrders(prev => prev.map(o => o.id === orderId ? { 
-        ...o, 
-        assignedAgent: agent || undefined, 
-        assignedAgentId: agent ? agent.id : undefined 
-      } : o));
-
-      // Also update 'pickups' table in Supabase
-      if (dbStatus.connected) {
-        try {
-          await api.updatePickup(orderId, {
-            assignedAgentId: agent ? agent.id : null,
-          });
-        } catch (e) {
-          console.warn('Failed to update pickup agent assignment in Supabase:', e);
-        }
-      }
-
-      if (agent) {
-        logAgentActionToSupabase(
-          'ASSIGN',
-          agent.id,
-          agent.name,
-          { orderId },
-          currentUser?.email || 'admin@jiffex.com'
-        );
-      } else if (prevAgent) {
-        logAgentActionToSupabase(
-          'DEASSIGN',
-          prevAgent.id,
-          prevAgent.name,
-          { orderId },
-          currentUser?.email || 'admin@jiffex.com'
-        );
-      }
-    } catch (err) {
-      console.error('Failed to assign agent:', err);
-      throw err;
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900 safe-top safe-bottom overflow-x-clip">
       {/* Supabase Status Banner */}
@@ -18419,7 +18456,7 @@ export default function App() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 md:h-20 flex items-center justify-between gap-4 flex-nowrap">
             {/* Mobile View Logo - Only visible below md screens */}
             <div 
-              className="flex md:hidden items-center gap-2 cursor-pointer shrink-0" 
+              className="flex md:hidden items-center gap-2 cursor-pointer shrink-0 origin-left scale-[1.3] pl-0.5 mr-3" 
               onClick={() => {
                 if (currentUser?.role === 'admin' || currentUser?.role === 'Admin') navigateTo('admin');
                 else if (currentUser?.role === 'agent' || currentUser?.role === 'Agent') {
@@ -18678,6 +18715,16 @@ export default function App() {
 
             {/* Mobile View Group - Only visible below md screens */}
             <div className="flex md:hidden items-center gap-2 ml-auto shrink-0">
+              {currentUser?.role !== 'agent' && (
+                <button 
+                  onClick={handleQuickQuoteClick}
+                  className="flex items-center gap-1 text-[11px] font-extrabold uppercase tracking-wider text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 px-2.5 py-1.5 rounded-xl shadow-sm active:scale-95 transition-all text-nowrap shrink-0"
+                >
+                  <Calculator size={13} className="shrink-0 stroke-[2.5]" />
+                  <span>Quick Quote</span>
+                </button>
+              )}
+
               {currentUser?.role !== 'agent' && (
                 <button 
                   onClick={() => navigateTo('cart')}

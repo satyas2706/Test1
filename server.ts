@@ -5717,8 +5717,21 @@ const extractAgentParams = (req: express.Request) => {
     } else if (typeof body.arguments === 'object') {
       nestedArgs = body.arguments;
     }
+  } else if (body.args) {
+    if (typeof body.args === 'string') {
+      try { nestedArgs = JSON.parse(body.args); } catch (e) { nestedArgs = {}; }
+    } else if (typeof body.args === 'object') {
+      nestedArgs = body.args;
+    }
   } else if (body.message?.toolCalls?.[0]?.function?.arguments) {
     const fnArgs = body.message.toolCalls[0].function.arguments;
+    if (typeof fnArgs === 'string') {
+      try { nestedArgs = JSON.parse(fnArgs); } catch (e) { nestedArgs = {}; }
+    } else {
+      nestedArgs = fnArgs;
+    }
+  } else if (body.tool_calls?.[0]?.function?.arguments) {
+    const fnArgs = body.tool_calls[0].function.arguments;
     if (typeof fnArgs === 'string') {
       try { nestedArgs = JSON.parse(fnArgs); } catch (e) { nestedArgs = {}; }
     } else {
@@ -5728,112 +5741,327 @@ const extractAgentParams = (req: express.Request) => {
     nestedArgs = typeof body.toolCall.arguments === 'string' ? JSON.parse(body.toolCall.arguments || '{}') : body.toolCall.arguments;
   } else if (body.parameters) {
     nestedArgs = body.parameters;
+  } else if (body.input && typeof body.input === 'object') {
+    nestedArgs = body.input;
   }
 
   return { ...query, ...body, ...nestedArgs };
 };
 
+// Singleton Gemini AI Client
+let genAIClient: GoogleGenAI | null = null;
+function getGenAI(): GoogleGenAI | null {
+  if (!genAIClient && process.env.GEMINI_API_KEY) {
+    try {
+      genAIClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    } catch (e: any) {
+      console.warn("[GoogleGenAI] Initialization warning:", e.message);
+    }
+  }
+  return genAIClient;
+}
+
+// Convert home pickup record to standardized order format
+function transformPickupToOrder(p: any): any {
+  if (!p) return null;
+  const statusStr = p.status || 'Scheduled';
+  const isCollected = statusStr.toLowerCase().includes('picked') || statusStr.toLowerCase().includes('collected') || statusStr.toLowerCase().includes('warehouse');
+  
+  return {
+    id: p.id,
+    tracking_number: p.id,
+    trackingNumber: p.id,
+    status: statusStr,
+    shipment_status: isCollected ? 'In Warehouse' : statusStr,
+    carrier: 'Jiffex Courier Network',
+    shipping_date: p.pickup_date || p.date || new Date().toISOString().split('T')[0],
+    created_at: p.created_at || new Date().toISOString(),
+    total_weight: p.estimated_weight || p.weight || 2.0,
+    destination: {
+      fullName: p.customer_name || p.name || 'Valued Customer',
+      phone: p.customer_phone || p.phone || '',
+      addressLine1: p.pickup_address || p.address || '',
+      city: p.city || 'Delhi',
+      country: 'India',
+      pickupType: p.pickup_type || 'Doorstep Pickup',
+      assignedAgentId: p.assigned_agent_id || p.agent_id
+    },
+    items: [
+      { name: p.package_contents || p.notes || 'Scheduled Consignment Package', weight: p.estimated_weight || 2.0 }
+    ]
+  };
+}
+
+// Intelligent Order ID & Tracking Number Extractor from User Messages
+function extractOrderIdOrTrackingId(text: string): string | null {
+  if (!text) return null;
+  const raw = text.trim();
+  const str = raw.replace(/[.,!?;:"')]+$/, '').trim();
+
+  // 1. Specific Jiffex patterns: e.g. JX-WH-10001, JX-PH-10001, BB-516104, SH-616954, WO-100021, PKP-10001, PH-00004, JFX-12345, FDX-12345, DHL-12345
+  const prefixMatch = str.match(/\b([A-Z]{2,4}-[A-Z0-9]+-[A-Z0-9]+|[A-Z]{2,4}-[A-Z0-9]{3,12})\b/i);
+  if (prefixMatch) return prefixMatch[1];
+
+  // 2. Keyword prefixes: "order #BB-516104", "tracking id 12345", "order: 12345", "awb: 12345"
+  const keywordMatch = str.match(/(?:order|tracking|id|shipment|awb|package|consignment|ref|booking)[\s#:]+([A-Z0-9\-_]{4,25})/i);
+  if (keywordMatch) return keywordMatch[1];
+
+  // 3. String starting with # (e.g. #BB-516104 or #10001)
+  const hashMatch = str.match(/#([A-Z0-9\-_]{4,25})/i);
+  if (hashMatch) return hashMatch[1];
+
+  // 4. Standalone string if input is just the ID (e.g. user typed "BB516104" or "JX-WH-10001" or "PH00026")
+  if (str.length <= 30 && /^[A-Za-z0-9\-_]{4,25}$/.test(str)) {
+    return str;
+  }
+
+  // 5. Look for alphanumeric code with letters and numbers (e.g. BB516104, JFX12345, PH00026)
+  const codeMatch = str.match(/\b([A-Z]{2,4}\d{4,12})\b/i);
+  if (codeMatch) return codeMatch[1];
+
+  return null;
+}
+
+// Universal Order & Pickup Finder across in-memory cache and Supabase
+async function findOrderOrPickupHelper(searchTerm?: string, userEmail?: string, userPhone?: string): Promise<any | null> {
+  const rawClean = (searchTerm || '').toString().trim();
+  const cleanTerm = rawClean
+    .replace(/^[#\s]+/, '')
+    .replace(/^(?:order|tracking|id|shipment|awb|package|ref|reference)[:#\s\-]*/i, '')
+    .trim();
+
+  const termUpper = cleanTerm.toUpperCase();
+  const termAlphaNum = termUpper.replace(/[^A-Z0-9]/g, '');
+
+  console.log(`[Order Search] searchTerm: "${rawClean}" -> cleanTerm: "${cleanTerm}", alphaNum: "${termAlphaNum}", userEmail: "${userEmail || ''}"`);
+
+  // Matcher for order objects
+  const matchesOrder = (o: any) => {
+    if (!o) return false;
+    const oId = (o.id || '').toString().toUpperCase();
+    const oIdAlpha = oId.replace(/[^A-Z0-9]/g, '');
+    const oTrk = (o.tracking_number || o.trackingNumber || '').toString().toUpperCase();
+    const oTrkAlpha = oTrk.replace(/[^A-Z0-9]/g, '');
+
+    if (termUpper && (oId === termUpper || oTrk === termUpper)) return true;
+    if (termAlphaNum && termAlphaNum.length >= 3) {
+      if (oIdAlpha === termAlphaNum || oTrkAlpha === termAlphaNum) return true;
+      if (oIdAlpha.includes(termAlphaNum) || oTrkAlpha.includes(termAlphaNum)) return true;
+    }
+    return false;
+  };
+
+  // 1. Search in-memory / cached orders
+  if (termUpper || termAlphaNum) {
+    let matched = cachedAllOrders.find(matchesOrder) || memOrders.find(matchesOrder);
+    if (matched) {
+      console.log(`[Order Search] Found in cachedAllOrders/memOrders: ${matched.id}`);
+      return matched;
+    }
+  }
+
+  // 2. Search in-memory pickups
+  const matchesPickup = (p: any) => {
+    if (!p) return false;
+    const pId = (p.id || '').toString().toUpperCase();
+    const pIdAlpha = pId.replace(/[^A-Z0-9]/g, '');
+    if (termUpper && pId === termUpper) return true;
+    if (termAlphaNum && termAlphaNum.length >= 3 && (pIdAlpha === termAlphaNum || pIdAlpha.includes(termAlphaNum))) return true;
+    return false;
+  };
+
+  if (termUpper || termAlphaNum) {
+    const matchedP = memPickups.find(matchesPickup);
+    if (matchedP) {
+      console.log(`[Order Search] Found in memPickups: ${matchedP.id}`);
+      return transformPickupToOrder(matchedP);
+    }
+  }
+
+  // 3. Search Supabase orders table
+  if (supabase && (termUpper || termAlphaNum)) {
+    try {
+      const searchPattern = `%${termUpper}%`;
+      const { data: dbOrders, error: oErr } = await safeSupabaseQuery(() =>
+        supabase
+          .from('orders')
+          .select('*')
+          .or(`id.ilike.${searchPattern},tracking_number.ilike.${searchPattern}`)
+          .limit(10),
+        { label: 'findOrderOrPickup-orders' }
+      );
+
+      if (!oErr && dbOrders && dbOrders.length > 0) {
+        const exact = dbOrders.find(matchesOrder);
+        const resOrder = exact || dbOrders[0];
+        console.log(`[Order Search] Found in Supabase orders: ${resOrder.id}`);
+        return resOrder;
+      }
+    } catch (e: any) {
+      console.warn('[Order Search] Supabase orders query error:', e.message);
+    }
+
+    // 4. Search Supabase pickups table
+    try {
+      const searchPattern = `%${termUpper}%`;
+      const { data: dbPickups, error: pErr } = await safeSupabaseQuery(() =>
+        supabase
+          .from('pickups')
+          .select('*')
+          .ilike('id', searchPattern)
+          .limit(5),
+        { label: 'findOrderOrPickup-pickups' }
+      );
+
+      if (!pErr && dbPickups && dbPickups.length > 0) {
+        const exact = dbPickups.find(matchesPickup);
+        const resPickup = exact || dbPickups[0];
+        console.log(`[Order Search] Found in Supabase pickups: ${resPickup.id}`);
+        return transformPickupToOrder(resPickup);
+      }
+    } catch (e: any) {
+      console.warn('[Order Search] Supabase pickups query error:', e.message);
+    }
+  }
+
+  // 5. Phone lookup if provided
+  if (userPhone) {
+    const digits = userPhone.replace(/\D/g, '');
+    const targetDigits = digits.length >= 10 ? digits.slice(-10) : digits;
+    if (targetDigits.length >= 7) {
+      const isPhoneMatch = (o: any) => {
+        let dest = o.destination;
+        if (typeof dest === 'string') {
+          try { dest = JSON.parse(dest); } catch { dest = {}; }
+        }
+        const ph = (dest?.phone || o.phone || '').toString().replace(/\D/g, '');
+        return ph.length >= 7 && (ph.slice(-10) === targetDigits || ph.includes(targetDigits));
+      };
+
+      const matchedPhone = cachedAllOrders.find(isPhoneMatch) || memOrders.find(isPhoneMatch);
+      if (matchedPhone) return matchedPhone;
+
+      if (supabase) {
+        try {
+          const { data } = await safeSupabaseQuery(() =>
+            supabase
+              .from('orders')
+              .select('*')
+              .ilike('destination->>phone', `%${targetDigits}%`)
+              .order('created_at', { ascending: false })
+              .limit(1),
+            { label: 'findOrderByPhone' }
+          );
+          if (data && data[0]) return data[0];
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+
+  // 6. User email fallback (if user asks "where is my order" without an ID)
+  if (userEmail) {
+    const emailClean = userEmail.toLowerCase().trim();
+    const isEmailMatch = (o: any) => {
+      if ((o.customer_id || '').toLowerCase() === emailClean) return true;
+      let dest = o.destination;
+      if (typeof dest === 'string') {
+        try { dest = JSON.parse(dest); } catch { dest = {}; }
+      }
+      return (dest?.email || '').toLowerCase() === emailClean;
+    };
+
+    const userCached = cachedAllOrders.find(isEmailMatch) || memOrders.find(isEmailMatch);
+    if (userCached) return userCached;
+
+    if (supabase) {
+      try {
+        const { data } = await safeSupabaseQuery(() =>
+          supabase
+            .from('orders')
+            .select('*')
+            .or(`customer_id.eq.${emailClean},destination->>email.eq.${emailClean}`)
+            .order('created_at', { ascending: false })
+            .limit(1),
+          { label: 'findOrderByEmail' }
+        );
+        if (data && data[0]) return data[0];
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  return null;
+}
+
+// Format order into rich tracking context object
+function formatOrderContext(foundOrder: any): any {
+  if (!foundOrder) return null;
+  let destObj = foundOrder.destination;
+  if (typeof destObj === 'string') {
+    try { destObj = JSON.parse(destObj); } catch { destObj = {}; }
+  }
+
+  const trackingData = generateRealTrackingData(foundOrder);
+  const trackingCode = foundOrder.tracking_number || foundOrder.trackingNumber || foundOrder.id;
+  const statusText = foundOrder.shipment_status || foundOrder.shipmentStatus || foundOrder.status || "In Transit";
+  const destCity = destObj?.city || "Destination";
+  const destCountry = destObj?.country || "United States";
+  const estDelivery = foundOrder.shipping_date || foundOrder.shippingDate || trackingData.estimatedDelivery || "In 3-5 business days";
+  const carrier = foundOrder.carrier || "Jiffex Express";
+  const latestEvent = trackingData.events?.[0] || null;
+
+  return {
+    orderId: foundOrder.id,
+    trackingId: trackingCode,
+    trackingNumber: trackingCode,
+    status: statusText,
+    shipmentStatus: statusText,
+    carrier: carrier,
+    origin: trackingData.origin || "Delhi, India",
+    destination: `${destCity}, ${destCountry}`,
+    destCity,
+    destCountry,
+    estimatedDelivery: estDelivery,
+    weight: trackingData.weight || `${foundOrder.total_weight || 2.5} kg`,
+    customerName: destObj?.fullName || foundOrder.customer_name || "Valued Customer",
+    events: trackingData.events || [],
+    latestEvent: latestEvent
+  };
+}
+
 // 1. Live Shipment Status & Tracking Handler
 const handleGetShipmentStatus = async (req: express.Request, res: express.Response) => {
-  console.log(`[OmniDimension Track] Request Method: ${req.method}`);
+  console.log(`[Live Shipment Track] Request Method: ${req.method}`);
   try {
     const params = extractAgentParams(req);
     
-    let orderId = (params.orderId || params.order_id || params.order || '').toString().trim();
-    let trackingId = (params.trackingId || params.tracking_id || params.trackingNumber || params.tracking_number || params.awb || params.id || '').toString().trim();
-    let phone = (params.phone || params.phoneNumber || params.phone_number || params.customerPhone || params.number || '').toString().trim();
-    let query = (params.query || params.search || params.text || '').toString().trim();
+    let orderId = (params.orderId || params.order_id || params.order || params.orderID || params.id || '').toString().trim();
+    let trackingId = (params.trackingId || params.tracking_id || params.trackingNumber || params.tracking_number || params.awb || params.tracking || params.shipmentId || params.shipment_id || '').toString().trim();
+    let phone = (params.phone || params.phoneNumber || params.phone_number || params.customerPhone || params.customer_phone || params.number || '').toString().trim();
+    let query = (params.query || params.search || params.text || params.message || params.input || '').toString().trim();
 
-    // If a generic query was passed, detect if it looks like an order ID or phone
+    // If query was passed and no explicit orderId or trackingId
     if (!orderId && !trackingId && query) {
-      if (query.replace(/\D/g, '').length >= 6) {
+      const extracted = extractOrderIdOrTrackingId(query);
+      if (extracted) {
+        trackingId = extracted;
+      } else if (query.replace(/\D/g, '').length >= 10 && !/[a-zA-Z]/.test(query)) {
         phone = query;
       } else {
         trackingId = query;
       }
     }
 
-    console.log(`[OmniDimension Track] Searching -> orderId: "${orderId}", trackingId: "${trackingId}", phone: "${phone}"`);
+    const searchTerm = trackingId || orderId;
+    console.log(`[Live Shipment Track] Searching -> searchTerm: "${searchTerm}", phone: "${phone}"`);
 
-    let foundOrder: any = null;
+    let foundOrder = await findOrderOrPickupHelper(searchTerm, undefined, phone);
 
-    // 1. Search by orderId or trackingId
-    const primaryTerm = (trackingId || orderId).toUpperCase();
-    if (primaryTerm) {
-      // Memory / cache first
-      foundOrder = cachedAllOrders.find(o => 
-        (o.id && o.id.toUpperCase() === primaryTerm) || 
-        (o.tracking_number && o.tracking_number.toUpperCase() === primaryTerm) ||
-        (o.trackingNumber && o.trackingNumber.toUpperCase() === primaryTerm)
-      ) || memOrders.find(o => 
-        (o.id && o.id.toUpperCase() === primaryTerm) || 
-        (o.tracking_number && o.tracking_number.toUpperCase() === primaryTerm) ||
-        (o.trackingNumber && o.trackingNumber.toUpperCase() === primaryTerm)
-      );
-
-      if (!foundOrder && supabase) {
-        const { data } = await supabase
-          .from('orders')
-          .select('*')
-          .or(`id.ilike.%${primaryTerm}%,tracking_number.ilike.%${primaryTerm}%`)
-          .limit(1)
-          .maybeSingle();
-        if (data) foundOrder = data;
-      }
-    }
-
-    // 2. Search by Phone
-    if (!foundOrder && phone) {
-      const inputDigits = phone.replace(/\D/g, '');
-      const targetDigits =
-        inputDigits.length >= 10
-          ? inputDigits.slice(-10)
-          : inputDigits;
-
-      const isExactPhoneMatch = (o: any) => {
-        let dest = o.destination;
-        if (typeof dest === 'string') {
-          try { dest = JSON.parse(dest); } catch (e) { dest = {}; }
-        }
-        const storedDigits =
-          (dest?.phone || o.phone || '').toString().replace(/\D/g, '');
-        if (storedDigits.length < 7) return false;
-        const storedTarget =
-          storedDigits.length >= 10
-            ? storedDigits.slice(-10)
-            : storedDigits;
-        return storedDigits.length >= 7 && storedTarget === targetDigits;
-      };
-
-      if (inputDigits.length >= 7) {
-        if (supabase) {
-          try {
-            const pattern =
-              '%' + targetDigits.split('').join('%') + '%';
-
-            const { data } = await supabase
-              .from('orders')
-              .select('id, tracking_number, shipment_status, status, shipping_date, carrier, destination, total_weight, created_at, tracking_response')
-              .ilike('destination->>phone', pattern)
-              .order('created_at', { ascending: false })
-              .limit(5);
-
-            if (data && data.length > 0) {
-              foundOrder = data.find(isExactPhoneMatch);
-            }
-          } catch (dbErr: any) {
-            console.warn('[AI Assistant] Supabase phone search error:', dbErr.message);
-          }
-        }
-
-        if (!foundOrder) {
-          foundOrder = cachedAllOrders.find(isExactPhoneMatch) || memOrders.find(isExactPhoneMatch);
-        }
-      }
-    }
-
-    // 3. Fallback: Return the latest active sample order if no term was provided
-    if (!foundOrder && !orderId && !trackingId && !phone) {
+    // Fallback: If no term was provided at all, return the first order so caller gets a valid sample
+    if (!foundOrder && !searchTerm && !phone) {
       foundOrder = cachedAllOrders[0] || memOrders[0];
       if (!foundOrder && supabase) {
         const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -5842,48 +6070,24 @@ const handleGetShipmentStatus = async (req: express.Request, res: express.Respon
     }
 
     if (!foundOrder) {
+      const queryLabel = searchTerm || phone || 'your request';
       return res.status(200).json({
         success: false,
         found: false,
         status: "Not Found",
-        message: `I could not locate any active shipment matching ${primaryTerm || phone || 'your request'}. Please confirm your tracking ID (e.g. JFX-12345) or registered phone number.`,
-        speech: `I could not locate any active shipment matching that tracking ID or phone number. Please check the tracking number on your receipt or provide your phone number.`,
+        message: `I could not locate any active shipment matching ${queryLabel}. Please confirm your Order ID (e.g. BB-XXXXXX, SH-XXXXXX, WO-XXXXXX, PKP-XXXXXX) or Tracking Number (e.g. JFX-XXXXXX).`,
+        speech: `I could not locate any active shipment matching that tracking ID or phone number. Please check the Order ID or tracking number on your receipt.`,
         data: null
       });
     }
 
-    // Prepare structured response
-    let destObj = foundOrder.destination;
-    if (typeof destObj === 'string') {
-      try { destObj = JSON.parse(destObj); } catch (e) { destObj = {}; }
-    }
-
-    const trackingData = generateRealTrackingData(foundOrder);
-    const trackingCode = foundOrder.tracking_number || foundOrder.trackingNumber || foundOrder.id;
-    const statusText = foundOrder.shipment_status || foundOrder.shipmentStatus || foundOrder.status || "In Transit";
-    const destCity = destObj?.city || "London";
-    const destCountry = destObj?.country || "United Kingdom";
-    const estDelivery = foundOrder.shipping_date || foundOrder.shippingDate || trackingData.estimatedDelivery || "in 3-5 business days";
-    const carrier = foundOrder.carrier || "Jiffex Express";
-
-    const speechText = `Shipment ${trackingCode} to ${destCity}, ${destCountry} is currently ${statusText} with ${carrier}. Estimated delivery date is ${estDelivery}.`;
+    const orderCtx = formatOrderContext(foundOrder);
+    const speechText = `Shipment ${orderCtx.trackingId} to ${orderCtx.destination} is currently ${orderCtx.status} with ${orderCtx.carrier}. Estimated delivery date is ${orderCtx.estimatedDelivery}.`;
 
     return res.json({
       success: true,
       found: true,
-      orderId: foundOrder.id,
-      trackingId: trackingCode,
-      trackingNumber: trackingCode,
-      status: statusText,
-      shipmentStatus: statusText,
-      carrier: carrier,
-      origin: trackingData.origin || "Delhi, India",
-      destination: `${destCity}, ${destCountry}`,
-      estimatedDelivery: estDelivery,
-      weight: trackingData.weight || `${foundOrder.total_weight || 2.5} kg`,
-      customerName: destObj?.fullName || foundOrder.customer_name || "Valued Customer",
-      events: trackingData.events || [],
-      latestEvent: trackingData.events?.[0] || null,
+      ...orderCtx,
       message: speechText,
       speech: speechText,
       result: speechText
@@ -6281,6 +6485,131 @@ app.post("/api/support/call-session", async (req, res) => {
     console.error("[Support Call] Network/Internal error creating voice session:", err?.message || err);
     return res.status(503).json({ error: "Failed to connect to voice support service. Please try again." });
   }
+});
+
+// ==========================================
+// JIFFEX SUPPORT TEXT CHAT (Real-Time Tracking + Gemini AI Support)
+// ==========================================
+app.post("/api/support/chat-message", async (req, res) => {
+  const authUser = getAuthenticatedUser(req);
+  const userEmail = authUser?.email || req.body?.userEmail || (req.body?.email) || "customer@jiffex.com";
+
+  const { message, sessionId } = req.body || {};
+  const userMsg = (message || "").toString().trim();
+  const uniqueSessionId = sessionId || `jfx-chat-${userEmail.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now()}`;
+
+  console.log(`[Support Chat] Message from ${userEmail}: "${userMsg}"`);
+
+  // 1. Detect if this message asks for order tracking or mentions an order/tracking ID
+  const extractedId = extractOrderIdOrTrackingId(userMsg);
+  const isTrackingIntent = Boolean(
+    extractedId ||
+    /track|status|where\s+is|shipment|order|package|delivery|parcel|consignment/i.test(userMsg)
+  );
+
+  let foundOrder: any = null;
+  let orderCtx: any = null;
+
+  if (extractedId) {
+    foundOrder = await findOrderOrPickupHelper(extractedId, userEmail);
+  } else if (isTrackingIntent) {
+    // User asked "where is my order" without providing an explicit ID -> look up their latest order by email
+    foundOrder = await findOrderOrPickupHelper(undefined, userEmail);
+  }
+
+  if (foundOrder) {
+    orderCtx = formatOrderContext(foundOrder);
+    console.log(`[Support Chat] Live order located: Order #${orderCtx.orderId} (Tracking: ${orderCtx.trackingId}), Status: ${orderCtx.status}`);
+  } else if (extractedId) {
+    console.log(`[Support Chat] Order search yielded no match for ID: "${extractedId}"`);
+  }
+
+  // 2. Build prompt and query Gemini AI
+  let replyText = "";
+  const ai = getGenAI();
+
+  if (ai && userMsg) {
+    try {
+      const prompt = `You are the official 24/7 Jiffex AI Logistics Support Assistant.
+Jiffex is a leading cross-border logistics provider connecting India and the USA, UK, Canada, UAE, Europe, and Australia.
+Services offered:
+- Doorstep Pickup across India (Delhi NCR, Mumbai, Bangalore, Hyderabad, Pune, Chennai, Kolkata, etc.)
+- Express Cross-Border Shipping (5-7 business days via FedEx, DHL, UPS, and Jiffex Global Network)
+- Indian Virtual Locker & Warehouse Consolidation (free storage up to 30 days)
+- Jiffex Gift & Festival Store (sweets, pooja essentials, handicrafts, clothing shipped worldwide)
+
+Customer Info:
+- Email: ${userEmail}
+
+${orderCtx ? `
+LIVE SHIPMENT STATUS RETRIEVED FROM JIFFEX DATABASE:
+- Order ID: #${orderCtx.orderId}
+- Tracking Number: ${orderCtx.trackingId}
+- Current Status: ${orderCtx.status}
+- Carrier: ${orderCtx.carrier}
+- Destination: ${orderCtx.destination}
+- Estimated Delivery: ${orderCtx.estimatedDelivery}
+- Weight: ${orderCtx.weight}
+${orderCtx.latestEvent ? `- Latest Checkpoint: ${orderCtx.latestEvent.description} (${orderCtx.latestEvent.location} - ${orderCtx.latestEvent.date} ${orderCtx.latestEvent.time})` : ''}
+
+CRITICAL INSTRUCTIONS:
+- The customer asked about their shipment. State the live status warmly, clearly, and concisely.
+- Include the Order ID, Tracking Number, Status, Carrier, Destination, Estimated Delivery, and latest checkpoint.
+- Do NOT say you cannot find tracking info or don't have access to real-time tools, because the exact live shipment details are provided right above.
+` : (extractedId ? `
+NOTE: The customer inquired about Order or Tracking ID "${extractedId}", but no matching record was found in the Jiffex system.
+- Politely inform them that no shipment could be found with ID "${extractedId}".
+- Advise them to double-check their Order ID (typically formatted as BB-XXXXXX, SH-XXXXXX, WO-XXXXXX, or PKP-XXXXXX) or Tracking Number (JFX-XXXXXX) from their order confirmation receipt.
+` : `
+Provide warm, helpful, professional, and concise support. If they need to track an order, encourage them to provide their Order ID (e.g. BB-516104) or Tracking Number (e.g. JFX-12345).
+`)}
+
+Customer Message: "${userMsg}"`;
+
+      const aiRes = await ai.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents: [
+          { role: "user", parts: [{ text: prompt }] }
+        ]
+      });
+
+      replyText = aiRes.text || "";
+    } catch (err: any) {
+      console.warn("[Support Chat] Gemini generation warning:", err.message);
+    }
+  }
+
+  // 3. High-quality deterministic fallback if Gemini is offline or rate limited
+  if (!replyText) {
+    if (orderCtx) {
+      replyText = `📦 **Shipment Status for Order #${orderCtx.orderId}**\n\n` +
+        `• **Current Status:** ${orderCtx.status}\n` +
+        `• **Tracking Number:** ${orderCtx.trackingId}\n` +
+        `• **Carrier:** ${orderCtx.carrier}\n` +
+        `• **Destination:** ${orderCtx.destination}\n` +
+        `• **Estimated Delivery:** ${orderCtx.estimatedDelivery}\n` +
+        `• **Package Weight:** ${orderCtx.weight}\n` +
+        (orderCtx.latestEvent ? `• **Latest Checkpoint:** ${orderCtx.latestEvent.description} (${orderCtx.latestEvent.date})\n\n` : '\n') +
+        `You can also view real-time checkpoints anytime in the Tracking tab. How else can I assist you with this shipment?`;
+    } else if (extractedId) {
+      replyText = `I checked our logistics database, but could not locate an active shipment matching **${extractedId}**.\n\nPlease verify your Order ID (format: \`BB-XXXXXX\`, \`SH-XXXXXX\`, \`WO-XXXXXX\`, or \`PKP-XXXXXX\`) or Tracking Number (\`JFX-XXXXXX\`) from your order confirmation email.`;
+    } else {
+      replyText = "Hello! I am your 24/7 Jiffex Support Assistant. I can help you check your live shipment status, calculate shipping rates to any country, or book a home pickup in India. Please provide your Order ID (e.g. BB-516104) or Tracking Number to track a package.";
+    }
+  }
+
+  return res.json({
+    success: true,
+    sessionId: uniqueSessionId,
+    response: replyText,
+    order: orderCtx || null,
+    prompts: [
+      "Track my shipment",
+      "Check shipping rates to USA",
+      "Book a doorstep pickup",
+      "Prohibited items list"
+    ]
+  });
 });
 
 async function startServer() {

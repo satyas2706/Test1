@@ -1,15 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Mail, HelpCircle, ArrowRight, Sparkles, Truck, Calculator, Calendar, CheckCircle2 } from 'lucide-react';
+import { Mail, HelpCircle, ArrowRight, Sparkles, Truck, Calculator, Calendar, CheckCircle2, MessageSquareText, LogIn } from 'lucide-react';
 import { useJiffexVoiceCall } from '../../hooks/useJiffexVoiceCall';
 import { JiffexVoiceCallPanel } from '../support/JiffexVoiceCallPanel';
+import { JiffexChatPanel } from '../support/JiffexChatPanel';
 
 interface SupportSectionProps {
   currentUser?: any;
   onOpenLogin?: () => void;
+  orders?: any[];
 }
 
-const SupportSection: React.FC<SupportSectionProps> = ({ currentUser, onOpenLogin }) => {
+const SupportSection: React.FC<SupportSectionProps> = ({ currentUser, onOpenLogin, orders = [] }) => {
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
   const isUserLoggedIn = (): boolean => {
     if (currentUser?.email) return true;
     try {
@@ -36,6 +40,18 @@ const SupportSection: React.FC<SupportSectionProps> = ({ currentUser, onOpenLogi
 
   const handleCallSupport = () => {
     voiceCall.startCall(loggedIn);
+  };
+
+  const handleChatWithJiffex = () => {
+    if (!loggedIn) {
+      if (onOpenLogin) {
+        onOpenLogin();
+      } else {
+        window.dispatchEvent(new CustomEvent('jiffex:open-login', { detail: { source: 'support-chat' } }));
+      }
+      return;
+    }
+    setIsChatOpen(true);
   };
 
   const handleSupportContact = () => {
@@ -112,6 +128,25 @@ const SupportSection: React.FC<SupportSectionProps> = ({ currentUser, onOpenLogi
           </ul>
 
           <div className="pt-2 flex flex-wrap items-center gap-4">
+            <button
+              id="btn-chat-jiffex-support-section"
+              type="button"
+              onClick={handleChatWithJiffex}
+              className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-base rounded-2xl shadow-xl shadow-indigo-200 active:scale-95 transition flex items-center justify-center gap-3 cursor-pointer"
+            >
+              {loggedIn ? (
+                <>
+                  <MessageSquareText size={18} />
+                  <span>Chat with Jiffex</span>
+                </>
+              ) : (
+                <>
+                  <LogIn size={18} />
+                  <span>Sign in to Chat with Jiffex</span>
+                </>
+              )}
+            </button>
+
             <JiffexVoiceCallPanel
               idPrefix="btn-call-jiffex-support-section"
               isAuthenticated={loggedIn}
@@ -228,6 +263,15 @@ const SupportSection: React.FC<SupportSectionProps> = ({ currentUser, onOpenLogi
           ))}
         </div>
       </div>
+
+      {/* Jiffex Support Chat Panel (Support Page Only) */}
+      <JiffexChatPanel
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        userEmail={currentUser?.email}
+        onOpenLogin={onOpenLogin}
+        orders={orders}
+      />
     </div>
   );
 };

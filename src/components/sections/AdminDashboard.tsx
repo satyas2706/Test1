@@ -179,10 +179,10 @@ const AdminDashboard = ({
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, currentNewProduct: any, setNewProduct: any) => {
-    const file = e.target.files?.[0];
+    const inputElement = e.target;
+    const file = inputElement.files?.[0];
     if (!file) return;
 
-    const target = e.target;
     setIsUploadingProductImage(true);
     setProductImageUploadError(null);
 
@@ -202,7 +202,7 @@ const AdminDashboard = ({
       }
     } finally {
       setIsUploadingProductImage(false);
-      target.value = '';
+      inputElement.value = '';
     }
   };
 

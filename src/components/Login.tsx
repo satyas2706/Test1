@@ -208,11 +208,11 @@ export const Login: React.FC<LoginProps> = ({ onSuccess, initialEmail = '' }) =>
     if (value.length > 1) {
       const digitsOnly = value.replace(/\D/g, '').slice(0, 6);
       if (digitsOnly.length > 0) {
-        const newOtp = [...otp];
+        const pastedOtp = [...otp];
         for (let i = 0; i < 6; i++) {
-          newOtp[i] = digitsOnly[i] || '';
+          pastedOtp[i] = digitsOnly[i] || '';
         }
-        setOtp(newOtp);
+        setOtp(pastedOtp);
         if (digitsOnly.length === 6) {
           triggerVerification(digitsOnly);
         } else {

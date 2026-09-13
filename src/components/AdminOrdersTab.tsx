@@ -47,57 +47,6 @@ export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
   const [selectedOrderDetail, setSelectedOrderDetail] = useState<Order | null>(null);
   const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
 
-  const handleRefreshAllOrders = async () => {
-    setIsRefreshingOrders(true);
-    try {
-      const refreshed = await api.getAllOrders();
-      if (refreshed === null) {
-        toast.error('Unable to reach server. Please check your connection.');
-      } else if (refreshed.length > 0) {
-        setOrders(refreshed);
-        toast.success(`Successfully loaded ${refreshed.length} total orders from database.`);
-      } else {
-        toast.info('Orders list is up to date.');
-      }
-    } catch (err: any) {
-      toast.error('Failed to refresh orders: ' + err.message);
-    } finally {
-      setIsRefreshingOrders(false);
-    }
-  };
-
-  const handleExportOrdersCsv = () => {
-    try {
-      const headers = ['Order ID', 'Created Date', 'Customer Name', 'Phone', 'Email', 'Origin', 'Destination City', 'Destination Country', 'Fulfillment Status', 'Payment Status', 'Total Weight (kg)', 'Total Cost (INR)', 'Items Count'];
-      const rows = filteredOrdersList.map(o => [
-        `"${o.id}"`,
-        `"${o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-IN') : ''}"`,
-        `"${(o.pickupAddress?.fullName || o.customerName || o.destination?.fullName || '').replace(/"/g, '""')}"`,
-        `"${(o.pickupAddress?.phone || o.phone || o.destination?.phone || '').replace(/"/g, '""')}"`,
-        `"${(o.pickupAddress?.email || o.email || o.destination?.email || '').replace(/"/g, '""')}"`,
-        `"${(o.pickupAddress?.addressLine1 || (o as any).address || 'Hyderabad').replace(/"/g, '""')}"`,
-        `"${(o.destination?.city || 'Hyderabad').replace(/"/g, '""')}"`,
-        `"${(o.destination?.country || 'India').replace(/"/g, '""')}"`,
-        `"${o.status}"`,
-        `"${o.paymentStatus || 'Pending'}"`,
-        o.totalWeight || 0,
-        o.totalCost || 0,
-        o.items?.length || 0
-      ]);
-      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `jiffex_orders_export_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      toast.success(`Exported ${rows.length} orders to CSV.`);
-    } catch (e) {
-      toast.error('Failed to export orders to CSV.');
-    }
-  };
-
   const filteredOrdersList = useMemo(() => {
     return orders.filter(order => {
       // Status Filter
@@ -162,6 +111,57 @@ export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
       return 0;
     });
   }, [orders, ordersSearch, ordersStatusFilter, ordersPaymentFilter, ordersSort]);
+
+  const handleRefreshAllOrders = async () => {
+    setIsRefreshingOrders(true);
+    try {
+      const refreshed = await api.getAllOrders();
+      if (refreshed === null) {
+        toast.error('Unable to reach server. Please check your connection.');
+      } else if (refreshed.length > 0) {
+        setOrders(refreshed);
+        toast.success(`Successfully loaded ${refreshed.length} total orders from database.`);
+      } else {
+        toast.info('Orders list is up to date.');
+      }
+    } catch (err: any) {
+      toast.error('Failed to refresh orders: ' + err.message);
+    } finally {
+      setIsRefreshingOrders(false);
+    }
+  };
+
+  const handleExportOrdersCsv = () => {
+    try {
+      const headers = ['Order ID', 'Created Date', 'Customer Name', 'Phone', 'Email', 'Origin', 'Destination City', 'Destination Country', 'Fulfillment Status', 'Payment Status', 'Total Weight (kg)', 'Total Cost (INR)', 'Items Count'];
+      const rows = filteredOrdersList.map(o => [
+        `"${o.id}"`,
+        `"${o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-IN') : ''}"`,
+        `"${(o.pickupAddress?.fullName || o.customerName || o.destination?.fullName || '').replace(/"/g, '""')}"`,
+        `"${(o.pickupAddress?.phone || o.phone || o.destination?.phone || '').replace(/"/g, '""')}"`,
+        `"${(o.pickupAddress?.email || o.email || o.destination?.email || '').replace(/"/g, '""')}"`,
+        `"${(o.pickupAddress?.addressLine1 || (o as any).address || 'Hyderabad').replace(/"/g, '""')}"`,
+        `"${(o.destination?.city || 'Hyderabad').replace(/"/g, '""')}"`,
+        `"${(o.destination?.country || 'India').replace(/"/g, '""')}"`,
+        `"${o.status}"`,
+        `"${o.paymentStatus || 'Pending'}"`,
+        o.totalWeight || 0,
+        o.totalCost || 0,
+        o.items?.length || 0
+      ]);
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `jiffex_orders_export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success(`Exported ${rows.length} orders to CSV.`);
+    } catch (e) {
+      toast.error('Failed to export orders to CSV.');
+    }
+  };
 
   return (
     <div className="space-y-6">
