@@ -9542,65 +9542,62 @@ export default function App() {
                         What is Jiffex?
                       </h2>
                       <p className="text-xs sm:text-sm font-bold text-indigo-700 tracking-tight">
-                        Your bridge between India and the world.
+                        Your connection to India, made simple.
                       </p>
                     </div>
 
-                    <div className="space-y-2 text-xs text-slate-600 leading-relaxed text-center sm:text-left">
+                    <div className="text-xs text-slate-600 leading-relaxed text-center sm:text-left">
                       <p>
-                        Jiffex makes it easy to get the things you love from India delivered to you abroad. Shop from your favorite Indian stores, send your own items, or tell us where to collect them.
-                      </p>
-                      <p className="font-medium text-slate-700">
-                        We pick up, consolidate, securely pack, and ship everything to your doorstep — so you don't have to manage multiple deliveries or shipping arrangements.
+                        Jiffex makes it easy to shop, collect, consolidate, and ship from India to your doorstep abroad.
                       </p>
                     </div>
 
-                    <div className="space-y-2.5 pt-1">
-                      <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-800">
-                        With Jiffex, you can:
-                      </h4>
-
-                      <div className="space-y-2">
-                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
-                          <span className="text-base shrink-0 select-none">🛍️</span>
-                          <div className="text-xs leading-snug">
-                            <span className="font-black text-slate-900">Shop in India</span>
-                            <span className="text-slate-600"> — Buy from Indian stores and ship internationally.</span>
-                          </div>
+                    <div className="space-y-2 pt-0.5">
+                      <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                        <span className="text-base shrink-0 select-none">🛍️</span>
+                        <div className="text-xs leading-snug space-y-0.5">
+                          <div className="font-black text-slate-900">Shop Directly on Jiffex</div>
+                          <div className="text-slate-600">Discover products from India in the Jiffex Store, order directly through our app/website, and we’ll take care of delivery to you.</div>
                         </div>
+                      </div>
 
-                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
-                          <span className="text-base shrink-0 select-none">🚚</span>
-                          <div className="text-xs leading-snug">
-                            <span className="font-black text-slate-900">Let us collect</span>
-                            <span className="text-slate-600"> — We can pick up items from your home, a store, or another location.</span>
-                          </div>
+                      <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                        <span className="text-base shrink-0 select-none">🛒</span>
+                        <div className="text-xs leading-snug space-y-0.5">
+                          <div className="font-black text-slate-900">Shop From Your Favorite Stores</div>
+                          <div className="text-slate-600">Want something that isn’t in the Jiffex Store? Shop from your favorite Indian stores and let Jiffex handle the shipping.</div>
                         </div>
+                      </div>
 
-                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
-                          <span className="text-base shrink-0 select-none">📦</span>
-                          <div className="text-xs leading-snug">
-                            <span className="font-black text-slate-900">Combine & Ship</span>
-                            <span className="text-slate-600"> — Consolidate multiple items into one international shipment.</span>
-                          </div>
+                      <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                        <span className="text-base shrink-0 select-none">🚚</span>
+                        <div className="text-xs leading-snug space-y-0.5">
+                          <div className="font-black text-slate-900">We Can Collect It for You</div>
+                          <div className="text-slate-600">Bought something from a local store or have items with family or friends? We can arrange collection and bring everything together.</div>
                         </div>
+                      </div>
 
-                        <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
-                          <span className="text-base shrink-0 select-none">🌎</span>
-                          <div className="text-xs leading-snug">
-                            <span className="font-black text-slate-900">Track to your doorstep</span>
-                            <span className="text-slate-600"> — Follow your shipment until delivery.</span>
-                          </div>
+                      <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                        <span className="text-base shrink-0 select-none">📦</span>
+                        <div className="text-xs leading-snug space-y-0.5">
+                          <div className="font-black text-slate-900">Combine & Ship</div>
+                          <div className="text-slate-600">Have items from different places? We consolidate them into one shipment, securely pack them, and ship them internationally.</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                        <span className="text-base shrink-0 select-none">🌎</span>
+                        <div className="text-xs leading-snug space-y-0.5">
+                          <div className="font-black text-slate-900">Delivered to Your Doorstep</div>
+                          <div className="text-slate-600">From India to your home abroad, Jiffex makes the entire journey simple and convenient.</div>
                         </div>
                       </div>
                     </div>
 
                     <div className="pt-1">
                       <div className="p-3 bg-gradient-to-r from-indigo-50 via-amber-50/60 to-indigo-50 border border-indigo-100 rounded-xl text-center shadow-xs">
-                        <p className="text-xs font-black text-indigo-950 tracking-tight flex items-center justify-center gap-1.5">
-                          <span>🇮🇳</span>
-                          <span>India is closer with Jiffex.</span>
-                          <span>✈️</span>
+                        <p className="text-xs font-black text-indigo-950 tracking-tight">
+                          Shop India. Combine everything. Ship with Jiffex.
                         </p>
                       </div>
                     </div>
