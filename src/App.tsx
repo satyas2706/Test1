@@ -158,7 +158,7 @@ import { MobileCartSection } from './components/sections/MobileCartSection';
 import { useJiffexVoiceCall } from './hooks/useJiffexVoiceCall';
 import { JiffexVoiceCallPanel } from './components/support/JiffexVoiceCallPanel';
 import { JiffexChatPanel } from './components/support/JiffexChatPanel';
-import jiffexDeliveryBoy from './assets/images/jiffex_delivery_boy_1789302397188.jpg';
+import jiffexHeroCustom from './assets/images/jiffex_hero_custom_1789308756197.jpg';
 
 const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 1 day (24 hours)
 
@@ -9513,18 +9513,29 @@ export default function App() {
                   </motion.p>
                 </div>
 
-                {/* Mobile View Only: Business image placed between tagline and What is Jiffex */}
+                {/* Mobile View Only: Hero banner placed between tagline and What is Jiffex */}
                 <motion.div 
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.15 }}
                   className="block md:hidden w-full max-w-xl mx-auto pt-2"
                 >
-                  <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-blue-400/30 bg-blue-950/40">
+                  <div className="relative w-full rounded-2xl overflow-hidden shadow-xl border border-slate-200/80 bg-white flex items-center justify-center">
                     <img 
-                      src={jiffexDeliveryBoy} 
-                      alt="Jiffex delivery courier partner in blue uniform delivering parcel box" 
-                      className="w-full h-48 sm:h-56 object-cover"
+                      src={jiffexHeroCustom || "/image.png"}
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (target.src !== '/image.png') {
+                          target.src = '/image.png';
+                        } else if (target.src !== '/hero.png') {
+                          target.src = '/hero.png';
+                        } else if (target.src !== '/hero.jpg') {
+                          target.src = '/hero.jpg';
+                        }
+                      }}
+                      alt="JIFFEX - From India to Your Doorstep with Love" 
+                      className="w-full aspect-[16/9] object-contain block"
+                      style={{ objectFit: 'contain', aspectRatio: '16/9' }}
                       referrerPolicy="no-referrer" 
                     />
                   </div>
@@ -9555,41 +9566,41 @@ export default function App() {
                     <div className="space-y-2 pt-0.5">
                       <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
                         <span className="text-base shrink-0 select-none">🛍️</span>
-                        <div className="text-xs leading-snug space-y-0.5">
-                          <div className="font-black text-slate-900">Shop Directly on Jiffex</div>
-                          <div className="text-slate-600">Discover products from India in the Jiffex Store, order directly through our app/website, and we’ll take care of delivery to you.</div>
+                        <div className="text-xs leading-snug">
+                          <span className="font-black text-slate-900">Shop Directly on Jiffex</span>
+                          <span className="text-slate-600"> — Discover products from India in the Jiffex Store, order directly through our app/website, and we’ll take care of delivery to you.</span>
                         </div>
                       </div>
 
                       <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
                         <span className="text-base shrink-0 select-none">🛒</span>
-                        <div className="text-xs leading-snug space-y-0.5">
-                          <div className="font-black text-slate-900">Shop From Your Favorite Stores</div>
-                          <div className="text-slate-600">Want something that isn’t in the Jiffex Store? Shop from your favorite Indian stores and let Jiffex handle the shipping.</div>
+                        <div className="text-xs leading-snug">
+                          <span className="font-black text-slate-900">Shop From Your Favorite Stores</span>
+                          <span className="text-slate-600"> — Want something that isn’t in the Jiffex Store? Shop from your favorite Indian stores and let Jiffex handle the shipping.</span>
                         </div>
                       </div>
 
                       <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
                         <span className="text-base shrink-0 select-none">🚚</span>
-                        <div className="text-xs leading-snug space-y-0.5">
-                          <div className="font-black text-slate-900">We Can Collect It for You</div>
-                          <div className="text-slate-600">Bought something from a local store or have items with family or friends? We can arrange collection and bring everything together.</div>
+                        <div className="text-xs leading-snug">
+                          <span className="font-black text-slate-900">We Can Collect It for You</span>
+                          <span className="text-slate-600"> — Bought something from a local store or have items with family or friends? We can arrange collection and bring everything together.</span>
                         </div>
                       </div>
 
                       <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
                         <span className="text-base shrink-0 select-none">📦</span>
-                        <div className="text-xs leading-snug space-y-0.5">
-                          <div className="font-black text-slate-900">Combine & Ship</div>
-                          <div className="text-slate-600">Have items from different places? We consolidate them into one shipment, securely pack them, and ship them internationally.</div>
+                        <div className="text-xs leading-snug">
+                          <span className="font-black text-slate-900">Combine & Ship</span>
+                          <span className="text-slate-600"> — Have items from different places? We consolidate them into one shipment, securely pack them, and ship them internationally.</span>
                         </div>
                       </div>
 
                       <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200/70">
                         <span className="text-base shrink-0 select-none">🌎</span>
-                        <div className="text-xs leading-snug space-y-0.5">
-                          <div className="font-black text-slate-900">Delivered to Your Doorstep</div>
-                          <div className="text-slate-600">From India to your home abroad, Jiffex makes the entire journey simple and convenient.</div>
+                        <div className="text-xs leading-snug">
+                          <span className="font-black text-slate-900">Delivered to Your Doorstep</span>
+                          <span className="text-slate-600"> — From India to your home abroad, Jiffex makes the entire journey simple and convenient.</span>
                         </div>
                       </div>
                     </div>

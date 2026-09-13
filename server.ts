@@ -526,6 +526,36 @@ function getRazorpay() {
   return razorpayInstance;
 }
 
+// Static resolver for uploaded hero image direct names
+app.get(["/image.png", "/image.jpg", "/image*", "/ChatGPT%20Image*", "/ChatGPT*", "/hero.png", "/hero.jpg"], (req, res, next) => {
+  const dirs = [
+    path.join(process.cwd(), "public"),
+    path.join(process.cwd(), "src/assets/images"),
+    process.cwd()
+  ];
+  for (const dir of dirs) {
+    if (fs.existsSync(dir)) {
+      try {
+        const files = fs.readdirSync(dir);
+        const match = files.find(f => 
+          f.toLowerCase() === "image.png" ||
+          f.toLowerCase() === "image.jpg" ||
+          f.includes("ChatGPT") || 
+          f.includes("07_37") || 
+          f.toLowerCase() === "hero.png" || 
+          f.toLowerCase() === "hero.jpg"
+        );
+        if (match) {
+          return res.sendFile(path.join(dir, match));
+        }
+      } catch (err) {
+        // continue
+      }
+    }
+  }
+  next();
+});
+
 // Get Razorpay Config Key ID (so client-side does not need VITE_ prefixes)
 app.get("/api/payment/razorpay/config", (req, res) => {
   const keyId = process.env.RAZORPAY_KEY_ID;
