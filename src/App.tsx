@@ -158,7 +158,7 @@ import { MobileCartSection } from './components/sections/MobileCartSection';
 import { useJiffexVoiceCall } from './hooks/useJiffexVoiceCall';
 import { JiffexVoiceCallPanel } from './components/support/JiffexVoiceCallPanel';
 import { JiffexChatPanel } from './components/support/JiffexChatPanel';
-import jiffexDoorstepShipping from './assets/images/jiffex_shipping_doorstep_1789287238407.jpg';
+import jiffexDeliveryBoy from './assets/images/jiffex_delivery_boy_1789302397188.jpg';
 
 const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 1 day (24 hours)
 
@@ -9513,7 +9513,7 @@ export default function App() {
                   </motion.p>
                 </div>
 
-                {/* Mobile View Only: Business image placed between tagline and How Jiffex Works */}
+                {/* Mobile View Only: Business image placed between tagline and What is Jiffex */}
                 <motion.div 
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -9522,20 +9522,11 @@ export default function App() {
                 >
                   <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-blue-400/30 bg-blue-950/40">
                     <img 
-                      src={jiffexDoorstepShipping} 
-                      alt="Jiffex Doorstep International Courier and Packaging Partner" 
-                      className="w-full h-44 sm:h-52 object-cover"
+                      src={jiffexDeliveryBoy} 
+                      alt="Jiffex delivery courier partner in blue uniform delivering parcel box" 
+                      className="w-full h-48 sm:h-56 object-cover"
                       referrerPolicy="no-referrer" 
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent pointer-events-none" />
-                    <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white text-[10px] font-bold">
-                      <span className="bg-blue-600/90 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-blue-400/30 flex items-center gap-1 shadow-sm">
-                        <span>📦</span> Doorstep Pickup & Packing
-                      </span>
-                      <span className="bg-amber-500 text-slate-950 font-black px-2.5 py-0.5 rounded-full shadow-sm">
-                        India to Abroad
-                      </span>
-                    </div>
                   </div>
                 </motion.div>
               </div>
@@ -9784,11 +9775,88 @@ export default function App() {
                   <span>Choose how you want to send:</span>
                 </motion.p>
 
+                {/* Mobile View Only: Schedule Pickup, Drop Off package, Shop & Ship side by side without descriptions */}
+                <motion.div 
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="grid md:hidden grid-cols-3 gap-2 w-full max-w-xl mx-auto px-1"
+                >
+                  {/* Item 1: Schedule Pickup */}
+                  <div 
+                    onClick={() => navigateTo('pickup')}
+                    className="relative cursor-pointer bg-white border border-slate-200/90 hover:border-indigo-300 p-2.5 rounded-2xl shadow-md flex flex-col items-center justify-between text-center gap-2 group active:scale-95 transition-all min-h-[142px]"
+                  >
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10 whitespace-nowrap">
+                      <span className="px-1.5 py-0.5 bg-amber-500 text-white text-[7px] font-black uppercase tracking-wider rounded-full shadow-xs">
+                        Popular
+                      </span>
+                    </div>
+                    <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center shrink-0 mt-1 group-hover:scale-105 transition-transform">
+                      <Truck className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div className="flex-1 flex items-center justify-center">
+                      <h3 className="font-black text-xs text-slate-900 leading-tight">
+                        Schedule Pickup
+                      </h3>
+                    </div>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); navigateTo('pickup'); }}
+                      className="w-full py-1.5 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-all text-[10px] shadow-xs active:scale-95"
+                    >
+                      Schedule
+                    </button>
+                  </div>
+
+                  {/* Item 2: Drop Off package */}
+                  <div 
+                    onClick={() => navigateTo('warehouse')}
+                    className="cursor-pointer bg-white border border-slate-200/90 hover:border-emerald-300 p-2.5 rounded-2xl shadow-md flex flex-col items-center justify-between text-center gap-2 group active:scale-95 transition-all min-h-[142px]"
+                  >
+                    <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0 mt-1 group-hover:scale-105 transition-transform">
+                      <Package className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div className="flex-1 flex items-center justify-center">
+                      <h3 className="font-black text-xs text-slate-900 leading-tight">
+                        Drop Off package
+                      </h3>
+                    </div>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); navigateTo('warehouse'); }}
+                      className="w-full py-1.5 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-all text-[10px] shadow-xs active:scale-95"
+                    >
+                      Drop Off
+                    </button>
+                  </div>
+
+                  {/* Item 3: Shop & Ship */}
+                  <div 
+                    onClick={() => navigateTo('store')}
+                    className="cursor-pointer bg-white border border-slate-200/90 hover:border-amber-300 p-2.5 rounded-2xl shadow-md flex flex-col items-center justify-between text-center gap-2 group active:scale-95 transition-all min-h-[142px]"
+                  >
+                    <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center shrink-0 mt-1 group-hover:scale-105 transition-transform">
+                      <ShoppingBag className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <div className="flex-1 flex items-center justify-center">
+                      <h3 className="font-black text-xs text-slate-900 leading-tight">
+                        Shop & Ship
+                      </h3>
+                    </div>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); navigateTo('store'); }}
+                      className="w-full py-1.5 bg-amber-500 text-white rounded-lg font-bold hover:bg-amber-600 transition-all text-[10px] shadow-xs active:scale-95"
+                    >
+                      Shop Now
+                    </button>
+                  </div>
+                </motion.div>
+
+                {/* Desktop, Laptop & Tablet View Only: Full cards with descriptions */}
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
-                  className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-6 max-w-5xl mx-auto w-full px-1 sm:px-0"
+                  className="hidden md:grid md:grid-cols-3 gap-4 md:gap-6 max-w-5xl mx-auto w-full px-1 sm:px-0"
                 >
                   {/* Card 1: Pickup from Home */}
                   <div 
