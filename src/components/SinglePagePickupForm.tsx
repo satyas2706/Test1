@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Truck, 
@@ -121,6 +121,17 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
   const [showProhibitedModal, setShowProhibitedModal] = useState(false);
   const [dateStartIndex, setDateStartIndex] = useState(0);
   const [isReviewing, setIsReviewing] = useState(false);
+  const [isMobileScreen, setIsMobileScreen] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobileScreen(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const reviewRef = React.useRef<HTMLDivElement>(null);
 
   const forceScrollToTop = React.useCallback(() => {
@@ -230,9 +241,11 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
     pickupName && pickupName.trim() !== '' &&
     pickupPhone && pickupPhone.trim().length === 10 &&
     pickupAddress.street && pickupAddress.street.trim() !== '' &&
-    pickupAddress.city && pickupAddress.city.trim() !== '' &&
-    pickupAddress.state && pickupAddress.state.trim() !== '' &&
-    pickupAddress.zip && pickupAddress.zip.trim() !== ''
+    (isMobileScreen || (
+      pickupAddress.city && pickupAddress.city.trim() !== '' &&
+      pickupAddress.state && pickupAddress.state.trim() !== '' &&
+      pickupAddress.zip && pickupAddress.zip.trim() !== ''
+    ))
   );
 
   const isScheduleComplete = Boolean(
@@ -263,20 +276,22 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
       return;
     }
     if (!pickupAddress.street || !pickupAddress.street.trim()) {
-      toast.error('Please enter street address for pickup.');
+      toast.error(isMobileScreen ? 'Please enter address for pickup.' : 'Please enter street address for pickup.');
       return;
     }
-    if (!pickupAddress.city || !pickupAddress.city.trim()) {
-      toast.error('Please enter city for pickup address.');
-      return;
-    }
-    if (!pickupAddress.state || !pickupAddress.state.trim()) {
-      toast.error('Please enter state for pickup address.');
-      return;
-    }
-    if (!pickupAddress.zip || !pickupAddress.zip.trim()) {
-      toast.error('Please enter PIN code for pickup address.');
-      return;
+    if (!isMobileScreen) {
+      if (!pickupAddress.city || !pickupAddress.city.trim()) {
+        toast.error('Please enter city for pickup address.');
+        return;
+      }
+      if (!pickupAddress.state || !pickupAddress.state.trim()) {
+        toast.error('Please enter state for pickup address.');
+        return;
+      }
+      if (!pickupAddress.zip || !pickupAddress.zip.trim()) {
+        toast.error('Please enter PIN code for pickup address.');
+        return;
+      }
     }
 
     if (!selectedPickupDate) {
@@ -398,7 +413,10 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
               <div className="sm:col-span-2">
                 <span className="text-slate-400 font-semibold block text-[10px]">Full Address:</span>
                 <span className="font-medium text-slate-800 block leading-snug">
-                  {pickupAddress.street}, {pickupAddress.city}, {pickupAddress.state} - {pickupAddress.zip}
+                  {pickupAddress.street}
+                  {pickupAddress.city ? `, ${pickupAddress.city}` : ''}
+                  {pickupAddress.state ? `, ${pickupAddress.state}` : ''}
+                  {pickupAddress.zip ? ` - ${pickupAddress.zip}` : ''}
                 </span>
               </div>
               {pickupSpecialInstructions && (
@@ -488,27 +506,27 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
   }
 
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-5 md:space-y-8 pb-16">
       {/* Page Hero / Header Banner */}
-      <div className="bg-gradient-to-r from-[#0A142F] to-[#12224A] text-white p-8 md:p-10 rounded-[2.5rem] shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-r from-[#0A142F] to-[#12224A] text-white p-5 sm:p-6 md:p-10 rounded-2xl md:rounded-[2.5rem] shadow-xl relative overflow-hidden">
         <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-lg shadow-amber-500/20 shrink-0">
-              <Truck size={32} />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-lg shadow-amber-500/20 shrink-0">
+              <Truck className="w-6 h-6 md:w-8 md:h-8" />
             </div>
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-black uppercase tracking-wider mb-2 border border-amber-500/30">
+              <div className="hidden md:inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-black uppercase tracking-wider mb-2 border border-amber-500/30">
                 <Sparkles size={12} /> Doorstep Collection
               </div>
-              <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight">Schedule a Home Pickup</h2>
-              <p className="text-slate-300 text-sm font-medium mt-1">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight">Schedule a Home Pickup</h2>
+              <p className="text-slate-300 text-xs sm:text-sm font-medium mt-0.5 md:mt-1">
                 Tell us what you're shipping, when you'd like pickup, and where we should collect it.
               </p>
             </div>
           </div>
           
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="hidden md:flex flex-wrap items-center gap-3">
             <button
               onClick={() => setShowRequirementsModal(true)}
               className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/10 flex items-center gap-2 cursor-pointer"
@@ -526,7 +544,7 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
       </div>
 
       {/* Main Form Container */}
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-4xl mx-auto space-y-5 md:space-y-8">
         
         {/* SECTION 1: Item Category & Weight */}
           <div className="p-5 md:p-6 rounded-3xl border bg-white border-slate-200 shadow-sm space-y-4">
@@ -700,7 +718,9 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
             {/* Time Window Selector */}
             <div className="space-y-3">
               <label className="block text-xs font-black text-slate-700 uppercase tracking-wider">Select Time Window</label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              
+              {/* Desktop / Laptop / Tablet (md and above) - All time windows */}
+              <div className="hidden md:grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {PICKUP_SLOTS.find(s => s.date === selectedPickupDate)?.times.map(time => {
                   const isSelected = selectedPickupTime === time;
                   let isPast = false;
@@ -728,6 +748,39 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                       }`}
                     >
                       <span className="text-xs font-black">{time}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Mobile View Only - Exactly 3 time windows */}
+              <div className="grid grid-cols-3 gap-2 md:hidden">
+                {['9–11 AM', '1–3 PM', '5–7 PM'].map(time => {
+                  const isSelected = selectedPickupTime === time;
+                  let isPast = false;
+                  if (selectedPickupDate < istDateStr) {
+                    isPast = true;
+                  } else if (selectedPickupDate === istDateStr) {
+                    const hourMap: Record<string, number> = {
+                      '9–11 AM': 9, '1–3 PM': 13, '5–7 PM': 17
+                    };
+                    const startHour = hourMap[time] || 9;
+                    if (istNow.getHours() >= startHour) isPast = true;
+                  }
+
+                  return (
+                    <button
+                      key={time}
+                      type="button"
+                      disabled={isPast}
+                      onClick={() => setSelectedPickupTime(time)}
+                      className={`py-3 px-1 rounded-2xl border-2 transition-all text-center flex flex-col items-center justify-center ${
+                        isPast ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-100 text-slate-300' :
+                        isSelected ? 'border-amber-500 bg-amber-500/10 text-amber-900 font-black shadow-sm' : 
+                        'border-slate-100 bg-slate-50 text-slate-600 hover:border-slate-200'
+                      }`}
+                    >
+                      <span className="text-xs font-black whitespace-nowrap">{time}</span>
                     </button>
                   );
                 })}
@@ -795,17 +848,21 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
               </div>
 
               <div className="md:col-span-2 space-y-1.5">
-                <label className="block text-xs font-bold text-slate-600">Street Address *</label>
+                <label className="block text-xs font-bold text-slate-600">
+                  <span className="md:hidden">Address *</span>
+                  <span className="hidden md:inline">Street Address *</span>
+                </label>
                 <input 
                   type="text" 
                   className="w-full p-3.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-amber-500 outline-none bg-slate-50 focus:bg-white transition-all font-medium text-sm text-slate-900 placeholder:text-slate-300 placeholder:font-light"
-                  placeholder="Flat, House no., Building, Street / Landmark"
+                  placeholder={isMobileScreen ? "Complete pickup address" : "Flat, House no., Building, Street / Landmark"}
                   value={pickupAddress.street}
                   onChange={(e) => setPickupAddress({...pickupAddress, street: e.target.value})}
                 />
               </div>
 
-              <div className="space-y-1.5">
+              {/* City - Desktop/Tablet only, hidden on mobile */}
+              <div className="space-y-1.5 hidden md:block">
                 <label className="block text-xs font-bold text-slate-600">City *</label>
                 <input 
                   type="text" 
@@ -816,7 +873,8 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* State & PIN Code - Desktop/Tablet only, hidden on mobile */}
+              <div className="hidden md:grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-slate-600">State *</label>
                   <input 

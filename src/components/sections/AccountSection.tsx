@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { User, Mail, Phone, MapPin, Save, UserCheck, ShieldCheck, CreditCard, Copy, Check } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Save, UserCheck, ShieldCheck, CreditCard, Copy, Check, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface AccountSectionProps {
@@ -14,9 +14,10 @@ interface AccountSectionProps {
   } | null;
   onUpdateProfile: (updatedData: { name: string; email: string; phone: string; address: string }) => void;
   customerWarehouseId: string;
+  onLogout?: () => void;
 }
 
-const AccountSection = ({ currentUser, onUpdateProfile, customerWarehouseId }: AccountSectionProps) => {
+const AccountSection = ({ currentUser, onUpdateProfile, customerWarehouseId, onLogout }: AccountSectionProps) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -153,6 +154,19 @@ const AccountSection = ({ currentUser, onUpdateProfile, customerWarehouseId }: A
                 <span>Access to standard shipping rates, live shipment tracker, and continuous email updates.</span>
               </div>
             </div>
+
+            {onLogout && (
+              <div className="pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-600 rounded-xl font-bold text-xs transition-colors border border-red-100"
+                >
+                  <LogOut size={15} />
+                  <span>Sign Out of Account</span>
+                </button>
+              </div>
+            )}
           </motion.div>
         </div>
 

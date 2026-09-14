@@ -18529,10 +18529,10 @@ export default function App() {
 
         {/* Navigation */}
         <nav className="bg-white/95 border-b border-slate-100 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.04)] sticky top-0 z-[100] backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 md:h-20 flex items-center justify-between gap-4 flex-nowrap">
-            {/* Mobile View Logo - Only visible below md screens */}
+          <div className="max-w-7xl mx-auto px-2.5 sm:px-4 md:px-6 lg:px-8 h-14 md:h-20 flex items-center justify-between gap-1.5 sm:gap-2 md:gap-4 flex-nowrap">
+            {/* Mobile View Logo - Only visible below md screens (Zoomed 25%) */}
             <div 
-              className="flex md:hidden items-center gap-2 cursor-pointer shrink-0 origin-left scale-[1.3] pl-0.5 mr-3" 
+              className="flex md:hidden items-center cursor-pointer shrink-0 origin-left scale-[1.25] pl-0.5 mr-1" 
               onClick={() => {
                 if (currentUser?.role === 'admin' || currentUser?.role === 'Admin') navigateTo('admin');
                 else if (currentUser?.role === 'agent' || currentUser?.role === 'Agent') {
@@ -18790,11 +18790,11 @@ export default function App() {
           </div>
 
             {/* Mobile View Group - Only visible below md screens */}
-            <div className="flex md:hidden items-center gap-2 ml-auto shrink-0">
+            <div className="flex md:hidden items-center gap-2 sm:gap-2.5 ml-auto shrink-0">
               {currentUser?.role !== 'agent' && (
                 <button 
                   onClick={handleQuickQuoteClick}
-                  className="flex items-center gap-1 text-[11px] font-extrabold uppercase tracking-wider text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 px-2.5 py-1.5 rounded-xl shadow-sm active:scale-95 transition-all text-nowrap shrink-0"
+                  className="flex items-center gap-1.5 text-[11px] sm:text-xs font-extrabold uppercase tracking-wider text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl shadow-xs active:scale-95 transition-all text-nowrap shrink-0"
                 >
                   <Calculator size={13} className="shrink-0 stroke-[2.5]" />
                   <span>Quick Quote</span>
@@ -18804,11 +18804,12 @@ export default function App() {
               {currentUser?.role !== 'agent' && (
                 <button 
                   onClick={() => navigateTo('cart')}
-                  className={`relative p-1.5 rounded-xl transition-all shrink-0 ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600'}`}
+                  aria-label="View Cart"
+                  className={`relative p-2 rounded-xl transition-all shrink-0 ${activeTab === 'cart' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   <ShoppingCart size={18} className="shrink-0" />
                   {cartItems.length > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 bg-indigo-600 text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-black border border-white">
+                    <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[8px] min-w-[15px] h-[15px] px-0.5 rounded-full flex items-center justify-center font-black border border-white shadow-xs">
                       {cartItems.reduce((acc, item) => acc + (item.quantity || 1), 0)}
                     </span>
                   )}
@@ -18818,17 +18819,22 @@ export default function App() {
               {/* Mobile Profile Or Sign In icon button */}
               {currentUser ? (
                 <button 
-                  className="w-7 h-7 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-black text-[10px] shrink-0"
-                  onClick={() => navigateTo('account')}
+                  onClick={handleLogout}
+                  title="Sign Out"
+                  aria-label="Sign Out"
+                  className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 active:bg-red-200 border border-red-200/80 px-3 py-1.5 rounded-xl transition-all shrink-0"
                 >
-                  {currentUser.name.charAt(0).toUpperCase()}
+                  <LogOut size={13} className="shrink-0 stroke-[2.2]" />
+                  <span>Sign Out</span>
                 </button>
               ) : (
                 <button 
                   onClick={() => { setLoginTriggerSource('default'); setShowLoginModal(true); }}
-                  className="p-1.5 text-slate-600 hover:bg-slate-50 rounded-xl"
+                  className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 border border-indigo-100 px-3 py-1.5 rounded-xl transition-all shrink-0"
+                  aria-label="Sign In"
                 >
-                  <UserIcon size={18} />
+                  <UserIcon size={14} className="shrink-0" />
+                  <span>Sign In</span>
                 </button>
               )}
             </div>
@@ -18841,7 +18847,7 @@ export default function App() {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="lg:hidden border-t border-slate-100 bg-white overflow-hidden"
+                className="md:hidden border-t border-slate-100 bg-white overflow-hidden"
               >
                 <div className="flex flex-col p-4 gap-2">
                   <div className="px-3 py-4 mb-2 border-b border-slate-50">
@@ -19097,6 +19103,7 @@ export default function App() {
                 currentUser={currentUser} 
                 onUpdateProfile={handleUpdateProfile}
                 customerWarehouseId={customerWarehouseId}
+                onLogout={handleLogout}
               />
             )}
           </motion.div>
