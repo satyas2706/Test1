@@ -393,6 +393,19 @@ export const MobileStoreSection: React.FC<MobileStoreSectionProps> = ({
                     </span>
                   </div>
 
+                  <AnimatePresence>
+                    {itemCount > 0 && (
+                      <motion.div 
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        className="absolute top-2.5 right-10 z-10 w-6 h-6 bg-jiffex-orange text-white rounded-full flex items-center justify-center text-[9px] font-bold shadow-lg border-2 border-white"
+                      >
+                        {itemCount}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
                   <button
                     onClick={() => toggleWishlist(product.id, product.name)}
                     className="absolute top-2 right-2 z-10 w-7 h-7 bg-white/95 backdrop-blur rounded-full flex items-center justify-center border border-slate-100 shadow-sm active:scale-90 transition-transform"
@@ -437,43 +450,11 @@ export const MobileStoreSection: React.FC<MobileStoreSectionProps> = ({
                       </div>
                     </div>
 
-                    {/* Controls Row */}
-                    <div className="mt-3 pt-2.5 border-t border-slate-50 flex items-center justify-between gap-1.5">
-                      {/* Quantity Selector Counter */}
-                      <div className="flex items-center bg-slate-100 rounded-lg p-0.5 h-8 shrink-0">
-                        <button
-                          onClick={() => {
-                            if (itemCount > 0) {
-                              removeStoreItem(product.name);
-                              toast.info(`Removed 1 "${product.name}" from cart`);
-                            }
-                          }}
-                          className="w-6 h-6 rounded-md flex items-center justify-center text-slate-500 hover:bg-white active:scale-90 transition-transform"
-                        >
-                          <Minus size={11} className="stroke-[2.5]" />
-                        </button>
-                        <span className="w-5 text-center text-[11px] font-black text-slate-900">
-                          {itemCount}
-                        </span>
-                        <button
-                          onClick={() => {
-                            addItem({
-                              name: product.name,
-                              weight: product.weight,
-                              price: product.price,
-                              image: product.image,
-                              estimatedDelivery: product.estimatedDelivery
-                            }, 'Store');
-                            toast.success(`Added 1 "${product.name}" to cart!`);
-                          }}
-                          className="w-6 h-6 rounded-md flex items-center justify-center text-slate-500 hover:bg-white active:scale-90 transition-transform"
-                        >
-                          <Plus size={11} className="stroke-[2.5]" />
-                        </button>
-                      </div>
-
-                      {/* Vibrant Blue Add Button with Cart icon */}
-                      <button
+                    {/* Centered Add Button - Single + symbol same as Featured from Shop */}
+                    <div className="flex justify-center mt-3 pt-2 border-t border-slate-50">
+                      <motion.button 
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
                         onClick={() => {
                           addItem({
                             name: product.name,
@@ -484,11 +465,11 @@ export const MobileStoreSection: React.FC<MobileStoreSectionProps> = ({
                           }, 'Store');
                           toast.success(`"${product.name}" added to cart!`);
                         }}
-                        className="flex-1 h-8 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-lg flex items-center justify-center gap-1 px-1.5 active:scale-95 transition-all shadow-sm"
+                        className="w-8 h-8 bg-deep-blue text-white rounded-full flex items-center justify-center hover:bg-slate-800 transition-all shadow-lg shadow-deep-blue/10 cursor-pointer"
+                        aria-label={`Add ${product.name} to cart`}
                       >
-                        <ShoppingCart size={11} />
-                        <span>Add</span>
-                      </button>
+                        <Plus className="w-3.5 h-3.5" />
+                      </motion.button>
                     </div>
                   </div>
                 </div>
