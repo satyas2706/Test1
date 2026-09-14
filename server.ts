@@ -55,7 +55,7 @@ if (process.env.TWILIO_WHATSAPP_NUMBER) {
 }
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.TEST_PORT ? parseInt(process.env.TEST_PORT, 10) : 3000;
 
 // Initialize Supabase Client
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
@@ -6665,6 +6665,17 @@ async function startServer() {
   console.log("Configuring Vite middleware...");
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    // Explicit static SEO routes in development mode
+    app.get("/sitemap.xml", (req, res) => {
+      res.type("application/xml");
+      res.sendFile(path.join(process.cwd(), "public", "sitemap.xml"));
+    });
+
+    app.get("/robots.txt", (req, res) => {
+      res.type("text/plain");
+      res.sendFile(path.join(process.cwd(), "public", "robots.txt"));
+    });
+
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -6673,6 +6684,17 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
+
+    app.get("/sitemap.xml", (req, res) => {
+      res.type("application/xml");
+      res.sendFile(path.join(distPath, "sitemap.xml"));
+    });
+
+    app.get("/robots.txt", (req, res) => {
+      res.type("text/plain");
+      res.sendFile(path.join(distPath, "robots.txt"));
+    });
+
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
