@@ -5593,18 +5593,24 @@ export default function App() {
   const pickupHeaderRef = React.useRef<HTMLDivElement>(null);
 
   const scrollToQuote = () => {
-    const el = isMobile 
-      ? (document.getElementById('mobile-quick-quote') || document.getElementById('desktop-quick-quote') || quoteRef.current)
-      : (document.getElementById('desktop-quick-quote') || document.getElementById('mobile-quick-quote') || quoteRef.current);
-    if (el) {
-      if (!isMobile) {
-        const yOffset = -100; // 80px sticky nav + 20px comfortable breathing space
-        const y = el.getBoundingClientRect().top + window.scrollY + yOffset;
-        window.scrollTo({ top: y, behavior: 'smooth' });
-      } else {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    requestAnimationFrame(() => {
+      const isMobileView = window.innerWidth < 768 || isMobile;
+      const el = isMobileView 
+        ? (document.getElementById('mobile-quick-quote') || document.getElementById('desktop-quick-quote') || quoteRef.current)
+        : (document.getElementById('desktop-quick-quote') || document.getElementById('mobile-quick-quote') || quoteRef.current);
+      if (el) {
+        if (!isMobileView) {
+          const yOffset = -100; // 80px sticky nav + 20px comfortable breathing space
+          const y = el.getBoundingClientRect().top + window.scrollY + yOffset;
+          window.scrollTo({ top: y, behavior: 'smooth' });
+        } else {
+          // Mobile header is 56px (h-14). Scroll with offset -70px so the Quick Quote header is clearly visible below the sticky nav
+          const yOffset = -70;
+          const y = el.getBoundingClientRect().top + window.scrollY + yOffset;
+          window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+        }
       }
-    }
+    });
   };
 
   const handleQuickQuoteClick = () => {
@@ -10048,9 +10054,9 @@ export default function App() {
             </div>
           </motion.div>
 
-          <div ref={quoteRef} id="desktop-quick-quote" className="grid grid-cols-1 lg:grid-cols-5 gap-6 md:gap-12 items-start px-2 sm:px-4 md:px-0">
+          <div ref={quoteRef} id="desktop-quick-quote" className="grid grid-cols-1 lg:grid-cols-5 gap-6 md:gap-12 items-start px-2 sm:px-4 md:px-0 scroll-mt-20 md:scroll-mt-28">
             <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white p-4 sm:p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-xl md:shadow-indigo-500/5 border border-slate-100">
+              <div id="mobile-quick-quote" className="bg-white p-4 sm:p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-xl md:shadow-indigo-500/5 border border-slate-100 scroll-mt-20">
                 <h2 className="text-lg sm:text-xl md:text-2xl font-black mb-4 md:mb-6 flex items-center gap-2 uppercase tracking-wider text-slate-900">
                   <Calculator className="w-5 h-5 md:w-6 md:h-6 text-indigo-600 shrink-0" /> Quick Quote
                 </h2>
