@@ -505,6 +505,20 @@ async function sendNotification(userId: string, event: string, message: string, 
   await Promise.all(promises);
 }
 
+// 301 Permanent Redirect for legacy domains (jiffex.in, www.jiffex.in) to primary domain https://www.jiffex.shop
+app.use((req, res, next) => {
+  const host = (req.headers['x-forwarded-host'] || req.headers.host || '').toString().toLowerCase();
+  const hostname = host.split(':')[0];
+
+  if (hostname === 'jiffex.in' || hostname === 'www.jiffex.in') {
+    const targetUrl = `https://www.jiffex.shop${req.originalUrl || '/'}`;
+    console.log(`[SEO 301 Redirect] Legacy domain ${hostname} -> ${targetUrl}`);
+    return res.redirect(301, targetUrl);
+  }
+
+  next();
+});
+
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));

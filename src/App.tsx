@@ -5566,6 +5566,147 @@ export default function App() {
     }
   }, []);
 
+  // Public SEO Pages configuration for canonical URLs and metadata
+  const PUBLIC_PAGE_SEO: Record<string, { path: string; canonical: string; title: string; description: string }> = {
+    home: {
+      path: '/',
+      canonical: 'https://www.jiffex.shop/',
+      title: 'Jiffex | India to USA Shipping & International Courier',
+      description: 'Ship from India to the USA with Jiffex. Schedule a pickup, consolidate packages, shop in India, get shipping quotes and track your international shipments.',
+    },
+    pickup: {
+      path: '/pickup',
+      canonical: 'https://www.jiffex.shop/pickup',
+      title: 'Schedule a Home Pickup in India | Jiffex',
+      description: 'Schedule a doorstep pickup anywhere in India. Ship packages securely to the USA, UK, Canada, UAE, and worldwide with Jiffex.',
+    },
+    store: {
+      path: '/store',
+      canonical: 'https://www.jiffex.shop/store',
+      title: 'Shop in India & Ship Worldwide | Jiffex Store',
+      description: 'Shop authentic Indian sweets, Pooja essentials, clothing, and gifts. International courier delivery to your doorstep across the globe.',
+    },
+    warehouse: {
+      path: '/warehouse',
+      canonical: 'https://www.jiffex.shop/warehouse',
+      title: 'Indian Virtual Locker & Warehouse Consolidation | Jiffex',
+      description: 'Get your own virtual Indian address. Store packages for up to 30 days free, consolidate multiple orders, and save on international shipping.',
+    },
+    track: {
+      path: '/tracking',
+      canonical: 'https://www.jiffex.shop/tracking',
+      title: 'Track Your International Shipment | Jiffex',
+      description: 'Track your cross-border package live with real-time milestone checkpoints from pickup in India to final delivery.',
+    },
+    support: {
+      path: '/support',
+      canonical: 'https://www.jiffex.shop/support',
+      title: '24/7 Customer Support | Jiffex Global Logistics',
+      description: 'Get help with international courier rates, shipment tracking, customs inquiries, or home pickup bookings with Jiffex.',
+    },
+    about: {
+      path: '/about',
+      canonical: 'https://www.jiffex.shop/about',
+      title: 'About Jiffex | Global Logistics & Cross-Border Courier',
+      description: 'Discover how Jiffex is transforming cross-border parcel delivery and ecommerce fulfillment between India and the world.',
+    },
+  };
+
+  // Synchronize route pathname on initial load and handle browser navigation
+  useEffect(() => {
+    const rawPath = (window.location.pathname || '/').toLowerCase().replace(/\/+$/, '') || '/';
+    const pathToTab: Record<string, Tab> = {
+      '/': 'home',
+      '/pickup': 'pickup',
+      '/store': 'store',
+      '/warehouse': 'warehouse',
+      '/track': 'track',
+      '/tracking': 'track',
+      '/support': 'support',
+      '/about': 'about',
+      '/why-jiffex': 'about',
+    };
+    if (pathToTab[rawPath] && pathToTab[rawPath] !== activeTab) {
+      setActiveTab(pathToTab[rawPath]);
+    }
+
+    const handlePopState = () => {
+      const curPath = (window.location.pathname || '/').toLowerCase().replace(/\/+$/, '') || '/';
+      if (pathToTab[curPath]) {
+        setActiveTab(pathToTab[curPath]);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Update canonical tag, document title, and SEO meta tags per active tab
+  useEffect(() => {
+    let canonicalLink = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canonicalLink) {
+      canonicalLink = document.createElement('link');
+      canonicalLink.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonicalLink);
+    }
+
+    let robotsMeta = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
+    if (!robotsMeta) {
+      robotsMeta = document.createElement('meta');
+      robotsMeta.setAttribute('name', 'robots');
+      document.head.appendChild(robotsMeta);
+    }
+
+    let descMeta = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (!descMeta) {
+      descMeta = document.createElement('meta');
+      descMeta.setAttribute('name', 'description');
+      document.head.appendChild(descMeta);
+    }
+
+    let ogUrlMeta = document.querySelector('meta[property="og:url"]') as HTMLMetaElement | null;
+    if (!ogUrlMeta) {
+      ogUrlMeta = document.createElement('meta');
+      ogUrlMeta.setAttribute('property', 'og:url');
+      document.head.appendChild(ogUrlMeta);
+    }
+
+    let ogTitleMeta = document.querySelector('meta[property="og:title"]') as HTMLMetaElement | null;
+    if (!ogTitleMeta) {
+      ogTitleMeta = document.createElement('meta');
+      ogTitleMeta.setAttribute('property', 'og:title');
+      document.head.appendChild(ogTitleMeta);
+    }
+
+    let ogDescMeta = document.querySelector('meta[property="og:description"]') as HTMLMetaElement | null;
+    if (!ogDescMeta) {
+      ogDescMeta = document.createElement('meta');
+      ogDescMeta.setAttribute('property', 'og:description');
+      document.head.appendChild(ogDescMeta);
+    }
+
+    const seo = PUBLIC_PAGE_SEO[activeTab];
+
+    if (seo) {
+      document.title = seo.title;
+      descMeta.content = seo.description;
+      canonicalLink.setAttribute('href', seo.canonical);
+      ogUrlMeta.content = seo.canonical;
+      ogTitleMeta.content = seo.title;
+      ogDescMeta.content = seo.description;
+      robotsMeta.content = 'index, follow';
+
+      // Keep URL path synchronized without reload
+      if (window.location.pathname !== seo.path && !window.location.search) {
+        window.history.replaceState(null, '', seo.path);
+      }
+    } else {
+      // Private/admin/account/order-specific pages that should not be indexed
+      canonicalLink.removeAttribute('href');
+      robotsMeta.content = 'noindex, nofollow';
+      document.title = `Jiffex | ${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}`;
+    }
+  }, [activeTab]);
+
   // Scroll to top when pickup step or tab changes
   useEffect(() => {
     if (activeTab === 'pickup' && activePickupStep >= 1) {
