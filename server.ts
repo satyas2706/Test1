@@ -55,6 +55,7 @@ if (process.env.TWILIO_WHATSAPP_NUMBER) {
 }
 
 const app = express();
+app.set('trust proxy', true);
 const PORT = process.env.TEST_PORT ? parseInt(process.env.TEST_PORT, 10) : 3000;
 
 // Initialize Supabase Client
@@ -438,7 +439,7 @@ async function sendNotification(userId: string, event: string, message: string, 
         const pickupDate = recipientInfo?.pickupDate || 'Scheduled Date';
         const pickupTime = recipientInfo?.pickupTime || 'Scheduled Time';
         const pickupAddress = recipientInfo?.pickupAddress || 'Your Address';
-        const appUrl = process.env.APP_URL || "https://www.jiffex.com";
+        const appUrl = process.env.APP_URL || "https://www.jiffex.shop";
         const trackingUrl = `${appUrl}?tab=track&id=${orderId}`;
 
         subject = `Pickup Scheduled: Your Jiffex Appointment ${orderId}`;
@@ -478,7 +479,7 @@ async function sendNotification(userId: string, event: string, message: string, 
     Best regards,<br>
     <strong>The Jiffex Team</strong><br>
     Jiffex Shipping & Logistics<br>
-    <a href="https://www.jiffex.com" style="color: #4f46e5; text-decoration: none;">www.jiffex.com</a>
+    <a href="https://www.jiffex.shop" style="color: #4f46e5; text-decoration: none;">www.jiffex.shop</a>
   </p>
 </div>
         `;
@@ -507,12 +508,15 @@ async function sendNotification(userId: string, event: string, message: string, 
 
 // 301 Permanent Redirect for legacy domains (jiffex.in, www.jiffex.in) to primary domain https://www.jiffex.shop
 app.use((req, res, next) => {
-  const host = (req.headers['x-forwarded-host'] || req.headers.host || '').toString().toLowerCase();
-  const hostname = host.split(':')[0];
+  const forwardedHost = (req.headers['x-forwarded-host'] as string || '').split(',')[0].trim();
+  const hostHeader = (req.headers.host || '').toString().trim();
+  const rawHost = (forwardedHost || hostHeader || req.hostname || '').toLowerCase();
+  const hostname = rawHost.split(':')[0].replace(/\.+$/, '');
 
   if (hostname === 'jiffex.in' || hostname === 'www.jiffex.in') {
-    const targetUrl = `https://www.jiffex.shop${req.originalUrl || '/'}`;
-    console.log(`[SEO 301 Redirect] Legacy domain ${hostname} -> ${targetUrl}`);
+    const pathAndQuery = req.originalUrl || '/';
+    const targetUrl = `https://www.jiffex.shop${pathAndQuery}`;
+    console.log(`[SEO 301 Redirect] ${req.method} ${hostname}${pathAndQuery} -> 301 -> ${targetUrl}`);
     return res.redirect(301, targetUrl);
   }
 
@@ -2717,7 +2721,7 @@ app.patch("/api/orders/:orderId", async (req, res) => {
     // Send WhatsApp/Email notification if order status was changed in PATCH updates
     if (updates.status !== undefined && data) {
       try {
-        const message = `*Jiffex Shipment Update* 📦\n\nYour order #${orderId.slice(0, 8)} status has changed to: *${updates.status}*\n\nTrack here: ${process.env.APP_URL || 'https://jiffex.com'}/track?id=${orderId}`;
+        const message = `*Jiffex Shipment Update* 📦\n\nYour order #${orderId.slice(0, 8)} status has changed to: *${updates.status}*\n\nTrack here: ${process.env.APP_URL || 'https://www.jiffex.shop'}/track?id=${orderId}`;
         await sendNotification(
           data.customer_id || '',
           "Order Status Updated",
@@ -2797,7 +2801,7 @@ app.patch("/api/orders/:orderId/status", async (req, res) => {
     // 3. Send notification if order was found
     if (order) {
       try {
-        const message = `*Jiffex Shipment Update*\n\nYour order #${orderId.slice(0, 8)} status has changed to: *${status}*\n\nTrack here: ${process.env.APP_URL || 'https://jiffex.com'}/track?id=${orderId}`;
+        const message = `*Jiffex Shipment Update*\n\nYour order #${orderId.slice(0, 8)} status has changed to: *${status}*\n\nTrack here: ${process.env.APP_URL || 'https://www.jiffex.shop'}/track?id=${orderId}`;
         
         await sendNotification(
           order.customer_id,
@@ -3151,7 +3155,7 @@ app.post("/api/order-confirmation", async (req, res) => {
     const orderIdStr = String(order.id || '');
     const isPrefixed = ['SH-', 'SW-', 'PH-', 'BB-'].some(p => orderIdStr.startsWith(p));
     const trackingId = isPrefixed ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
-    const appUrl = process.env.APP_URL || "https://www.jiffex.com";
+    const appUrl = process.env.APP_URL || "https://www.jiffex.shop";
     const trackingUrl = `${appUrl}?tab=track&id=${trackingId}`;
     
     const isPaid = order.paymentStatus === 'Paid' || order.payment_status === 'Paid';

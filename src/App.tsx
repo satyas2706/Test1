@@ -5566,7 +5566,22 @@ export default function App() {
     }
   }, []);
 
-  // Public SEO Pages configuration for canonical URLs and metadata
+  // Client-side domain safety check: if loaded under legacy domain jiffex.in, redirect immediately to www.jiffex.shop
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location) {
+      const currentHost = window.location.hostname.toLowerCase();
+      if (currentHost === 'jiffex.in' || currentHost === 'www.jiffex.in') {
+        const newLocation = `https://www.jiffex.shop${window.location.pathname}${window.location.search}${window.location.hash}`;
+        window.location.replace(newLocation);
+      }
+    }
+  }, []);
+
+  // Public SEO Pages configuration for self-referencing canonical URLs and metadata
+  const currentPathname = typeof window !== 'undefined' ? (window.location.pathname || '/').toLowerCase().replace(/\/+$/, '') || '/' : '/';
+  const trackPath = currentPathname.startsWith('/track') && !currentPathname.startsWith('/tracking') ? '/track' : '/tracking';
+  const aboutPath = currentPathname === '/why-jiffex' ? '/why-jiffex' : '/about';
+
   const PUBLIC_PAGE_SEO: Record<string, { path: string; canonical: string; title: string; description: string }> = {
     home: {
       path: '/',
@@ -5593,8 +5608,8 @@ export default function App() {
       description: 'Get your own virtual Indian address. Store packages for up to 30 days free, consolidate multiple orders, and save on international shipping.',
     },
     track: {
-      path: '/tracking',
-      canonical: 'https://www.jiffex.shop/tracking',
+      path: trackPath,
+      canonical: `https://www.jiffex.shop${trackPath}`,
       title: 'Track Your International Shipment | Jiffex',
       description: 'Track your cross-border package live with real-time milestone checkpoints from pickup in India to final delivery.',
     },
@@ -5605,8 +5620,8 @@ export default function App() {
       description: 'Get help with international courier rates, shipment tracking, customs inquiries, or home pickup bookings with Jiffex.',
     },
     about: {
-      path: '/about',
-      canonical: 'https://www.jiffex.shop/about',
+      path: aboutPath,
+      canonical: `https://www.jiffex.shop${aboutPath}`,
       title: 'About Jiffex | Global Logistics & Cross-Border Courier',
       description: 'Discover how Jiffex is transforming cross-border parcel delivery and ecommerce fulfillment between India and the world.',
     },
