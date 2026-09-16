@@ -734,7 +734,7 @@ export const api = {
             tracking_response,
             destination
           `)
-          .eq('id', orderId)
+          .or(`id.ilike.${orderId},tracking_number.ilike.${orderId}`)
           .maybeSingle();
         if (!error && data) {
           let tr = data.tracking_response;
@@ -767,14 +767,8 @@ export const api = {
     }
 
     return {
-      success: true,
-      isLive: false,
-      trackingData: {
-        id: orderId,
-        carrier: 'Internal Network',
-        status: 'In Warehouse',
-        events: []
-      }
+      success: false,
+      error: 'Order not found'
     };
   },
 
