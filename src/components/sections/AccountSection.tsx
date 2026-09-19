@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { User, Mail, Phone, MapPin, Save, UserCheck, ShieldCheck, CreditCard, Copy, Check, LogOut } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Save, UserCheck, ShieldCheck, CreditCard, Copy, Check, LogOut, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface AccountSectionProps {
@@ -15,9 +15,11 @@ interface AccountSectionProps {
   onUpdateProfile: (updatedData: { name: string; email: string; phone: string; address: string }) => void;
   customerWarehouseId: string;
   onLogout?: () => void;
+  isMobile?: boolean;
+  onOpenLogin?: () => void;
 }
 
-const AccountSection = ({ currentUser, onUpdateProfile, customerWarehouseId, onLogout }: AccountSectionProps) => {
+const AccountSection = ({ currentUser, onUpdateProfile, customerWarehouseId, onLogout, isMobile, onOpenLogin }: AccountSectionProps) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -110,26 +112,29 @@ const AccountSection = ({ currentUser, onUpdateProfile, customerWarehouseId, onL
                 </div>
               </div>
 
-              <div className="w-full bg-white/5 rounded-2xl p-4 border border-white/10 text-left space-y-2">
-                <div className="text-[10px] text-slate-300 font-extrabold uppercase tracking-widest leading-none">
-                  Your Hub Warehouse ID
+              {/* HUB Warehouse ID: on mobile version, visible ONLY for signed-in customers. Laptop/Desktop/Tablet (md and above) view remains untouched */}
+              {(!isMobile || Boolean(currentUser)) && (
+                <div className={`w-full bg-white/5 rounded-2xl p-4 border border-white/10 text-left space-y-2 ${!currentUser ? 'hidden md:block' : ''}`}>
+                  <div className="text-[10px] text-slate-300 font-extrabold uppercase tracking-widest leading-none">
+                    Your Hub Warehouse ID
+                  </div>
+                  <div className="flex items-center justify-between gap-2 mt-1">
+                    <span className="font-mono text-base font-black text-indigo-300 tracking-wider">
+                      {customerWarehouseId}
+                    </span>
+                    <button 
+                      onClick={handleCopyId}
+                      type="button"
+                      className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-all text-white/80 hover:text-white"
+                    >
+                      {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-normal font-medium pt-1">
+                    Use this Hub ID when purchasing items from foreign stores (Amazon, eBay etc.) for storage and consolidation.
+                  </p>
                 </div>
-                <div className="flex items-center justify-between gap-2 mt-1">
-                  <span className="font-mono text-base font-black text-indigo-300 tracking-wider">
-                    {customerWarehouseId}
-                  </span>
-                  <button 
-                    onClick={handleCopyId}
-                    type="button"
-                    className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-all text-white/80 hover:text-white"
-                  >
-                    {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                  </button>
-                </div>
-                <p className="text-[10px] text-slate-400 leading-normal font-medium pt-1">
-                  Use this Hub ID when purchasing items from foreign stores (Amazon, eBay etc.) for storage and consolidation.
-                </p>
-              </div>
+              )}
             </div>
           </motion.div>
 
@@ -155,131 +160,165 @@ const AccountSection = ({ currentUser, onUpdateProfile, customerWarehouseId, onL
               </div>
             </div>
 
-            {onLogout && (
-              <div className="pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-600 rounded-xl font-bold text-xs transition-colors border border-red-100"
-                >
-                  <LogOut size={15} />
-                  <span>Sign Out of Account</span>
-                </button>
-              </div>
-            )}
+            {/* Desktop / Laptop / Tablet (md and above): keep original code completely untouched */}
+            <div className="hidden md:block">
+              {onLogout && (
+                <div className="pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-600 rounded-xl font-bold text-xs transition-colors border border-red-100"
+                  >
+                    <LogOut size={15} />
+                    <span>Sign Out of Account</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Mobile version (< md): If signed in, show Sign Out. If not signed in, show Sign In instead of 'Sign Out of Account' */}
+            <div className="block md:hidden">
+              {currentUser ? (
+                onLogout && (
+                  <div className="pt-2 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={onLogout}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-600 rounded-xl font-bold text-xs transition-colors border border-red-100"
+                    >
+                      <LogOut size={15} />
+                      <span>Sign Out of Account</span>
+                    </button>
+                  </div>
+                )
+              ) : (
+                <div className="pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={onOpenLogin}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl font-bold text-xs transition-colors shadow-sm shadow-indigo-100"
+                  >
+                    <LogIn size={15} />
+                    <span>Sign In to Account</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </motion.div>
         </div>
 
-        {/* Right column - Account Form */}
-        <div className="md:col-span-2">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-sm"
-          >
-            <h4 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2">
-              Personal Information
-            </h4>
+        {/* Right column - Account Form: On mobile version, Personal Information should be visible ONLY for signed-in customers. Laptop, desktop, and tablet (md and above) view remains completely untouched */}
+        {(!isMobile || Boolean(currentUser)) && (
+          <div className={`md:col-span-2 ${!currentUser ? 'hidden md:block' : ''}`}>
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white p-8 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-sm"
+            >
+              <h4 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2">
+                Personal Information
+              </h4>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {/* Full Name */}
-                <div className="space-y-2">
-                  <label htmlFor="fullName" className="text-xs font-extrabold text-slate-700 uppercase tracking-widest block">
-                    Full Name
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                      <User size={18} />
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {/* Full Name */}
+                  <div className="space-y-2">
+                    <label htmlFor="fullName" className="text-xs font-extrabold text-slate-700 uppercase tracking-widest block">
+                      Full Name
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <User size={18} />
+                      </div>
+                      <input
+                        id="fullName"
+                        type="text"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        placeholder="Enter customer name"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        required
+                      />
                     </div>
-                    <input
-                      id="fullName"
-                      type="text"
-                      value={name}
-                      onChange={e => setName(e.target.value)}
-                      placeholder="Enter customer name"
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                      required
-                    />
+                  </div>
+
+                  {/* Email Address */}
+                  <div className="space-y-2">
+                    <label htmlFor="email" className="text-xs font-extrabold text-slate-700 uppercase tracking-widest block">
+                      Email Address
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <Mail size={18} />
+                      </div>
+                      <input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        placeholder="customer@example.com"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Mobile No / Phone */}
+                  <div className="space-y-2 sm:col-span-2">
+                    <label htmlFor="mobile" className="text-xs font-extrabold text-slate-700 uppercase tracking-widest block">
+                      Mobile/Phone Number
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-bold text-xs select-none">
+                        <Phone size={18} />
+                      </div>
+                      <input
+                        id="mobile"
+                        type="tel"
+                        value={phone}
+                        onChange={e => setPhone(e.target.value)}
+                        placeholder="e.g. +91 98765 43210"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Address Line */}
+                  <div className="space-y-2 sm:col-span-2">
+                    <label htmlFor="address" className="text-xs font-extrabold text-slate-700 uppercase tracking-widest block">
+                      Default Shipping/Pickup Address
+                    </label>
+                    <div className="relative">
+                      <div className="absolute top-3.5 left-3.5 pointer-events-none text-slate-400">
+                        <MapPin size={18} />
+                      </div>
+                      <textarea
+                        id="address"
+                        value={address}
+                        onChange={e => setAddress(e.target.value)}
+                        placeholder="Enter flat/room/house number, building, street, and landmark details here"
+                        rows={3}
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {/* Email Address */}
-                <div className="space-y-2">
-                  <label htmlFor="email" className="text-xs font-extrabold text-slate-700 uppercase tracking-widest block">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                      <Mail size={18} />
-                    </div>
-                    <input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                      placeholder="customer@example.com"
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                      required
-                    />
-                  </div>
+                <div className="pt-4 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-2xl font-bold font-sans text-sm transition-all shadow-md shadow-indigo-600/15"
+                  >
+                    <Save size={16} />
+                    {isSaving ? 'Saving Changes...' : 'Save Profile Details'}
+                  </button>
                 </div>
-
-                {/* Mobile No / Phone */}
-                <div className="space-y-2 sm:col-span-2">
-                  <label htmlFor="mobile" className="text-xs font-extrabold text-slate-700 uppercase tracking-widest block">
-                    Mobile/Phone Number
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-bold text-xs select-none">
-                      <Phone size={18} />
-                    </div>
-                    <input
-                      id="mobile"
-                      type="tel"
-                      value={phone}
-                      onChange={e => setPhone(e.target.value)}
-                      placeholder="e.g. +91 98765 43210"
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Address Line */}
-                <div className="space-y-2 sm:col-span-2">
-                  <label htmlFor="address" className="text-xs font-extrabold text-slate-700 uppercase tracking-widest block">
-                    Default Shipping/Pickup Address
-                  </label>
-                  <div className="relative">
-                    <div className="absolute top-3.5 left-3.5 pointer-events-none text-slate-400">
-                      <MapPin size={18} />
-                    </div>
-                    <textarea
-                      id="address"
-                      value={address}
-                      onChange={e => setAddress(e.target.value)}
-                      placeholder="Enter flat/room/house number, building, street, and landmark details here"
-                      rows={3}
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-4 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-2xl font-bold font-sans text-sm transition-all shadow-md shadow-indigo-600/15"
-                >
-                  <Save size={16} />
-                  {isSaving ? 'Saving Changes...' : 'Save Profile Details'}
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
       </div>
     </div>
   );

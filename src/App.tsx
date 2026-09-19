@@ -18120,6 +18120,11 @@ export default function App() {
                 onUpdateProfile={handleUpdateProfile}
                 customerWarehouseId={customerWarehouseId}
                 onLogout={handleLogout}
+                isMobile={isMobile}
+                onOpenLogin={() => {
+                  setLoginTriggerSource('default');
+                  setShowLoginModal(true);
+                }}
               />
             )}
           </motion.div>
@@ -18748,6 +18753,10 @@ export default function App() {
                 <button
                   onClick={() => {
                     setShowAccountMenu(false);
+                    if (!currentUser) {
+                      setLoginTriggerSource('default');
+                      setShowLoginModal(true);
+                    }
                     navigateTo('account');
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
@@ -18757,8 +18766,12 @@ export default function App() {
                     <UserIcon size={22} />
                   </div>
                   <div>
-                    <h4 className="font-extrabold text-sm text-indigo-950">My Account</h4>
-                    <p className="text-xs text-indigo-700/80 mt-0.5">View your profile details and preferences</p>
+                    <h4 className="font-extrabold text-sm text-indigo-950">
+                      {!currentUser ? 'Sign In / My Account' : 'My Account'}
+                    </h4>
+                    <p className="text-xs text-indigo-700/80 mt-0.5">
+                      {!currentUser ? 'Sign in to view your account and HUB Warehouse ID' : 'View your profile details and preferences'}
+                    </p>
                   </div>
                 </button>
 
