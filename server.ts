@@ -2292,10 +2292,18 @@ app.post("/api/orders", async (req, res) => {
       }
     }
 
+    const totalItemQty = Array.isArray(req.body.items) 
+      ? req.body.items.reduce((sum: number, it: any) => sum + (Number(it.quantity) || (Array.isArray(it.ids) && it.ids.length > 0 ? it.ids.length : 1)), 0)
+      : (Number(req.body.itemCount) || 0);
+
+    const isExplicitNonPickupOrder = finalId && (String(finalId).toUpperCase().startsWith('SH-') || String(finalId).toUpperCase().startsWith('WH-') || String(finalId).toUpperCase().startsWith('SW-'));
+
     // Merge extra details inside the JSONB destination mapping to preserve them completely
     const sanitizedDestination = {
       ...parsedDestination,
-      pickupType: req.body.pickup_type || req.body.pickupType || parsedDestination.pickupType,
+      itemCount: totalItemQty,
+      totalItems: totalItemQty,
+      pickupType: isExplicitNonPickupOrder ? undefined : (req.body.pickup_type || req.body.pickupType || parsedDestination.pickupType),
       assignedAgent: req.body.assigned_agent || req.body.assignedAgent || parsedDestination.assignedAgent,
       assignedAgentId: req.body.assigned_agent_id || req.body.assignedAgentId || parsedDestination.assignedAgentId,
       languagePreference: req.body.language_preference || req.body.languagePreference || parsedDestination.languagePreference,
@@ -3051,6 +3059,28 @@ www.jiffex.shop
   }
 });
 
+// API: Download/view Invoice PDF (identical to the PDF attachment sent in email)
+app.post("/api/invoice/download-pdf", async (req, res) => {
+  const { order, companyDetails } = req.body;
+  if (!order) {
+    return res.status(400).json({ error: "Order details are missing" });
+  }
+  try {
+    const pdfBuffer = await generateInvoicePDF(order, companyDetails);
+    const orderIdStr = String(order.id || '');
+    const isPrefixed = ['SH-', 'SW-', 'PH-', 'BB-'].some(p => orderIdStr.startsWith(p));
+    const trackingId = isPrefixed ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="Invoice_${trackingId}.pdf"`);
+    res.setHeader("Content-Length", pdfBuffer.length);
+    res.send(pdfBuffer);
+  } catch (err: any) {
+    console.error("[Invoice PDF Download] Error generating PDF:", err);
+    res.status(500).json({ error: "Failed to generate invoice PDF" });
+  }
+});
+
 app.post("/api/invoice/send-consolidated-pdf", async (req, res) => {
   const { email, orders, companyDetails } = req.body;
   if (!orders || !Array.isArray(orders) || orders.length === 0) {
@@ -3518,6 +3548,24 @@ async function generateConsolidatedInvoicePDF(orders: any[], companyDetails: any
       y += 20;
     });
 
+    const totalItemsCount = allItems.reduce((acc: number, item: any) => acc + (Number(item.quantity) || 1), 0);
+    const productCost = allItems.reduce((acc: number, i: any) => acc + (i.price || 0), 0);
+    const totalCost = orders.reduce((acc: number, o: any) => acc + (o.total_cost || o.totalCost || 0), 0);
+    const shippingCharges = Math.max(0, totalCost - productCost);
+
+    // Table Total Items Row
+    doc.rect(50, y - 4, 495, 20).fill("#f1f5f9");
+    doc.fillColor("#0f172a").fontSize(8.5).font("Helvetica-Bold");
+    doc.text("Total Items", 58, y, { width: 155 });
+    doc.text("—", 220, y, { width: 70 });
+    doc.text(totalItemsCount.toString(), 295, y, { width: 30, align: 'center' });
+    doc.font("Helvetica").fillColor("#64748b");
+    doc.text("—", 330, y, { width: 65, align: 'right' });
+    doc.text("Rs. 0", 400, y, { width: 55, align: 'right' });
+    doc.font("Helvetica-Bold").fillColor("#0f172a");
+    doc.text(`Rs. ${Math.round(productCost).toLocaleString()}`, 460, y, { width: 80, align: 'right' });
+    y += 20;
+
     if (y > 640) {
       doc.addPage();
       y = 50;
@@ -3531,32 +3579,33 @@ async function generateConsolidatedInvoicePDF(orders: any[], companyDetails: any
     doc.fillColor("#0f172a").fontSize(10).font("Helvetica-Bold").text("Shipping & Summary", 50, summaryTop);
     doc.fontSize(8.5).font("Helvetica").fillColor("#475569");
     doc.text(`Orders Included: ${orders.map(o => o.id).join(', ')}`, 50, summaryTop + 16, { width: 260 });
-    doc.text(`Destination Country: ${dest.country || 'International'}`, 50, summaryTop + 42);
-    doc.text(`GST Status: Tax Invoice under GST Rules (Telangana)`, 50, summaryTop + 56);
+    doc.text(`Total Items: ${totalItemsCount}`, 50, summaryTop + 36);
+    doc.text(`Destination Country: ${dest.country || 'International'}`, 50, summaryTop + 50);
+    doc.text(`GST Status: Tax Invoice under GST Rules (Telangana)`, 50, summaryTop + 64);
 
     // Cost Breakdown table on right
     const costBoxX = 330;
-    const productCost = allItems.reduce((acc: number, i: any) => acc + (i.price || 0), 0);
-    const totalCost = orders.reduce((acc: number, o: any) => acc + (o.total_cost || o.totalCost || 0), 0);
-    const shippingCharges = Math.max(0, totalCost - productCost);
 
-    doc.rect(costBoxX, summaryTop, 215, 95).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
+    doc.rect(costBoxX, summaryTop, 215, 108).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
     
     doc.fillColor("#475569").fontSize(8.5).font("Helvetica");
-    doc.text("Items Subtotal:", costBoxX + 12, summaryTop + 10);
-    doc.text(`Rs. ${Math.round(productCost).toLocaleString()}`, costBoxX + 110, summaryTop + 10, { width: 90, align: 'right' });
+    doc.text("Total Items:", costBoxX + 12, summaryTop + 10);
+    doc.font("Helvetica-Bold").fillColor("#0f172a").text(`${totalItemsCount}`, costBoxX + 110, summaryTop + 10, { width: 90, align: 'right' });
 
-    doc.text("Shipping & Handling:", costBoxX + 12, summaryTop + 26);
-    doc.text(`Rs. ${Math.round(shippingCharges).toLocaleString()}`, costBoxX + 110, summaryTop + 26, { width: 90, align: 'right' });
+    doc.font("Helvetica").fillColor("#475569").text("Items Subtotal:", costBoxX + 12, summaryTop + 26);
+    doc.text(`Rs. ${Math.round(productCost).toLocaleString()}`, costBoxX + 110, summaryTop + 26, { width: 90, align: 'right' });
 
-    doc.text("Tax / GST (0%):", costBoxX + 12, summaryTop + 42);
-    doc.text("Rs. 0", costBoxX + 110, summaryTop + 42, { width: 90, align: 'right' });
+    doc.text("Shipping & Handling:", costBoxX + 12, summaryTop + 42);
+    doc.text(`Rs. ${Math.round(shippingCharges).toLocaleString()}`, costBoxX + 110, summaryTop + 42, { width: 90, align: 'right' });
 
-    doc.moveTo(costBoxX + 10, summaryTop + 60).lineTo(costBoxX + 205, summaryTop + 60).lineWidth(0.5).strokeColor("#cbd5e1").stroke();
+    doc.text("Tax / GST (0%):", costBoxX + 12, summaryTop + 58);
+    doc.text("Rs. 0", costBoxX + 110, summaryTop + 58, { width: 90, align: 'right' });
+
+    doc.moveTo(costBoxX + 10, summaryTop + 74).lineTo(costBoxX + 205, summaryTop + 74).lineWidth(0.5).strokeColor("#cbd5e1").stroke();
 
     doc.fillColor("#0f172a").fontSize(10).font("Helvetica-Bold");
-    doc.text("Total Amount:", costBoxX + 12, summaryTop + 70);
-    doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, costBoxX + 110, summaryTop + 70, { width: 90, align: 'right' });
+    doc.text("Total Amount:", costBoxX + 12, summaryTop + 84);
+    doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, costBoxX + 110, summaryTop + 84, { width: 90, align: 'right' });
 
     // Footer Section
     doc.font("Helvetica-Oblique").fontSize(8).fillColor("#64748b")
@@ -3674,39 +3723,78 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
     let y = thY + 26;
     doc.font("Helvetica").fillColor("#1e293b");
 
-    const items = order.items || [];
-    items.forEach((item: any, idx: number) => {
-      if (y > 670) {
-        doc.addPage();
-        y = 50;
-        doc.rect(50, y, 495, 22).fill("#0f172a");
-        doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#ffffff");
-        doc.text("Item Description", 58, y + 6);
-        doc.text("Qty", 260, y + 6, { width: 35, align: 'center' });
-        doc.text("Unit Price", 305, y + 6, { width: 70, align: 'right' });
-        doc.text("Tax", 385, y + 6, { width: 65, align: 'right' });
-        doc.text("Total Amount", 460, y + 6, { width: 80, align: 'right' });
-        y += 28;
-      }
+    let rawItems = order.items;
+    if (typeof rawItems === 'string') {
+      try { rawItems = JSON.parse(rawItems); } catch { rawItems = []; }
+    }
+    const items = Array.isArray(rawItems) ? rawItems : [];
+    const productCost = items.reduce((acc: number, i: any) => acc + (Number(i.price) || 0), 0);
+    const totalCost = Number(order.total_cost || order.totalCost || 0);
+    const shippingCharges = Math.max(0, totalCost - productCost);
 
-      const qty = item.quantity || 1;
-      const totalItemPrice = item.price || 0;
-      const unitPrice = qty > 0 ? (totalItemPrice / qty) : totalItemPrice;
-      const isEven = idx % 2 === 1;
+    const calculatedQty = items.reduce((acc: number, i: any) => acc + (Number(i.quantity) || 1), 0);
+    const totalItemsCount = calculatedQty > 0
+      ? calculatedQty
+      : Number(order.totalItems || order.total_items || (items.length > 0 ? items.length : 1));
 
-      if (isEven) {
-        doc.rect(50, y - 4, 495, 20).fill("#f8fafc");
-      }
+    if (items.length > 0) {
+      items.forEach((item: any, idx: number) => {
+        if (y > 670) {
+          doc.addPage();
+          y = 50;
+          doc.rect(50, y, 495, 22).fill("#0f172a");
+          doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#ffffff");
+          doc.text("Item Description", 58, y + 6);
+          doc.text("Qty", 260, y + 6, { width: 35, align: 'center' });
+          doc.text("Unit Price", 305, y + 6, { width: 70, align: 'right' });
+          doc.text("Tax", 385, y + 6, { width: 65, align: 'right' });
+          doc.text("Total Amount", 460, y + 6, { width: 80, align: 'right' });
+          y += 28;
+        }
 
+        const qty = item.quantity || 1;
+        const totalItemPrice = Number(item.price) || 0;
+        const unitPrice = qty > 0 ? (totalItemPrice / qty) : totalItemPrice;
+        const isEven = idx % 2 === 1;
+
+        if (isEven) {
+          doc.rect(50, y - 4, 495, 20).fill("#f8fafc");
+        }
+
+        doc.fillColor("#1e293b").fontSize(8.5).font("Helvetica");
+        doc.text(item.name || 'Courier Item', 58, y, { width: 195 });
+        doc.text(qty.toString(), 260, y, { width: 35, align: 'center' });
+        doc.text(`Rs. ${Math.round(unitPrice).toLocaleString()}`, 305, y, { width: 70, align: 'right' });
+        doc.text("Rs. 0 (0%)", 385, y, { width: 65, align: 'right' });
+        doc.text(`Rs. ${Math.round(totalItemPrice).toLocaleString()}`, 460, y, { width: 80, align: 'right' });
+        
+        y += 20;
+      });
+    } else {
+      const fallbackDesc = orderIdStr.startsWith('PH-') 
+        ? 'Home Pickup & International Courier Shipment' 
+        : 'Doorstep Courier & Delivery Service';
       doc.fillColor("#1e293b").fontSize(8.5).font("Helvetica");
-      doc.text(item.name || 'Unknown Item', 58, y, { width: 195 });
-      doc.text(qty.toString(), 260, y, { width: 35, align: 'center' });
-      doc.text(`Rs. ${Math.round(unitPrice).toLocaleString()}`, 305, y, { width: 70, align: 'right' });
+      doc.text(fallbackDesc, 58, y, { width: 195 });
+      doc.text(totalItemsCount.toString(), 260, y, { width: 35, align: 'center' });
+      doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, 305, y, { width: 70, align: 'right' });
       doc.text("Rs. 0 (0%)", 385, y, { width: 65, align: 'right' });
-      doc.text(`Rs. ${Math.round(totalItemPrice).toLocaleString()}`, 460, y, { width: 80, align: 'right' });
-      
+      doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, 460, y, { width: 80, align: 'right' });
       y += 20;
-    });
+    }
+
+    // Table Total Items Row
+    doc.rect(50, y - 4, 495, 20).fill("#f1f5f9");
+    doc.fillColor("#0f172a").fontSize(8.5).font("Helvetica-Bold");
+    doc.text("Total Items", 58, y, { width: 195 });
+    doc.text(totalItemsCount.toString(), 260, y, { width: 35, align: 'center' });
+    doc.font("Helvetica").fillColor("#64748b");
+    doc.text("—", 305, y, { width: 70, align: 'right' });
+    doc.text("Rs. 0", 385, y, { width: 65, align: 'right' });
+    doc.font("Helvetica-Bold").fillColor("#0f172a");
+    const subtotalVal = productCost > 0 ? productCost : totalCost;
+    doc.text(`Rs. ${Math.round(subtotalVal).toLocaleString()}`, 460, y, { width: 80, align: 'right' });
+    y += 20;
 
     if (y > 640) {
       doc.addPage();
@@ -3722,38 +3810,41 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
     
     const isPrefixed = ['SH-', 'SW-', 'PH-', 'BB-'].some(p => orderIdStr.startsWith(p));
     const trackingId = isPrefixed ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
-    const serviceType = (order.items && order.items[0]) ? order.items[0].source : 'Standard Shipping';
+    const serviceType = (items && items[0]) ? items[0].source : (
+      orderIdStr.startsWith('PH-') ? 'Home Pickup & International Courier' : 'Standard Shipping'
+    );
 
     doc.fontSize(8.5).font("Helvetica").fillColor("#475569");
     doc.text(`Service Type: ${serviceType}`, 50, shippingTop + 16);
-    doc.text(`Origin: Hyderabad, Telangana, India`, 50, shippingTop + 30);
-    doc.text(`Destination: ${dest.country || 'International'}`, 50, shippingTop + 44);
-    doc.text(`Tracking ID: ${trackingId}`, 50, shippingTop + 58);
-    doc.text(`GST Status: Tax Invoice under GST Rules (Telangana)`, 50, shippingTop + 72);
+    doc.text(`Total Items: ${totalItemsCount}`, 50, shippingTop + 30);
+    doc.text(`Origin: Hyderabad, Telangana, India`, 50, shippingTop + 44);
+    doc.text(`Destination: ${dest.country || 'International'}`, 50, shippingTop + 58);
+    doc.text(`Tracking ID: ${trackingId}`, 50, shippingTop + 72);
+    doc.text(`GST Status: Tax Invoice under GST Rules (Telangana)`, 50, shippingTop + 86);
 
     // Cost Breakdown table on right
     const costBoxX = 330;
-    const productCost = (order.items || []).reduce((acc: number, i: any) => acc + (i.price || 0), 0);
-    const totalCost = order.total_cost || order.totalCost || 0;
-    const shippingCharges = Math.max(0, totalCost - productCost);
 
-    doc.rect(costBoxX, shippingTop, 215, 95).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
+    doc.rect(costBoxX, shippingTop, 215, 108).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
     
     doc.fillColor("#475569").fontSize(8.5).font("Helvetica");
-    doc.text("Items Subtotal:", costBoxX + 12, shippingTop + 10);
-    doc.text(`Rs. ${Math.round(productCost).toLocaleString()}`, costBoxX + 110, shippingTop + 10, { width: 90, align: 'right' });
+    doc.text("Total Items:", costBoxX + 12, shippingTop + 10);
+    doc.font("Helvetica-Bold").fillColor("#0f172a").text(`${totalItemsCount}`, costBoxX + 110, shippingTop + 10, { width: 90, align: 'right' });
 
-    doc.text("Shipping & Handling:", costBoxX + 12, shippingTop + 26);
-    doc.text(`Rs. ${Math.round(shippingCharges).toLocaleString()}`, costBoxX + 110, shippingTop + 26, { width: 90, align: 'right' });
+    doc.font("Helvetica").fillColor("#475569").text("Items Subtotal:", costBoxX + 12, shippingTop + 26);
+    doc.text(`Rs. ${Math.round(productCost).toLocaleString()}`, costBoxX + 110, shippingTop + 26, { width: 90, align: 'right' });
 
-    doc.text("Tax / GST (0%):", costBoxX + 12, shippingTop + 42);
-    doc.text("Rs. 0", costBoxX + 110, shippingTop + 42, { width: 90, align: 'right' });
+    doc.text("Shipping & Handling:", costBoxX + 12, shippingTop + 42);
+    doc.text(`Rs. ${Math.round(shippingCharges).toLocaleString()}`, costBoxX + 110, shippingTop + 42, { width: 90, align: 'right' });
 
-    doc.moveTo(costBoxX + 10, shippingTop + 60).lineTo(costBoxX + 205, shippingTop + 60).lineWidth(0.5).strokeColor("#cbd5e1").stroke();
+    doc.text("Tax / GST (0%):", costBoxX + 12, shippingTop + 58);
+    doc.text("Rs. 0", costBoxX + 110, shippingTop + 58, { width: 90, align: 'right' });
+
+    doc.moveTo(costBoxX + 10, shippingTop + 74).lineTo(costBoxX + 205, shippingTop + 74).lineWidth(0.5).strokeColor("#cbd5e1").stroke();
 
     doc.fillColor("#0f172a").fontSize(10).font("Helvetica-Bold");
-    doc.text("Total Amount:", costBoxX + 12, shippingTop + 70);
-    doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, costBoxX + 110, shippingTop + 70, { width: 90, align: 'right' });
+    doc.text("Total Amount:", costBoxX + 12, shippingTop + 84);
+    doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, costBoxX + 110, shippingTop + 84, { width: 90, align: 'right' });
 
     // Footer Section
     doc.font("Helvetica-Oblique").fontSize(8).fillColor("#64748b")
@@ -3856,31 +3947,34 @@ const transformDbOrder = (o: any) => {
     }
   }
 
-  return {
-    ...o,
-    items: Array.isArray(o.items) ? o.items : (o.items ? o.items : []),
-    destination: dest,
-    customerId: o.customer_id || o.customerId || dest?.customerId || dest?.customer_id,
-    totalWeight: o.total_weight !== undefined && o.total_weight !== null ? o.total_weight : (o.totalWeight !== undefined ? o.totalWeight : (dest?.totalWeight || dest?.total_weight || 0)),
-    totalCost: o.total_cost !== undefined && o.total_cost !== null ? o.total_cost : (o.totalCost !== undefined ? o.totalCost : (dest?.totalCost || dest?.total_cost || 0)),
-    paymentStatus: o.payment_status || o.paymentStatus || dest?.paymentStatus || dest?.payment_status || 'Pending',
-    shippingDate: o.shipping_date || o.shippingDate || dest?.shippingDate || dest?.shipping_date || dest?.date,
-    createdAt: o.created_at || o.createdAt,
-    pickupType: o.pickup_type !== undefined && o.pickup_type !== null ? o.pickup_type : (o.pickupType !== undefined && o.pickupType !== null ? o.pickupType : (dest?.pickupType || dest?.pickup_type || 'AllAgent')),
-    assignedAgent: o.assigned_agent !== undefined && o.assigned_agent !== null ? o.assigned_agent : (o.assignedAgent !== undefined && o.assignedAgent !== null ? o.assignedAgent : (dest?.assignedAgent || dest?.assigned_agent)),
-    assignedAgentId: o.assigned_agent_id !== undefined && o.assigned_agent_id !== null ? o.assigned_agent_id : (o.assignedAgentId !== undefined && o.assignedAgentId !== null ? o.assignedAgentId : (dest?.assignedAgentId || dest?.assigned_agent_id)),
-    languagePreference: o.language_preference !== undefined && o.language_preference !== null ? o.language_preference : (o.languagePreference !== undefined && o.languagePreference !== null ? o.languagePreference : (dest?.languagePreference || dest?.language_preference || 'English')),
-    itemType: o.item_type !== undefined && o.item_type !== null ? o.item_type : (o.itemType !== undefined && o.itemType !== null ? o.itemType : (dest?.itemType || dest?.item_type || 'General')),
-    vehicleType: o.vehicle_type !== undefined && o.vehicle_type !== null ? o.vehicle_type : (o.vehicleType !== undefined && o.vehicleType !== null ? o.vehicleType : (dest?.vehicleType || dest?.vehicle_type || 'Two-Wheeler')),
-    customerName: o.customer_name !== undefined && o.customer_name !== null ? o.customer_name : (o.customerName !== undefined && o.customerName !== null ? o.customerName : (dest?.customerName || dest?.customer_name || dest?.fullName)),
-    phone: o.phone !== undefined && o.phone !== null ? o.phone : dest?.phone,
-    address: o.address !== undefined && o.address !== null ? o.address : dest?.address || dest?.addressLine1,
-    date: o.date !== undefined && o.date !== null ? o.date : (dest?.date || o.shipping_date || o.shipping_date),
-    time: o.time !== undefined && o.time !== null ? o.time : (dest?.time || 'Flexible'),
-    trackingNumber: o.tracking_number || o.trackingNumber,
-    carrier: o.carrier,
-    shipmentStatus: o.shipment_status || o.shipmentStatus,
-    shipmentDate: o.shipment_date || o.shipmentDate,
+    const isExplicitNonPickup = (o.id && (String(o.id).toUpperCase().startsWith('SH-') || String(o.id).toUpperCase().startsWith('WH-') || String(o.id).toUpperCase().startsWith('SW-')));
+    const resolvedPickupType = isExplicitNonPickup ? undefined : (o.pickup_type !== undefined && o.pickup_type !== null ? o.pickup_type : (o.pickupType !== undefined && o.pickupType !== null ? o.pickupType : (dest?.pickupType || dest?.pickup_type || undefined)));
+
+    return {
+      ...o,
+      items: Array.isArray(o.items) ? o.items : (o.items ? o.items : []),
+      destination: dest,
+      customerId: o.customer_id || o.customerId || dest?.customerId || dest?.customer_id,
+      totalWeight: o.total_weight !== undefined && o.total_weight !== null ? o.total_weight : (o.totalWeight !== undefined ? o.totalWeight : (dest?.totalWeight || dest?.total_weight || 0)),
+      totalCost: o.total_cost !== undefined && o.total_cost !== null ? o.total_cost : (o.totalCost !== undefined ? o.totalCost : (dest?.totalCost || dest?.total_cost || 0)),
+      paymentStatus: o.payment_status || o.paymentStatus || dest?.paymentStatus || dest?.payment_status || 'Pending',
+      shippingDate: o.shipping_date || o.shippingDate || dest?.shippingDate || dest?.shipping_date || dest?.date,
+      createdAt: o.created_at || o.createdAt,
+      pickupType: resolvedPickupType,
+      assignedAgent: o.assigned_agent !== undefined && o.assigned_agent !== null ? o.assigned_agent : (o.assignedAgent !== undefined && o.assignedAgent !== null ? o.assignedAgent : (dest?.assignedAgent || dest?.assigned_agent)),
+      assignedAgentId: o.assigned_agent_id !== undefined && o.assigned_agent_id !== null ? o.assigned_agent_id : (o.assignedAgentId !== undefined && o.assignedAgentId !== null ? o.assignedAgentId : (dest?.assignedAgentId || dest?.assigned_agent_id)),
+      languagePreference: o.language_preference !== undefined && o.language_preference !== null ? o.language_preference : (o.languagePreference !== undefined && o.languagePreference !== null ? o.languagePreference : (dest?.languagePreference || dest?.language_preference || 'English')),
+      itemType: o.item_type !== undefined && o.item_type !== null ? o.item_type : (o.itemType !== undefined && o.itemType !== null ? o.itemType : (dest?.itemType || dest?.item_type || 'General')),
+      vehicleType: o.vehicle_type !== undefined && o.vehicle_type !== null ? o.vehicle_type : (o.vehicleType !== undefined && o.vehicleType !== null ? o.vehicleType : (dest?.vehicleType || dest?.vehicle_type || 'Two-Wheeler')),
+      customerName: o.customer_name !== undefined && o.customer_name !== null ? o.customer_name : (o.customerName !== undefined && o.customerName !== null ? o.customerName : (dest?.customerName || dest?.customer_name || dest?.fullName)),
+      phone: o.phone !== undefined && o.phone !== null ? o.phone : dest?.phone,
+      address: o.address !== undefined && o.address !== null ? o.address : dest?.address || dest?.addressLine1,
+      date: o.date !== undefined && o.date !== null ? o.date : (dest?.date || o.shipping_date || o.shipping_date),
+      time: o.time !== undefined && o.time !== null ? o.time : (dest?.time || 'Flexible'),
+      trackingNumber: o.tracking_number || o.trackingNumber,
+      carrier: o.carrier,
+      shipmentStatus: o.shipment_status || o.shipmentStatus,
+      shipmentDate: o.shipment_date || o.shipmentDate,
     lastTrackingUpdate: o.last_tracking_update || o.lastTrackingUpdate,
     trackingResponse: (() => {
       let tr = o.tracking_response || o.trackingResponse;
@@ -3951,6 +4045,14 @@ const deduplicateOrders = async (ordersList: any[]): Promise<any[]> => {
       const cAddr = comp.address || comp.destination?.address || comp.destination?.addressLine1;
       if (pAddr !== cAddr) return false;
 
+      // Creation timestamp check: Clones caused by double-sequence increment bugs are created within seconds (<= 5 minutes) of each other.
+      // Legitimate subsequent orders created hours or days apart (such as PH-00105 created days after PH-00104) are NEVER duplicate clones.
+      const pCreated = new Date(pend.created_at || pend.createdAt || 0).getTime();
+      const cCreated = new Date(comp.created_at || comp.createdAt || 0).getTime();
+      if (pCreated > 0 && cCreated > 0 && Math.abs(pCreated - cCreated) > 5 * 60 * 1000) {
+        return false;
+      }
+
       const pendingNum = parseInt(pend.id.split('-')[1], 10);
       const completedNum = parseInt(comp.id.split('-')[1], 10);
       const isSeqClose = !isNaN(pendingNum) && !isNaN(completedNum) && Math.abs(pendingNum - completedNum) <= 2;
@@ -3975,41 +4077,39 @@ const deduplicateOrders = async (ordersList: any[]): Promise<any[]> => {
       const adminDb = supabaseAdmin || supabase;
       if (adminDb) {
         try {
-          // Query ONLY the candidate order ID, retrieving the smallest possible data to check item presence
-          // without pulling base64 image data.
+          // Query ONLY the candidate order ID with valid PostgREST select projection
           const verifyPromise = adminDb
             .from('orders')
-            .select('id, items->0->id, items->0->name')
+            .select('id, items')
             .eq('id', pend.id)
             .maybeSingle();
 
           const { data: verifiedOrder, error: verifyError } = await queryWithTimeout(
             verifyPromise,
-            2000,
-            `Deduplication verification timed out for candidate ${pend.id}`
-          );
+            5000,
+            `Deduplication verification check for candidate ${pend.id}`
+          ).catch((e: any) => {
+            // Gracefully handle timeout without logging fatal server warnings
+            return { data: null, error: e };
+          });
 
           if (!verifyError && verifiedOrder && verifiedOrder.id === pend.id) {
-            const vObj = verifiedOrder as any;
-            const firstId = vObj['items->0->id'] || (vObj.items && vObj.items[0]?.id);
-            const firstName = vObj['items->0->name'] || (vObj.items && vObj.items[0]?.name);
-
-            if (firstId || firstName) {
+            let vItems = verifiedOrder.items;
+            if (typeof vItems === 'string') {
+              try { vItems = JSON.parse(vItems); } catch { vItems = []; }
+            }
+            if (Array.isArray(vItems) && vItems.length > 0) {
               // Real items exist in database: legitimate order, protect it
               isVerifiedStaleDuplicate = false;
             } else {
-              // If arrow projection is not supported or returns an ambiguous result where emptiness
-              // cannot be safely determined without retrieving the full items JSONB value,
-              // the fail-safe rule mandates DO NOT DELETE.
               isVerifiedStaleDuplicate = false;
             }
           } else {
             // Query failed, timed out, or returned unexpected data: fail-safe retain
             isVerifiedStaleDuplicate = false;
           }
-        } catch (verifyEx: any) {
+        } catch {
           // Timeout or network error: fail-safe retain
-          console.warn(`[SERVER SELF-HEAL] Verification check timed out/failed for ${pend.id}, retaining order:`, verifyEx?.message || verifyEx);
           isVerifiedStaleDuplicate = false;
         }
       }
@@ -4655,7 +4755,7 @@ const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
           const ordersQueryPromise = Promise.resolve(
             supabase
               .from('orders')
-              .select('id, customer_id, total_weight, total_cost, status, destination, payment_status, shipping_date, created_at, tracking_number, carrier, shipment_status, shipment_date, last_tracking_update, tracking_response')
+              .select('id, customer_id, total_weight, total_cost, status, destination, payment_status, shipping_date, created_at, tracking_number, carrier, shipment_status, shipment_date, last_tracking_update, tracking_response, items')
               .order('id', { ascending: false })
               .limit(500)
               .abortSignal(ordersController.signal)
@@ -4670,12 +4770,12 @@ const refreshAllOrdersCache = async (force = false): Promise<any[]> => {
 
           if (!oErr && Array.isArray(dbOrders)) {
             dbOrders.forEach((o: any) => {
-              // Retain items if already loaded from pickups
+              // Retain items if already loaded from pickups or db, stripped of heavy images
               const existing = orderMap.get(o.id);
-              const itemsList = existing?.items || [];
+              const itemsList = o.items || existing?.items || [];
               const lightweightOrder = {
                 ...o,
-                items: itemsList
+                items: stripItemImages(itemsList)
               };
               const transformed = transformDbOrder(lightweightOrder);
               if (transformed && transformed.id) {
@@ -5110,7 +5210,8 @@ app.get("/api/orders/:customerId", async (req, res) => {
         carrier,
         shipment_status,
         shipment_date,
-        last_tracking_update
+        last_tracking_update,
+        items
       `)
       .in('customer_id', idsToFetch)
       .order('created_at', { ascending: false });
@@ -5140,7 +5241,8 @@ app.get("/api/orders/:customerId", async (req, res) => {
             carrier,
             shipment_status,
             shipment_date,
-            last_tracking_update
+            last_tracking_update,
+            items
           `)
           .ilike('destination->>email', emailToMatch)
           .order('created_at', { ascending: false })
@@ -5172,7 +5274,13 @@ app.get("/api/orders/:customerId", async (req, res) => {
       }
     });
 
-    const transformed = mergedOrders.map(transformDbOrder);
+    const transformed = mergedOrders.map(o => {
+      const tr = transformDbOrder(o);
+      if (tr && tr.items && Array.isArray(tr.items)) {
+        tr.items = stripItemImages(tr.items);
+      }
+      return tr;
+    });
     res.json(await deduplicateOrders(transformed));
   } catch (err: any) {
     console.log(`Serving filtered orders fallback for user: ${customerId}`);

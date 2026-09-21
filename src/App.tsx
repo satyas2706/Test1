@@ -159,6 +159,7 @@ import { MobileCartSection } from './components/sections/MobileCartSection';
 import { useJiffexVoiceCall } from './hooks/useJiffexVoiceCall';
 import { JiffexVoiceCallPanel } from './components/support/JiffexVoiceCallPanel';
 import { JiffexChatPanel } from './components/support/JiffexChatPanel';
+import { InvoiceAttachmentModal } from './components/InvoiceAttachmentModal';
 import jiffexHeroCustom from './assets/images/jiffex_hero_custom_1789308756197.jpg';
 
 const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 1 day (24 hours)
@@ -5051,6 +5052,98 @@ const getSafeOrderTotalWeight = (order: any): number => {
   return 1.5;
 };
 
+const isHomePickupOrder = (order: any): boolean => {
+  if (!order || !order.id) return false;
+  const id = String(order.id).toUpperCase().trim();
+  
+  if (id.startsWith('SH-') || id.startsWith('SW-') || id.startsWith('WH-') || id.startsWith('JX-WH-') || id.startsWith('BB-')) {
+    return false;
+  }
+  
+  if (id.startsWith('PH-') || id.startsWith('JX-PH-')) {
+    return true;
+  }
+
+  let its = order.items;
+  if (typeof its === 'string') {
+    try { its = JSON.parse(its); } catch { its = []; }
+  }
+  if (Array.isArray(its) && its.length > 0) {
+    if (its.some((i: any) => i.source === 'Store' || i.source === 'shop')) return false;
+    if (its.some((i: any) => i.source === 'Warehouse')) return false;
+    if (its.some((i: any) => i.source === 'Pickup')) return true;
+  }
+
+  if (order.pickupDate || order.pickup_date) return true;
+  if (order.orderType === 'pickup') return true;
+
+  return false;
+};
+
+const isShopShipOrder = (order: any): boolean => {
+  if (!order || !order.id) return false;
+  const id = String(order.id).toUpperCase().trim();
+  if (id.startsWith('SH-')) return true;
+
+  let its = order.items;
+  if (typeof its === 'string') {
+    try { its = JSON.parse(its); } catch { its = []; }
+  }
+  if (Array.isArray(its) && its.length > 0) {
+    if (its.some((i: any) => i.source === 'Store' || i.source === 'shop')) return true;
+  }
+  return false;
+};
+
+const getSafeOrderItemsCount = (order: any, cachedDetail?: any): number => {
+  const target = (cachedDetail && cachedDetail.items && Array.isArray(cachedDetail.items) && cachedDetail.items.length > 0)
+    ? cachedDetail
+    : order;
+  if (!target) return 0;
+
+  let its = target.items;
+  if (typeof its === 'string') {
+    try { its = JSON.parse(its); } catch { its = []; }
+  }
+
+  if (Array.isArray(its) && its.length > 0) {
+    const total = its.reduce((sum: number, item: any) => {
+      const q = Number(item.quantity);
+      if (!isNaN(q) && q > 0) return sum + q;
+      if (Array.isArray(item.ids) && item.ids.length > 0) return sum + item.ids.length;
+      return sum + 1;
+    }, 0);
+    if (total > 0) return total;
+  }
+
+  if (target !== order && order) {
+    let oIts = order.items;
+    if (typeof oIts === 'string') {
+      try { oIts = JSON.parse(oIts); } catch { oIts = []; }
+    }
+    if (Array.isArray(oIts) && oIts.length > 0) {
+      const total = oIts.reduce((sum: number, item: any) => {
+        const q = Number(item.quantity);
+        if (!isNaN(q) && q > 0) return sum + q;
+        if (Array.isArray(item.ids) && item.ids.length > 0) return sum + item.ids.length;
+        return sum + 1;
+      }, 0);
+      if (total > 0) return total;
+    }
+  }
+
+  const dest = typeof target.destination === 'string' ? (() => {
+    try { return JSON.parse(target.destination); } catch { return {}; }
+  })() : (target.destination || {});
+
+  const metaCount = Number(target.itemCount || target.item_count || dest?.itemCount || dest?.totalItems);
+  if (!isNaN(metaCount) && metaCount > 0) {
+    return metaCount;
+  }
+
+  return 0;
+};
+
 const loadRazorpayScript = (): Promise<boolean> => {
   return new Promise((resolve) => {
     if (typeof window === 'undefined') {
@@ -5225,7 +5318,7 @@ export default function App() {
 
   const appointments = useMemo(() => {
     return orders
-      .filter(o => o.status === 'Scheduled' || o.status === 'Pending Pickup' || o.status === 'Picked Up' || (o as any).pickupType)
+      .filter(o => isHomePickupOrder(o))
       .map(o => {
         const agentId = o.assignedAgentId || o.assigned_agent_id || (o as any).destination?.assignedAgentId || (o as any).destination?.assigned_agent_id;
         const resolvedAgent = agentId ? agents.find(a => a.id === agentId) : undefined;
@@ -5256,7 +5349,7 @@ export default function App() {
   const [activeWorkOrder, setActiveWorkOrder] = useState<Appointment | null>(null);
   const [agentActiveTab, setAgentActiveTab] = useState<'Summary' | 'Scheduled' | 'Completed' | 'Canceled'>('Summary');
   const [agentMainTab, setAgentMainTab] = useState<'Summary' | 'Home Pickup'>('Summary');
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -5989,6 +6082,16 @@ export default function App() {
       loadOrderDetailIfNeeded(selectedOrderForDetails);
     }
   }, [selectedOrderForDetails, loadOrderDetailIfNeeded]);
+
+  useEffect(() => {
+    if (activeTab === 'history' && orders && orders.length > 0) {
+      orders.forEach(order => {
+        if ((!order.items || order.items.length === 0) && !orderDetailCache[order.id]) {
+          loadOrderDetailIfNeeded(order);
+        }
+      });
+    }
+  }, [activeTab, orders, orderDetailCache, loadOrderDetailIfNeeded]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
 
@@ -7059,7 +7162,7 @@ export default function App() {
       paymentStatus: o.paymentStatus || o.payment_status || dest?.paymentStatus || dest?.payment_status || 'Pending',
       shippingDate: o.shippingDate || o.shipping_date || dest?.shippingDate || dest?.shipping_date || dest?.date,
       createdAt: o.createdAt || o.created_at,
-      pickupType: o.pickupType || o.pickup_type || dest?.pickupType || dest?.pickup_type || 'AllAgent',
+      pickupType: (o.id && (String(o.id).toUpperCase().startsWith('SH-') || String(o.id).toUpperCase().startsWith('WH-') || String(o.id).toUpperCase().startsWith('SW-'))) ? undefined : (o.pickupType || o.pickup_type || dest?.pickupType || dest?.pickup_type || undefined),
       assignedAgent: o.assignedAgent || o.assigned_agent || dest?.assignedAgent || dest?.assigned_agent,
       assignedAgentId: o.assignedAgentId || o.assigned_agent_id || dest?.assignedAgentId || dest?.assigned_agent_id,
       languagePreference: o.languagePreference || o.language_preference || dest?.languagePreference || dest?.language_preference || 'English',
@@ -9558,7 +9661,8 @@ export default function App() {
               </div>
             ) : (
               unifiedHistory.map(order => {
-                const isPickup = order.id.startsWith('PH-') || (order as any).pickupType;
+                const isPickup = isHomePickupOrder(order);
+                const isShopShip = isShopShipOrder(order);
                 const formattedPlacedDate = () => {
                   try {
                     const date = new Date(order.createdAt || order.created_at || Date.now());
@@ -9574,18 +9678,23 @@ export default function App() {
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div className="flex-1 min-w-0">
                         <span className="text-[10px] font-extrabold tracking-wider text-slate-400 uppercase block">ORDER ID</span>
-                        <button 
-                          onClick={() => setSelectedOrderForDetails(order)}
-                          className="text-left hover:text-indigo-600 transition-colors cursor-pointer font-black text-slate-900 text-lg mt-0.5 block"
-                        >
+                        <div className="font-black text-slate-900 text-lg mt-0.5 block select-text">
                           {order.id}
-                        </button>
+                        </div>
                       </div>
                       
                       <div className="flex flex-col items-end gap-1.5 shrink-0">
-                        {isPickup && (
+                        {isPickup ? (
                           <div className="bg-indigo-50 text-indigo-600 font-extrabold text-[9px] px-2.5 py-1 rounded-full uppercase tracking-wider whitespace-nowrap">
                             HOME PICKUP SCHEDULED
+                          </div>
+                        ) : isShopShip ? (
+                          <div className="bg-amber-50 text-amber-700 font-extrabold text-[9px] px-2.5 py-1 rounded-full uppercase tracking-wider whitespace-nowrap">
+                            SHOP & SHIP
+                          </div>
+                        ) : (
+                          <div className="bg-slate-100 text-slate-600 font-extrabold text-[9px] px-2.5 py-1 rounded-full uppercase tracking-wider whitespace-nowrap">
+                            WAREHOUSE SHIPMENT
                           </div>
                         )}
                         
@@ -9649,7 +9758,7 @@ export default function App() {
                       <div>
                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block">ITEMS</span>
                         <span className="text-xs font-extrabold text-slate-900 block">
-                          {order.items?.length || 0} items
+                          {getSafeOrderItemsCount(order, orderDetailCache[order.id])} items
                         </span>
                       </div>
                       <div>
@@ -9744,201 +9853,15 @@ export default function App() {
             )}
           </div>
 
-          {/* Invoice Modal */}
+          {/* Invoice Modal (Email Attachment View) */}
           <AnimatePresence>
             {selectedOrderForInvoice && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                  className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
-                >
-                  <div className="flex justify-between items-start mb-6">
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Logo iconSize={20} />
-                      </div>
-                      <h2 className="text-2xl font-black text-slate-900">Tax Invoice</h2>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 font-semibold">
-                        <span>Invoice: <strong className="text-slate-800">INV-{(selectedOrderForInvoice.id || '').slice(0, 8).toUpperCase()}</strong></span>
-                        <span>•</span>
-                        <span>GSTIN: <strong className="text-slate-800">{COMPANY_DETAILS.gstin}</strong></span>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => setSelectedOrderForInvoice(null)}
-                      className="p-2 hover:bg-slate-100 rounded-full transition-colors cursor-pointer"
-                    >
-                      <XCircle size={24} className="text-slate-400" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                    <div>
-                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Billed & Supplied By</h4>
-                      <div className="text-xs font-bold text-slate-900">{COMPANY_DETAILS.name}</div>
-                      <div className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
-                        {COMPANY_DETAILS.address}<br />
-                        GSTIN: {COMPANY_DETAILS.gstin}<br />
-                        Email: {COMPANY_DETAILS.email} | Web: {COMPANY_DETAILS.website}
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Billing & Shipping Address</h4>
-                      <div className="text-xs font-bold text-slate-900">{selectedOrderForInvoice.destination.fullName}</div>
-                      <div className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
-                        {selectedOrderForInvoice.destination.addressLine1}<br />
-                        {selectedOrderForInvoice.destination.city}, {selectedOrderForInvoice.destination.state}<br />
-                        {selectedOrderForInvoice.destination.zipCode}, {selectedOrderForInvoice.destination.country}<br />
-                        Phone: {selectedOrderForInvoice.destination.phone || 'N/A'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const currentInvoice = (selectedOrderForInvoice && orderDetailCache[selectedOrderForInvoice.id]) || selectedOrderForInvoice;
-                    const isPendingInvoice = (currentInvoice.status === 'Scheduled' || currentInvoice.status === 'Pending Pickup') && (!currentInvoice.items || currentInvoice.items.length === 0);
-                    const isLoading = loadingOrderDetail === currentInvoice.id;
-                    return (
-                      <>
-                        <div className="border-t border-slate-100 pt-5 mb-6">
-                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Order Items & Tax Details</h4>
-                          {isLoading ? (
-                            <div className="py-8 text-center text-slate-500 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center justify-center gap-2">
-                              <Loader2 className="animate-spin text-indigo-600" size={24} />
-                              <span className="text-xs font-semibold">Loading item details...</span>
-                            </div>
-                          ) : orderDetailError && (!currentInvoice.items || currentInvoice.items.length === 0) ? (
-                            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-center">
-                              <p className="text-xs text-red-600 font-semibold mb-2">{orderDetailError}</p>
-                              <button
-                                onClick={() => loadOrderDetailIfNeeded(selectedOrderForInvoice)}
-                                className="px-3 py-1.5 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-colors cursor-pointer"
-                              >
-                                Retry
-                              </button>
-                            </div>
-                          ) : isPendingInvoice ? (
-                            <div className="bg-indigo-50/50 border border-indigo-100/60 text-indigo-900 rounded-2xl p-6 text-center">
-                              <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                                <Clock size={20} />
-                              </div>
-                              <p className="text-sm font-bold text-slate-800">No items picked or billed yet</p>
-                              <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
-                                This is a scheduled pickup from home. The item list will be finalized and updated once our agent collects and measures your items at our hub.
-                              </p>
-                            </div>
-                          ) : (!currentInvoice.items || currentInvoice.items.length === 0) ? (
-                            <div className="p-4 bg-slate-50 rounded-xl text-center text-slate-400 text-xs">
-                              No items found for this order.
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              {/* Item Table Header */}
-                              <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-100/80 rounded-lg text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                <div className="col-span-5">Item Description</div>
-                                <div className="col-span-2 text-center">Qty</div>
-                                <div className="col-span-2 text-right">Unit Price</div>
-                                <div className="col-span-1 text-right">Tax</div>
-                                <div className="col-span-2 text-right">Total Amount</div>
-                              </div>
-                              {currentInvoice.items.map((item, idx) => {
-                                const qty = item.quantity || 1;
-                                const itemTotal = item.price || 0;
-                                const unitPrice = qty > 0 ? (itemTotal / qty) : itemTotal;
-                                return (
-                                  <div key={idx} className="grid grid-cols-12 gap-2 items-center p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-                                    <div className="col-span-5 flex items-center gap-2.5">
-                                      <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 shrink-0 overflow-hidden">
-                                        <PickupItemThumbnail 
-                                          pickupId={currentInvoice.id} 
-                                          image={item.image} 
-                                          alt={item.name} 
-                                          fallbackIconSize={16} 
-                                        />
-                                      </div>
-                                      <div>
-                                        <div className="font-bold text-slate-900 line-clamp-1">{item.name}</div>
-                                        <div className="text-[10px] text-slate-500">{getSafeItemUnitWeight(item)} kg • {item.source}</div>
-                                      </div>
-                                    </div>
-                                    <div className="col-span-2 text-center font-bold text-slate-700">{qty}</div>
-                                    <div className="col-span-2 text-right font-medium text-slate-700">₹{Math.round(unitPrice)}</div>
-                                    <div className="col-span-1 text-right font-medium text-slate-500">₹0</div>
-                                    <div className="col-span-2 text-right font-bold text-slate-900">₹{Math.round(itemTotal)}</div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="bg-slate-900 rounded-2xl p-6 text-white mb-4">
-                          {isPendingInvoice ? (
-                            <div className="text-center py-4 font-sans">
-                              <span className="text-indigo-400 text-[10px] font-black uppercase tracking-widest block mb-1">Invoice Notification</span>
-                              <div className="text-sm font-bold text-slate-200 max-w-md mx-auto leading-relaxed">
-                                Invoice will be displayed once the items are picked and billed.
-                              </div>
-                              <span className="inline-block mt-3.5 px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[9px] font-bold uppercase tracking-widest">
-                                Awaiting Pick & Bill
-                              </span>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="flex justify-between items-center mb-3 pb-3 border-b border-white/10 text-xs">
-                                <span className="text-slate-400 font-bold uppercase tracking-widest">Total Weight</span>
-                                <span className="font-bold text-white">{getSafeOrderTotalWeight(selectedOrderForInvoice)} kg</span>
-                              </div>
-                              <div className="flex justify-between items-center mb-3 pb-3 border-b border-white/10 text-xs">
-                                <span className="text-slate-400 font-bold uppercase tracking-widest">Taxes (GST 0%)</span>
-                                <span className="font-bold text-slate-300">₹0</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <div>
-                                  <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Grand Total</span>
-                                  <div className="text-3xl font-black">₹{Math.round(Number(selectedOrderForInvoice.totalCost || selectedOrderForInvoice.total_cost || 0))}</div>
-                                </div>
-                                <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
-                                  {selectedOrderForInvoice.paymentStatus || 'Paid'}
-                                </div>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </>
-                    );
-                  })()}
-
-                  <div className="mt-6 flex gap-4">
-                    <button 
-                      onClick={() => window.print()}
-                      className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer border-0"
-                    >
-                      <Printer size={18} /> Print
-                    </button>
-                    <button 
-                      onClick={async () => {
-                        const targetEmail = selectedOrderForInvoice.destination.email || currentUser?.email;
-                        if (!targetEmail) {
-                          toast.error("No recipient email found for this order.");
-                          return;
-                        }
-                        const promise = api.sendInvoicePDF(targetEmail, selectedOrderForInvoice, COMPANY_DETAILS);
-                        toast.promise(promise, {
-                          loading: 'Sending invoice PDF to email...',
-                          success: `Tax Invoice PDF sent to ${targetEmail}!`,
-                          error: 'Could not send invoice via email.'
-                        });
-                      }}
-                      className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/20"
-                    >
-                      <Share size={18} /> Share PDF
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
+              <InvoiceAttachmentModal
+                order={selectedOrderForInvoice}
+                onClose={() => setSelectedOrderForInvoice(null)}
+                cachedOrder={orderDetailCache[selectedOrderForInvoice.id]}
+                isLoadingDetail={loadingOrderDetail === selectedOrderForInvoice.id}
+              />
             )}
           </AnimatePresence>
 
@@ -9969,13 +9892,13 @@ export default function App() {
                     <div>
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
                       <div className="text-sm font-bold text-slate-900">
-                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
+                        {isHomePickupOrder(selectedOrderForDetails)
                           ? ((selectedOrderForDetails as any).pickupAddress?.fullName || selectedOrderForDetails.customerName || 'Customer Residence')
                           : 'Jiffex Warehouse'
                         }
                       </div>
                       <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType ? (
+                        {isHomePickupOrder(selectedOrderForDetails) ? (
                           <>
                             {((selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || '').split(',').slice(0, 2).join(',')}<br />
                             {((selectedOrderForDetails as any).pickupAddress?.city || selectedOrderForDetails.destination?.city || '')} {((selectedOrderForDetails as any).pickupAddress?.state || selectedOrderForDetails.destination?.state || '')}<br />
@@ -9993,7 +9916,7 @@ export default function App() {
                     <div>
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
                       <div className="text-sm font-bold text-slate-900">
-                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
+                        {isHomePickupOrder(selectedOrderForDetails)
                           ? (selectedOrderForDetails.destination?.fullName || 'Receiver Location')
                           : (selectedOrderForDetails.destination?.fullName || currentUser?.name || 'Receiver Location')
                         }
@@ -10006,7 +9929,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {(selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType) && (
+                  {isHomePickupOrder(selectedOrderForDetails) && (
                     <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 mb-6 text-slate-700">
                       <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-3 flex items-center gap-1.5 pb-2 border-b border-indigo-100/60">
                         <Calendar size={14} className="text-indigo-600" /> Home Pickup Scheduled Details
@@ -10203,25 +10126,33 @@ export default function App() {
                 <button onClick={() => navigateTo('home')} className="mt-4 text-indigo-600 font-bold hover:underline">Start a shipment</button>
               </div>
             ) : (
-              unifiedHistory.map(order => (
+              unifiedHistory.map(order => {
+                const isPickup = isHomePickupOrder(order);
+                const isShopShip = isShopShipOrder(order);
+                return (
                 <div key={order.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-200 hover:border-indigo-300 transition-all group">
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex-1 min-w-0">
-                      <button 
-                        onClick={() => setSelectedOrderForDetails(order)}
-                        className="text-left group-hover:text-indigo-600 transition-colors w-full"
-                      >
+                      <div className="text-left w-full select-text">
                         <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Order ID</div>
-                        <div className="text-lg font-black flex items-center flex-wrap gap-2 text-slate-900 group-hover:text-indigo-600 transition-colors">
+                        <div className="text-lg font-black flex items-center flex-wrap gap-2 text-slate-900">
                           {order.id}
-                          {(order.id.startsWith('PH-') || (order as any).pickupType) && (
+                          {isPickup ? (
                             <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[9px] font-black uppercase tracking-wider rounded-md">
                               Home Pickup Scheduled
                             </span>
+                          ) : isShopShip ? (
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[9px] font-black uppercase tracking-wider rounded-md">
+                              Shop & Ship
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[9px] font-black uppercase tracking-wider rounded-md">
+                              Warehouse Shipment
+                            </span>
                           )}
                         </div>
-                      </button>
-                      {(order.id.startsWith('PH-') || (order as any).pickupType) && (
+                      </div>
+                      {isPickup && (
                         <div className="mt-2.5 text-xs bg-indigo-50/50 border border-indigo-100/60 rounded-xl p-3 text-slate-700 font-sans space-y-1 font-medium transition-all group-hover:bg-indigo-50 max-w-2xl">
                           <div className="font-extrabold flex items-center gap-1.5 text-slate-900 text-xs pb-1.5 mb-1.5 border-b border-indigo-100/40">
                             <Calendar size={13} className="text-indigo-600 font-bold" /> Scheduled Pickup Details
@@ -10259,7 +10190,7 @@ export default function App() {
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Items Shipped</div>
-                      <div className="text-sm font-bold text-slate-800">{order.items?.length || 0} items</div>
+                      <div className="text-sm font-bold text-slate-800">{getSafeOrderItemsCount(order, orderDetailCache[order.id])} items</div>
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Weight</div>
@@ -10352,170 +10283,20 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-              ))
+              )})
             )}
           </div>
         </div>
 
-        {/* Invoice Modal */}
+        {/* Invoice Modal (Email Attachment View) */}
         <AnimatePresence>
           {selectedOrderForInvoice && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-8 custom-scrollbar"
-              >
-                <div className="flex justify-between items-start mb-8">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Logo iconSize={18} />
-                    </div>
-                    <h2 className="text-2xl font-black text-slate-900">Tax Invoice</h2>
-                    <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mt-1">Order ID: {selectedOrderForInvoice.id}</p>
-                  </div>
-                  <button 
-                    onClick={() => setSelectedOrderForInvoice(null)}
-                    className="p-2 hover:bg-slate-100 rounded-full transition-colors"
-                  >
-                    <XCircle size={24} className="text-slate-400" />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-8 mb-8">
-                  <div>
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
-                    <div className="text-sm font-bold text-slate-900">Jiffex Warehouse</div>
-                    <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                      {WAREHOUSE_ADDRESS.street}<br />
-                      {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}<br />
-                      {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
-                    <div className="text-sm font-bold text-slate-900">{selectedOrderForInvoice.destination.fullName}</div>
-                    <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                      {selectedOrderForInvoice.destination.addressLine1}<br />
-                      {selectedOrderForInvoice.destination.city}, {selectedOrderForInvoice.destination.state}<br />
-                      {selectedOrderForInvoice.destination.zipCode}, {selectedOrderForInvoice.destination.country}
-                    </div>
-                  </div>
-                </div>
-
-                {(() => {
-                  const currentInvoice = (selectedOrderForInvoice && orderDetailCache[selectedOrderForInvoice.id]) || selectedOrderForInvoice;
-                  const isPendingInvoice = (currentInvoice.status === 'Scheduled' || currentInvoice.status === 'Pending Pickup') && (!currentInvoice.items || currentInvoice.items.length === 0);
-                  const isLoading = loadingOrderDetail === currentInvoice.id;
-                  return (
-                    <>
-                      <div className="border-t border-slate-100 pt-6 mb-8">
-                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
-                        {isLoading ? (
-                          <div className="py-8 text-center text-slate-500 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center justify-center gap-2">
-                            <Loader2 className="animate-spin text-indigo-600" size={24} />
-                            <span className="text-xs font-semibold">Loading item details...</span>
-                          </div>
-                        ) : orderDetailError && (!currentInvoice.items || currentInvoice.items.length === 0) ? (
-                          <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-center">
-                            <p className="text-xs text-red-600 font-semibold mb-2">{orderDetailError}</p>
-                            <button
-                              onClick={() => loadOrderDetailIfNeeded(selectedOrderForInvoice)}
-                              className="px-3 py-1.5 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-colors cursor-pointer"
-                            >
-                              Retry
-                            </button>
-                          </div>
-                        ) : isPendingInvoice ? (
-                          <div className="bg-indigo-50/50 border border-indigo-100/60 text-indigo-900 rounded-2xl p-6 text-center">
-                            <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                              <Clock size={20} />
-                            </div>
-                            <p className="text-sm font-bold text-slate-800">No items picked or billed yet</p>
-                            <p className="text-[11px] text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
-                              This is a scheduled pickup from home. The item list will be finalized and updated once our agent collects and measures your items at our hub.
-                            </p>
-                          </div>
-                        ) : (!currentInvoice.items || currentInvoice.items.length === 0) ? (
-                          <div className="p-4 bg-slate-50 rounded-xl text-center text-slate-400 text-xs">
-                            No items found for this order.
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            {currentInvoice.items.map((item, idx) => (
-                              <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-400 border border-slate-100 overflow-hidden">
-                                    <PickupItemThumbnail 
-                                      pickupId={currentInvoice.id} 
-                                      image={item.image} 
-                                      alt={item.name} 
-                                      fallbackIconSize={20} 
-                                    />
-                                  </div>
-                                  <div>
-                                    <div className="text-sm font-bold text-slate-900">{item.name}</div>
-                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] text-slate-500 font-medium">
-                                      <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 uppercase text-[9px] font-bold">{item.source}</span>
-                                      <span>Weight: <strong className="text-slate-700">{getSafeItemUnitWeight(item)} kg</strong></span>
-                                      <span>Qty: <strong className="text-slate-700">{item.quantity || 1}</strong></span>
-                                      <span>Total Weight: <strong className="text-slate-800">{getSafeItemTotalWeight(item).toFixed(2)} kg</strong></span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="text-sm font-bold text-slate-900">
-                                  {item.price ? `₹${item.price}` : '-'}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="bg-slate-900 rounded-2xl p-6 text-white mb-4">
-                        {isPendingInvoice ? (
-                          <div className="text-center py-4 font-sans">
-                            <span className="text-indigo-400 text-[10px] font-black uppercase tracking-widest block mb-1">Invoice Notification</span>
-                            <div className="text-sm font-bold text-slate-200 max-w-md mx-auto leading-relaxed">
-                              Invoice will be displayed once the items are picked and billed.
-                            </div>
-                            <span className="inline-block mt-3.5 px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-[9px] font-bold uppercase tracking-widest">
-                              Awaiting Pick & Bill
-                            </span>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
-                              <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Total Weight</span>
-                              <span className="font-bold">{getSafeOrderTotalWeight(selectedOrderForInvoice)} kg</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Grand Total</span>
-                                <div className="text-3xl font-black">₹{selectedOrderForInvoice.totalCost}</div>
-                              </div>
-                              <div className="px-3 py-1 bg-emerald-500 text-white rounded-full text-[10px] font-bold uppercase tracking-widest">
-                                {selectedOrderForInvoice.paymentStatus}
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </>
-                  );
-                })()}
-
-                <div className="mt-8 flex gap-4">
-                  <button className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
-                    <Printer size={18} /> Print
-                  </button>
-                  <button className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center justify-center gap-2">
-                    <Share size={18} /> Share
-                  </button>
-                </div>
-              </motion.div>
-            </div>
+            <InvoiceAttachmentModal
+              order={selectedOrderForInvoice}
+              onClose={() => setSelectedOrderForInvoice(null)}
+              cachedOrder={orderDetailCache[selectedOrderForInvoice.id]}
+              isLoadingDetail={loadingOrderDetail === selectedOrderForInvoice.id}
+            />
           )}
         </AnimatePresence>
 
@@ -10546,13 +10327,13 @@ export default function App() {
                     <div>
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping From</h4>
                       <div className="text-sm font-bold text-slate-900">
-                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
+                        {isHomePickupOrder(selectedOrderForDetails)
                           ? ((selectedOrderForDetails as any).pickupAddress?.fullName || selectedOrderForDetails.customerName || 'Customer Residence')
                           : 'Jiffex Warehouse'
                         }
                       </div>
                       <div className="text-xs text-slate-600 leading-relaxed mt-1">
-                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType ? (
+                        {isHomePickupOrder(selectedOrderForDetails) ? (
                           <>
                             {((selectedOrderForDetails as any).pickupAddress?.addressLine1 || selectedOrderForDetails.destination?.addressLine1 || '').split(',').slice(0, 2).join(',')}<br />
                             {((selectedOrderForDetails as any).pickupAddress?.city || selectedOrderForDetails.destination?.city || '')} {((selectedOrderForDetails as any).pickupAddress?.state || selectedOrderForDetails.destination?.state || '')}<br />
@@ -10570,7 +10351,7 @@ export default function App() {
                     <div>
                       <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Shipping To</h4>
                       <div className="text-sm font-bold text-slate-900">
-                        {selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType
+                        {isHomePickupOrder(selectedOrderForDetails)
                           ? (selectedOrderForDetails.destination?.fullName || 'Receiver Location')
                           : (selectedOrderForDetails.destination?.fullName || currentUser?.name || 'Receiver Location')
                         }
@@ -10583,7 +10364,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {(selectedOrderForDetails.id?.startsWith('PH-') || (selectedOrderForDetails as any).pickupType) && (
+                  {isHomePickupOrder(selectedOrderForDetails) && (
                     <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 mb-6 text-slate-700">
                       <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-3 flex items-center gap-1.5 pb-2 border-b border-indigo-100/60">
                         <Calendar size={14} className="text-indigo-600" /> Home Pickup Scheduled Details

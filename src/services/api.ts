@@ -108,8 +108,19 @@ const transformDbOrder = (o: any) => {
     }
   }
 
+  let its = o.items;
+  if (typeof its === 'string') {
+    try { its = JSON.parse(its); } catch (e) { its = []; }
+  } else if (!its) {
+    its = [];
+  }
+
+  const isExplicitNonPickup = (o.id && (String(o.id).toUpperCase().startsWith('SH-') || String(o.id).toUpperCase().startsWith('WH-') || String(o.id).toUpperCase().startsWith('SW-')));
+  const resolvedPickupType = isExplicitNonPickup ? undefined : (o.pickup_type !== undefined && o.pickup_type !== null ? o.pickup_type : (o.pickupType !== undefined && o.pickupType !== null ? o.pickupType : (dest?.pickupType || dest?.pickup_type || undefined)));
+
   return {
     ...o,
+    items: its,
     destination: dest,
     customerId: o.customer_id || o.customerId || dest?.customerId || dest?.customer_id,
     totalWeight: o.total_weight !== undefined && o.total_weight !== null ? o.total_weight : (o.totalWeight !== undefined ? o.totalWeight : (dest?.totalWeight || dest?.total_weight || 0)),
@@ -117,7 +128,7 @@ const transformDbOrder = (o: any) => {
     paymentStatus: o.payment_status || o.paymentStatus || dest?.paymentStatus || dest?.payment_status || 'Pending',
     shippingDate: o.shipping_date || o.shippingDate || dest?.shippingDate || dest?.shipping_date || dest?.date,
     createdAt: o.created_at || o.createdAt,
-    pickupType: o.pickup_type !== undefined && o.pickup_type !== null ? o.pickup_type : (o.pickupType !== undefined && o.pickupType !== null ? o.pickupType : (dest?.pickupType || dest?.pickup_type || 'AllAgent')),
+    pickupType: resolvedPickupType,
     assignedAgent: o.assigned_agent !== undefined && o.assigned_agent !== null ? o.assigned_agent : (o.assignedAgent !== undefined && o.assignedAgent !== null ? o.assignedAgent : (dest?.assignedAgent || dest?.assigned_agent)),
     assignedAgentId: o.assigned_agent_id !== undefined && o.assigned_agent_id !== null ? o.assigned_agent_id : (o.assignedAgentId !== undefined && o.assignedAgentId !== null ? o.assignedAgentId : (dest?.assignedAgentId || dest?.assigned_agent_id)),
     languagePreference: o.language_preference !== undefined && o.language_preference !== null ? o.language_preference : (o.languagePreference !== undefined && o.languagePreference !== null ? o.languagePreference : (dest?.languagePreference || dest?.language_preference || 'English')),
@@ -480,7 +491,7 @@ export const api = {
       try {
         let query = supabase
           .from('orders')
-          .select('id, customer_id, total_weight, total_cost, status, destination, payment_status, shipping_date, created_at, tracking_number, carrier, shipment_status, shipment_date, last_tracking_update, tracking_response');
+          .select('id, customer_id, total_weight, total_cost, status, destination, payment_status, shipping_date, created_at, tracking_number, carrier, shipment_status, shipment_date, last_tracking_update, tracking_response, items');
         if (userId !== 'all') {
           const idsToCheck = [userId];
           if (email) {
@@ -929,6 +940,22 @@ export const api = {
       console.warn('[API] /api/invoice/send-pdf failed:', err);
     }
     return { success: true, emailSent: false, message: 'Offline / Email service unreachable' };
+  },
+
+  async downloadInvoicePDF(order: Order, companyDetails: any): Promise<Blob | null> {
+    try {
+      const response = await fetch(`${API_URL}/api/invoice/download-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order, companyDetails }),
+      });
+      if (response.ok) {
+        return await response.blob();
+      }
+    } catch (err) {
+      console.warn('[API] /api/invoice/download-pdf failed:', err);
+    }
+    return null;
   },
 
   async sendConsolidatedInvoicePDF(email: string, orders: Order[], companyDetails: any) {
