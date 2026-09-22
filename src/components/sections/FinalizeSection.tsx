@@ -9,7 +9,8 @@ import {
   AlertTriangle,
   Mail,
   MessageCircle,
-  Loader2
+  Loader2,
+  Heart
 } from 'lucide-react';
 import { ShippingItem, User, DestinationAddress, Order } from '../../types';
 import { COUNTRIES, SHIPPING_DATES, SHIPPING_RATES, PROHIBITED_ITEMS, COMPANY_DETAILS } from '../../constants';
@@ -74,66 +75,24 @@ const FinalizeSection = ({
           <h2 className="text-4xl font-black text-slate-900">Payment Successful!</h2>
           <p className="text-slate-500">Your order <span className="font-bold text-indigo-600">{orderId}</span> has been placed successfully.</p>
         </div>
-        <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-4">
-          <div className="flex justify-between items-center border-b border-slate-100 pb-4">
-            <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Estimated Delivery</span>
-            <span className="font-black text-slate-900">12-15 Business Days</span>
-          </div>
-          <p className="text-sm text-slate-500 leading-relaxed">
-            We have received your payment. Our team will consolidate your items and ship them on <span className="font-bold">{selectedDate}</span>. You can track your shipment in your history.
+        <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-100 shadow-sm text-center">
+          <p className="text-sm text-slate-600 leading-relaxed font-semibold">
+            We have received your payment. Our team will consolidate your items and ship them. You can track your shipment in My Orders.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <button 
-            disabled={isSendingInvoice}
-            onClick={async () => {
-              if (!orderId) return;
-              setIsSendingInvoice(true);
-              
-              // We need an Order object here. We can reconstruct it or pass it.
-              const cartItems = items.filter(i => i.source !== 'Warehouse' || i.submitted);
-              const currentOrder: Order = {
-                id: orderId,
-                customerId: currentUser.id,
-                items: cartItems,
-                totalWeight,
-                totalCost,
-                status: 'Order Confirmed',
-                createdAt: new Date().toISOString(),
-                shippingDate: selectedDate,
-                destination: address,
-                paymentStatus: 'Paid'
-              };
-
-              try {
-                await api.sendInvoicePDF(address.email, currentOrder, COMPANY_DETAILS);
-                toast.success('Invoice sent to email successfully!');
-              } catch (err: any) {
-                console.error(err);
-                toast.error(err.message || 'Failed to send invoice email.');
-                
-                // Fallback to mailto
-                const subject = `Invoice for Order ${orderId}`;
-                const body = `Hi ${address.fullName},\n\nYour payment for order ${orderId} was successful.\nTotal Amount: ₹${totalCost.toFixed(2)}\nDestination: ${address.country}\n\nThank you for choosing Jiffex!`;
-                window.location.href = `mailto:${address.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-              } finally {
-                setIsSendingInvoice(false);
-              }
-            }}
-            className="flex-1 py-4 bg-slate-100 text-slate-900 rounded-2xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {isSendingInvoice ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />} Email Invoice
-          </button>
-          <button 
-            onClick={() => {
-              const message = `*Jiffex Invoice*\n\nOrder ID: ${orderId}\nCustomer: ${address.fullName}\nTotal Amount: ₹${totalCost.toFixed(2)}\nDestination: ${address.country}\nStatus: Paid\n\nThank you for choosing Jiffex!`;
-              const cleanPhone = address.phone.replace(/\D/g, '');
-              window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
-            }}
-            className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
-          >
-            <MessageCircle size={18} /> WhatsApp Invoice
-          </button>
+        {/* Heartfelt Thank You & Reassurance Message */}
+        <div className="p-6 bg-gradient-to-br from-indigo-50/70 via-white to-emerald-50/50 border border-indigo-100/80 rounded-3xl text-center space-y-3 shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
+            <Heart className="w-6 h-6 fill-indigo-600 text-indigo-600" />
+          </div>
+          <div className="space-y-1.5">
+            <h3 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
+              Thank You for Choosing Jiffex!
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium">
+              We are truly happy to help you with your shopping and delighted to ship your packages safely to your doorstep. Our team is already preparing and packaging your order with utmost care, and we're always here to support and assist you every step of the way!
+            </p>
+          </div>
         </div>
         <div className="flex gap-4">
           <button 
@@ -219,6 +178,16 @@ const FinalizeSection = ({
                 className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
                 value={address.city}
                 onChange={e => setAddress({...address, city: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-1">State / Province</label>
+              <input 
+                type="text" 
+                className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none"
+                placeholder="State / Province"
+                value={address.state || ''}
+                onChange={e => setAddress({...address, state: e.target.value})}
               />
             </div>
             <div>

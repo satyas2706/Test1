@@ -63,8 +63,11 @@ export const mapOrderToThirdPartyTrackResult = (order: Order): ThirdPartyTrackRe
 
   // Map Jiffex native status to tracking status
   const rawStatus = order.status;
-  let status: 'In Transit' | 'Out for Delivery' | 'Delivered' | 'Pending' = 'Pending';
-  if (rawStatus === 'Delivered') {
+  const isCancelled = String(rawStatus || '').toLowerCase().includes('cancel');
+  let status: 'In Transit' | 'Out for Delivery' | 'Delivered' | 'Pending' | 'Cancelled' = 'Pending';
+  if (isCancelled) {
+    status = 'Cancelled';
+  } else if (rawStatus === 'Delivered') {
     status = 'Delivered';
   } else if (rawStatus === 'Out for Delivery') {
     status = 'Out for Delivery';
@@ -74,7 +77,7 @@ export const mapOrderToThirdPartyTrackResult = (order: Order): ThirdPartyTrackRe
     status = 'Pending';
   }
 
-  const origin = 'Jiffex Delhi Hub (DEL), India';
+  const origin = 'Hyderabad (Jiffex Warehouse), India';
   const destination = `${order.destination?.city || 'New York'}, ${order.destination?.state ? order.destination.state + ', ' : ''}${destCountry}`;
   
   const shipDate = order.shippingDate || order.created_at || order.createdAt || new Date().toISOString();
@@ -88,14 +91,31 @@ export const mapOrderToThirdPartyTrackResult = (order: Order): ThirdPartyTrackRe
   };
 
   const estDate = new Date(dateBase.getTime() + (status === 'Delivered' ? 3 : 5) * 24 * 3600 * 1000);
-  const estimatedDelivery = status === 'Delivered'
+  const estimatedDelivery = status === 'Cancelled'
+    ? 'Shipment Cancelled'
+    : status === 'Delivered'
     ? `Delivered on ${formatDateStr(new Date(dateBase.getTime() + 3 * 24 * 3600 * 1000))}`
     : `Estimated Delivery by ${formatDateStr(estDate)}`;
 
   const events = [];
   const today = new Date();
   
-  if (status === 'Delivered') {
+  if (status === 'Cancelled') {
+    events.push({
+      status: 'Order Cancelled',
+      location: origin,
+      date: formatDateStr(today),
+      time: formatTimeStr(today.getHours(), today.getMinutes()),
+      description: 'Shipment order has been cancelled. Processing and dispatch operations halted.'
+    });
+    events.push({
+      status: 'Order Placed & Scheduled',
+      location: 'Origin Address',
+      date: formatDateStr(dateBase),
+      time: formatTimeStr(8, 0),
+      description: 'Shipment request submitted.'
+    });
+  } else if (status === 'Delivered') {
     const dDate = new Date(dateBase.getTime() + 3 * 24 * 3600 * 1000);
     events.push({
       status: 'Delivered',
@@ -174,7 +194,7 @@ export const mapOrderToThirdPartyTrackResult = (order: Order): ThirdPartyTrackRe
       location: origin,
       date: formatDateStr(dateBase),
       time: formatTimeStr(21, 15),
-      description: 'Departed Jiffex New Delhi logistics facility.'
+      description: 'Departed Jiffex Hyderabad logistics facility.'
     });
     events.push({
       status: 'Processed at Warehouse',
@@ -311,13 +331,15 @@ export const ThirdPartyTrackerCard: React.FC<{
     }
   };
 
+  const isCancelled = (result.status || '').toLowerCase().includes('cancel');
   const brand = carrierBranding[result.carrier] || {
     logo: <span className="font-extrabold tracking-tight text-lg text-indigo-600">{result.carrier || 'Carrier'}</span>,
-    barColor: 'bg-indigo-600'
+    barColor: isCancelled ? 'bg-red-600' : 'bg-indigo-600'
   };
   const steps = ['Label Created', 'Pickup Completed', 'In Transit', 'Out for Delivery', 'Delivered'];
   const getStepIndex = (statusStr: string): number => {
     const s = (statusStr || '').toLowerCase();
+    if (s.includes('cancel')) return 0;
     if (s.includes('delivered') || s.includes('received by') || s.includes('completed') || s.includes('signed')) return 4;
     if (s.includes('out for delivery') || s.includes('delivery vehicle') || s.includes('on vehicle')) return 3;
     if (s.includes('transit') || s.includes('departed') || s.includes('arrived') || s.includes('facility') || s.includes('hub') || s.includes('cleared') || s.includes('customs') || s.includes('received at warehouse') || s.includes('packed') || s.includes('shipped') || s.includes('dispatched')) return 2;
@@ -361,7 +383,7 @@ export const ThirdPartyTrackerCard: React.FC<{
         <div className="flex flex-col gap-3 pb-4 border-b border-slate-100">
           <div className="flex items-center justify-between gap-3">
             {brand.logo}
-            <span className={`px-2.5 py-0.5 rounded-full text-[9px] uppercase font-black tracking-wider text-white ${brand.barColor}`}>
+            <span className={`px-2.5 py-0.5 rounded-full text-[9px] uppercase font-black tracking-wider text-white ${isCancelled ? 'bg-red-600' : brand.barColor}`}>
               {result.status}
             </span>
           </div>
@@ -386,7 +408,11 @@ export const ThirdPartyTrackerCard: React.FC<{
             </span>
           </div>
           {result.estimatedDelivery && (
-            <div className="text-[11px] font-semibold text-emerald-600 bg-emerald-50/50 border border-emerald-100/40 p-2.5 rounded-xl flex items-center gap-1.5">
+            <div className={`text-[11px] font-semibold p-2.5 rounded-xl flex items-center gap-1.5 ${
+              isCancelled 
+                ? 'text-red-700 bg-red-50 border border-red-200' 
+                : 'text-emerald-600 bg-emerald-50/50 border border-emerald-100/40'
+            }`}>
               <Clock size={13} />
               <span>{result.estimatedDelivery}</span>
             </div>
@@ -595,20 +621,9 @@ export const ThirdPartyTrackerCard: React.FC<{
       </div>
 
       <div className="p-6 sm:p-8 space-y-8">
-        {/* Real Data Synchronization Notice & Direct Tracking Option */}
-        <div className="p-5 bg-teal-50/40 border border-teal-100/60 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5">
-            <div className="w-9 h-9 rounded-xl bg-white border border-teal-200 text-teal-600 flex items-center justify-center shrink-0 shadow-sm font-sans font-black">
-              <CheckCircle2 size={18} />
-            </div>
-            <div className="space-y-0.5">
-              <span className="text-xs font-black text-teal-800 uppercase tracking-widest block leading-none">Database Records Synced</span>
-              <p className="text-[11px] text-teal-700 leading-relaxed font-semibold">
-                This shipment tracking status is synchronized directly with your real Jiffex order data.
-              </p>
-            </div>
-          </div>
-          {result.trackingUrl && (
+        {/* Direct Tracking Option if Available */}
+        {result.trackingUrl && (
+          <div className="flex justify-end">
             <button
               type="button"
               onClick={() => setShowTracker(prev => !prev)}
@@ -621,8 +636,8 @@ export const ThirdPartyTrackerCard: React.FC<{
               <ExternalLink size={14} />
               {showTracker ? 'Hide' : 'Open'} {result.carrier} Tracker
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Custom Interactive Shipment Progress Tracker */}
         {showTracker && (
@@ -705,18 +720,24 @@ export const ThirdPartyTrackerCard: React.FC<{
                   <div className="space-y-2">
                     <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Real-time status</span>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-black text-white uppercase ${brand.barColor}`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-black text-white uppercase ${isCancelled ? 'bg-red-600' : brand.barColor}`}>
                         {result.status}
                       </span>
                       {result.estimatedDelivery && (
-                        <span className="text-xs font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200/40">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded border ${
+                          isCancelled 
+                            ? 'text-red-700 bg-red-50 border-red-200' 
+                            : 'text-slate-500 bg-slate-50 border-slate-200/40'
+                        }`}>
                           {result.estimatedDelivery}
                         </span>
                       )}
                     </div>
                   </div>
                   <p className="mt-4 text-xs font-medium text-slate-500 leading-relaxed font-sans">
-                    Authorized digital delivery manifest synced with the real-time order tracking server.
+                    {isCancelled 
+                      ? 'Shipment order has been cancelled. Processing and transit operations halted.' 
+                      : 'Authorized digital delivery manifest synced with the real-time order tracking server.'}
                   </p>
                 </div>
 

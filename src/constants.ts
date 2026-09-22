@@ -507,16 +507,16 @@ export const PICKUP_SLOTS = Array.from({ length: 15 }).map((_, i) => ({
 }));
 
 export const WAREHOUSE_ADDRESS = {
-  name: 'Jiffex Main Warehouse',
-  fullName: 'Jiffex Main Warehouse',
-  street: 'Plot No. 45, Sector 18',
-  addressLine1: 'Plot No. 45, Sector 18',
-  city: 'Gurgaon',
-  state: 'Haryana',
-  zip: '122015',
-  zipCode: '122015',
+  name: 'Jiffex Warehouse Hub',
+  fullName: 'Jiffex Warehouse Hub',
+  street: 'Plot No 20, Siddartha Nagar North',
+  addressLine1: 'Plot No 20, Siddartha Nagar North',
+  city: 'Hyderabad',
+  state: 'Telangana',
+  zip: '500038',
+  zipCode: '500038',
   country: 'India',
-  phone: '+91 124 4567890'
+  phone: '+91 99999 00000'
 };
 
 export const INDIAN_STORES = [
@@ -532,7 +532,7 @@ export const COMPANY_DETAILS = {
   name: "Jiffex Fulfilment Private Limited",
   fullName: "Jiffex Fulfilment Private Limited",
   gstin: "36AAHCJ4656R1ZQ",
-  address: "Plot No 20, Siddartha Nagar North, Hyderabad 500038",
+  address: "Plot No 20, Siddartha Nagar North, Hyderabad, Telangana, India - 500038",
   email: "support@jiffex.shop",
   phone: "+91 99999 00000",
   website: "www.jiffex.shop"

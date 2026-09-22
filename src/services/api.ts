@@ -761,13 +761,20 @@ export const api = {
                 description: String(evt?.description || '')
               }))
             : [];
+          const rawStat = data.status || '';
+          const rawShipStat = data.shipment_status || '';
+          const isCancelled = rawStat.toLowerCase().includes('cancel') || rawShipStat.toLowerCase().includes('cancel');
+          const finalStatus = isCancelled ? 'Cancelled' : (rawShipStat || rawStat || 'In Warehouse');
+
           return {
             success: true,
             isLive: false,
             trackingData: {
               id: data.tracking_number || data.id || 'TBD',
               carrier: data.carrier || 'Pending Assignment',
-              status: data.shipment_status || data.status || 'In Warehouse',
+              status: finalStatus,
+              origin: 'Hyderabad (Jiffex Warehouse), India',
+              estimatedDelivery: isCancelled ? 'Shipment Cancelled' : (data.shipping_date || data.shipment_date || 'In 3-5 business days'),
               events: sanitizedEvents
             }
           };
@@ -986,6 +993,28 @@ export const api = {
       }
     } catch (err) {
       console.warn('[API] /api/order-confirmation failed:', err);
+    }
+    return { success: true, emailSent: false, message: 'Offline / Email service unreachable' };
+  },
+
+  async sendOrderCancellationEmail(orderId: string, order?: any, email?: string, reason?: string, companyDetails?: any) {
+    try {
+      const response = await fetch(`${API_URL}/api/order-cancellation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          order,
+          email,
+          reason,
+          companyDetails: companyDetails || COMPANY_DETAILS
+        }),
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (err) {
+      console.warn('[API] /api/order-cancellation failed:', err);
     }
     return { success: true, emailSent: false, message: 'Offline / Email service unreachable' };
   },

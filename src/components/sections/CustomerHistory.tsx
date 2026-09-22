@@ -114,7 +114,7 @@ const CustomerHistory = ({
                   </div>
                   <div>
                     <div className="text-[10px] font-bold text-slate-400 uppercase">Total Paid</div>
-                    <div className="text-sm font-bold">₹{order.totalCost}</div>
+                    <div className="text-sm font-bold">₹{Number(order.totalCost || 0).toFixed(1)}</div>
                   </div>
                 </div>
                 <div className="flex items-center justify-between">

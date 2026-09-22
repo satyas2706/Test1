@@ -81,6 +81,21 @@ export const InvoiceAttachmentModal: React.FC<InvoiceAttachmentModalProps> = ({
     orderIdStr.startsWith('PH-') ? 'Home Pickup & International Courier' : 'International Express Shipping'
   );
 
+  const isOnlyShopShip = (() => {
+    if (!activeOrder) return false;
+    const id = String(activeOrder.id || '').toUpperCase().trim();
+    if (id.startsWith('PH-')) return false;
+    if ((activeOrder as any).pickupType === 'AllAgent' || (activeOrder as any).pickupType === 'home' || (activeOrder as any).pickupType === 'agent') return false;
+    if (id.startsWith('SH-')) return true;
+    if ((activeOrder as any).orderType === 'shop_and_ship' || (activeOrder as any).type === 'shop_and_ship' || (activeOrder as any).serviceType === 'Shop & Ship') return true;
+    if (items.length > 0) {
+      const hasShop = items.some((i: any) => i.source === 'Store' || i.source === 'shop');
+      const hasPickup = items.some((i: any) => i.source === 'Pickup' || i.source === 'home' || i.source === 'courier_pickup');
+      if (hasShop && !hasPickup) return true;
+    }
+    return false;
+  })();
+
   // Download PDF handler
   const handleDownloadPDF = async () => {
     setIsDownloading(true);
@@ -223,11 +238,11 @@ export const InvoiceAttachmentModal: React.FC<InvoiceAttachmentModalProps> = ({
               <div>
                 <Logo iconSize={22} />
               </div>
-              <div className="text-left sm:text-right text-[11px] text-slate-600 space-y-0.5">
+              <div className="text-left sm:text-right text-[11px] text-slate-600 space-y-1">
                 <div className="font-bold text-slate-900 text-xs">{COMPANY_DETAILS.name}</div>
-                <div>{COMPANY_DETAILS.address}</div>
+                <div className="max-w-xs sm:ml-auto leading-relaxed">{COMPANY_DETAILS.address}</div>
                 <div className="font-semibold text-slate-800">GSTIN: {COMPANY_DETAILS.gstin}</div>
-                <div>Email: {COMPANY_DETAILS.email} | Web: {COMPANY_DETAILS.website}</div>
+                <div className="text-slate-500">Email: {COMPANY_DETAILS.email} | Web: {COMPANY_DETAILS.website}</div>
               </div>
             </div>
 
@@ -262,13 +277,30 @@ export const InvoiceAttachmentModal: React.FC<InvoiceAttachmentModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-5 text-xs">
               {/* Billing Address */}
               <div className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-200">
-                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
-                  Billing Address
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5 flex items-center justify-between">
+                  <span>Billing Address</span>
+                  {isOnlyShopShip && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border border-indigo-100">
+                      Office Address
+                    </span>
+                  )}
                 </div>
-                <div className="font-bold text-slate-900 mb-1">{destName}</div>
-                <div className="text-slate-600 leading-relaxed text-[11px] mb-2">{destAddrStr}</div>
-                <div className="text-[11px] text-slate-500">Phone: <strong className="text-slate-700">{destPhone}</strong></div>
-                <div className="text-[11px] text-slate-500">Email: <strong className="text-slate-700">{destEmail}</strong></div>
+                {isOnlyShopShip ? (
+                  <>
+                    <div className="font-bold text-slate-900 mb-1">{COMPANY_DETAILS.name}</div>
+                    <div className="text-slate-600 leading-relaxed text-[11px] mb-1.5">{COMPANY_DETAILS.address}</div>
+                    <div className="text-[11px] font-semibold text-slate-800 mb-0.5">GSTIN: {COMPANY_DETAILS.gstin}</div>
+                    <div className="text-[11px] text-slate-500">Phone: <strong className="text-slate-700">{COMPANY_DETAILS.phone}</strong></div>
+                    <div className="text-[11px] text-slate-500">Email: <strong className="text-slate-700">{COMPANY_DETAILS.email}</strong></div>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-bold text-slate-900 mb-1">{destName}</div>
+                    <div className="text-slate-600 leading-relaxed text-[11px] mb-2">{destAddrStr}</div>
+                    <div className="text-[11px] text-slate-500">Phone: <strong className="text-slate-700">{destPhone}</strong></div>
+                    <div className="text-[11px] text-slate-500">Email: <strong className="text-slate-700">{destEmail}</strong></div>
+                  </>
+                )}
               </div>
 
               {/* Shipping Address */}

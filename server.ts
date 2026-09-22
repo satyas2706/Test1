@@ -2764,6 +2764,14 @@ app.patch("/api/orders/:orderId/status", async (req, res) => {
     if (idx > -1) {
       memOrders[idx].status = status;
       saveDb();
+      if (status === 'Cancelled') {
+        sendCancellationEmail({
+          orderId,
+          order: memOrders[idx],
+          recipientEmail: memOrders[idx]?.destination?.email,
+          reason: req.body.reason
+        }).catch(e => console.error('[Order] Mem cancel email error:', e));
+      }
       return res.json({ success: true, order: transformDbOrder(memOrders[idx]) });
     }
     return res.status(404).json({ error: "Order not found" });
@@ -2789,7 +2797,7 @@ app.patch("/api/orders/:orderId/status", async (req, res) => {
     // 1. Get current order info for notification
     const { data: order, error: fetchError } = await supabase
       .from('orders')
-      .select('id, customer_id, destination')
+      .select('id, customer_id, destination, items, total_cost, payment_status, shipping_date, pickup_type')
       .eq('id', orderId)
       .single();
     
@@ -2806,25 +2814,53 @@ app.patch("/api/orders/:orderId/status", async (req, res) => {
 
     if (updateError) throw updateError;
     
-    // 3. Send notification if order was found
+    // 3. Send notification / formal cancellation email if order was found
     if (order) {
-      try {
-        const message = `*Jiffex Shipment Update*\n\nYour order #${orderId.slice(0, 8)} status has changed to: *${status}*\n\nTrack here: ${process.env.APP_URL || 'https://www.jiffex.shop'}/track?id=${orderId}`;
-        
-        await sendNotification(
-          order.customer_id,
-          "Order Status Updated",
-          message,
-          ['whatsapp', 'Email'],
-          { 
-            phone: (order.destination as any)?.phone,
-            email: (order.destination as any)?.email,
-            fullName: (order.destination as any)?.fullName
-          }
-        );
-      } catch (notifyErr: any) {
-        console.error("[Order] Notification failed but status update succeeded:", notifyErr.message);
-        // Do not throw here, we want the status update to be considered a success
+      if (status === 'Cancelled') {
+        try {
+          await sendCancellationEmail({
+            orderId,
+            order,
+            recipientEmail: (order.destination as any)?.email,
+            reason: req.body.reason
+          });
+        } catch (cancelErr: any) {
+          console.error("[Order] Formal cancellation email error:", cancelErr.message);
+        }
+
+        try {
+          const message = `*Jiffex Shipment Cancelled*\n\nYour order #${orderId.slice(0, 8)} has been cancelled as requested.\n\nView details: ${process.env.APP_URL || 'https://www.jiffex.shop'}/track?id=${orderId}`;
+          await sendNotification(
+            order.customer_id,
+            "Order Cancelled",
+            message,
+            ['whatsapp'],
+            { 
+              phone: (order.destination as any)?.phone,
+              fullName: (order.destination as any)?.fullName
+            }
+          );
+        } catch (wErr) {
+          // Non-blocking
+        }
+      } else {
+        try {
+          const message = `*Jiffex Shipment Update*\n\nYour order #${orderId.slice(0, 8)} status has changed to: *${status}*\n\nTrack here: ${process.env.APP_URL || 'https://www.jiffex.shop'}/track?id=${orderId}`;
+          
+          await sendNotification(
+            order.customer_id,
+            "Order Status Updated",
+            message,
+            ['whatsapp', 'Email'],
+            { 
+              phone: (order.destination as any)?.phone,
+              email: (order.destination as any)?.email,
+              fullName: (order.destination as any)?.fullName
+            }
+          );
+        } catch (notifyErr: any) {
+          console.error("[Order] Notification failed but status update succeeded:", notifyErr.message);
+        }
       }
     }
 
@@ -3326,6 +3362,395 @@ The Jiffex Team
   }
 });
 
+// Helper: Compose and send formal Order Cancellation Email
+async function sendCancellationEmail(params: {
+  orderId: string;
+  order?: any;
+  recipientEmail?: string;
+  recipientName?: string;
+  companyDetails?: any;
+  reason?: string;
+}): Promise<{ success: boolean; emailSent: boolean; message?: string; recipient?: string }> {
+  const { orderId, companyDetails, reason } = params;
+  let order = params.order;
+
+  // Try to enrich order data from memory or Supabase if needed
+  if (!order || !order.destination) {
+    const memMatch = memOrders.find(o => o.id === orderId);
+    if (memMatch) {
+      order = { ...memMatch, ...(order || {}) };
+    } else if (supabase) {
+      try {
+        const { data } = await supabase.from('orders').select('*').eq('id', orderId).single();
+        if (data) {
+          order = { ...data, ...(order || {}) };
+        }
+      } catch (err) {
+        console.warn(`[Cancellation Email] Could not fetch order ${orderId} from Supabase:`, err);
+      }
+    }
+  }
+
+  const orderIdStr = String(orderId || order?.id || '');
+  const isPrefixed = ['SH-', 'SW-', 'PH-', 'BB-'].some(p => orderIdStr.startsWith(p));
+  const trackingId = isPrefixed ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
+
+  const dest = order?.destination || order?.pickupAddress || {};
+  let email = params.recipientEmail || dest.email || order?.customerEmail || order?.email;
+
+  // Lookup profile email if needed
+  if ((!email || !email.includes('@')) && supabase && (order?.customer_id || order?.customerId)) {
+    try {
+      const cId = order?.customer_id || order?.customerId;
+      const { data: profile } = await supabase.from('profiles').select('email, full_name').eq('id', cId).single();
+      if (profile?.email) {
+        email = profile.email;
+        if (!dest.fullName && profile.full_name) {
+          dest.fullName = profile.full_name;
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  if (!email || !email.includes('@') || email === 'user@example.com') {
+    console.warn(`[Cancellation Email] No valid recipient email found for order ${orderIdStr}`);
+    return { success: false, emailSent: false, message: 'No valid recipient email address' };
+  }
+
+  if (!mailTransporter || (!process.env.SMTP_FROM && !process.env.SMTP_USER)) {
+    console.error('[Cancellation Email] Email service not configured');
+    return { success: false, emailSent: false, message: 'Email service not configured' };
+  }
+
+  const compName = companyDetails?.fullName || companyDetails?.name || "Jiffex Fulfilment Private Limited";
+  const compEmail = companyDetails?.email || "support@jiffex.shop";
+  const compPhone = companyDetails?.phone || "+91 99999 00000";
+  const compGst = companyDetails?.gstin || "36AAHCJ4656R1ZQ";
+  const compAddress = companyDetails?.address || "Plot No 20, Siddartha Nagar North, Hyderabad, Telangana, India - 500038";
+  const compWebsite = companyDetails?.website || "www.jiffex.shop";
+
+  const customerName = params.recipientName || dest.fullName || dest.name || order?.customerName || 'Valued Customer';
+  const appUrl = process.env.APP_URL || "https://www.jiffex.shop";
+  const trackingUrl = `${appUrl}?tab=track&id=${trackingId}`;
+  const myOrdersUrl = `${appUrl}?tab=my-orders`;
+
+  // Parse order items if present
+  let rawItems = order?.items;
+  if (typeof rawItems === 'string') {
+    try { rawItems = JSON.parse(rawItems); } catch { rawItems = []; }
+  }
+  const items = Array.isArray(rawItems) ? rawItems : [];
+
+  const totalCost = Number(order?.totalCost || order?.total_cost || 0);
+  const paymentStatus = String(order?.paymentStatus || order?.payment_status || 'Pending');
+  const isPaid = paymentStatus.toLowerCase() === 'paid';
+  const isPayAtHome = paymentStatus.toLowerCase() === 'pay at home';
+
+  const cancellationDateStr = new Date().toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata'
+  });
+
+  const serviceType = (() => {
+    if (orderIdStr.startsWith('SH-') || items.some((i: any) => i.source === 'Store' || i.source === 'shop')) {
+      return 'Shop & Ship (Assisted Store Purchase & Delivery)';
+    }
+    if (orderIdStr.startsWith('PH-') || order?.pickupType === 'AllAgent' || order?.pickupType === 'home' || order?.pickupType === 'agent') {
+      return 'Home Pickup & International Courier';
+    }
+    return 'International Express Logistics';
+  })();
+
+  const destCity = [dest.city, dest.state, dest.country].filter(Boolean).join(', ') || 'Address on file';
+  const subject = `Order Cancellation Notice: #${trackingId} - Jiffex Shipment Cancelled`;
+
+  let itemsHtml = '';
+  if (items.length > 0) {
+    const itemRows = items.map((it: any) => `
+      <tr>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #f1f5f9; color: #1e293b; font-size: 13px;">
+          <strong>${it.name || it.description || 'Consignment Item'}</strong>
+          ${it.category ? `<br><span style="color: #64748b; font-size: 11px;">Category: ${it.category}</span>` : ''}
+        </td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #f1f5f9; color: #475569; font-size: 13px; text-align: center;">
+          ${it.quantity || 1}
+        </td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #f1f5f9; color: #0f172a; font-size: 13px; text-align: right; font-weight: 600;">
+          ₹${(Number(it.price) || 0).toLocaleString('en-IN')}
+        </td>
+      </tr>
+    `).join('');
+
+    itemsHtml = `
+      <div style="margin: 20px 0;">
+        <p style="margin: 0 0 8px 0; font-size: 13px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.5px;">
+          Cancelled Consignment Items
+        </p>
+        <table style="width: 100%; border-collapse: collapse; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+          <thead>
+            <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+              <th style="padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Description</th>
+              <th style="padding: 8px 12px; text-align: center; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; width: 60px;">Qty</th>
+              <th style="padding: 8px 12px; text-align: right; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; width: 90px;">Price</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemRows}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  // Payment block
+  let paymentBlockHtml = '';
+  let paymentBlockText = '';
+  if (isPaid) {
+    paymentBlockText = `PAYMENT DETAILS:
+Payment Status: ${paymentStatus} (Amount: ₹${Math.round(totalCost).toLocaleString('en-IN')}).
+Any applicable refund will be evaluated and processed in accordance with our cancellation policy by our finance team.`;
+    paymentBlockHtml = `
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #64748b; padding: 14px 16px; border-radius: 8px; margin: 18px 0;">
+        <p style="margin: 0 0 4px 0; font-weight: 700; font-size: 13px; color: #334155; text-transform: uppercase; letter-spacing: 0.5px;">
+          Payment Notice
+        </p>
+        <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.5;">
+          Recorded payment status: <strong>${paymentStatus}</strong> (₹${Math.round(totalCost).toLocaleString('en-IN')}). Any eligible refund is subject to verification under our cancellation policy. Please contact our support team if you have any questions regarding your account.
+        </p>
+      </div>
+    `;
+  } else if (isPayAtHome) {
+    paymentBlockText = `PAYMENT STATUS:
+This order was scheduled under 'Pay at Home'. No charges have been collected, and any doorstep cash collection has been cancelled.`;
+    paymentBlockHtml = `
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #64748b; padding: 14px 16px; border-radius: 8px; margin: 18px 0;">
+        <p style="margin: 0 0 4px 0; font-weight: 700; font-size: 13px; color: #334155; text-transform: uppercase; letter-spacing: 0.5px;">
+          Payment Notice: No Charges Applied
+        </p>
+        <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.5;">
+          This order was scheduled under <strong>Pay at Home</strong>. No payment was collected, and the scheduled doorstep collection has been completely voided.
+        </p>
+      </div>
+    `;
+  } else {
+    paymentBlockText = `PAYMENT STATUS:
+No payment was processed for this order. No charges have been deducted from your account.`;
+    paymentBlockHtml = `
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #94a3b8; padding: 14px 16px; border-radius: 8px; margin: 18px 0;">
+        <p style="margin: 0 0 4px 0; font-weight: 700; font-size: 13px; color: #334155; text-transform: uppercase; letter-spacing: 0.5px;">
+          Payment Status: No Charges Deducted
+        </p>
+        <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.5;">
+          The payment status was <strong>${paymentStatus}</strong>. No charges were captured, and your account has not been billed.
+        </p>
+      </div>
+    `;
+  }
+
+  const bodyText = `
+Dear ${customerName},
+
+ORDER CANCELLATION NOTICE
+Reference: #${trackingId}
+Status: CANCELLED
+Date: ${cancellationDateStr} IST
+
+We are writing to formally confirm that your order #${trackingId} has been successfully cancelled in our logistics management system.
+
+ORDER SUMMARY:
+- Order Reference: #${trackingId}
+- Current Status: Cancelled
+- Service Type: ${serviceType}
+- Destination: ${destCity}
+- Order Value: ₹${Math.round(totalCost).toLocaleString('en-IN')}
+${reason ? `- Cancellation Reason: ${reason}\n` : ''}
+${paymentBlockText}
+
+WHAT HAPPENS NEXT:
+1. All scheduled pickups, packaging, and international transit dispatches for this order have been permanently halted.
+2. No further action is required from your side.
+3. The shipment record in your portal has been marked as Cancelled for your records.
+
+View Order Status: ${trackingUrl}
+
+If this cancellation was requested in error or if you require any assistance, please reach out to our 24/7 support desk:
+Email: ${compEmail}
+Phone: ${compPhone}
+Website: ${compWebsite}
+
+Sincerely,
+Customer Support & Operations Team
+${compName}
+${compAddress}
+GSTIN: ${compGst}
+`.trim();
+
+  const bodyHtml = `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
+  
+  <!-- Header Bar -->
+  <div style="background-color: #0f172a; padding: 24px 30px; border-bottom: 3px solid #ef4444;">
+    <table style="width: 100%; border-collapse: collapse;">
+      <tr>
+        <td style="vertical-align: middle;">
+          <div style="color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">Jiffex</div>
+        </td>
+        <td style="text-align: right; vertical-align: middle;">
+          <span style="background-color: #ef4444; color: #ffffff; padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block;">
+            Order Cancelled
+          </span>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Body Content -->
+  <div style="padding: 28px 30px;">
+    <p style="font-size: 15px; margin: 0 0 16px 0;">Dear <strong>${customerName}</strong>,</p>
+    
+    <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 20px 0;">
+      This email is to formally confirm that your order <strong>#${trackingId}</strong> has been <strong>successfully cancelled</strong> in accordance with your request. All fulfillment, doorstep pickup, and courier dispatch operations for this consignment have been discontinued.
+    </p>
+
+    <!-- Formal Status Box -->
+    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px 20px; margin: 20px 0;">
+      <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
+        Consignment Cancellation Details
+      </div>
+      
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <tr>
+          <td style="padding: 5px 0; color: #64748b; width: 40%;">Order Reference:</td>
+          <td style="padding: 5px 0; font-weight: 700; color: #0f172a;">#${trackingId}</td>
+        </tr>
+        <tr>
+          <td style="padding: 5px 0; color: #64748b;">Status:</td>
+          <td style="padding: 5px 0;">
+            <span style="background-color: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 11px; border: 1px solid #fecaca;">
+              CANCELLED
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 5px 0; color: #64748b;">Cancellation Date:</td>
+          <td style="padding: 5px 0; color: #334155; font-weight: 600;">${cancellationDateStr} IST</td>
+        </tr>
+        <tr>
+          <td style="padding: 5px 0; color: #64748b;">Service Type:</td>
+          <td style="padding: 5px 0; color: #334155;">${serviceType}</td>
+        </tr>
+        <tr>
+          <td style="padding: 5px 0; color: #64748b;">Destination:</td>
+          <td style="padding: 5px 0; color: #334155;">${destCity}</td>
+        </tr>
+        <tr>
+          <td style="padding: 5px 0; color: #64748b;">Total Value:</td>
+          <td style="padding: 5px 0; font-weight: 700; color: #0f172a;">₹${Math.round(totalCost).toLocaleString('en-IN')}</td>
+        </tr>
+        ${reason ? `
+        <tr>
+          <td style="padding: 5px 0; color: #64748b;">Cancellation Note:</td>
+          <td style="padding: 5px 0; color: #b91c1c; font-style: italic;">${reason}</td>
+        </tr>` : ''}
+      </table>
+    </div>
+
+    <!-- Items breakdown if present -->
+    ${itemsHtml}
+
+    <!-- Payment & Refund Block -->
+    ${paymentBlockHtml}
+
+    <!-- Operational Next Steps -->
+    <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 18px; margin: 20px 0;">
+      <p style="margin: 0 0 8px 0; font-weight: 700; font-size: 13px; color: #0f172a;">
+        Operational Summary & Next Steps:
+      </p>
+      <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: #475569; line-height: 1.6;">
+        <li style="margin-bottom: 6px;">Any allocated doorstep pickup agent or transport vehicle has been recalled.</li>
+        <li style="margin-bottom: 6px;">No further charges or handling fees will be levied for this shipment.</li>
+        <li>Your portal records have been updated to reflect the cancelled status.</li>
+      </ul>
+    </div>
+
+    <!-- Call to Action Button -->
+    <div style="text-align: center; margin: 28px 0;">
+      <a href="${myOrdersUrl}" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; font-size: 13px; font-weight: 700; text-decoration: none; border-radius: 8px; display: inline-block; letter-spacing: 0.3px;">
+        View My Orders & History
+      </a>
+    </div>
+
+    <!-- Support Notice -->
+    <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin: 20px 0 0 0; padding-top: 16px; border-top: 1px solid #f1f5f9;">
+      If you did not request this cancellation or would like to schedule a new delivery or pickup, our operations desk is at your service 24/7 at <a href="mailto:${compEmail}" style="color: #4f46e5; text-decoration: underline;">${compEmail}</a> or by calling <strong>${compPhone}</strong>.
+    </p>
+
+    <!-- Sign-off -->
+    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 13px; color: #475569;">
+      Sincerely,<br>
+      <strong>Customer Support & Logistics Team</strong><br>
+      ${compName}<br>
+      <span style="font-size: 12px; color: #94a3b8;">${compAddress}</span>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="background-color: #f8fafc; padding: 16px 30px; font-size: 11px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0;">
+    GSTIN: ${compGst} | Website: <a href="https://${compWebsite}" style="color: #64748b; text-decoration: none;">${compWebsite}</a><br>
+    This is an automated formal notification sent to ${email} regarding your Jiffex shipment status.
+  </div>
+</div>
+  `.trim();
+
+  console.log(`[Order Cancellation Email] Sending formal cancellation email to ${email} for order ${orderIdStr}...`);
+  await mailTransporter.sendMail({
+    from: getSenderAddress(process.env.SMTP_FROM),
+    to: email,
+    subject: subject,
+    text: bodyText,
+    html: bodyHtml
+  });
+
+  console.log(`[Order Cancellation Email] Successfully dispatched cancellation email for order ${orderIdStr} to ${email}`);
+  return { success: true, emailSent: true, recipient: email };
+}
+
+// API: Send Order Cancellation Email
+app.post("/api/order-cancellation", async (req, res) => {
+  const { orderId, order, email, reason, companyDetails } = req.body;
+  if (!orderId && !order?.id) {
+    return res.status(400).json({ error: "Order ID is required" });
+  }
+
+  const targetId = String(orderId || order?.id);
+  console.log(`[Order Cancellation API] Request received for order ${targetId} to email: ${email || 'auto-detect'}`);
+
+  try {
+    const result = await sendCancellationEmail({
+      orderId: targetId,
+      order,
+      recipientEmail: email,
+      companyDetails,
+      reason
+    });
+    res.json(result);
+  } catch (err: any) {
+    console.error(`[Order Cancellation API] Error sending cancellation email for order ${targetId}:`, err);
+    res.status(500).json({
+      error: formatSmtpError(err, "Cancellation Email"),
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  }
+});
+
 async function fetchImageBuffer(url: string | undefined): Promise<Buffer | null> {
   // Check if local logo file exists first as most reliable and fastest source
   const localLogoPaths = [
@@ -3398,6 +3823,38 @@ async function fetchImageBuffer(url: string | undefined): Promise<Buffer | null>
   }
 }
 
+function isOnlyShopAndShipOrder(order: any): boolean {
+  if (!order) return false;
+  const orderIdStr = String(order.id || '').toUpperCase().trim();
+  
+  // Explicit Home Pickup orders are NOT only shop & ship
+  if (orderIdStr.startsWith('PH-')) return false;
+  if (order.pickupType === 'AllAgent' || order.pickupType === 'home' || order.pickupType === 'agent') return false;
+
+  // Explicit Shop & Ship prefix
+  if (orderIdStr.startsWith('SH-')) return true;
+
+  // If orderType or serviceType is explicitly shop and ship
+  if (order.orderType === 'shop_and_ship' || order.type === 'shop_and_ship' || order.serviceType === 'Shop & Ship') {
+    return true;
+  }
+
+  // Inspect items
+  let rawItems = order.items;
+  if (typeof rawItems === 'string') {
+    try { rawItems = JSON.parse(rawItems); } catch { rawItems = []; }
+  }
+  const items = Array.isArray(rawItems) ? rawItems : [];
+  
+  if (items.length > 0) {
+    const hasShop = items.some((i: any) => i.source === 'Store' || i.source === 'shop');
+    const hasPickup = items.some((i: any) => i.source === 'Pickup' || i.source === 'home' || i.source === 'courier_pickup');
+    if (hasShop && !hasPickup) return true;
+  }
+
+  return false;
+}
+
 async function generateConsolidatedInvoicePDF(orders: any[], companyDetails: any): Promise<Buffer> {
   return new Promise(async (resolve, reject) => {
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
@@ -3409,7 +3866,7 @@ async function generateConsolidatedInvoicePDF(orders: any[], companyDetails: any
 
     const compName = companyDetails?.fullName || companyDetails?.name || "Jiffex Fulfilment Private Limited";
     const compGst = companyDetails?.gstin || "36AAHCJ4656R1ZQ";
-    const compAddress = companyDetails?.address || "Plot No 20, Siddartha Nagar North, Hyderabad 500038";
+    const compAddress = companyDetails?.address || "Plot No 20, Siddartha Nagar North, Hyderabad, Telangana, India - 500038";
     const compEmail = companyDetails?.email || "support@jiffex.shop";
     const compWebsite = companyDetails?.website || "www.jiffex.shop";
 
@@ -3419,29 +3876,44 @@ async function generateConsolidatedInvoicePDF(orders: any[], companyDetails: any
     
     if (logoBuffer) {
       try {
-        doc.image(logoBuffer, 50, 40, { width: 130 });
+        doc.image(logoBuffer, 50, 36, { width: 125 });
       } catch (err) {
         console.error("[PDF Logo] Rendering Error:", err);
-        doc.fillColor("#4f46e5").fontSize(26).font("Helvetica-Bold").text("Jiffex", 50, 45);
+        doc.fillColor("#4f46e5").fontSize(26).font("Helvetica-Bold").text("Jiffex", 50, 40);
       }
     } else {
-      doc.fillColor("#4f46e5").fontSize(26).font("Helvetica-Bold").text("Jiffex", 50, 45);
+      doc.fillColor("#4f46e5").fontSize(26).font("Helvetica-Bold").text("Jiffex", 50, 40);
     }
     
-    // Company details on top right
-    doc.fillColor("#1e293b").fontSize(11).font("Helvetica-Bold");
-    doc.text(compName, 260, 45, { align: "right", width: 285 });
+    // Company details on top right - dynamic positioning so pincode never overlaps on GSTIN
+    const headerRightX = 230;
+    const headerRightWidth = 315;
     
-    doc.fillColor("#475569").fontSize(9).font("Helvetica");
-    doc.text(compAddress, 260, 60, { align: "right", width: 285 });
-    doc.font("Helvetica-Bold").text(`GSTIN: ${compGst}`, 260, 75, { align: "right", width: 285 });
-    doc.font("Helvetica").text(`Email: ${compEmail} | Web: ${compWebsite}`, 260, 90, { align: "right", width: 285 });
+    let curY = 36;
+    doc.fillColor("#1e293b").fontSize(10.5).font("Helvetica-Bold");
+    doc.text(compName, headerRightX, curY, { align: "right", width: headerRightWidth });
+    curY += doc.heightOfString(compName, { width: headerRightWidth }) + 2;
     
-    doc.moveTo(50, 110).lineTo(545, 110).lineWidth(1).strokeColor("#cbd5e1").stroke();
+    doc.fillColor("#475569").fontSize(8.5).font("Helvetica");
+    doc.text(compAddress, headerRightX, curY, { align: "right", width: headerRightWidth, lineGap: 1.5 });
+    curY += doc.heightOfString(compAddress, { width: headerRightWidth, lineGap: 1.5 }) + 3;
+    
+    doc.font("Helvetica-Bold").fillColor("#334155").fontSize(8.5);
+    const gstText = `GSTIN: ${compGst}`;
+    doc.text(gstText, headerRightX, curY, { align: "right", width: headerRightWidth });
+    curY += doc.heightOfString(gstText, { width: headerRightWidth }) + 3;
+    
+    doc.font("Helvetica").fillColor("#64748b").fontSize(8);
+    const contactText = `Email: ${compEmail}  |  Web: ${compWebsite}`;
+    doc.text(contactText, headerRightX, curY, { align: "right", width: headerRightWidth });
+    curY += doc.heightOfString(contactText, { width: headerRightWidth }) + 6;
+    
+    const dividerY = Math.max(curY, 112);
+    doc.moveTo(50, dividerY).lineTo(545, dividerY).lineWidth(1).strokeColor("#cbd5e1").stroke();
 
     // Invoice Title & Meta Box
     const pageWidth = doc.page.width;
-    doc.fillColor("#0f172a").fontSize(18).font("Helvetica-Bold").text("CONSOLIDATED TAX INVOICE", 0, 120, { 
+    doc.fillColor("#0f172a").fontSize(18).font("Helvetica-Bold").text("CONSOLIDATED TAX INVOICE", 0, dividerY + 10, { 
       align: "center",
       width: pageWidth
     });
@@ -3450,42 +3922,60 @@ async function generateConsolidatedInvoicePDF(orders: any[], companyDetails: any
     const userInitials = (primaryOrder?.destination?.fullName || 'USR').slice(0, 3).toUpperCase();
     const consolId = `CONSOL-${userInitials}-${new Date().getTime().toString().slice(-6)}`;
     
+    const metaY = dividerY + 36;
     doc.fontSize(9).font("Helvetica-Bold").fillColor("#334155");
-    doc.text(`Invoice No: ${consolId}`, 50, 148);
-    doc.text(`Invoice Date: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 380, 148, { align: 'right', width: 165 });
-    doc.text(`Place of Supply: Telangana (36)`, 50, 162);
-    doc.text(`Reverse Charge: No`, 380, 162, { align: 'right', width: 165 });
+    doc.text(`Invoice No: ${consolId}`, 50, metaY);
+    doc.text(`Invoice Date: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`, 380, metaY, { align: 'right', width: 165 });
+    doc.text(`Place of Supply: Telangana (36)`, 50, metaY + 14);
+    doc.text(`Reverse Charge: No`, 380, metaY + 14, { align: 'right', width: 165 });
 
-    doc.moveTo(50, 178).lineTo(545, 178).lineWidth(0.5).strokeColor("#e2e8f0").stroke();
+    const metaDivY = metaY + 30;
+    doc.moveTo(50, metaDivY).lineTo(545, metaDivY).lineWidth(0.5).strokeColor("#e2e8f0").stroke();
 
     // Billing & Shipping Address side-by-side
-    const addrTop = 188;
+    const addrTop = metaDivY + 10;
     const dest = primaryOrder?.destination || {};
     const destName = dest.fullName || 'Valued Customer';
     const destPhone = dest.phone || 'N/A';
     const destEmail = dest.email || 'N/A';
     const destAddrStr = [dest.addressLine1, dest.city, dest.state, dest.zipCode, dest.country].filter(Boolean).join(', ');
 
+    const isAllShopShip = Array.isArray(orders) && orders.length > 0 && orders.every(o => isOnlyShopAndShipOrder(o));
+    const billingName = isAllShopShip ? compName : destName;
+    const billingAddrStr = isAllShopShip ? compAddress : (destAddrStr || 'Same as destination address');
+    const billingPhone = isAllShopShip ? (companyDetails?.phone || "+91 99999 00000") : destPhone;
+    const billingEmail = isAllShopShip ? compEmail : destEmail;
+
     // Billing Address Box
-    doc.rect(50, addrTop, 240, 92).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
+    const boxHeight = 94;
+    doc.rect(50, addrTop, 240, boxHeight).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
     doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold").text("BILLING ADDRESS", 60, addrTop + 8);
-    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(destName, 60, addrTop + 24, { width: 220 });
-    doc.font("Helvetica").fillColor("#475569");
-    doc.text(destAddrStr || 'Same as destination address', 60, addrTop + 36, { width: 220 });
-    doc.text(`Phone: ${destPhone}`, 60, addrTop + 62, { width: 220 });
-    doc.text(`Email: ${destEmail}`, 60, addrTop + 74, { width: 220 });
+    if (isAllShopShip) {
+      doc.fillColor("#4f46e5").fontSize(7).font("Helvetica-Bold").text("(OFFICE ADDRESS)", 168, addrTop + 9);
+    }
+    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(billingName, 60, addrTop + 23, { width: 220 });
+    doc.font("Helvetica").fontSize(8.5).fillColor("#475569");
+    doc.text(billingAddrStr, 60, addrTop + 36, { width: 220, lineGap: 1 });
+    if (isAllShopShip) {
+      doc.fontSize(8).font("Helvetica-Bold").fillColor("#334155").text(`GSTIN: ${compGst}`, 60, addrTop + 63, { width: 220 });
+      doc.fontSize(7.5).font("Helvetica").fillColor("#64748b").text(`Ph: ${billingPhone}  |  ${billingEmail}`, 60, addrTop + 76, { width: 220 });
+    } else {
+      doc.fontSize(8.5).font("Helvetica").fillColor("#475569");
+      doc.text(`Phone: ${destPhone}`, 60, addrTop + 63, { width: 220 });
+      doc.text(`Email: ${destEmail}`, 60, addrTop + 76, { width: 220 });
+    }
 
     // Shipping Address Box
-    doc.rect(305, addrTop, 240, 92).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
+    doc.rect(305, addrTop, 240, boxHeight).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
     doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold").text("SHIPPING ADDRESS", 315, addrTop + 8);
-    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(destName, 315, addrTop + 24, { width: 220 });
-    doc.font("Helvetica").fillColor("#475569");
-    doc.text(destAddrStr || 'N/A', 315, addrTop + 36, { width: 220 });
-    doc.text(`Phone: ${destPhone}`, 315, addrTop + 62, { width: 220 });
-    doc.text(`Email: ${destEmail}`, 315, addrTop + 74, { width: 220 });
+    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(destName, 315, addrTop + 23, { width: 220 });
+    doc.font("Helvetica").fontSize(8.5).fillColor("#475569");
+    doc.text(destAddrStr || 'N/A', 315, addrTop + 36, { width: 220, lineGap: 1 });
+    doc.text(`Phone: ${destPhone}`, 315, addrTop + 63, { width: 220 });
+    doc.text(`Email: ${destEmail}`, 315, addrTop + 76, { width: 220 });
 
     // Order Details Table
-    const tableTop = addrTop + 106;
+    const tableTop = addrTop + boxHeight + 14;
     doc.fillColor("#0f172a").fontSize(11).font("Helvetica-Bold").text("Consolidated Item Details", 50, tableTop);
     
     // Table Header Bar
@@ -3630,7 +4120,7 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
 
     const compName = companyDetails?.fullName || companyDetails?.name || "Jiffex Fulfilment Private Limited";
     const compGst = companyDetails?.gstin || "36AAHCJ4656R1ZQ";
-    const compAddress = companyDetails?.address || "Plot No 20, Siddartha Nagar North, Hyderabad 500038";
+    const compAddress = companyDetails?.address || "Plot No 20, Siddartha Nagar North, Hyderabad, Telangana, India - 500038";
     const compEmail = companyDetails?.email || "support@jiffex.shop";
     const compWebsite = companyDetails?.website || "www.jiffex.shop";
 
@@ -3640,29 +4130,44 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
     
     if (logoBuffer) {
       try {
-        doc.image(logoBuffer, 50, 40, { width: 130 });
+        doc.image(logoBuffer, 50, 36, { width: 125 });
       } catch (err) {
         console.error("[PDF Logo] Rendering Error:", err);
-        doc.fillColor("#4f46e5").fontSize(26).font("Helvetica-Bold").text("Jiffex", 50, 45);
+        doc.fillColor("#4f46e5").fontSize(26).font("Helvetica-Bold").text("Jiffex", 50, 40);
       }
     } else {
-      doc.fillColor("#4f46e5").fontSize(26).font("Helvetica-Bold").text("Jiffex", 50, 45);
+      doc.fillColor("#4f46e5").fontSize(26).font("Helvetica-Bold").text("Jiffex", 50, 40);
     }
     
-    // Company details on top right
-    doc.fillColor("#1e293b").fontSize(11).font("Helvetica-Bold");
-    doc.text(compName, 260, 45, { align: "right", width: 285 });
+    // Company details on top right - dynamic positioning so pincode never overlaps on GSTIN
+    const headerRightX = 230;
+    const headerRightWidth = 315;
     
-    doc.fillColor("#475569").fontSize(9).font("Helvetica");
-    doc.text(compAddress, 260, 60, { align: "right", width: 285 });
-    doc.font("Helvetica-Bold").text(`GSTIN: ${compGst}`, 260, 75, { align: "right", width: 285 });
-    doc.font("Helvetica").text(`Email: ${compEmail} | Web: ${compWebsite}`, 260, 90, { align: "right", width: 285 });
+    let curY = 36;
+    doc.fillColor("#1e293b").fontSize(10.5).font("Helvetica-Bold");
+    doc.text(compName, headerRightX, curY, { align: "right", width: headerRightWidth });
+    curY += doc.heightOfString(compName, { width: headerRightWidth }) + 2;
     
-    doc.moveTo(50, 110).lineTo(545, 110).lineWidth(1).strokeColor("#cbd5e1").stroke();
+    doc.fillColor("#475569").fontSize(8.5).font("Helvetica");
+    doc.text(compAddress, headerRightX, curY, { align: "right", width: headerRightWidth, lineGap: 1.5 });
+    curY += doc.heightOfString(compAddress, { width: headerRightWidth, lineGap: 1.5 }) + 3;
+    
+    doc.font("Helvetica-Bold").fillColor("#334155").fontSize(8.5);
+    const gstText = `GSTIN: ${compGst}`;
+    doc.text(gstText, headerRightX, curY, { align: "right", width: headerRightWidth });
+    curY += doc.heightOfString(gstText, { width: headerRightWidth }) + 3;
+    
+    doc.font("Helvetica").fillColor("#64748b").fontSize(8);
+    const contactText = `Email: ${compEmail}  |  Web: ${compWebsite}`;
+    doc.text(contactText, headerRightX, curY, { align: "right", width: headerRightWidth });
+    curY += doc.heightOfString(contactText, { width: headerRightWidth }) + 6;
+    
+    const dividerY = Math.max(curY, 112);
+    doc.moveTo(50, dividerY).lineTo(545, dividerY).lineWidth(1).strokeColor("#cbd5e1").stroke();
 
     // Invoice Title & Meta Box
     const pageWidth = doc.page.width;
-    doc.fillColor("#0f172a").fontSize(18).font("Helvetica-Bold").text("TAX INVOICE", 0, 120, { 
+    doc.fillColor("#0f172a").fontSize(18).font("Helvetica-Bold").text("TAX INVOICE", 0, dividerY + 10, { 
       align: "center",
       width: pageWidth
     });
@@ -3671,42 +4176,60 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
     const invNo = `INV-${orderIdStr.slice(0, 8).toUpperCase()}`;
     const invDate = new Date(order.created_at || order.createdAt || new Date()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
+    const metaY = dividerY + 36;
     doc.fontSize(9).font("Helvetica-Bold").fillColor("#334155");
-    doc.text(`Invoice No: ${invNo}`, 50, 148);
-    doc.text(`Invoice Date: ${invDate}`, 380, 148, { align: 'right', width: 165 });
-    doc.text(`Place of Supply: Telangana (36)`, 50, 162);
-    doc.text(`Reverse Charge: No`, 380, 162, { align: 'right', width: 165 });
+    doc.text(`Invoice No: ${invNo}`, 50, metaY);
+    doc.text(`Invoice Date: ${invDate}`, 380, metaY, { align: 'right', width: 165 });
+    doc.text(`Place of Supply: Telangana (36)`, 50, metaY + 14);
+    doc.text(`Reverse Charge: No`, 380, metaY + 14, { align: 'right', width: 165 });
 
-    doc.moveTo(50, 178).lineTo(545, 178).lineWidth(0.5).strokeColor("#e2e8f0").stroke();
+    const metaDivY = metaY + 30;
+    doc.moveTo(50, metaDivY).lineTo(545, metaDivY).lineWidth(0.5).strokeColor("#e2e8f0").stroke();
 
     // Billing & Shipping Address side-by-side
-    const addrTop = 188;
+    const addrTop = metaDivY + 10;
     const dest = order.destination || {};
     const destName = dest.fullName || 'Valued Customer';
     const destPhone = dest.phone || 'N/A';
     const destEmail = dest.email || 'N/A';
     const destAddrStr = [dest.addressLine1, dest.city, dest.state, dest.zipCode, dest.country].filter(Boolean).join(', ');
 
+    const isOnlyShopShip = isOnlyShopAndShipOrder(order);
+    const billingName = isOnlyShopShip ? compName : destName;
+    const billingAddrStr = isOnlyShopShip ? compAddress : (destAddrStr || 'Same as destination address');
+    const billingPhone = isOnlyShopShip ? (companyDetails?.phone || "+91 99999 00000") : destPhone;
+    const billingEmail = isOnlyShopShip ? compEmail : destEmail;
+
     // Billing Address Box
-    doc.rect(50, addrTop, 240, 92).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
+    const boxHeight = 94;
+    doc.rect(50, addrTop, 240, boxHeight).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
     doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold").text("BILLING ADDRESS", 60, addrTop + 8);
-    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(destName, 60, addrTop + 24, { width: 220 });
-    doc.font("Helvetica").fillColor("#475569");
-    doc.text(destAddrStr || 'Same as destination address', 60, addrTop + 36, { width: 220 });
-    doc.text(`Phone: ${destPhone}`, 60, addrTop + 62, { width: 220 });
-    doc.text(`Email: ${destEmail}`, 60, addrTop + 74, { width: 220 });
+    if (isOnlyShopShip) {
+      doc.fillColor("#4f46e5").fontSize(7).font("Helvetica-Bold").text("(OFFICE ADDRESS)", 168, addrTop + 9);
+    }
+    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(billingName, 60, addrTop + 23, { width: 220 });
+    doc.font("Helvetica").fontSize(8.5).fillColor("#475569");
+    doc.text(billingAddrStr, 60, addrTop + 36, { width: 220, lineGap: 1 });
+    if (isOnlyShopShip) {
+      doc.fontSize(8).font("Helvetica-Bold").fillColor("#334155").text(`GSTIN: ${compGst}`, 60, addrTop + 63, { width: 220 });
+      doc.fontSize(7.5).font("Helvetica").fillColor("#64748b").text(`Ph: ${billingPhone}  |  ${billingEmail}`, 60, addrTop + 76, { width: 220 });
+    } else {
+      doc.fontSize(8.5).font("Helvetica").fillColor("#475569");
+      doc.text(`Phone: ${destPhone}`, 60, addrTop + 63, { width: 220 });
+      doc.text(`Email: ${destEmail}`, 60, addrTop + 76, { width: 220 });
+    }
 
     // Shipping Address Box
-    doc.rect(305, addrTop, 240, 92).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
+    doc.rect(305, addrTop, 240, boxHeight).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
     doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold").text("SHIPPING ADDRESS", 315, addrTop + 8);
-    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(destName, 315, addrTop + 24, { width: 220 });
-    doc.font("Helvetica").fillColor("#475569");
-    doc.text(destAddrStr || 'N/A', 315, addrTop + 36, { width: 220 });
-    doc.text(`Phone: ${destPhone}`, 315, addrTop + 62, { width: 220 });
-    doc.text(`Email: ${destEmail}`, 315, addrTop + 74, { width: 220 });
+    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(destName, 315, addrTop + 23, { width: 220 });
+    doc.font("Helvetica").fontSize(8.5).fillColor("#475569");
+    doc.text(destAddrStr || 'N/A', 315, addrTop + 36, { width: 220, lineGap: 1 });
+    doc.text(`Phone: ${destPhone}`, 315, addrTop + 63, { width: 220 });
+    doc.text(`Email: ${destEmail}`, 315, addrTop + 76, { width: 220 });
 
     // Order Details Table
-    const tableTop = addrTop + 106;
+    const tableTop = addrTop + boxHeight + 14;
     doc.fillColor("#0f172a").fontSize(11).font("Helvetica-Bold").text("Order Details", 50, tableTop);
     
     // Table Header Bar
@@ -5670,50 +6193,19 @@ function generateRealTrackingData(order: any): any {
     }
   }
   const destinationLoc = `${cityStr}, ${countryStr}`;
-  const warehouseLoc = "Jiffex Delhi Warehouse, India";
+  const warehouseLoc = "Hyderabad (Jiffex Warehouse), Telangana, India";
 
   if (events.length === 0) {
     const statusLower = String(rawStatus).toLowerCase();
     
-    // Reverse chronological list (latest event first) based on actual Supabase status (no mock FedEx/other carriers)
-    if (statusLower.includes('delivered') || statusLower.includes('completed')) {
+    if (statusLower.includes('cancel')) {
       events.push({
-        status: 'Delivered',
-        location: destinationLoc,
-        date: formatDate(new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000)),
-        time: formatTime(14, 30),
-        description: 'Shipment delivered to consignee as updated in Supabase.'
-      });
-    }
-    if (statusLower.includes('delivered') || statusLower.includes('out') || statusLower.includes('delivery')) {
-      events.push({
-        status: 'Out for Delivery',
-        location: destinationLoc,
-        date: formatDate(new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000)),
-        time: formatTime(8, 15),
-        description: 'Courier out for local delivery.'
-      });
-    }
-    if (statusLower.includes('delivered') || statusLower.includes('out') || statusLower.includes('transit') || statusLower.includes('ship') || statusLower.includes('ready')) {
-      events.push({
-        status: 'In Transit',
-        location: 'Sorting Hub Gateway',
-        date: formatDate(new Date(baseDate.getTime() + 1.5 * 24 * 60 * 60 * 1000)),
-        time: formatTime(22, 10),
-        description: 'International customs cleared and departing Jiffex transit facility.'
-      });
-    }
-    if (statusLower.includes('delivered') || statusLower.includes('out') || statusLower.includes('transit') || statusLower.includes('ship') || statusLower.includes('packed') || statusLower.includes('warehouse') || statusLower.includes('received')) {
-      events.push({
-        status: 'Received at Warehouse',
+        status: 'Order Cancelled',
         location: warehouseLoc,
-        date: formatDate(baseDate),
-        time: formatTime(11, 45),
-        description: 'Package received at Jiffex sorting warehouse, categorized, and prepared.'
+        date: formatDate(new Date()),
+        time: formatTime(new Date().getHours(), new Date().getMinutes()),
+        description: 'Shipment order has been cancelled.'
       });
-    }
-
-    if (events.length === 0) {
       events.push({
         status: 'Order Registered',
         location: 'Origin Address',
@@ -5721,18 +6213,67 @@ function generateRealTrackingData(order: any): any {
         time: formatTime(9, 0),
         description: 'Shipment order registered in Supabase database.'
       });
+    } else {
+      // Reverse chronological list (latest event first) based on actual Supabase status (no mock FedEx/other carriers)
+      if (statusLower.includes('delivered') || statusLower.includes('completed')) {
+        events.push({
+          status: 'Delivered',
+          location: destinationLoc,
+          date: formatDate(new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000)),
+          time: formatTime(14, 30),
+          description: 'Shipment delivered to consignee as updated in Supabase.'
+        });
+      }
+      if (statusLower.includes('delivered') || statusLower.includes('out') || statusLower.includes('delivery')) {
+        events.push({
+          status: 'Out for Delivery',
+          location: destinationLoc,
+          date: formatDate(new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000)),
+          time: formatTime(8, 15),
+          description: 'Courier out for local delivery.'
+        });
+      }
+      if (statusLower.includes('delivered') || statusLower.includes('out') || statusLower.includes('transit') || statusLower.includes('ship') || statusLower.includes('ready')) {
+        events.push({
+          status: 'In Transit',
+          location: 'Sorting Hub Gateway',
+          date: formatDate(new Date(baseDate.getTime() + 1.5 * 24 * 60 * 60 * 1000)),
+          time: formatTime(22, 10),
+          description: 'International customs cleared and departing Jiffex transit facility.'
+        });
+      }
+      if (statusLower.includes('delivered') || statusLower.includes('out') || statusLower.includes('transit') || statusLower.includes('ship') || statusLower.includes('packed') || statusLower.includes('warehouse') || statusLower.includes('received')) {
+        events.push({
+          status: 'Received at Warehouse',
+          location: warehouseLoc,
+          date: formatDate(baseDate),
+          time: formatTime(11, 45),
+          description: 'Package received at Jiffex sorting warehouse, categorized, and prepared.'
+        });
+      }
+
+      if (events.length === 0) {
+        events.push({
+          status: 'Order Registered',
+          location: 'Origin Address',
+          date: formatDate(baseDate),
+          time: formatTime(9, 0),
+          description: 'Shipment order registered in Supabase database.'
+        });
+      }
     }
   }
 
   const weightVal = order.total_weight || order.totalWeight || 2.5;
+  const isCancelled = String(rawStatus || '').toLowerCase().includes('cancel');
 
   return {
     id: trackingNumber,
     carrier: carrier,
-    status: rawStatus,
-    origin: "Delhi, India",
+    status: isCancelled ? 'Cancelled' : rawStatus,
+    origin: "Hyderabad (Jiffex Warehouse), India",
     destination: destinationLoc,
-    estimatedDelivery: order.shipping_date || order.shippingDate || "Estimated 3-5 Business Days",
+    estimatedDelivery: isCancelled ? 'Shipment Cancelled' : (order.shipping_date || order.shippingDate || "Estimated 3-5 Business Days"),
     weight: `${weightVal} kg`,
     serviceType: `${carrier} Shipment`,
     events: events,
@@ -6176,7 +6717,7 @@ function formatOrderContext(foundOrder: any): any {
     status: statusText,
     shipmentStatus: statusText,
     carrier: carrier,
-    origin: trackingData.origin || "Delhi, India",
+    origin: trackingData.origin || "Hyderabad (Jiffex Warehouse), India",
     destination: `${destCity}, ${destCountry}`,
     destCity,
     destCountry,

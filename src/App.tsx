@@ -666,6 +666,33 @@ const StaticShipmentTracker = ({ order }: { order?: Order }) => {
     );
   }
 
+  if (order.status?.toLowerCase().includes('cancel')) {
+    return (
+      <div className="bg-white p-8 rounded-[2.5rem] border border-red-100 shadow-sm space-y-6">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-black text-slate-900">Shipment Status</h3>
+            <p className="text-sm text-slate-500">Real-time updates for your package</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 bg-red-50 text-red-700 text-xs font-black rounded-xl border border-red-200 uppercase">
+              Order Cancelled
+            </span>
+            <div className="px-4 py-2 bg-slate-50 rounded-2xl text-xs font-bold text-slate-700 border border-slate-200 flex items-center gap-2">
+              <Package size={14} /> ID: {order.id}
+            </div>
+          </div>
+        </div>
+        <div className="p-5 bg-red-50/60 border border-red-100 rounded-2xl flex items-center gap-4 text-red-700">
+          <AlertCircle size={22} className="shrink-0 text-red-600" />
+          <p className="text-xs font-semibold leading-relaxed">
+            This shipment order has been cancelled. In-transit activities and courier handling have ceased.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
@@ -2065,7 +2092,14 @@ const AdminDashboard = ({
       );
       sendWhatsApp(order.destination?.phone || '', message);
 
-      toast.success(`Order ${orderId} status updated to ${newStatus}. WhatsApp notification sent.`);
+      if (newStatus === 'Cancelled') {
+        const cancelEmail = order.destination?.email || order.pickupAddress?.email || (order as any).customerEmail;
+        api.sendOrderCancellationEmail(orderId, order, cancelEmail).catch(err => {
+          console.warn('Failed to send cancellation email:', err);
+        });
+      }
+
+      toast.success(`Order ${orderId} status updated to ${newStatus}. Notification sent.`);
 
       // Check if all active orders for this customer are now completed (Delivered), and send a single consolidated invoice
       if (newStatus === 'Delivered') {
@@ -6044,6 +6078,8 @@ export default function App() {
   const [showPickupChoiceModal, setShowPickupChoiceModal] = useState(false);
   const [showConflictModal, setShowConflictModal] = useState<{ show: boolean; item: any; source: any }>({ show: false, item: null, source: null });
   const [cancellingPickupId, setCancellingPickupId] = useState<string | null>(null);
+  const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
+  const [isCancellingOrder, setIsCancellingOrder] = useState<boolean>(false);
   const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState<Order | null>(null);
   const [selectedOrdersForConsolidatedInvoice, setSelectedOrdersForConsolidatedInvoice] = useState<Order[] | null>(null);
   const [selectedOrderForDetails, setSelectedOrderForDetails] = useState<Order | null>(null);
@@ -6401,14 +6437,77 @@ export default function App() {
   };
 
   const cancelPickup = (id: string) => {
+    const foundOrder = orders.find(o => o.id === id);
+    if (foundOrder) {
+      setOrderToCancel(foundOrder);
+    } else {
+      setOrderToCancel({ id, status: 'Scheduled' } as Order);
+    }
     setCancellingPickupId(id);
   };
 
-  const confirmCancelPickup = () => {
-    if (cancellingPickupId) {
-      setOrders(prev => prev.filter(o => o.id !== cancellingPickupId));
+  const handleCancelOrder = (order: Order) => {
+    setOrderToCancel(order);
+    setCancellingPickupId(order.id);
+  };
+
+  const confirmCancelPickup = async () => {
+    const targetId = orderToCancel?.id || cancellingPickupId;
+    if (!targetId) return;
+
+    const currentOrder = orderToCancel || orders.find(o => o.id === targetId);
+    const targetEmail = currentOrder?.destination?.email || 
+                        currentOrder?.pickupAddress?.email || 
+                        currentUser?.email || 
+                        (currentOrder as any)?.customerEmail;
+
+    setIsCancellingOrder(true);
+    try {
+      // 1. Call server API to update status to 'Cancelled'
+      try {
+        await api.updateOrderStatus(targetId, 'Cancelled');
+      } catch (apiErr) {
+        console.warn('[API] updateOrderStatus failed during cancel:', apiErr);
+      }
+
+      // 2. Call server API to send formal cancellation confirmation email
+      try {
+        await api.sendOrderCancellationEmail(targetId, currentOrder, targetEmail);
+      } catch (mailErr) {
+        console.warn('[API] sendOrderCancellationEmail failed:', mailErr);
+      }
+
+      // 3. Update Supabase orders and pickups tables if active
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('orders').update({ status: 'Cancelled' }).eq('id', targetId);
+        } catch (e) {
+          console.warn('[Supabase] Cancel order direct update warning:', e);
+        }
+        try {
+          await supabase.from('pickups').update({ status: 'Cancelled' }).eq('id', targetId);
+        } catch (e) {
+          console.warn('[Supabase] Cancel pickup direct update warning:', e);
+        }
+      }
+
+      // 4. Immediately update local state
+      setOrders(prev => {
+        if (prev.some(o => o.id === targetId)) {
+          return prev.map(o => o.id === targetId ? { ...o, status: 'Cancelled' as ShippingStatus } : o);
+        }
+        return [{ id: targetId, status: 'Cancelled' as ShippingStatus, items: [] } as any, ...prev];
+      });
+
+      toast.success(`Order #${targetId} cancelled successfully. Formal notification email sent.`);
+    } catch (err) {
+      console.error('Error cancelling order:', err);
+      setOrders(prev => prev.map(o => o.id === targetId ? { ...o, status: 'Cancelled' as ShippingStatus } : o));
+      toast.success(`Order #${targetId} marked as cancelled.`);
+    } finally {
+      setIsCancellingOrder(false);
+      setOrderToCancel(null);
       setCancellingPickupId(null);
-      toast.success('Pickup cancelled successfully.');
     }
   };
 
@@ -8029,8 +8128,8 @@ export default function App() {
     // Validate checkout details (required if custom address or normal international checkout is selected)
     if (shippingPreference !== 'LocalPickup' && shopItemsShippingDestination !== 'warehouse') {
       if (shopItemsShippingDestination === 'custom' || !hasHomePickupActive) {
-        if (!finalDestination.fullName || !finalDestination.phone || !finalDestination.addressLine1 || !finalDestination.city || !finalDestination.zipCode) {
-          toast.error('Please complete your shipping address details including your contact phone number.');
+        if (!finalDestination.fullName || !finalDestination.phone || !finalDestination.addressLine1 || !finalDestination.city || !finalDestination.state || !finalDestination.zipCode) {
+          toast.error('Please complete your shipping address details including State / Province and contact phone number.');
           return;
         }
       }
@@ -8055,6 +8154,22 @@ export default function App() {
     }
 
     const isPickupType = finalOrderId.startsWith('PH-') || cartItems.some(i => i.source === 'Pickup');
+    const isShopAndShip = finalOrderId.startsWith('SH-') || 
+                          cartItems.some(i => i.source === 'Store' || (i.source as any) === 'shop') ||
+                          pickupConsolidationOption === 'shop_and_ship' ||
+                          shopConsolidationOption === 'ship_direct';
+
+    const warehouseSourceAddress: DestinationAddress = {
+      fullName: WAREHOUSE_ADDRESS.name,
+      email: COMPANY_DETAILS.email,
+      phone: WAREHOUSE_ADDRESS.phone,
+      addressLine1: WAREHOUSE_ADDRESS.street,
+      city: WAREHOUSE_ADDRESS.city,
+      state: WAREHOUSE_ADDRESS.state,
+      zipCode: WAREHOUSE_ADDRESS.zip,
+      country: WAREHOUSE_ADDRESS.country
+    };
+
     const assignedAgent = (isAutoAssignAgentEnabled && isPickupType) ? agents[Math.floor(Math.random() * agents.length)] : undefined;
 
     const finalCostToPay = appliedCoupon 
@@ -8073,6 +8188,19 @@ export default function App() {
       createdAt: new Date().toISOString(),
       shippingDate: finalShippingDate,
       destination: finalDestination,
+      pickupAddress: isShopAndShip 
+        ? warehouseSourceAddress 
+        : (isPickupType ? {
+            fullName: pickupName || currentUser?.name || 'Customer',
+            email: currentUser?.email || '',
+            phone: pickupPhone || '',
+            addressLine1: `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}`,
+            city: pickupAddress.city,
+            state: pickupAddress.state,
+            zipCode: pickupAddress.zip,
+            country: 'India'
+          } : undefined),
+      sourceAddress: isShopAndShip ? warehouseSourceAddress : undefined,
       paymentStatus: paymentStatus,
       pickupType: isPickupType ? 'AllAgent' : undefined,
       assignedAgent: assignedAgent,
@@ -8116,6 +8244,8 @@ export default function App() {
             payment_status: orderToSave.paymentStatus,
             shipping_date: selectedDate,
             pickup_type: isPickupType ? 'AllAgent' : undefined,
+            pickup_address: orderToSave.pickupAddress,
+            source_address: (orderToSave as any).sourceAddress,
             assigned_agent: assignedAgent,
             assigned_agent_id: assignedAgent?.id
           } as any);
@@ -9597,62 +9727,6 @@ export default function App() {
           </div>
 
           <div className="space-y-4">
-            {(() => {
-              const completedOrdersList = unifiedHistory.filter(o => o.status === 'Delivered' && o.items && o.items.length > 0);
-              if (completedOrdersList.length === 0) return null;
-              
-              const allCompletedActive = unifiedHistory.filter(o => o.status !== 'Cancelled').every(o => o.status === 'Delivered');
-              
-              return (
-                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border border-indigo-100 rounded-3xl p-5 mx-4 shadow-sm relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
-                    <FileText size={100} className="text-indigo-600" />
-                  </div>
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="p-1.5 bg-indigo-600 text-white rounded-lg flex items-center justify-center">
-                        <FileText size={14} />
-                      </span>
-                      <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">CONSOLIDATED TAX INVOICE</span>
-                    </div>
-                    <h4 className="text-sm font-black text-slate-900">
-                      {allCompletedActive 
-                        ? 'All Shipments Completed!' 
-                        : `${completedOrdersList.length} of ${unifiedHistory.filter(o => o.status !== 'Cancelled').length} Shipments Completed`}
-                    </h4>
-                    <p className="text-[11px] text-slate-600 mt-1 max-w-md leading-relaxed">
-                      To keep your billing clean, Jiffex generates a single consolidated invoice grouping all completed orders.
-                    </p>
-                    
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button 
-                        onClick={() => setSelectedOrdersForConsolidatedInvoice(completedOrdersList)}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 px-4 rounded-xl transition shadow-md shadow-indigo-100 flex items-center gap-1.5 cursor-pointer border-0"
-                      >
-                        <Search size={14} />
-                        <span>View Consolidated Invoice</span>
-                      </button>
-                      
-                      <button 
-                        onClick={async () => {
-                          const promise = api.sendConsolidatedInvoicePDF(currentUser.email, completedOrdersList, COMPANY_DETAILS);
-                          toast.promise(promise, {
-                            loading: 'Sending consolidated invoice...',
-                            success: 'Single consolidated invoice sent to your email!',
-                            error: 'Could not send consolidated invoice via Email.'
-                          });
-                        }}
-                        className="bg-white hover:bg-indigo-50 text-indigo-600 border border-indigo-200 text-xs font-bold py-2 px-4 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Share size={14} />
-                        <span>Email Invoice</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
             {unifiedHistory.length === 0 ? (
               <div className="text-center py-12 text-slate-400 bg-white border border-slate-100 rounded-2xl p-4 shadow-sm mx-4">
                 <Package size={48} className="mx-auto mb-4 opacity-20" />
@@ -9770,7 +9844,7 @@ export default function App() {
                       <div>
                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 block">TOTAL PAID</span>
                         <span className="text-xs font-extrabold text-indigo-600 block">
-                          ₹{Math.round(Number(order.totalCost || order.total_cost || 0))}
+                          ₹{Number(order.totalCost || order.total_cost || 0).toFixed(1)}
                         </span>
                       </div>
                     </div>
@@ -9830,7 +9904,10 @@ export default function App() {
 
                       {order.status !== 'Delivered' && order.status !== 'Cancelled' && (
                         <button 
-                          onClick={() => cancelPickup(order.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCancelOrder(order);
+                          }}
                           className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-rose-600 bg-rose-50/50 border border-rose-100 text-xs font-bold transition hover:bg-rose-100/50 cursor-pointer"
                         >
                           <Trash2 size={14} />
@@ -10022,7 +10099,7 @@ export default function App() {
                     <div className="flex justify-between items-center text-sm font-semibold text-slate-600 border-t border-slate-100 pt-3">
                       <div>
                         <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">Grand Total</span>
-                        <div className="text-2xl font-black text-slate-950 mt-1">₹{Math.round(Number(selectedOrderForDetails.totalCost || selectedOrderForDetails.total_cost || 0))}</div>
+                        <div className="text-2xl font-black text-slate-950 mt-1">₹{Number(selectedOrderForDetails.totalCost || selectedOrderForDetails.total_cost || 0).toFixed(1)}</div>
                       </div>
                       <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold rounded-xl text-xs uppercase tracking-widest">
                         {selectedOrderForDetails.paymentStatus || selectedOrderForDetails.payment_status || 'Paid'}
@@ -10059,64 +10136,6 @@ export default function App() {
           <h2 className="text-3xl font-black text-slate-900">My Orders</h2>
         </div>
         
-        {(() => {
-          const completedOrdersList = unifiedHistory.filter(o => o.status === 'Delivered' && o.items && o.items.length > 0);
-          if (completedOrdersList.length === 0) return null;
-          
-          const allCompletedActive = unifiedHistory.filter(o => o.status !== 'Cancelled').every(o => o.status === 'Delivered');
-          
-          return (
-            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 border border-indigo-100 rounded-3xl p-6 shadow-sm relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
-                <FileText size={120} className="text-indigo-600" />
-              </div>
-              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="p-1.5 bg-indigo-600 text-white rounded-lg flex items-center justify-center">
-                      <FileText size={16} />
-                    </span>
-                    <span className="text-xs font-black text-indigo-700 uppercase tracking-widest">CONSOLIDATED TAX INVOICE</span>
-                  </div>
-                  <h4 className="text-lg font-black text-slate-900">
-                    {allCompletedActive 
-                      ? 'All Shipments Completed!' 
-                      : `${completedOrdersList.length} of ${unifiedHistory.filter(o => o.status !== 'Cancelled').length} Shipments Completed`}
-                  </h4>
-                  <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
-                    To keep your billing clean and reduce duplicate files, Jiffex generates a single consolidated invoice grouping all completed orders.
-                  </p>
-                </div>
-                
-                <div className="flex gap-3 shrink-0">
-                  <button 
-                    onClick={() => setSelectedOrdersForConsolidatedInvoice(completedOrdersList)}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3 px-5 rounded-xl transition shadow-md shadow-indigo-100 flex items-center gap-1.5 cursor-pointer border-0"
-                  >
-                    <Search size={16} />
-                    <span>View Consolidated Invoice</span>
-                  </button>
-                  
-                  <button 
-                    onClick={async () => {
-                      const promise = api.sendConsolidatedInvoicePDF(currentUser.email, completedOrdersList, COMPANY_DETAILS);
-                      toast.promise(promise, {
-                        loading: 'Sending consolidated invoice...',
-                        success: 'Single consolidated invoice sent to your email!',
-                        error: 'Could not send consolidated invoice via Email.'
-                      });
-                    }}
-                    className="bg-white hover:bg-indigo-50 text-indigo-600 border border-indigo-200 text-xs font-bold py-3 px-5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Share size={16} />
-                    <span>Email Invoice</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
         <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
           <div className="grid grid-cols-1 gap-6">
             {unifiedHistory.length === 0 ? (
@@ -10198,7 +10217,7 @@ export default function App() {
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Paid</div>
-                      <div className="text-sm font-bold text-indigo-600">₹{order.totalCost || order.total_cost || 0}</div>
+                      <div className="text-sm font-bold text-indigo-600">₹{Number(order.totalCost || order.total_cost || 0).toFixed(1)}</div>
                     </div>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-slate-100 pt-4">
@@ -10258,8 +10277,11 @@ export default function App() {
 
                       {order.status !== 'Delivered' && order.status !== 'Cancelled' && (
                         <button 
-                          onClick={() => cancelPickup(order.id)}
-                          className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 border border-red-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCancelOrder(order);
+                          }}
+                          className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 border border-red-100 cursor-pointer"
                         >
                           <Trash2 size={12} /> Cancel
                         </button>
@@ -10485,7 +10507,7 @@ export default function App() {
                     <div className="flex justify-between items-center text-sm font-semibold text-slate-600 border-t border-slate-100 pt-3">
                       <div>
                         <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">Grand Total</span>
-                        <div className="text-2xl font-black text-slate-950 mt-1">₹{selectedOrderForDetails.totalCost || selectedOrderForDetails.total_cost || 0}</div>
+                        <div className="text-2xl font-black text-slate-950 mt-1">₹{Number(selectedOrderForDetails.totalCost || selectedOrderForDetails.total_cost || 0).toFixed(1)}</div>
                       </div>
                       <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold rounded-xl text-xs uppercase tracking-widest">
                         {selectedOrderForDetails.paymentStatus || selectedOrderForDetails.payment_status || 'Paid'}
@@ -10640,7 +10662,7 @@ export default function App() {
           </AnimatePresence>
         </div>
       );
-    }, [orders, appointments, currentUser, setActiveTab, selectedOrderForInvoice, selectedOrderForDetails, selectedOrdersForConsolidatedInvoice, isMobile]);
+    }, [orders, appointments, currentUser, setActiveTab, selectedOrderForInvoice, selectedOrderForDetails, selectedOrdersForConsolidatedInvoice, isMobile, cancellingPickupId, orderToCancel, isCancellingOrder]);
 
 
   const WorkOrderSection = useMemo(() => {
@@ -11585,6 +11607,18 @@ export default function App() {
                     />
                   </div>
                   <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">State / Province</label>
+                    <input 
+                      type="text" 
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
+                      placeholder="State / Province"
+                      value={woAddress.state || ''}
+                      onChange={e => setWoAddress({...woAddress, state: e.target.value})}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Zip Code</label>
                     <input 
                       type="text" 
@@ -11593,16 +11627,16 @@ export default function App() {
                       onChange={e => setWoAddress({...woAddress, zipCode: e.target.value})}
                     />
                   </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Destination Country</label>
-                  <select 
-                    className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
-                    value={woAddress.country}
-                    onChange={e => setWoAddress({...woAddress, country: e.target.value})}
-                  >
-                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Destination Country</label>
+                    <select 
+                      className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none text-base md:text-sm"
+                      value={woAddress.country}
+                      onChange={e => setWoAddress({...woAddress, country: e.target.value})}
+                    >
+                      {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -15835,19 +15869,21 @@ export default function App() {
               }
             </p>
           </div>
-          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-4">
-              <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">Status</span>
-              <span className="font-black text-indigo-600">{isWarehouseCheckout ? 'Awaiting Warehouse Arrival' : '12-15 Business Days'}</span>
-            </div>
-            <p className="text-sm text-slate-500 leading-relaxed font-semibold">
+          <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-100 shadow-sm max-w-xl mx-auto">
+            {isWarehouseCheckout && (
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-3">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Status</span>
+                <span className="font-black text-indigo-600">Awaiting Warehouse Arrival</span>
+              </div>
+            )}
+            <p className="text-sm text-slate-600 leading-relaxed font-semibold text-center">
               {isWarehouseCheckout 
                 ? "Your shipment request has been successfully registered. You can check the status of your order in My Orders."
                 : isPayAtHome 
                   ? "Your order is confirmed. Our agent will collect your items and finalize the billing at your home during pickup. You'll receive a confirmation email shortly."
                   : shippingPreference === 'LocalPickup'
                     ? "Your payment is successful. Our agent will bring these items when they come for your scheduled home pickup. You'll receive a confirmation email shortly."
-                    : `We have received your payment. Our team will consolidate your items and ship them on ${selectedDate}. You can track your shipment in your history.`
+                    : "We have received your payment. Our team will consolidate your items and ship them. You can track your shipment in My Orders."
               }
             </p>
           </div>
@@ -15876,59 +15912,20 @@ export default function App() {
             </div>
           )}
 
-          {/* Invoice Actions for desktop */}
-          {!isWarehouseCheckout && !isPayAtHome && (
-            <div className="flex justify-center gap-3 pt-2 max-w-xl mx-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  const targetOrder = orders.find(o => o.id === orderId) || {
-                    id: orderId || 'SH-00001',
-                    destination: address,
-                    items: cartItems,
-                    totalWeight,
-                    totalCost,
-                    status: 'Order Confirmed',
-                    paymentStatus: 'Paid',
-                    createdAt: new Date().toISOString()
-                  } as any;
-                  setSelectedOrderForInvoice(targetOrder);
-                }}
-                className="flex-1 py-3.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-2xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-              >
-                <FileText size={16} /> View Tax Invoice
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const targetEmail = address.email || currentUser?.email;
-                  if (!targetEmail) {
-                    toast.error("No recipient email found.");
-                    return;
-                  }
-                  const targetOrder = orders.find(o => o.id === orderId) || {
-                    id: orderId || 'SH-00001',
-                    destination: address,
-                    items: cartItems,
-                    totalWeight,
-                    totalCost,
-                    status: 'Order Confirmed',
-                    paymentStatus: 'Paid',
-                    createdAt: new Date().toISOString()
-                  } as any;
-                  const promise = api.sendInvoicePDF(targetEmail, targetOrder, COMPANY_DETAILS);
-                  toast.promise(promise, {
-                    loading: 'Sending invoice PDF to email...',
-                    success: `Tax Invoice PDF sent to ${targetEmail}!`,
-                    error: 'Could not send invoice email.'
-                  });
-                }}
-                className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-              >
-                <Mail size={16} /> Email Invoice
-              </button>
+          {/* Heartfelt Thank You & Reassurance Message */}
+          <div className="p-6 sm:p-7 bg-gradient-to-br from-indigo-50/70 via-white to-emerald-50/50 border border-indigo-100/80 rounded-3xl text-center space-y-3 max-w-xl mx-auto shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
+              <Heart className="w-6 h-6 fill-indigo-600 text-indigo-600" />
             </div>
-          )}
+            <div className="space-y-1.5">
+              <h3 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
+                Thank You for Choosing Jiffex!
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium">
+                We are truly happy to help you with your shopping and delighted to ship your packages safely to your doorstep. Our team is already preparing and packaging your order with utmost care, and we're always here to support and assist you every step of the way!
+              </p>
+            </div>
+          </div>
 
           <div className="flex justify-center pt-2">
             <button 
@@ -16131,6 +16128,17 @@ export default function App() {
                   <div className="w-1.5 h-4 bg-indigo-600 rounded-full" />
                   <h3 className="text-sm font-black uppercase tracking-wider">Step 2: Destination Address</h3>
                 </div>
+
+                {/* Source Address Badge for Shop & Ship */}
+                {(cartItems.some(i => i.source === 'Store' || (i.source as any) === 'shop') || pickupConsolidationOption === 'shop_and_ship' || (orderId && orderId.startsWith('SH-'))) && (
+                  <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5">
+                    <Warehouse size={16} className="text-amber-700 shrink-0 mt-0.5" />
+                    <div className="text-[11px] leading-relaxed">
+                      <span className="font-extrabold text-amber-900 uppercase tracking-wider block text-[10px]">Source Address: Jiffex Warehouse Hub</span>
+                      <span className="text-slate-800 font-semibold">{WAREHOUSE_ADDRESS.street}, {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state} - {WAREHOUSE_ADDRESS.zip}, {WAREHOUSE_ADDRESS.country}</span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
                   <div className="space-y-1.5">
@@ -16564,19 +16572,21 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-3 text-xs">
-                    <span className="font-bold text-slate-400 uppercase tracking-wider">Estimated Delivery</span>
-                    <span className="font-black text-indigo-600">{isWarehouseCheckout ? 'Awaiting Warehouse Arrival' : '12-15 Business Days'}</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 leading-relaxed font-semibold">
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                  {isWarehouseCheckout && (
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-3 text-xs">
+                      <span className="font-bold text-slate-400 uppercase tracking-wider">Status</span>
+                      <span className="font-black text-indigo-600">Awaiting Warehouse Arrival</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-600 leading-relaxed font-semibold text-center">
                     {isWarehouseCheckout 
                       ? "Your shipment request is registered. Once received at our hub, we will weigh and bill your order."
                       : isPayAtHome 
                         ? "Our agent will bring your order and finalize billing at your home during pickup."
                         : shippingPreference === 'LocalPickup'
                           ? "Payment received. Our agent will bring these items with them during scheduled home pickup."
-                          : `We have received your payment. Our team will consolidate your items and ship them on ${selectedDate}.`
+                          : "We have received your payment. Our team will consolidate your items and ship them. You can track your shipment in My Orders."
                     }
                   </p>
                 </div>
@@ -16605,59 +16615,20 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Invoice Actions */}
-                {!isWarehouseCheckout && !isPayAtHome && (
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const targetOrder = orders.find(o => o.id === orderId) || {
-                          id: orderId || 'SH-00001',
-                          destination: address,
-                          items: cartItems,
-                          totalWeight,
-                          totalCost,
-                          status: 'Order Confirmed',
-                          paymentStatus: 'Paid',
-                          createdAt: new Date().toISOString()
-                        } as any;
-                        setSelectedOrderForInvoice(targetOrder);
-                      }}
-                      className="flex-1 py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                    >
-                      <FileText size={14} /> View Tax Invoice
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const targetEmail = address.email || currentUser?.email;
-                        if (!targetEmail) {
-                          toast.error("No recipient email found.");
-                          return;
-                        }
-                        const targetOrder = orders.find(o => o.id === orderId) || {
-                          id: orderId || 'SH-00001',
-                          destination: address,
-                          items: cartItems,
-                          totalWeight,
-                          totalCost,
-                          status: 'Order Confirmed',
-                          paymentStatus: 'Paid',
-                          createdAt: new Date().toISOString()
-                        } as any;
-                        const promise = api.sendInvoicePDF(targetEmail, targetOrder, COMPANY_DETAILS);
-                        toast.promise(promise, {
-                          loading: 'Sending invoice PDF to email...',
-                          success: `Tax Invoice PDF sent to ${targetEmail}!`,
-                          error: 'Could not send invoice email.'
-                        });
-                      }}
-                      className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                    >
-                      <Mail size={14} /> Email Invoice
-                    </button>
+                {/* Heartfelt Thank You & Reassurance Message */}
+                <div className="p-4 sm:p-5 bg-gradient-to-br from-indigo-50/70 via-white to-emerald-50/50 border border-indigo-100/80 rounded-2xl text-center space-y-2.5 shadow-sm">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
+                    <Heart className="w-5 h-5 fill-indigo-600 text-indigo-600" />
                   </div>
-                )}
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">
+                      Thank You for Choosing Jiffex!
+                    </h3>
+                    <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                      We are truly happy to help you with your shopping and delighted to ship your packages safely to your doorstep. Our team is already preparing and packaging your order with utmost care!
+                    </p>
+                  </div>
+                </div>
 
                 {/* Go to history */}
                 <button 
@@ -16906,6 +16877,29 @@ export default function App() {
             <>
               {/* Address Form */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                {/* Source Address Badge for Shop & Ship */}
+                {(cartItems.some(i => i.source === 'Store' || (i.source as any) === 'shop') || pickupConsolidationOption === 'shop_and_ship' || (orderId && orderId.startsWith('SH-'))) && (
+                  <div className="mb-6 p-4 bg-amber-50/80 border border-amber-200 rounded-2xl flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 font-black mt-0.5 shadow-xs">
+                      <Warehouse size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-md">
+                          Source Address (Jiffex Warehouse)
+                        </span>
+                        <span className="text-xs font-bold text-slate-900">{WAREHOUSE_ADDRESS.name}</span>
+                      </div>
+                      <p className="text-xs text-slate-700 font-semibold mt-1">
+                        {WAREHOUSE_ADDRESS.street}, {WAREHOUSE_ADDRESS.city}, {WAREHOUSE_ADDRESS.state}, {WAREHOUSE_ADDRESS.country} - {WAREHOUSE_ADDRESS.zip}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        For Shop & Ship orders, items are received at our Hyderabad warehouse hub and dispatched from here to your destination address below.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold flex items-center gap-2">
                     <MapPin className="text-red-500" /> {shippingPreference === 'LocalPickup' ? 'Warehouse Destination' : shopItemsShippingDestination === 'custom' ? 'Different Shipping Address' : 'Destination Address'}
@@ -16970,6 +16964,17 @@ export default function App() {
                       value={address.city}
                       onChange={e => setAddress({...address, city: e.target.value})}
                       placeholder="City"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">State / Province</label>
+                    <input 
+                      type="text" 
+                      disabled={shippingPreference === 'LocalPickup'}
+                      className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+                      value={address.state || ''}
+                      onChange={e => setAddress({...address, state: e.target.value})}
+                      placeholder="State / Province"
                     />
                   </div>
                   <div>
@@ -18018,32 +18023,49 @@ export default function App() {
 
       {/* Cancellation Modal */}
       <AnimatePresence>
-        {cancellingPickupId && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[140] flex items-center justify-center p-4">
+        {(cancellingPickupId || orderToCancel) && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100"
+              className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100 relative"
             >
               <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-6 mx-auto">
                 <AlertTriangle size={32} />
               </div>
-              <h3 className="text-2xl font-black text-slate-900 text-center mb-2">Cancel Pickup?</h3>
-              <p className="text-slate-500 text-center mb-8 leading-relaxed">
-                Are you sure you want to cancel this scheduled pickup request? This action cannot be undone.
+              <h3 className="text-2xl font-black text-slate-900 text-center mb-2">
+                {(() => {
+                  const target = orderToCancel || orders.find(o => o.id === cancellingPickupId);
+                  return target && isHomePickupOrder(target) ? 'Cancel Pickup?' : 'Cancel Order?';
+                })()}
+              </h3>
+              <p className="text-slate-500 text-center mb-8 leading-relaxed text-sm">
+                Are you sure you want to cancel {orderToCancel ? `order #${orderToCancel.id}` : cancellingPickupId ? `request #${cancellingPickupId}` : 'this request'}? This will mark the shipment as Cancelled.
               </p>
               
               <div className="flex flex-col gap-3">
                 <button 
                   onClick={confirmCancelPickup}
-                  className="w-full py-4 bg-red-600 text-white rounded-2xl font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200"
+                  disabled={isCancellingOrder}
+                  className="w-full py-4 bg-red-600 text-white rounded-2xl font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  Yes, Cancel Pickup
+                  {isCancellingOrder ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      <span>Cancelling...</span>
+                    </>
+                  ) : (
+                    <span>Yes, Cancel Order</span>
+                  )}
                 </button>
                 <button 
-                  onClick={() => setCancellingPickupId(null)}
-                  className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all"
+                  onClick={() => {
+                    setCancellingPickupId(null);
+                    setOrderToCancel(null);
+                  }}
+                  disabled={isCancellingOrder}
+                  className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all cursor-pointer disabled:opacity-50"
                 >
                   No, Keep It
                 </button>
