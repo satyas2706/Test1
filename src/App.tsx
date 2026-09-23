@@ -5328,7 +5328,10 @@ export default function App() {
           languagePreference: (o as any).languagePreference,
           itemType: (o as any).itemType,
           vehicleType: (o as any).vehicleType,
-          email: o.destination?.email || (o as any).email || ''
+          email: o.destination?.email || (o as any).email || '',
+          cargo_authorization_otp: (o as any).cargo_authorization_otp || (o as any).cargoAuthorizationOtp,
+          cargoAuthorizationOtp: (o as any).cargo_authorization_otp || (o as any).cargoAuthorizationOtp,
+          cargo_authorization_status: (o as any).cargo_authorization_status
         };
       }) as Appointment[];
   }, [orders, agents]);
@@ -5531,6 +5534,7 @@ export default function App() {
   // This allows the user to navigate back safely from the Cart to their active booking confirmation page.
 
   const [lastBookingRef, setLastBookingRef] = useState<string | null>(null);
+  const [lastBookingOtp, setLastBookingOtp] = useState<string | null>(null);
   const userAppointments = useMemo(() => {
     return appointments.filter(a => {
       if (!currentUser || !session?.user) {
@@ -5965,14 +5969,20 @@ export default function App() {
 
   useEffect(() => {
     if (activeWorkOrder) {
+      // Find corresponding order
+      const correspondingOrder = orders.find(o => o.id === activeWorkOrder.id);
+      const existingOtp = (correspondingOrder as any)?.cargo_authorization_otp || 
+                          (correspondingOrder as any)?.cargoAuthorizationOtp || 
+                          (activeWorkOrder as any)?.cargo_authorization_otp || 
+                          (activeWorkOrder as any)?.cargoAuthorizationOtp || '';
+
       setWoStep(1);
-      setWoOtpCode('');
-      setWoOtpSent(false);
+      setWoOtpCode(existingOtp);
+      // Since Customer Authorization OTP is sent in pickup confirmation email, mark sent if existing
+      setWoOtpSent(Boolean(existingOtp));
       setWoOtpVerified(false);
       setWoOtpInput('');
       setShowSimulatedWhatsapp(false);
-      // Find corresponding order
-      const correspondingOrder = orders.find(o => o.id === activeWorkOrder.id);
       if (correspondingOrder) {
         setWoAddress({
           fullName: correspondingOrder.destination?.fullName || activeWorkOrder.customerName || '',
@@ -6207,6 +6217,9 @@ export default function App() {
     const resolvedName = pickupName || overrideName || currentUser?.name || 'Guest User';
     const resolvedEmail = pickupEmail || overrideEmail || currentUser?.email || '';
 
+    // Generate 6-digit Customer Authorization OTP for this Home Pickup appointment
+    const authorizationOtp = Math.floor(100000 + Math.random() * 900000).toString();
+
     // Create new order which will derive the appointment
     const newOrder: Order = {
       id: newAppointmentId,
@@ -6245,16 +6258,33 @@ export default function App() {
       itemType: pickupItemType,
       vehicleType: pickupVehicleType,
       customerName: resolvedName,
-      pickupConsolidationOption: pickupConsolidationOption
+      pickupConsolidationOption: pickupConsolidationOption,
+      cargo_authorization_otp: authorizationOtp,
+      cargoAuthorizationOtp: authorizationOtp,
+      cargo_authorization_status: 'pending'
     } as any;
     
     setOrders([...orders, newOrder]);
+    setLastBookingOtp(authorizationOtp);
 
-    // Send confirmation email
+    // Register Customer Authorization OTP with the server backend
+    fetch('/api/agent/cargo-authorization-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderId: newOrder.id,
+        customerName: resolvedName,
+        customerPhone: pickupPhone,
+        customerEmail: resolvedEmail,
+        code: authorizationOtp
+      })
+    }).catch(err => console.warn('Failed to register cargo authorization OTP:', err));
+
+    // Send confirmation email (includes Customer Authorization OTP)
     const recipientEmail = resolvedEmail;
     if (recipientEmail && recipientEmail.includes('@') && recipientEmail !== 'user@example.com') {
       api.sendOrderConfirmationEmail(recipientEmail, newOrder, COMPANY_DETAILS)
-        .then(() => toast.success(`Confirmation email sent to ${recipientEmail}`))
+        .then(() => toast.success(`Pickup confirmation email with Authorization OTP sent to ${recipientEmail}`))
         .catch(err => {
           console.error('Failed to send pickup confirmation email:', err);
           toast.error(`Pickup scheduled, but ${err.message || 'failed to send email'}`);
@@ -6298,7 +6328,9 @@ export default function App() {
           destination: newOrder.destination,
           pickup_address: newOrder.pickupAddress,
           payment_status: 'Pending',
-          shipping_date: selectedPickupDate
+          shipping_date: selectedPickupDate,
+          cargo_authorization_otp: authorizationOtp,
+          cargo_authorization_status: 'pending'
         } as any;
 
         const savedOrder = await api.createOrder(orderData);
@@ -6326,7 +6358,9 @@ export default function App() {
           assigned_agent_id: assignedAgent?.id,
           language_preference: pickupLanguage,
           item_type: pickupItemType,
-          vehicle_type: pickupVehicleType
+          vehicle_type: pickupVehicleType,
+          cargo_authorization_otp: authorizationOtp,
+          cargo_authorization_status: 'pending'
         };
         await api.createPickup(pickupData);
       } catch (err) {
@@ -11694,15 +11728,15 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 🔒 CUSTOMER AUTHORIZATION (OTP via WhatsApp) */}
+                {/* 🔒 CUSTOMER AUTHORIZATION (Doorstep OTP Verification) */}
                 <div className="p-5 rounded-2xl border border-emerald-150 bg-emerald-50/10 space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <MessageCircle size={18} className="text-emerald-600 shrink-0" /> WhatsApp Cargo Authorization
+                        <MessageCircle size={18} className="text-emerald-600 shrink-0" /> WhatsApp Items Summary & Authorization
                       </h4>
                       <p className="text-xs text-slate-500 mt-1">
-                        Send the collected items list and secure authorization OTP directly as a text message to the customer's WhatsApp in one click.
+                        Send the collected items list directly to the customer's WhatsApp in one click. Customer provides their 6-digit Customer Authorization OTP from their pickup confirmation email.
                       </p>
                     </div>
                     {woOtpVerified ? (
@@ -11721,8 +11755,10 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => {
-                        const code = Math.floor(100000 + Math.random() * 900000).toString();
-                        setWoOtpCode(code);
+                        const code = woOtpCode || Math.floor(100000 + Math.random() * 900000).toString();
+                        if (!woOtpCode) {
+                          setWoOtpCode(code);
+                        }
                         setWoOtpSent(true);
                         setWoOtpVerified(false);
                         setWoOtpInput('');
@@ -11734,7 +11770,7 @@ export default function App() {
 
                         const customerPhoneNumber = (woAddress.phone || activeWorkOrder?.phone || '').replace(/\D/g, '');
                         
-                        // Dispatch Authorization OTP to backend (Backup to Admin via email & notifications, and send to customer)
+                        // Dispatch Authorization OTP to backend (Backup to Admin via email & notifications)
                         fetch('/api/agent/cargo-authorization-otp', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -11752,7 +11788,8 @@ export default function App() {
                           })
                         }).catch(err => console.warn('Failed to dispatch cargo authorization OTP to admin backup:', err));
 
-                        const whatsappMsg = `📌 *CARGO COLLECTION AUTHORIZATION*\n\n` +
+                        // Note: As specified, Customer Authorization OTP is NOT sent in WhatsApp message. It was sent in the pickup confirmation email!
+                        const whatsappMsg = `📌 *CARGO COLLECTION SUMMARY & ITEMS LIST*\n\n` +
                           `*Work Order:* ${activeWorkOrder?.id || 'NEW'}\n` +
                           `*Customer Name:* ${woAddress.fullName}\n\n` +
                           `*Collected Items:*\n${itemsListText}\n\n` +
@@ -11760,19 +11797,18 @@ export default function App() {
                           `*Total Weight:* ${woTotalWeight.toFixed(1)} kg\n` +
                           `*Estimated Cost:* ₹${woTotalCost.toFixed(2)}\n` +
                           `--------------------------------\n\n` +
-                          `🔑 *SECURE AUTHORIZATION OTP PIN:* *${code}*\n\n` +
-                          `Please tell this 6-digit PIN code to our field agent to authorize the cargo collection. Thank you!`;
+                          `Please review your collected items above. To authorize collection, please share the 6-digit Customer Authorization OTP from your pickup confirmation email with our visiting executive. Thank you!`;
 
                         const whatsappUrl = `https://api.whatsapp.com/send?phone=${encodeURIComponent(customerPhoneNumber)}&text=${encodeURIComponent(whatsappMsg)}`;
                         
                         // Instantly open the WhatsApp API URL to send
                         window.open(whatsappUrl, '_blank');
                         
-                        toast.success(`Secure authorization OTP dispatched to ${woAddress.fullName || 'Customer'}'s WhatsApp & backed up to Admin! (PIN is masked to agent for security)`);
+                        toast.success(`Items list dispatched to ${woAddress.fullName || 'Customer'}'s WhatsApp! Ask customer for their Customer Authorization OTP received via email.`);
                       }}
                       className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer transition-all border border-emerald-500"
                     >
-                      <MessageCircle size={14} /> Send Items List + OTP to Customer WhatsApp (1-Click)
+                      <MessageCircle size={14} /> Send Items List to Customer WhatsApp (1-Click)
                     </button>
                   </div>
 
@@ -11813,7 +11849,7 @@ export default function App() {
                               toast.success("Customer cargo authorization verified successfully!");
                               confetti({ particleCount: 30, spread: 50 });
                             } else {
-                              toast.error("Invalid secure OTP code. Please ask customer to re-check their WhatsApp.");
+                              toast.error("Invalid OTP code. Please ask customer to check their pickup confirmation email.");
                             }
                           }}
                           className={`w-full sm:w-auto px-6 py-2.5 font-black rounded-xl text-xs cursor-pointer transition-all shrink-0 ${
@@ -11828,7 +11864,7 @@ export default function App() {
                       
                       {!woOtpVerified && (
                         <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
-                          Ask your customer for the 6-digit PIN that was sent to their WhatsApp. Verify to confirm authorized collection.
+                          Ask customer for the 6-digit Customer Authorization OTP sent in their pickup confirmation email. Verify to confirm authorized collection.
                         </p>
                       )}
                     </div>
@@ -11978,20 +12014,19 @@ export default function App() {
                           <div className="border-t border-dashed my-1 border-slate-200" />
                           <p className="text-[9px] text-slate-700">Total weight: <b>{woTotalWeight.toFixed(1)} kg</b></p>
                           <p className="text-[9px] text-slate-750">Estimated Bill: <b>₹{woTotalCost.toFixed(2)}</b></p>
-                          <div className="bg-amber-50 p-2 rounded-md border border-amber-200 mt-2 text-center text-slate-800">
-                            <p className="text-[8px] font-black text-amber-800 uppercase tracking-wider flex items-center justify-center gap-1">
-                              <Lock size={9} /> SECURE AUTHORIZATION PIN
+                          <div className="bg-sky-50 p-2.5 rounded-md border border-sky-200 mt-2 text-center text-slate-800">
+                            <p className="text-[8.5px] font-black text-sky-800 uppercase tracking-wider flex items-center justify-center gap-1">
+                              <Mail size={10} className="text-sky-600" /> Authorization OTP in Email
                             </p>
-                            <p className="text-base font-black tracking-widest text-slate-700 my-1 font-mono select-none">••••••</p>
-                            <p className="text-[8px] text-amber-700 font-medium leading-tight">
-                              🔒 Delivered to customer's WhatsApp only. Masked on agent & demo screen for security.
+                            <p className="text-[8px] text-sky-700 font-medium leading-tight mt-1">
+                              ✉️ Your 6-digit Customer Authorization OTP was sent to your pickup confirmation email. Please share it with our visiting executive.
                             </p>
                           </div>
                         </div>
 
                         <div className="flex items-center justify-between mt-1 text-[8px] text-slate-400">
                           <span className="text-[8px] text-emerald-700 font-mono font-semibold flex items-center gap-1">
-                            <ShieldCheck size={10} className="text-emerald-600" /> Customer-Exclusive PIN
+                            <ShieldCheck size={10} className="text-emerald-600" /> Manifest & Item Details
                           </span>
                           <span>05:36 PM ✓✓</span>
                         </div>
@@ -14649,6 +14684,48 @@ export default function App() {
                             </button>
                           </div>
                         </div>
+
+                        {/* Customer Authorization OTP Banner (Sent in confirmation email) */}
+                        {(lastBookingOtp || (activePickup as any)?.cargo_authorization_otp || (activePickup as any)?.cargoAuthorizationOtp) && (
+                          <div className="bg-gradient-to-r from-emerald-50 via-teal-50/50 to-indigo-50/40 border-2 border-emerald-500/40 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                            <div className="flex items-start gap-4">
+                              <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/20">
+                                <ShieldCheck size={26} />
+                              </div>
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-black uppercase tracking-wider text-emerald-800">Customer Authorization OTP</span>
+                                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">Sent to Email</span>
+                                </div>
+                                <p className="text-xs text-slate-600 font-medium max-w-xl leading-relaxed">
+                                  A copy of this 6-digit PIN has been emailed with your pickup confirmation. Keep this safe and share it with your visiting Jiffex executive at your doorstep to authorize cargo collection.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl border-2 border-emerald-300 shadow-xs self-stretch md:self-auto justify-between md:justify-center">
+                              <div>
+                                <span className="text-[9px] uppercase font-bold text-slate-400 tracking-widest block">Doorstep PIN</span>
+                                <span className="text-2xl font-black font-mono tracking-widest text-emerald-700">
+                                  {lastBookingOtp || (activePickup as any)?.cargo_authorization_otp || (activePickup as any)?.cargoAuthorizationOtp}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const pin = lastBookingOtp || (activePickup as any)?.cargo_authorization_otp || (activePickup as any)?.cargoAuthorizationOtp;
+                                  if (pin) {
+                                    navigator.clipboard.writeText(pin);
+                                    toast.success('Authorization OTP copied!');
+                                  }
+                                }}
+                                className="p-2 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all cursor-pointer"
+                                title="Copy OTP"
+                              >
+                                <Copy size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Two Column Grid */}
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">

@@ -3225,12 +3225,71 @@ app.post("/api/order-confirmation", async (req, res) => {
       ? `Your official tax invoice for order ${trackingId} has been generated and is attached to this email.`
       : `Your final tax invoice will be generated and emailed as a consolidated invoice once all your active orders are completed.`;
 
+    // Check if this is a Home Pickup order or already has an authorization OTP
+    const isHomePickup = Boolean(
+      order.pickupType || 
+      order.pickup_type || 
+      order.pickupAddress || 
+      order.pickup_address || 
+      orderIdStr.startsWith('PH-') || 
+      orderIdStr.startsWith('SW-') || 
+      orderIdStr.startsWith('PKP-')
+    );
+
+    const authorizationOtp = order.cargo_authorization_otp || 
+      order.cargoAuthorizationOtp || 
+      (isHomePickup ? Math.floor(100000 + Math.random() * 900000).toString() : null);
+
+    let authorizationOtpBlockHtml = '';
+    let authorizationOtpBlockText = '';
+
+    if (authorizationOtp) {
+      // Store in memory OTP map for later verification during doorstep pickup
+      cargoAuthorizationOtps.set(String(order.id), {
+        code: authorizationOtp,
+        orderId: String(order.id),
+        customerName: order.destination?.fullName || order.pickupAddress?.fullName || order.customerName || 'Valued Customer',
+        customerPhone: order.destination?.phone || order.pickupAddress?.phone || '',
+        customerEmail: email,
+        createdAt: Date.now()
+      });
+
+      // Update in memory collections
+      const memOrd = memOrders.find(o => o.id === order.id);
+      if (memOrd) {
+        (memOrd as any).cargo_authorization_otp = authorizationOtp;
+        (memOrd as any).cargo_authorization_status = 'pending';
+      }
+      const memPkp = memPickups.find(p => p.id === order.id);
+      if (memPkp) {
+        (memPkp as any).cargo_authorization_otp = authorizationOtp;
+        (memPkp as any).cargo_authorization_status = 'pending';
+      }
+
+      authorizationOtpBlockHtml = `
+      <div style="background: #f0fdf4; border: 2px solid #16a34a; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: #15803d; text-transform: uppercase;">Customer Authorization OTP (Doorstep Home Pickup)</div>
+        <div style="font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #166534; margin: 10px 0; font-family: monospace; user-select: all;">${authorizationOtp}</div>
+        <p style="margin: 0; font-size: 13px; color: #166534; line-height: 1.5;">
+          <strong>Doorstep Security Notice:</strong> Please keep this 6-digit OTP confidential. When our visiting Jiffex pickup executive arrives at your doorstep, verify your collected items and then share this PIN to authorize the cargo collection.
+        </p>
+      </div>`;
+
+      authorizationOtpBlockText = `
+--------------------------------------------------
+CUSTOMER AUTHORIZATION OTP (HOME PICKUP):
+PIN: ${authorizationOtp}
+Please keep this 6-digit OTP confidential. When our visiting Jiffex pickup executive arrives at your doorstep, verify your collected items and then share this PIN to authorize the cargo collection.
+--------------------------------------------------`;
+    }
+
     const bodyText = `
 Dear ${order.destination.fullName},
 
 Thank you for choosing Jiffex. Your order ${trackingId} has been confirmed.
 
 ${paymentBlockText}
+${authorizationOtpBlockText}
 
 Pickup/Shipping Date: ${order.shippingDate || order.shipping_date || 'As scheduled'}
 Destination: ${order.destination.city}, ${order.destination.country}
@@ -3251,6 +3310,7 @@ The Jiffex Team
   <p>Thank you for choosing <strong>Jiffex</strong>. Your order <strong>${trackingId}</strong> has been confirmed.</p>
   
   ${paymentBlockHtml}
+  ${authorizationOtpBlockHtml}
 
   <p><strong>Order Summary:</strong><br>
   Shipping Date: ${order.shippingDate || order.shipping_date || 'As scheduled'}<br>
@@ -3284,6 +3344,25 @@ The Jiffex Team
       html: bodyHtml,
       attachments: attachments.length > 0 ? attachments : undefined
     });
+
+    // Send Admin Backup copy if authorization OTP is generated for Home Pickup
+    if (authorizationOtp) {
+      for (const adminEmail of ADMIN_EMAILS) {
+        mailTransporter.sendMail({
+          from: getSenderAddress(process.env.SMTP_FROM),
+          to: adminEmail,
+          subject: `[ADMIN BACKUP] Home Pickup Scheduled: ${trackingId} - Auth PIN: ${authorizationOtp}`,
+          text: `Admin Backup: New Home Pickup scheduled for ${order.destination?.fullName || order.pickupAddress?.fullName || 'Customer'}.\nOrder: ${trackingId}\nAuthorization OTP PIN: ${authorizationOtp}\nCustomer Email: ${email}\nCustomer Phone: ${order.destination?.phone || order.pickupAddress?.phone || 'N/A'}\nPickup Date: ${order.shippingDate || 'Scheduled'}`,
+          html: `<div style="font-family: Arial, sans-serif; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+            <h3 style="color: #4338ca; margin-top: 0;">Admin Backup: Home Pickup Scheduled</h3>
+            <p><strong>Order ID:</strong> ${trackingId}</p>
+            <p><strong>Customer:</strong> ${order.destination?.fullName || order.pickupAddress?.fullName || 'Customer'} (${email})</p>
+            <p><strong>Customer Authorization OTP:</strong> <span style="font-family: monospace; font-size: 20px; font-weight: bold; background: #e0e7ff; color: #3730a3; padding: 4px 8px; border-radius: 4px;">${authorizationOtp}</span></p>
+            <p style="font-size: 12px; color: #666;">This PIN was sent to the customer in their pickup confirmation email. It is for administrative emergency backup only and is masked from field agents.</p>
+          </div>`
+        }).catch(err => console.warn(`[Admin OTP Backup Email] Error sending to ${adminEmail}:`, err.message));
+      }
+    }
 
     console.log(`[Order Confirmation] Confirmation for order ${order.id} successfully sent to ${email}`);
     res.json({ success: true });
@@ -5176,10 +5255,10 @@ app.post("/api/agent/cargo-authorization-otp", async (req, res) => {
       if (normalizedPhone.length >= 10) {
         const toWhatsApp = `whatsapp:+${normalizedPhone.startsWith('91') ? normalizedPhone : '91' + normalizedPhone}`;
         twilioClient.messages.create({
-          body: `📌 *CARGO COLLECTION AUTHORIZATION*\n\nOrder: ${cleanOrderId}\nCustomer: ${record.customerName}\nTotal Weight: ${record.totalWeight.toFixed(1)} kg\nEstimated Cost: ₹${record.totalCost.toFixed(2)}\n\n🔑 *SECURE PIN:* *${code}*\n\nPlease share this 6-digit PIN with your visiting Jiffex agent to authorize cargo collection.`,
+          body: `📌 *CARGO COLLECTION SUMMARY & ITEMS LIST*\n\nOrder: ${cleanOrderId}\nCustomer: ${record.customerName}\nTotal Weight: ${record.totalWeight.toFixed(1)} kg\nEstimated Cost: ₹${record.totalCost.toFixed(2)}\n\nPlease review your items and share the 6-digit Customer Authorization OTP from your pickup confirmation email with our visiting agent to authorize collection.`,
           to: toWhatsApp,
           from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`
-        }).catch((err: any) => console.warn(`[Twilio WhatsApp OTP] Error:`, err.message));
+        }).catch((err: any) => console.warn(`[Twilio WhatsApp items summary] Error:`, err.message));
       }
     } catch (err: any) {
       console.warn("[Twilio WhatsApp OTP] Failed:", err.message);
@@ -7153,9 +7232,10 @@ const handleBookHomePickup = async (req: express.Request, res: express.Response)
     const vehicleType = (params.vehicleType || params.vehicle_type || 'Two Wheeler').toString().trim();
     const notes = (params.notes || params.instructions || params.specialInstructions || '').toString().trim();
 
-    // Generate real Pickup ID
+    // Generate real Pickup ID and secure 6-digit Customer Authorization OTP PIN
     const randomSeq = Math.floor(100000 + Math.random() * 900000);
     const pickupId = `PKP-${randomSeq}`;
+    const authOtp = Math.floor(100000 + Math.random() * 900000).toString();
 
     const newPickupRecord = {
       id: pickupId,
@@ -7179,8 +7259,61 @@ const handleBookHomePickup = async (req: express.Request, res: express.Response)
       assigned_agent_id: null,
       language_preference: 'English',
       item_type: itemType,
-      vehicle_type: vehicleType
+      vehicle_type: vehicleType,
+      cargo_authorization_otp: authOtp,
+      cargo_authorization_status: 'pending'
     };
+
+    // Register OTP for verification
+    cargoAuthorizationOtps.set(pickupId, {
+      code: authOtp,
+      orderId: pickupId,
+      customerName: customerName,
+      customerPhone: newPickupRecord.phone,
+      customerEmail: email,
+      createdAt: Date.now()
+    });
+
+    // Send pickup confirmation email with Customer Authorization OTP
+    if (email && email.includes('@') && email !== 'customer@jiffex.com') {
+      const emailHtml = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 24px; border-radius: 12px;">
+        <h2 style="color: #0f172a; margin-top: 0;">Doorstep Pickup Confirmed: ${pickupId}</h2>
+        <p>Dear <strong>${customerName}</strong>,</p>
+        <p>Your Jiffex doorstep pickup appointment has been successfully scheduled.</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin: 15px 0;">
+          <p style="margin: 0 0 6px 0;"><strong>Pickup Date:</strong> ${pickupDate}</p>
+          <p style="margin: 0 0 6px 0;"><strong>Time Slot:</strong> ${pickupTime}</p>
+          <p style="margin: 0;"><strong>Pickup Address:</strong> ${address}</p>
+        </div>
+        <div style="background: #f0fdf4; border: 2px solid #16a34a; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+          <div style="font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: #15803d; text-transform: uppercase;">Customer Authorization OTP (Doorstep Home Pickup)</div>
+          <div style="font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #166534; margin: 10px 0; font-family: monospace; user-select: all;">${authOtp}</div>
+          <p style="margin: 0; font-size: 13px; color: #166534; line-height: 1.5;">
+            <strong>Doorstep Security Notice:</strong> Please keep this 6-digit OTP confidential. When our visiting Jiffex pickup executive arrives at your doorstep, verify your collected items and then share this PIN to authorize the cargo collection.
+          </p>
+        </div>
+        <p style="font-size: 13px; color: #64748b;">If you need to reschedule or have questions, contact us at support@jiffex.com.</p>
+      </div>`;
+
+      mailTransporter.sendMail({
+        from: getSenderAddress(process.env.SMTP_FROM),
+        to: email,
+        subject: `Doorstep Pickup Confirmed: ${pickupId} - Authorization OTP: ${authOtp}`,
+        text: `Your doorstep pickup is scheduled for ${pickupDate} (${pickupTime}).\nCustomer Authorization PIN: ${authOtp}\nShare this PIN with your visiting Jiffex agent to authorize cargo collection.`,
+        html: emailHtml
+      }).catch(err => console.warn(`[handleBookHomePickup Email Warning]:`, err.message));
+
+      // Admin backup
+      for (const adminEmail of ADMIN_EMAILS) {
+        mailTransporter.sendMail({
+          from: getSenderAddress(process.env.SMTP_FROM),
+          to: adminEmail,
+          subject: `[ADMIN BACKUP] Doorstep Pickup Scheduled: ${pickupId} - Auth PIN: ${authOtp}`,
+          text: `Admin Backup: New Doorstep Pickup for ${customerName} (${email}). Pickup ID: ${pickupId}, Date: ${pickupDate}, Authorization OTP: ${authOtp}`
+        }).catch(() => {});
+      }
+    }
 
     // Store in memory
     memPickups.unshift(newPickupRecord);

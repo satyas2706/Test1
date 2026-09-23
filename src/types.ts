@@ -92,6 +92,9 @@ export interface Order {
   lastTrackingUpdate?: string;
   tracking_response?: any;
   trackingResponse?: any;
+  cargo_authorization_otp?: string;
+  cargoAuthorizationOtp?: string;
+  cargo_authorization_status?: string;
 }
 
 export interface Appointment {
