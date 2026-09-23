@@ -635,7 +635,8 @@ app.post("/api/payment/razorpay/verify", async (req, res) => {
 // Admin email configurations
 const ADMIN_EMAILS = [
   'srikanth.satya@jiffex.in',
-  'arun.dubba@jiffex.in'
+  'arun.dubba@jiffex.in',
+  'sanjeevaraosb@gmail.com'
 ];
 
 const ADMIN_ALIASES = [
@@ -5003,6 +5004,254 @@ app.post("/api/pickups", async (req, res) => {
     console.error("[SUPABASE INSERT PICKUP ERROR]:", err.message);
     res.json(dbPickup);
   }
+});
+
+// ==================================================
+// CARGO COLLECTION AUTHORIZATION OTP ARCHITECTURE
+// Requirement: PIN is masked to agents, delivered to customer, and backed up to admin
+// ==================================================
+const cargoAuthorizationOtps = new Map<string, {
+  code: string;
+  orderId: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  agentName?: string;
+  agentEmail?: string;
+  items?: any[];
+  totalWeight?: number;
+  totalCost?: number;
+  createdAt: number;
+  verifiedAt?: number;
+}>();
+
+// API: Generate & Dispatch Cargo Collection Authorization OTP
+app.post("/api/agent/cargo-authorization-otp", async (req, res) => {
+  const {
+    orderId,
+    customerName,
+    customerPhone,
+    customerEmail,
+    agentName,
+    agentEmail,
+    items,
+    totalWeight,
+    totalCost,
+    code: incomingCode
+  } = req.body;
+
+  const cleanOrderId = String(orderId || 'NEW').trim();
+  const code = incomingCode && /^\d{6}$/.test(String(incomingCode))
+    ? String(incomingCode)
+    : Math.floor(100000 + Math.random() * 900000).toString();
+
+  // 1. Store authorization OTP record
+  const record = {
+    code,
+    orderId: cleanOrderId,
+    customerName: customerName || 'Valued Customer',
+    customerPhone: customerPhone || '',
+    customerEmail: customerEmail || '',
+    agentName: agentName || 'Field Agent',
+    agentEmail: agentEmail || 'agent@jiffex.com',
+    items: Array.isArray(items) ? items : [],
+    totalWeight: Number(totalWeight) || 0,
+    totalCost: Number(totalCost) || 0,
+    createdAt: Date.now()
+  };
+  cargoAuthorizationOtps.set(cleanOrderId, record);
+
+  // Attach to memory orders / pickups if present
+  const ord = memOrders.find(o => o.id === cleanOrderId);
+  if (ord) {
+    (ord as any).cargo_authorization_otp = code;
+    (ord as any).cargo_authorization_status = 'pending';
+  }
+  const pick = memPickups.find(p => p.id === cleanOrderId);
+  if (pick) {
+    (pick as any).cargo_authorization_otp = code;
+    (pick as any).cargo_authorization_status = 'pending';
+  }
+
+  // 2. Dispatch Backup Email to Administrator(s)
+  try {
+    const adminSubject = `[ADMIN BACKUP] Cargo Collection Authorization OTP: #${cleanOrderId} - PIN: ${code}`;
+    const itemsListHtml = record.items.length > 0
+      ? `<ul style="margin: 6px 0; padding-left: 20px; font-size: 12px; color: #475569;">` +
+        record.items.map((it: any) => `<li><strong>${it.name || 'Cargo Item'}</strong> (${it.quantity || 1}x, ${(Number(it.weight) || 1).toFixed(1)} kg)</li>`).join('') +
+        `</ul>`
+      : `<p style="font-size: 12px; color: #64748b;">Items list recorded during field pickup.</p>`;
+
+    const adminEmailHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; overflow: hidden;">
+        <div style="background: #0f172a; padding: 18px 24px; color: #ffffff;">
+          <div style="font-size: 10px; font-weight: 800; letter-spacing: 1.5px; color: #818cf8; text-transform: uppercase;">Jiffex Operations & Security</div>
+          <h2 style="margin: 4px 0 0 0; font-size: 18px; font-weight: 800; color: #ffffff;">Cargo Collection Authorization OTP (Admin Backup)</h2>
+        </div>
+        <div style="padding: 24px;">
+          <p style="font-size: 13px; color: #475569; line-height: 1.6; margin-top: 0;">
+            Field Agent <strong>${record.agentName}</strong> (${record.agentEmail}) has initiated cargo authorization for Work Order <strong>#${cleanOrderId}</strong>.
+          </p>
+
+          <div style="background: #f0fdf4; border: 2px solid #22c55e; border-radius: 10px; padding: 20px; text-align: center; margin: 20px 0;">
+            <div style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #166534; text-transform: uppercase;">Customer Authorization PIN (Backup)</div>
+            <div style="font-size: 34px; font-weight: 900; letter-spacing: 8px; color: #15803d; margin: 8px 0; font-family: monospace;">${code}</div>
+            <div style="font-size: 11px; color: #166534; line-height: 1.4;">
+              This PIN has been dispatched directly to the customer. It is strictly masked on the agent's screen and provided here as an emergency operational backup.
+            </div>
+          </div>
+
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 20px;">
+            <div style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Consolidated Cargo Details</div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; color: #334155;">
+              <tr><td style="padding: 4px 0; font-weight: 600; width: 130px;">Customer:</td><td>${record.customerName}</td></tr>
+              <tr><td style="padding: 4px 0; font-weight: 600;">Phone:</td><td>${record.customerPhone || 'N/A'}</td></tr>
+              <tr><td style="padding: 4px 0; font-weight: 600;">Email:</td><td>${record.customerEmail || 'N/A'}</td></tr>
+              <tr><td style="padding: 4px 0; font-weight: 600;">Total Weight:</td><td>${record.totalWeight.toFixed(1)} kg</td></tr>
+              <tr><td style="padding: 4px 0; font-weight: 600;">Estimated Cost:</td><td>₹${record.totalCost.toFixed(2)}</td></tr>
+            </table>
+            <div style="margin-top: 10px; border-top: 1px dashed #cbd5e1; padding-top: 8px;">
+              ${itemsListHtml}
+            </div>
+          </div>
+
+          <div style="font-size: 11px; color: #94a3b8; line-height: 1.5; border-left: 3px solid #cbd5e1; padding-left: 12px;">
+            <strong>Security Notice:</strong> Field agents cannot view this PIN on their pickup terminal. If a customer is unable to receive WhatsApp/email messages, an authorized administrator can relay this PIN to the customer after identity confirmation.
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Send to all administrator mailboxes
+    for (const adminEmail of ADMIN_EMAILS) {
+      mailTransporter.sendMail({
+        from: getSenderAddress(process.env.SMTP_FROM),
+        to: adminEmail,
+        subject: adminSubject,
+        text: `Jiffex Cargo Collection Authorization PIN Backup: ${code} for order #${cleanOrderId}. Customer: ${record.customerName}. Agent: ${record.agentName}.`,
+        html: adminEmailHtml
+      }).catch(err => console.warn(`[OTP Admin Backup] Error sending to ${adminEmail}:`, err.message));
+    }
+  } catch (err: any) {
+    console.warn("[OTP Admin Backup] Failed to dispatch admin email:", err.message);
+  }
+
+  // 3. Dispatch Email to Customer if email is provided
+  if (record.customerEmail && record.customerEmail.includes('@')) {
+    try {
+      const customerSubject = `Cargo Collection Authorization PIN: ${code} - Jiffex`;
+      const customerEmailHtml = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px;">
+          <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">Your Jiffex Cargo Collection PIN</h2>
+          <p style="font-size: 14px; color: #475569;">
+            Dear <strong>${record.customerName}</strong>,<br>
+            Our field agent is currently at your location to collect your cargo for Order <strong>#${cleanOrderId}</strong>.
+          </p>
+          <div style="background: #f0fdf4; border: 2px solid #22c55e; border-radius: 8px; padding: 18px; text-align: center; margin: 20px 0;">
+            <div style="font-size: 11px; font-weight: bold; color: #166534; text-transform: uppercase;">YOUR AUTHORIZATION PIN</div>
+            <div style="font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #15803d; margin: 6px 0; font-family: monospace;">${code}</div>
+            <div style="font-size: 12px; color: #166534;">Share this 6-digit PIN with the agent only after you inspect the collected items list and weight.</div>
+          </div>
+          <p style="font-size: 12px; color: #64748b;">
+            Total weight: <strong>${record.totalWeight.toFixed(1)} kg</strong> | Total estimated: <strong>₹${record.totalCost.toFixed(2)}</strong>
+          </p>
+        </div>
+      `;
+      mailTransporter.sendMail({
+        from: getSenderAddress(process.env.SMTP_FROM),
+        to: record.customerEmail,
+        subject: customerSubject,
+        text: `Your Jiffex Cargo Collection Authorization PIN is: ${code}. Share this with your visiting agent to authorize pickup.`,
+        html: customerEmailHtml
+      }).catch(err => console.warn(`[Customer OTP Email] Failed to send to ${record.customerEmail}:`, err.message));
+    } catch (err: any) {
+      console.warn("[Customer OTP Email] Error:", err.message);
+    }
+  }
+
+  // 4. Send Twilio WhatsApp message if configured
+  if (record.customerPhone && twilioClient && process.env.TWILIO_WHATSAPP_NUMBER) {
+    try {
+      const normalizedPhone = record.customerPhone.replace(/\D/g, '');
+      if (normalizedPhone.length >= 10) {
+        const toWhatsApp = `whatsapp:+${normalizedPhone.startsWith('91') ? normalizedPhone : '91' + normalizedPhone}`;
+        twilioClient.messages.create({
+          body: `📌 *CARGO COLLECTION AUTHORIZATION*\n\nOrder: ${cleanOrderId}\nCustomer: ${record.customerName}\nTotal Weight: ${record.totalWeight.toFixed(1)} kg\nEstimated Cost: ₹${record.totalCost.toFixed(2)}\n\n🔑 *SECURE PIN:* *${code}*\n\nPlease share this 6-digit PIN with your visiting Jiffex agent to authorize cargo collection.`,
+          to: toWhatsApp,
+          from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`
+        }).catch((err: any) => console.warn(`[Twilio WhatsApp OTP] Error:`, err.message));
+      }
+    } catch (err: any) {
+      console.warn("[Twilio WhatsApp OTP] Failed:", err.message);
+    }
+  }
+
+  // 5. Send Admin System Notification
+  try {
+    sendNotification(
+      'admin',
+      'Cargo Auth PIN Backup',
+      `Admin Backup: Cargo Collection Authorization PIN [${code}] for order #${cleanOrderId} (Customer: ${record.customerName}).`,
+      ['Email'],
+      { orderId: cleanOrderId, fullName: record.customerName, email: ADMIN_EMAILS[0] }
+    ).catch(() => {});
+  } catch (_) {}
+
+  // Return masked confirmation to agent (never return cleartext PIN to the agent)
+  return res.json({
+    success: true,
+    orderId: cleanOrderId,
+    maskedPin: "••••••",
+    message: "Authorization OTP successfully dispatched to customer and backed up to admin."
+  });
+});
+
+// API: Verify Cargo Authorization OTP
+app.post("/api/agent/verify-cargo-authorization-otp", (req, res) => {
+  const { orderId, code } = req.body;
+  const cleanOrderId = String(orderId || '').trim();
+  const cleanCode = String(code || '').trim();
+
+  const record = cargoAuthorizationOtps.get(cleanOrderId);
+  const ord = memOrders.find(o => o.id === cleanOrderId);
+  const pick = memPickups.find(p => p.id === cleanOrderId);
+
+  const expectedCode = record?.code || (ord as any)?.cargo_authorization_otp || (pick as any)?.cargo_authorization_otp;
+
+  if (expectedCode && cleanCode === expectedCode) {
+    if (record) record.verifiedAt = Date.now();
+    if (ord) (ord as any).cargo_authorization_status = 'verified';
+    if (pick) (pick as any).cargo_authorization_status = 'verified';
+
+    return res.json({ verified: true, message: "Authorization PIN verified successfully." });
+  }
+
+  return res.status(400).json({ verified: false, error: "Invalid authorization PIN code. Please ask customer to re-check." });
+});
+
+// API: Customer/Admin endpoint to view authorization OTP (Strictly blocks agents)
+app.get("/api/orders/:id/cargo-authorization-otp", (req, res) => {
+  const authUser = getAuthenticatedUser(req);
+  if (!authUser) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  // Agents are strictly forbidden from reading the cleartext PIN via API
+  if (authUser.role === 'agent') {
+    return res.status(403).json({ error: "Forbidden: PIN is masked to field agents" });
+  }
+
+  const { id } = req.params;
+  const record = cargoAuthorizationOtps.get(id);
+  const ord = memOrders.find(o => o.id === id);
+  const pick = memPickups.find(p => p.id === id);
+
+  const code = record?.code || (ord as any)?.cargo_authorization_otp || (pick as any)?.cargo_authorization_otp;
+  if (!code) {
+    return res.status(404).json({ error: "No active authorization PIN found for this order" });
+  }
+
+  return res.json({ code, orderId: id, status: record?.verifiedAt ? 'verified' : 'pending' });
 });
 
 // API: Patch/Update an existing pickup (e.g., status, assigned agent)

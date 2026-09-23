@@ -15,7 +15,8 @@ import {
   Box, 
   User as UserIcon, 
   Send,
-  Loader2 
+  Loader2,
+  ShieldCheck 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Order, AgentProfile, ShippingStatus } from '../types';
@@ -695,6 +696,23 @@ export const AdminOrdersTab: React.FC<AdminOrdersTabProps> = ({
                 </select>
               </div>
             </div>
+
+            {/* Admin Backup Cargo Authorization PIN */}
+            {((selectedOrderDetail as any).cargo_authorization_otp || (selectedOrderDetail as any).cargoAuthorizationOtp) && (
+              <div className="p-4 bg-emerald-50/80 rounded-2xl border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="text-[10px] font-black uppercase text-emerald-900 tracking-wider flex items-center gap-1.5">
+                    <ShieldCheck size={14} className="text-emerald-600" /> Admin Backup Cargo Authorization PIN
+                  </div>
+                  <p className="text-xs text-emerald-700">
+                    Emergency operational backup. This PIN is masked to field agents and dispatched to the customer.
+                  </p>
+                </div>
+                <div className="font-mono text-xl font-black tracking-widest bg-white border border-emerald-300 text-emerald-800 px-4 py-1.5 rounded-xl shadow-xs shrink-0 select-all text-center">
+                  {(selectedOrderDetail as any).cargo_authorization_otp || (selectedOrderDetail as any).cargoAuthorizationOtp}
+                </div>
+              </div>
+            )}
 
             {/* Items Breakdown */}
             <div className="space-y-3">

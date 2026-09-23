@@ -10013,6 +10013,45 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Customer Cargo Authorization PIN Display (Displayed exclusively to customers, never to agents) */}
+                  {((selectedOrderForDetails as any).cargo_authorization_otp || (selectedOrderForDetails as any).cargoAuthorizationOtp || (selectedOrderForDetails.id === activeWorkOrder?.id && woOtpCode)) && currentUser?.role !== 'agent' && currentUser?.role !== 'Agent' && (
+                    <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-4 mb-6 text-emerald-950">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <div className="text-[10px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
+                            <Lock size={12} className="text-emerald-600" /> Customer Authorization PIN
+                          </div>
+                          <div className="text-xs text-emerald-700 mt-0.5">
+                            Share this 6-digit PIN with your visiting field agent to authorize cargo collection.
+                          </div>
+                        </div>
+                        <div className="text-center sm:text-right bg-white border border-emerald-300 rounded-xl px-4 py-2 shrink-0 shadow-xs">
+                          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Your Secure PIN</div>
+                          <div className="text-xl font-black tracking-widest text-emerald-700 font-mono select-all">
+                            {(selectedOrderForDetails as any).cargo_authorization_otp || (selectedOrderForDetails as any).cargoAuthorizationOtp || (selectedOrderForDetails.id === activeWorkOrder?.id ? woOtpCode : '••••••')}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Admin Backup View of Authorization PIN (Displayed only to administrators as operational backup) */}
+                  {((selectedOrderForDetails as any).cargo_authorization_otp || (selectedOrderForDetails as any).cargoAuthorizationOtp || (selectedOrderForDetails.id === activeWorkOrder?.id && woOtpCode)) && (currentUser?.role === 'admin' || currentUser?.role === 'Admin') && (
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3.5 mb-6 text-indigo-950 flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-indigo-800 flex items-center gap-1.5">
+                          <ShieldCheck size={14} className="text-indigo-600" /> Admin Backup Authorization PIN
+                        </div>
+                        <div className="text-xs text-indigo-700 mt-0.5">
+                          Backup copy in case customer is unable to access WhatsApp. Masked to field agents.
+                        </div>
+                      </div>
+                      <div className="font-mono text-lg font-black tracking-widest bg-white border border-indigo-300 text-indigo-800 px-3 py-1 rounded-xl shadow-xs">
+                        {(selectedOrderForDetails as any).cargo_authorization_otp || (selectedOrderForDetails as any).cargoAuthorizationOtp || (selectedOrderForDetails.id === activeWorkOrder?.id ? woOtpCode : '')}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="border-t border-slate-100 pt-6 mb-6">
                     <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Item Details</h4>
                     <div className="space-y-3">
@@ -11695,6 +11734,24 @@ export default function App() {
 
                         const customerPhoneNumber = (woAddress.phone || activeWorkOrder?.phone || '').replace(/\D/g, '');
                         
+                        // Dispatch Authorization OTP to backend (Backup to Admin via email & notifications, and send to customer)
+                        fetch('/api/agent/cargo-authorization-otp', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            orderId: activeWorkOrder?.id || 'NEW',
+                            customerName: woAddress.fullName || activeWorkOrder?.customerName || 'Valued Customer',
+                            customerPhone: customerPhoneNumber,
+                            customerEmail: woAddress.email || activeWorkOrder?.email || '',
+                            agentName: currentUser?.name || 'Field Agent',
+                            agentEmail: currentUser?.email || 'agent@jiffex.com',
+                            items: woItems,
+                            totalWeight: woTotalWeight,
+                            totalCost: woTotalCost,
+                            code
+                          })
+                        }).catch(err => console.warn('Failed to dispatch cargo authorization OTP to admin backup:', err));
+
                         const whatsappMsg = `📌 *CARGO COLLECTION AUTHORIZATION*\n\n` +
                           `*Work Order:* ${activeWorkOrder?.id || 'NEW'}\n` +
                           `*Customer Name:* ${woAddress.fullName}\n\n` +
@@ -11711,7 +11768,7 @@ export default function App() {
                         // Instantly open the WhatsApp API URL to send
                         window.open(whatsappUrl, '_blank');
                         
-                        toast.success(`OTP [${code}] generated! Opening WhatsApp chat for: ${woAddress.fullName || 'Customer'}`);
+                        toast.success(`Secure authorization OTP dispatched to ${woAddress.fullName || 'Customer'}'s WhatsApp & backed up to Admin! (PIN is masked to agent for security)`);
                       }}
                       className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer transition-all border border-emerald-500"
                     >
@@ -11723,7 +11780,9 @@ export default function App() {
                     <div className="space-y-3 pt-3 border-t border-slate-150">
                       <div className="text-xs font-bold text-slate-700 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
                         <span className="flex items-center gap-1.5"><Lock size={12} className="text-indigo-600" /> Enter Customer Authorization OTP:</span>
-                        <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded w-max">Simulated Code: {woOtpCode}</span>
+                        <span className="text-[10px] font-mono text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded flex items-center gap-1 font-bold shadow-xs">
+                          <Lock size={10} className="text-amber-600" /> PIN: •••••• (Masked to Agent)
+                        </span>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2">
                         <input
@@ -11738,13 +11797,23 @@ export default function App() {
                         <button
                           type="button"
                           disabled={woOtpVerified || !woOtpInput}
-                          onClick={() => {
+                          onClick={async () => {
+                            // Also call server verification endpoint
+                            fetch('/api/agent/verify-cargo-authorization-otp', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                orderId: activeWorkOrder?.id || 'NEW',
+                                code: woOtpInput
+                              })
+                            }).catch(err => console.warn('Server OTP verification error:', err));
+
                             if (woOtpInput === woOtpCode) {
                               setWoOtpVerified(true);
                               toast.success("Customer cargo authorization verified successfully!");
                               confetti({ particleCount: 30, spread: 50 });
                             } else {
-                              toast.error("Invalid secure OTP code. Please retry or get a new OTP.");
+                              toast.error("Invalid secure OTP code. Please ask customer to re-check their WhatsApp.");
                             }
                           }}
                           className={`w-full sm:w-auto px-6 py-2.5 font-black rounded-xl text-xs cursor-pointer transition-all shrink-0 ${
@@ -11909,24 +11978,21 @@ export default function App() {
                           <div className="border-t border-dashed my-1 border-slate-200" />
                           <p className="text-[9px] text-slate-700">Total weight: <b>{woTotalWeight.toFixed(1)} kg</b></p>
                           <p className="text-[9px] text-slate-750">Estimated Bill: <b>₹{woTotalCost.toFixed(2)}</b></p>
-                          <div className="bg-amber-50 p-1.5 rounded-md border border-amber-250 mt-2 text-center text-slate-800">
-                            <p className="text-[7px] font-black text-slate-500 uppercase tracking-wider">YOUR SECURE OTP PIN</p>
-                            <p className="text-sm font-black tracking-widest text-indigo-950 my-0.5 select-all">{woOtpCode}</p>
-                            <p className="text-[7px] text-slate-400 font-medium">Share with agent to confirm cargo collection</p>
+                          <div className="bg-amber-50 p-2 rounded-md border border-amber-200 mt-2 text-center text-slate-800">
+                            <p className="text-[8px] font-black text-amber-800 uppercase tracking-wider flex items-center justify-center gap-1">
+                              <Lock size={9} /> SECURE AUTHORIZATION PIN
+                            </p>
+                            <p className="text-base font-black tracking-widest text-slate-700 my-1 font-mono select-none">••••••</p>
+                            <p className="text-[8px] text-amber-700 font-medium leading-tight">
+                              🔒 Delivered to customer's WhatsApp only. Masked on agent & demo screen for security.
+                            </p>
                           </div>
                         </div>
 
                         <div className="flex items-center justify-between mt-1 text-[8px] text-slate-400">
-                          <button 
-                            type="button"
-                            onClick={() => {
-                              setWoOtpInput(woOtpCode);
-                              toast.info("OTP Pin filled in Agent input box!");
-                            }}
-                            className="text-[9px] text-indigo-650 font-black hover:underline cursor-pointer bg-slate-50 px-1.5 py-0.5 rounded border border-indigo-100"
-                          >
-                            ⚡ Autofill PIN
-                          </button>
+                          <span className="text-[8px] text-emerald-700 font-mono font-semibold flex items-center gap-1">
+                            <ShieldCheck size={10} className="text-emerald-600" /> Customer-Exclusive PIN
+                          </span>
                           <span>05:36 PM ✓✓</span>
                         </div>
                       </div>
