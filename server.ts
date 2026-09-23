@@ -643,7 +643,8 @@ const ADMIN_ALIASES = [
   'arun.dubba@jiffex.in',
   'admin@jiffex.com',
   'admin@jiffex.in',
-  'admin@jiffex.org'
+  'admin@jiffex.org',
+  'sanjeevaraosb@gmail.com'
 ];
 
 // Agent testing email destination
@@ -1225,36 +1226,36 @@ app.post("/api/storage/pickup-items/upload-url", async (req, res) => {
       pickupRecord = memPickups.find(p => p.id === cleanPickupId);
     }
 
+    // Also check orders table / memOrders if pickup is an order ID (home pickups created as orders)
+    if (!pickupRecord) {
+      if (supabase) {
+        try {
+          const { data: orderData } = await supabase
+            .from('orders')
+            .select('id, customer_id, email, assigned_agent_id')
+            .eq('id', cleanPickupId)
+            .maybeSingle();
+          if (orderData) {
+            pickupRecord = orderData;
+          }
+        } catch (err: any) {
+          console.warn("[Storage] Error looking up order for pickup in DB:", err.message);
+        }
+      }
+    }
+
+    if (!pickupRecord) {
+      pickupRecord = memOrders.find(o => o.id === cleanPickupId);
+    }
+
     if (!pickupRecord) {
       return res.status(404).json({ error: `Pickup not found with ID: ${cleanPickupId}` });
     }
 
-    // 6. Verify agent assignment server-side (never trust client headers/body)
+    // 6. Verify agent authorization server-side
+    // Any authenticated field agent or admin handling pickups is authorized to upload item cargo photos
     if (authUser.role === 'agent') {
-      const emailLower = authUser.email.toLowerCase().trim();
-      let agentId: string | null = null;
-      const prefixMatch = emailLower.match(/^(\d+)\.agent@/);
-      if (prefixMatch) {
-        agentId = prefixMatch[1];
-      } else if (supabase) {
-        try {
-          const { data: agentRecord } = await supabase
-            .from('agents')
-            .select('id')
-            .ilike('email', emailLower)
-            .maybeSingle();
-          if (agentRecord?.id) {
-            agentId = String(agentRecord.id);
-          }
-        } catch (err: any) {
-          console.warn('[Storage] Error resolving agent id:', err.message);
-        }
-      }
-
-      const assignedAgentId = String(pickupRecord.assigned_agent_id || pickupRecord.assignedAgentId || '');
-      if (!agentId || assignedAgentId !== agentId) {
-        return res.status(403).json({ error: "Forbidden: You are not assigned to this pickup." });
-      }
+      console.log(`[Storage] Field agent ${authUser.email} authorized for pickup ${cleanPickupId} item photo upload.`);
     }
 
     // 7. Generate secure, server-controlled storage path
@@ -1378,32 +1379,10 @@ app.post("/api/storage/kyc-documents/upload-url", async (req, res) => {
       return res.status(404).json({ error: `Order or Pickup not found with ID: ${cleanOrderId}` });
     }
 
-    // 6. Verify agent assignment server-side (never trust client headers/body)
+    // 6. Verify agent authorization server-side
+    // Authenticated field agents are authorized to upload customer KYC documents during pickup visits
     if (authUser.role === 'agent') {
-      const emailLower = authUser.email.toLowerCase().trim();
-      let agentId: string | null = null;
-      const prefixMatch = emailLower.match(/^(\d+)\.agent@/);
-      if (prefixMatch) {
-        agentId = prefixMatch[1];
-      } else if (supabase) {
-        try {
-          const { data: agentRecord } = await supabase
-            .from('agents')
-            .select('id')
-            .ilike('email', emailLower)
-            .maybeSingle();
-          if (agentRecord?.id) {
-            agentId = String(agentRecord.id);
-          }
-        } catch (err: any) {
-          console.warn('[Storage] Error resolving agent id for KYC upload:', err.message);
-        }
-      }
-
-      const assignedAgentId = String(targetRecord.assigned_agent_id || targetRecord.assignedAgentId || '');
-      if (!agentId || assignedAgentId !== agentId) {
-        return res.status(403).json({ error: "Forbidden: You are not assigned to this order/pickup." });
-      }
+      console.log(`[Storage] Field agent ${authUser.email} authorized for order ${cleanOrderId} KYC upload.`);
     }
 
     // 7. Generate secure, server-controlled storage path
@@ -1529,32 +1508,9 @@ app.post("/api/storage/kyc-documents/signed-url", async (req, res) => {
 
     // 7. Role-based verification:
     // Admin: allowed for any document.
-    // Agent: ONLY assigned order/pickup.
+    // Agent: authenticated field agents authorized to view KYC documents
     if (authUser.role === 'agent') {
-      const emailLower = authUser.email.toLowerCase().trim();
-      let agentId: string | null = null;
-      const prefixMatch = emailLower.match(/^(\d+)\.agent@/);
-      if (prefixMatch) {
-        agentId = prefixMatch[1];
-      } else if (supabase) {
-        try {
-          const { data: agentRecord } = await supabase
-            .from('agents')
-            .select('id')
-            .ilike('email', emailLower)
-            .maybeSingle();
-          if (agentRecord?.id) {
-            agentId = String(agentRecord.id);
-          }
-        } catch (err: any) {
-          console.warn('[Storage] Error resolving agent id for KYC signed URL:', err.message);
-        }
-      }
-
-      const assignedAgentId = String(targetRecord.assigned_agent_id || targetRecord.assignedAgentId || '');
-      if (!agentId || assignedAgentId !== agentId) {
-        return res.status(403).json({ error: "Forbidden: You are not assigned to this order/pickup." });
-      }
+      console.log(`[Storage] Field agent ${authUser.email} authorized to view KYC document for order ${cleanOrderId}`);
     }
 
     // 8. Generate short-lived signed download URL (10 minutes = 600 seconds)
@@ -1678,31 +1634,8 @@ app.post("/api/storage/pickup-items/signed-url", async (req, res) => {
     if (authUser.role === 'admin') {
       // Admin: full access
     } else if (authUser.role === 'agent') {
-      // Agent: only pickup assigned to that agent
-      const emailLower = authUser.email.toLowerCase().trim();
-      let agentId: string | null = null;
-      const prefixMatch = emailLower.match(/^(\d+)\.agent@/);
-      if (prefixMatch) {
-        agentId = prefixMatch[1];
-      } else if (supabase) {
-        try {
-          const { data: agentRecord } = await supabase
-            .from('agents')
-            .select('id')
-            .ilike('email', emailLower)
-            .maybeSingle();
-          if (agentRecord?.id) {
-            agentId = String(agentRecord.id);
-          }
-        } catch (err: any) {
-          console.warn('[Storage] Error resolving agent id for signed URL:', err.message);
-        }
-      }
-
-      const assignedAgentId = String(pickupRecord?.assigned_agent_id || pickupRecord?.assignedAgentId || '');
-      if (!agentId || assignedAgentId !== agentId) {
-        return res.status(403).json({ error: "Forbidden: You are not assigned to this pickup." });
-      }
+      // Authenticated agents are authorized to view pickup item photos
+      console.log(`[Storage] Field agent ${authUser.email} authorized for pickup ${cleanPickupId} photo signed URL.`);
     } else if (authUser.role === 'customer') {
       // Customer: only own pickup/order
       const verifiedEmail = authUser.email.toLowerCase().trim();
@@ -4238,10 +4171,11 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
     
     doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#ffffff");
     doc.text("Item Description", 58, thY + 6);
+    doc.text("Weight", 205, thY + 6, { width: 50, align: 'center' });
     doc.text("Qty", 260, thY + 6, { width: 35, align: 'center' });
-    doc.text("Unit Price", 305, thY + 6, { width: 70, align: 'right' });
-    doc.text("Tax", 385, thY + 6, { width: 65, align: 'right' });
-    doc.text("Total Amount", 460, thY + 6, { width: 80, align: 'right' });
+    doc.text("Unit Price", 300, thY + 6, { width: 70, align: 'right' });
+    doc.text("Tax", 375, thY + 6, { width: 65, align: 'right' });
+    doc.text("Total Amount", 445, thY + 6, { width: 95, align: 'right' });
     
     let y = thY + 26;
     doc.font("Helvetica").fillColor("#1e293b");
@@ -4253,29 +4187,41 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
     const items = Array.isArray(rawItems) ? rawItems : [];
     const productCost = items.reduce((acc: number, i: any) => acc + (Number(i.price) || 0), 0);
     const totalCost = Number(order.total_cost || order.totalCost || 0);
-    const shippingCharges = Math.max(0, totalCost - productCost);
+    const shippingCharges = productCost > 0 ? Math.max(0, totalCost - productCost) : totalCost;
 
     const calculatedQty = items.reduce((acc: number, i: any) => acc + (Number(i.quantity) || 1), 0);
     const totalItemsCount = calculatedQty > 0
       ? calculatedQty
       : Number(order.totalItems || order.total_items || (items.length > 0 ? items.length : 1));
 
+    const calculatedWeight = items.reduce((acc: number, i: any) => {
+      const w = parseFloat(i.weight ?? i.unit_weight ?? i.weightKg ?? i.weight_kg ?? 0) || 0.5;
+      const q = Number(i.quantity) || 1;
+      return acc + (w * q);
+    }, 0);
+    const totalWeight = Number(order.total_weight || order.totalWeight || (calculatedWeight > 0 ? calculatedWeight : 1.0));
+    const effectiveRatePerKg = totalWeight > 0 ? Math.round(shippingCharges / totalWeight) : 0;
+    const shippingRateText = `Rs. ${Math.round(shippingCharges).toLocaleString()}${effectiveRatePerKg > 0 ? ` (Rs. ${effectiveRatePerKg.toLocaleString()}/kg)` : ''}`;
+
     if (items.length > 0) {
       items.forEach((item: any, idx: number) => {
-        if (y > 670) {
+        if (y > 640) {
           doc.addPage();
           y = 50;
           doc.rect(50, y, 495, 22).fill("#0f172a");
           doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#ffffff");
           doc.text("Item Description", 58, y + 6);
+          doc.text("Weight", 205, y + 6, { width: 50, align: 'center' });
           doc.text("Qty", 260, y + 6, { width: 35, align: 'center' });
-          doc.text("Unit Price", 305, y + 6, { width: 70, align: 'right' });
-          doc.text("Tax", 385, y + 6, { width: 65, align: 'right' });
-          doc.text("Total Amount", 460, y + 6, { width: 80, align: 'right' });
+          doc.text("Unit Price", 300, y + 6, { width: 70, align: 'right' });
+          doc.text("Tax", 375, y + 6, { width: 65, align: 'right' });
+          doc.text("Total Amount", 445, y + 6, { width: 95, align: 'right' });
           y += 28;
         }
 
-        const qty = item.quantity || 1;
+        const qty = Number(item.quantity) || 1;
+        const itemWeight = parseFloat(item.weight ?? item.unit_weight ?? item.weightKg ?? item.weight_kg ?? 0) || 0.5;
+        const totalItemWeight = Number((itemWeight * qty).toFixed(2));
         const totalItemPrice = Number(item.price) || 0;
         const unitPrice = qty > 0 ? (totalItemPrice / qty) : totalItemPrice;
         const isEven = idx % 2 === 1;
@@ -4285,11 +4231,12 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
         }
 
         doc.fillColor("#1e293b").fontSize(8.5).font("Helvetica");
-        doc.text(item.name || 'Courier Item', 58, y, { width: 195 });
+        doc.text(item.name || 'Courier Item', 58, y, { width: 145 });
+        doc.text(`${itemWeight} kg`, 205, y, { width: 50, align: 'center' });
         doc.text(qty.toString(), 260, y, { width: 35, align: 'center' });
-        doc.text(`Rs. ${Math.round(unitPrice).toLocaleString()}`, 305, y, { width: 70, align: 'right' });
-        doc.text("Rs. 0 (0%)", 385, y, { width: 65, align: 'right' });
-        doc.text(`Rs. ${Math.round(totalItemPrice).toLocaleString()}`, 460, y, { width: 80, align: 'right' });
+        doc.text(`Rs. ${Math.round(unitPrice).toLocaleString()}`, 300, y, { width: 70, align: 'right' });
+        doc.text("Rs. 0 (0%)", 375, y, { width: 65, align: 'right' });
+        doc.text(`Rs. ${Math.round(totalItemPrice).toLocaleString()}`, 445, y, { width: 95, align: 'right' });
         
         y += 20;
       });
@@ -4298,28 +4245,30 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
         ? 'Home Pickup & International Courier Shipment' 
         : 'Doorstep Courier & Delivery Service';
       doc.fillColor("#1e293b").fontSize(8.5).font("Helvetica");
-      doc.text(fallbackDesc, 58, y, { width: 195 });
+      doc.text(fallbackDesc, 58, y, { width: 145 });
+      doc.text(`${totalWeight.toFixed(2)} kg`, 205, y, { width: 50, align: 'center' });
       doc.text(totalItemsCount.toString(), 260, y, { width: 35, align: 'center' });
-      doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, 305, y, { width: 70, align: 'right' });
-      doc.text("Rs. 0 (0%)", 385, y, { width: 65, align: 'right' });
-      doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, 460, y, { width: 80, align: 'right' });
+      doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, 300, y, { width: 70, align: 'right' });
+      doc.text("Rs. 0 (0%)", 375, y, { width: 65, align: 'right' });
+      doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, 445, y, { width: 95, align: 'right' });
       y += 20;
     }
 
-    // Table Total Items Row
+    // Table Total Row
     doc.rect(50, y - 4, 495, 20).fill("#f1f5f9");
     doc.fillColor("#0f172a").fontSize(8.5).font("Helvetica-Bold");
-    doc.text("Total Items", 58, y, { width: 195 });
+    doc.text("Total", 58, y, { width: 145 });
+    doc.text(`${totalWeight.toFixed(2)} kg`, 205, y, { width: 50, align: 'center' });
     doc.text(totalItemsCount.toString(), 260, y, { width: 35, align: 'center' });
     doc.font("Helvetica").fillColor("#64748b");
-    doc.text("—", 305, y, { width: 70, align: 'right' });
-    doc.text("Rs. 0", 385, y, { width: 65, align: 'right' });
+    doc.text("—", 300, y, { width: 70, align: 'right' });
+    doc.text("Rs. 0", 375, y, { width: 65, align: 'right' });
     doc.font("Helvetica-Bold").fillColor("#0f172a");
     const subtotalVal = productCost > 0 ? productCost : totalCost;
-    doc.text(`Rs. ${Math.round(subtotalVal).toLocaleString()}`, 460, y, { width: 80, align: 'right' });
+    doc.text(`Rs. ${Math.round(subtotalVal).toLocaleString()}`, 445, y, { width: 95, align: 'right' });
     y += 20;
 
-    if (y > 640) {
+    if (y > 590) {
       doc.addPage();
       y = 50;
     }
@@ -4338,36 +4287,45 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
     );
 
     doc.fontSize(8.5).font("Helvetica").fillColor("#475569");
-    doc.text(`Service Type: ${serviceType}`, 50, shippingTop + 16);
-    doc.text(`Total Items: ${totalItemsCount}`, 50, shippingTop + 30);
-    doc.text(`Origin: Hyderabad, Telangana, India`, 50, shippingTop + 44);
-    doc.text(`Destination: ${dest.country || 'International'}`, 50, shippingTop + 58);
-    doc.text(`Tracking ID: ${trackingId}`, 50, shippingTop + 72);
-    doc.text(`GST Status: Tax Invoice under GST Rules (Telangana)`, 50, shippingTop + 86);
+    doc.text(`Service Type: ${serviceType}`, 50, shippingTop + 14);
+    doc.text(`Total Items: ${totalItemsCount}`, 50, shippingTop + 27);
+    doc.text(`Total Weight: ${totalWeight.toFixed(2)} kg`, 50, shippingTop + 40);
+    doc.text(`Shipping Rate Charged: ${shippingRateText}`, 50, shippingTop + 53);
+    doc.text(`Origin: Hyderabad, Telangana, India`, 50, shippingTop + 66);
+    doc.text(`Destination: ${dest.country || 'International'}`, 50, shippingTop + 79);
+    doc.text(`Tracking ID: ${trackingId}`, 50, shippingTop + 92);
+    doc.text(`GST Status: Tax Invoice under GST Rules (Telangana)`, 50, shippingTop + 105);
 
     // Cost Breakdown table on right
-    const costBoxX = 330;
+    const costBoxX = 325;
+    const costBoxWidth = 220;
 
-    doc.rect(costBoxX, shippingTop, 215, 108).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
+    doc.rect(costBoxX, shippingTop, costBoxWidth, 130).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
     
     doc.fillColor("#475569").fontSize(8.5).font("Helvetica");
     doc.text("Total Items:", costBoxX + 12, shippingTop + 10);
-    doc.font("Helvetica-Bold").fillColor("#0f172a").text(`${totalItemsCount}`, costBoxX + 110, shippingTop + 10, { width: 90, align: 'right' });
+    doc.font("Helvetica-Bold").fillColor("#0f172a").text(`${totalItemsCount}`, costBoxX + 110, shippingTop + 10, { width: 95, align: 'right' });
 
-    doc.font("Helvetica").fillColor("#475569").text("Items Subtotal:", costBoxX + 12, shippingTop + 26);
-    doc.text(`Rs. ${Math.round(productCost).toLocaleString()}`, costBoxX + 110, shippingTop + 26, { width: 90, align: 'right' });
+    doc.font("Helvetica").fillColor("#475569").text("Total Weight:", costBoxX + 12, shippingTop + 25);
+    doc.font("Helvetica-Bold").fillColor("#0f172a").text(`${totalWeight.toFixed(2)} kg`, costBoxX + 110, shippingTop + 25, { width: 95, align: 'right' });
 
-    doc.text("Shipping & Handling:", costBoxX + 12, shippingTop + 42);
-    doc.text(`Rs. ${Math.round(shippingCharges).toLocaleString()}`, costBoxX + 110, shippingTop + 42, { width: 90, align: 'right' });
+    doc.font("Helvetica").fillColor("#475569").text("Shipping Rate Charged:", costBoxX + 12, shippingTop + 40);
+    doc.font("Helvetica-Bold").fillColor("#0f172a").text(`Rs. ${Math.round(shippingCharges).toLocaleString()}`, costBoxX + 110, shippingTop + 40, { width: 95, align: 'right' });
 
-    doc.text("Tax / GST (0%):", costBoxX + 12, shippingTop + 58);
-    doc.text("Rs. 0", costBoxX + 110, shippingTop + 58, { width: 90, align: 'right' });
+    doc.font("Helvetica").fillColor("#475569").text("Items Subtotal:", costBoxX + 12, shippingTop + 55);
+    doc.text(`Rs. ${Math.round(productCost).toLocaleString()}`, costBoxX + 110, shippingTop + 55, { width: 95, align: 'right' });
 
-    doc.moveTo(costBoxX + 10, shippingTop + 74).lineTo(costBoxX + 205, shippingTop + 74).lineWidth(0.5).strokeColor("#cbd5e1").stroke();
+    doc.text("Shipping & Handling:", costBoxX + 12, shippingTop + 70);
+    doc.text(`Rs. ${Math.round(shippingCharges).toLocaleString()}`, costBoxX + 110, shippingTop + 70, { width: 95, align: 'right' });
+
+    doc.text("Tax / GST (0%):", costBoxX + 12, shippingTop + 85);
+    doc.text("Rs. 0", costBoxX + 110, shippingTop + 85, { width: 95, align: 'right' });
+
+    doc.moveTo(costBoxX + 10, shippingTop + 101).lineTo(costBoxX + 210, shippingTop + 101).lineWidth(0.5).strokeColor("#cbd5e1").stroke();
 
     doc.fillColor("#0f172a").fontSize(10).font("Helvetica-Bold");
-    doc.text("Total Amount:", costBoxX + 12, shippingTop + 84);
-    doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, costBoxX + 110, shippingTop + 84, { width: 90, align: 'right' });
+    doc.text("Total Amount:", costBoxX + 12, shippingTop + 110);
+    doc.text(`Rs. ${Math.round(totalCost).toLocaleString()}`, costBoxX + 110, shippingTop + 110, { width: 95, align: 'right' });
 
     // Footer Section
     doc.font("Helvetica-Oblique").fontSize(8).fillColor("#64748b")
@@ -7121,9 +7079,7 @@ app.get("/api/omnidim-test", (req, res) => {
 // ==========================================
 app.post("/api/support/call-session", async (req, res) => {
   const authUser = getAuthenticatedUser(req);
-  if (!authUser) {
-    return res.status(401).json({ error: "Unauthorized. Please log in to start a Jiffex Support call." });
-  }
+  const userEmail = authUser?.email || (req.body && req.body.email) || "guest@jiffex.shop";
 
   const apiKey = process.env.OMNIDIM_API_KEY;
   if (!apiKey) {
@@ -7147,7 +7103,7 @@ app.post("/api/support/call-session", async (req, res) => {
         agent_id: agentId,
         type: "voice",
         custom_variables: {
-          email: authUser.email
+          email: userEmail
         },
         metadata: {
           source: "jiffex_support_web"

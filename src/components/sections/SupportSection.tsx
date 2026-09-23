@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Mail, HelpCircle, ArrowRight, Sparkles, Truck, Calculator, Calendar, CheckCircle2, MessageSquareText, LogIn } from 'lucide-react';
-import { useJiffexVoiceCall } from '../../hooks/useJiffexVoiceCall';
-import { JiffexVoiceCallPanel } from '../support/JiffexVoiceCallPanel';
 import { JiffexChatPanel } from '../support/JiffexChatPanel';
 
 interface SupportSectionProps {
@@ -36,11 +34,6 @@ const SupportSection: React.FC<SupportSectionProps> = ({ currentUser, onOpenLogi
   };
 
   const loggedIn = isUserLoggedIn();
-  const voiceCall = useJiffexVoiceCall(onOpenLogin);
-
-  const handleCallSupport = () => {
-    voiceCall.startCall(loggedIn);
-  };
 
   const handleChatWithJiffex = () => {
     if (!loggedIn) {
@@ -147,17 +140,6 @@ const SupportSection: React.FC<SupportSectionProps> = ({ currentUser, onOpenLogi
               )}
             </button>
 
-            <JiffexVoiceCallPanel
-              idPrefix="btn-call-jiffex-support-section"
-              isAuthenticated={loggedIn}
-              callStatus={voiceCall.callStatus}
-              isMuted={voiceCall.isMuted}
-              lastTranscript={voiceCall.lastTranscript}
-              onStartCall={handleCallSupport}
-              onEndCall={voiceCall.endCall}
-              onToggleMute={voiceCall.toggleMute}
-            />
-
             <button
               type="button"
               onClick={handleSupportContact}
@@ -189,7 +171,7 @@ const SupportSection: React.FC<SupportSectionProps> = ({ currentUser, onOpenLogi
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
-              onClick={handleCallSupport}
+              onClick={handleChatWithJiffex}
               className={`p-6 rounded-3xl bg-white border ${cap.border} shadow-sm hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col justify-between`}
             >
               <div className="space-y-4">

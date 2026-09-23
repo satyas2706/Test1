@@ -67,15 +67,39 @@ export const InvoiceAttachmentModal: React.FC<InvoiceAttachmentModalProps> = ({
     try { rawItems = JSON.parse(rawItems); } catch { rawItems = []; }
   }
   const items = Array.isArray(rawItems) ? rawItems : [];
+
+  // Helper to extract item weight safely
+  const getItemWeight = (item: any): number => {
+    const w = parseFloat(item.weight ?? item.unit_weight ?? item.weightKg ?? item.weight_kg ?? 0);
+    if (!isNaN(w) && w > 0) return w;
+    return 0.5;
+  };
+
   const productCost = items.reduce((acc: number, item: any) => acc + (Number(item.price) || 0), 0);
   const totalCost = Number(activeOrder.totalCost || (activeOrder as any).total_cost || 0);
-  const shippingCharges = Math.max(0, totalCost - productCost);
+  const shippingCharges = productCost > 0 ? Math.max(0, totalCost - productCost) : totalCost;
 
   // Total items calculation
   const calculatedItemsCount = items.reduce((acc: number, item: any) => acc + (Number(item.quantity) || 1), 0);
   const totalItemsCount = calculatedItemsCount > 0
     ? calculatedItemsCount
     : Number((activeOrder as any).totalItems || (activeOrder as any).total_items || (items.length > 0 ? items.length : 1));
+
+  // Total weight calculation
+  const calculatedItemsWeight = items.reduce((acc: number, item: any) => {
+    const unitW = getItemWeight(item);
+    const qty = Number(item.quantity) || 1;
+    return acc + (unitW * qty);
+  }, 0);
+
+  const totalWeight = Number(
+    activeOrder.totalWeight ||
+    (activeOrder as any).total_weight ||
+    (calculatedItemsWeight > 0 ? calculatedItemsWeight : 1.0)
+  );
+
+  const effectiveRatePerKg = totalWeight > 0 ? Math.round(shippingCharges / totalWeight) : 0;
+  const shippingRateDisplay = `₹${Math.round(shippingCharges).toLocaleString()}${effectiveRatePerKg > 0 ? ` (₹${effectiveRatePerKg.toLocaleString()}/kg)` : ''}`;
 
   const serviceType = items.length > 0 && items[0].source ? items[0].source : (
     orderIdStr.startsWith('PH-') ? 'Home Pickup & International Courier' : 'International Express Shipping'
@@ -324,9 +348,10 @@ export const InvoiceAttachmentModal: React.FC<InvoiceAttachmentModalProps> = ({
               <div className="overflow-hidden rounded-xl border border-slate-200">
                 {/* Dark Header matching PDF */}
                 <div className="bg-[#0f172a] text-white text-[11px] font-bold px-3 py-2 grid grid-cols-12 gap-2 uppercase tracking-wider">
-                  <div className="col-span-6 sm:col-span-5">Item Description</div>
-                  <div className="col-span-2 text-center">Qty</div>
-                  <div className="col-span-2 text-right">Unit Price</div>
+                  <div className="col-span-5 sm:col-span-4">Item Description</div>
+                  <div className="col-span-2 sm:col-span-2 text-center">Weight</div>
+                  <div className="col-span-1 sm:col-span-1 text-center">Qty</div>
+                  <div className="col-span-2 sm:col-span-2 text-right">Unit Price</div>
                   <div className="hidden sm:block sm:col-span-1 text-right">Tax</div>
                   <div className="col-span-2 sm:col-span-2 text-right">Total</div>
                 </div>
@@ -334,7 +359,9 @@ export const InvoiceAttachmentModal: React.FC<InvoiceAttachmentModalProps> = ({
                 {/* Rows */}
                 {items.length > 0 ? (
                   items.map((item: any, idx: number) => {
-                    const qty = item.quantity || 1;
+                    const qty = Number(item.quantity) || 1;
+                    const unitWeight = getItemWeight(item);
+                    const totalItemWeight = Number((unitWeight * qty).toFixed(2));
                     const totalItemPrice = Number(item.price) || 0;
                     const unitPrice = qty > 0 ? totalItemPrice / qty : totalItemPrice;
                     const isEven = idx % 2 === 1;
@@ -346,16 +373,26 @@ export const InvoiceAttachmentModal: React.FC<InvoiceAttachmentModalProps> = ({
                           isEven ? 'bg-[#f8fafc]' : 'bg-white'
                         } border-t border-slate-100`}
                       >
-                        <div className="col-span-6 sm:col-span-5">
+                        <div className="col-span-5 sm:col-span-4">
                           <div className="font-semibold text-slate-900">{item.name || 'Courier Item'}</div>
-                          {(item.weight || item.source) && (
+                          {item.source && (
                             <div className="text-[10px] text-slate-500">
-                              {item.weight ? `${item.weight} kg` : ''} {item.source ? `• ${item.source}` : ''}
+                              {item.source}
                             </div>
                           )}
                         </div>
-                        <div className="col-span-2 text-center font-medium text-slate-600">{qty}</div>
-                        <div className="col-span-2 text-right font-medium text-slate-700">₹{Math.round(unitPrice).toLocaleString()}</div>
+                        <div className="col-span-2 sm:col-span-2 text-center">
+                          <span className="inline-block px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded font-semibold text-[11px]">
+                            {unitWeight} kg
+                          </span>
+                          {qty > 1 && (
+                            <span className="block text-[9px] text-slate-400 font-medium mt-0.5">
+                              Total: {totalItemWeight} kg
+                            </span>
+                          )}
+                        </div>
+                        <div className="col-span-1 sm:col-span-1 text-center font-medium text-slate-600">{qty}</div>
+                        <div className="col-span-2 sm:col-span-2 text-right font-medium text-slate-700">₹{Math.round(unitPrice).toLocaleString()}</div>
                         <div className="hidden sm:block sm:col-span-1 text-right text-slate-500 text-[11px]">₹0 (0%)</div>
                         <div className="col-span-2 sm:col-span-2 text-right font-bold text-slate-900">₹{Math.round(totalItemPrice).toLocaleString()}</div>
                       </div>
@@ -364,28 +401,34 @@ export const InvoiceAttachmentModal: React.FC<InvoiceAttachmentModalProps> = ({
                 ) : (
                   /* Fallback row when items have not yet been broken down separately */
                   <div className="grid grid-cols-12 gap-2 px-3 py-3 items-center text-xs text-slate-800 bg-white border-t border-slate-100">
-                    <div className="col-span-6 sm:col-span-5">
+                    <div className="col-span-5 sm:col-span-4">
                       <div className="font-semibold text-slate-900">
                         {orderIdStr.startsWith('PH-') ? 'Home Pickup & International Courier Shipment' : 'Doorstep Courier & Delivery Service'}
                       </div>
                       <div className="text-[10px] text-slate-500">Scheduled delivery to {dest.country || 'Destination'}</div>
                     </div>
-                    <div className="col-span-2 text-center font-medium text-slate-600">1</div>
-                    <div className="col-span-2 text-right font-medium text-slate-700">₹{Math.round(totalCost).toLocaleString()}</div>
+                    <div className="col-span-2 sm:col-span-2 text-center font-bold text-slate-700">
+                      {totalWeight.toFixed(2)} kg
+                    </div>
+                    <div className="col-span-1 sm:col-span-1 text-center font-medium text-slate-600">1</div>
+                    <div className="col-span-2 sm:col-span-2 text-right font-medium text-slate-700">₹{Math.round(totalCost).toLocaleString()}</div>
                     <div className="hidden sm:block sm:col-span-1 text-right text-slate-500 text-[11px]">₹0 (0%)</div>
                     <div className="col-span-2 sm:col-span-2 text-right font-bold text-slate-900">₹{Math.round(totalCost).toLocaleString()}</div>
                   </div>
                 )}
 
-                {/* Total Items Summary Row */}
+                {/* Total Summary Row */}
                 <div className="grid grid-cols-12 gap-2 px-3 py-2.5 items-center text-xs text-slate-900 bg-slate-100 border-t-2 border-slate-300 font-bold">
-                  <div className="col-span-6 sm:col-span-5 font-black uppercase text-[11px] tracking-wider text-slate-900">
-                    Total Items
+                  <div className="col-span-5 sm:col-span-4 font-black uppercase text-[11px] tracking-wider text-slate-900">
+                    Total
                   </div>
-                  <div className="col-span-2 text-center font-black text-indigo-700 text-sm">
+                  <div className="col-span-2 sm:col-span-2 text-center font-black text-indigo-700 text-xs sm:text-sm">
+                    {totalWeight.toFixed(2)} kg
+                  </div>
+                  <div className="col-span-1 sm:col-span-1 text-center font-black text-indigo-700 text-xs sm:text-sm">
                     {totalItemsCount}
                   </div>
-                  <div className="col-span-2 text-right text-slate-400 font-normal text-[11px]">
+                  <div className="col-span-2 sm:col-span-2 text-right text-slate-400 font-normal text-[11px]">
                     —
                   </div>
                   <div className="hidden sm:block sm:col-span-1 text-right text-slate-400 font-normal text-[11px]">
@@ -407,6 +450,8 @@ export const InvoiceAttachmentModal: React.FC<InvoiceAttachmentModalProps> = ({
                 </div>
                 <div><span className="text-slate-500">Service Type: </span><strong className="text-slate-800">{serviceType}</strong></div>
                 <div><span className="text-slate-500">Total Items: </span><strong className="text-slate-900 font-bold">{totalItemsCount}</strong></div>
+                <div><span className="text-slate-500">Total Weight: </span><strong className="text-indigo-700 font-bold">{totalWeight.toFixed(2)} kg</strong></div>
+                <div><span className="text-slate-500">Shipping Rate Charged: </span><strong className="text-emerald-700 font-bold">{shippingRateDisplay}</strong></div>
                 <div><span className="text-slate-500">Origin: </span><strong className="text-slate-800">Hyderabad, Telangana, India</strong></div>
                 <div><span className="text-slate-500">Destination: </span><strong className="text-slate-800">{dest.country || 'International'}</strong></div>
                 <div><span className="text-slate-500">Tracking ID: </span><strong className="text-slate-900 font-mono">{trackingId}</strong></div>
@@ -418,6 +463,14 @@ export const InvoiceAttachmentModal: React.FC<InvoiceAttachmentModalProps> = ({
                 <div className="flex justify-between text-slate-600">
                   <span>Total Items:</span>
                   <span className="font-bold text-slate-900">{totalItemsCount}</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Total Weight:</span>
+                  <span className="font-bold text-indigo-700">{totalWeight.toFixed(2)} kg</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Shipping Rate Charged:</span>
+                  <span className="font-bold text-emerald-700">{shippingRateDisplay}</span>
                 </div>
                 <div className="flex justify-between text-slate-600">
                   <span>Items Subtotal:</span>

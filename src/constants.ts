@@ -503,7 +503,7 @@ export const SHIPPING_DATES = [
 
 export const PICKUP_SLOTS = Array.from({ length: 15 }).map((_, i) => ({
   date: getFutureDate(i),
-  times: ['9–11 AM', '11–1 PM', '1–3 PM', '3–5 PM', '5–7 PM', '7–9 PM']
+  times: ['9–11 AM', '1–3 PM', '5–7 PM']
 }));
 
 export const WAREHOUSE_ADDRESS = {

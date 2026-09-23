@@ -199,7 +199,7 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
   ];
 
   const COUNTRIES = ['United States', 'India', 'Canada', 'United Kingdom', 'United Arab Emirates', 'Australia', 'Singapore', 'Germany'];
-  const PICKUP_SLOTS_TIMES = ['9–11 AM', '11–1 PM', '1–3 PM', '3–5 PM', '5–7 PM', '7–9 PM'];
+  const PICKUP_SLOTS_TIMES = ['9–11 AM', '1–3 PM', '5–7 PM'];
 
   // Handle step 1 action
   const handleStep1Continue = () => {
@@ -482,7 +482,7 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
             {/* Time Selector */}
             <div className="space-y-1.5 pt-1">
               <label className="text-[9px] font-black uppercase tracking-wider text-slate-400">Select Time Window</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {PICKUP_SLOTS_TIMES.map(time => {
                   const isSelected = selectedPickupTime === time;
                   let isPast = false;
@@ -491,11 +491,8 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                   } else if (selectedPickupDate === istDateStr) {
                     const hourMap: Record<string, number> = {
                       '9–11 AM': 9,
-                      '11–1 PM': 11,
                       '1–3 PM': 13,
-                      '3–5 PM': 15,
-                      '5–7 PM': 17,
-                      '7–9 PM': 19
+                      '5–7 PM': 17
                     };
                     const startHour = hourMap[time] || 9;
                     if (istNow.getHours() >= startHour) {
@@ -672,12 +669,12 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                       const isChecked = e.target.checked;
                       if (setProvideDestinationLater) setProvideDestinationLater(isChecked);
                       if (isChecked) {
-                        toast.info("Destination details set to be provided later before warehouse dispatch.");
+                        toast.info("Destination details will be collected during pickup.");
                       }
                     }}
                   />
                   <label htmlFor="provide-destination-later-mobile" className="text-xs font-bold text-slate-800 cursor-pointer select-none">
-                    I don't know the destination yet
+                    I will provide the details during pickup
                   </label>
                 </div>
 
@@ -686,7 +683,7 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                     <div className="flex items-center gap-2 text-amber-900">
                       <Clock size={16} className="shrink-0 text-amber-600" />
                       <p className="text-xs font-bold leading-snug">
-                        You can provide the destination later. We'll contact you before shipping.
+                        You can share the receiver and destination details directly with our executive during pickup.
                       </p>
                     </div>
 

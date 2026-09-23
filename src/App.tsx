@@ -156,8 +156,6 @@ import AboutSection from './components/sections/AboutSection';
 import TrackSection from './components/sections/TrackSection';
 import { MobileStoreSection } from './components/sections/MobileStoreSection';
 import { MobileCartSection } from './components/sections/MobileCartSection';
-import { useJiffexVoiceCall } from './hooks/useJiffexVoiceCall';
-import { JiffexVoiceCallPanel } from './components/support/JiffexVoiceCallPanel';
 import { JiffexChatPanel } from './components/support/JiffexChatPanel';
 import { InvoiceAttachmentModal } from './components/InvoiceAttachmentModal';
 import jiffexHeroCustom from './assets/images/jiffex_hero_custom_1789308756197.jpg';
@@ -1181,10 +1179,6 @@ const SupportDeskDashboard = ({ orders, tickets, setTickets, refundRequests, set
   );
 };
 
-export const triggerJiffexVoiceCall = () => {
-  window.dispatchEvent(new CustomEvent('jiffex:start-voice-call'));
-};
-
 interface SupportSectionProps {
   currentUser: User | null;
   session?: Session | null;
@@ -1228,12 +1222,6 @@ const SupportSection = ({
     (getValidActiveSession() && getValidActiveSession()?.email)
   );
 
-  const voiceCall = useJiffexVoiceCall(onOpenLogin);
-
-  const handleCallSupport = () => {
-    voiceCall.startCall(isAuthenticated);
-  };
-
   const handleChatWithJiffex = () => {
     if (!isAuthenticated) {
       if (onOpenLogin) {
@@ -1245,16 +1233,6 @@ const SupportSection = ({
     }
     setIsChatOpen(true);
   };
-
-  useEffect(() => {
-    const handleVoiceCallEvent = () => {
-      handleCallSupport();
-    };
-    window.addEventListener('jiffex:start-voice-call', handleVoiceCallEvent);
-    return () => {
-      window.removeEventListener('jiffex:start-voice-call', handleVoiceCallEvent);
-    };
-  }, [isAuthenticated, handleCallSupport]);
 
   const supportTopics = [
     "Shipping quotes",
@@ -1346,19 +1324,6 @@ const SupportSection = ({
                   </>
                 )}
               </button>
-
-              <JiffexVoiceCallPanel
-                idPrefix="btn-call-jiffex-support-mobile"
-                isAuthenticated={isAuthenticated}
-                callStatus={voiceCall.callStatus}
-                isMuted={voiceCall.isMuted}
-                lastTranscript={voiceCall.lastTranscript}
-                onStartCall={handleCallSupport}
-                onEndCall={voiceCall.endCall}
-                onToggleMute={voiceCall.toggleMute}
-                size="sm"
-                className="w-full"
-              />
 
               <a
                 id="btn-email-support-mobile-action"
@@ -1548,18 +1513,6 @@ const SupportSection = ({
                   </>
                 )}
               </button>
-
-              <JiffexVoiceCallPanel
-                idPrefix="btn-call-jiffex-support-desktop"
-                isAuthenticated={isAuthenticated}
-                callStatus={voiceCall.callStatus}
-                isMuted={voiceCall.isMuted}
-                lastTranscript={voiceCall.lastTranscript}
-                onStartCall={handleCallSupport}
-                onEndCall={voiceCall.endCall}
-                onToggleMute={voiceCall.toggleMute}
-                size="md"
-              />
 
               <a
                 id="btn-email-support-desktop-action"
@@ -8412,23 +8365,31 @@ export default function App() {
   };
 
   const addWOItem = () => {
-    if (!woItemName) return;
+    if (!woItemName.trim()) {
+      toast.error("Please enter the cargo item name.");
+      return;
+    }
+    if (!woItemImage) {
+      toast.error("Cargo item photo is mandatory. Please snap or upload a photo before adding the item.");
+      return;
+    }
     const finalWeight = Math.max(0.1, Number(woItemWeight) || 1);
     const finalQty = Math.max(1, Math.round(Number(woItemQuantity)) || 1);
     const newItem: ShippingItem = {
       id: crypto.randomUUID(),
-      name: woItemName,
+      name: woItemName.trim(),
       weight: finalWeight,
       quantity: finalQty,
       status: 'Pending',
       source: 'Pickup',
-      image: woItemImage || undefined
+      image: woItemImage
     };
     setWoItems([...woItems, newItem]);
     setWoItemName('');
     setWoItemWeight(1);
     setWoItemQuantity(1);
     setWoItemImage('');
+    toast.success(`Added ${newItem.name} with photo.`);
   };
 
   const handleWOSaveDetails = async () => {
@@ -10616,10 +10577,16 @@ export default function App() {
                       <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Completed Orders Included</span>
                       <span className="font-bold text-xs text-indigo-400">{selectedOrdersForConsolidatedInvoice.map(o => o.id).join(', ')}</span>
                     </div>
-                    <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
+                    <div className="flex justify-between items-center mb-3 pb-3 border-b border-white/10">
                       <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Consolidated Total Weight</span>
                       <span className="font-bold">
                         {selectedOrdersForConsolidatedInvoice.reduce((sum, o) => sum + getSafeOrderTotalWeight(o), 0).toFixed(2)} kg
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
+                      <span className="text-slate-400 text-xs font-bold uppercase tracking-widest">Shipping Rate Charged</span>
+                      <span className="font-bold text-emerald-400">
+                        ₹{Math.round(selectedOrdersForConsolidatedInvoice.reduce((sum, o) => sum + Number(o.totalCost || o.total_cost || 0), 0)).toLocaleString()}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
@@ -11031,7 +10998,9 @@ export default function App() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] text-center font-black text-slate-400 uppercase tracking-widest mb-1 truncate">Snap Photo</label>
+                      <label className="block text-[10px] text-center font-black text-slate-500 uppercase tracking-widest mb-1 truncate">
+                        Photo <span className="text-rose-500 font-bold">*</span>
+                      </label>
                       <div className="flex gap-1.5 items-center justify-center w-full">
                         <button 
                           type="button"
@@ -11041,13 +11010,16 @@ export default function App() {
                           }}
                           className={`flex-1 h-[38px] rounded-xl flex items-center justify-center border transition-all cursor-pointer relative ${
                             woItemImage 
-                              ? 'bg-emerald-50 border-emerald-200 text-emerald-600 ring-2 ring-emerald-100' 
-                              : 'bg-white border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-300'
+                              ? 'bg-emerald-50 border-emerald-300 text-emerald-600 ring-2 ring-emerald-100' 
+                              : 'bg-amber-50/60 border-dashed border-amber-300 text-amber-700 hover:bg-amber-100/60'
                           }`}
+                          title={woItemImage ? "Photo captured (Click to retake)" : "Photo mandatory (Click to snap or upload)"}
                         >
-                          <Camera size={14} className={!woItemImage ? "text-indigo-600" : ""} />
-                          {woItemImage && (
+                          <Camera size={14} className={!woItemImage ? "text-amber-600 animate-pulse" : ""} />
+                          {woItemImage ? (
                             <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 rounded-full border border-white flex items-center justify-center text-[8px] text-white">✓</span>
+                          ) : (
+                            <span className="ml-1 text-[10px] font-bold hidden xs:inline">Snap *</span>
                           )}
                         </button>
                         {woItemImage && (
@@ -11067,19 +11039,21 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center pt-2.5 border-t border-slate-150">
-                  <span className="text-[10px] font-bold text-slate-400">Add collected items representing cargo.</span>
+                <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-2 pt-2.5 border-t border-slate-150">
+                  <span className="text-[10px] font-bold text-slate-400">
+                    {!woItemImage ? '⚠️ Photo of the cargo item is mandatory before adding.' : 'Item photo captured. Ready to add to manifest.'}
+                  </span>
                   <button 
                     type="button"
                     onClick={addWOItem}
-                    disabled={!woItemName}
-                    className={`px-6 py-2 rounded-xl font-bold transition-all text-xs cursor-pointer shadow-xs ${
-                      woItemName 
+                    disabled={!woItemName.trim() || !woItemImage}
+                    className={`w-full sm:w-auto px-6 py-2 rounded-xl font-bold transition-all text-xs cursor-pointer shadow-xs flex items-center justify-center gap-1.5 ${
+                      woItemName.trim() && woItemImage 
                         ? 'bg-slate-900 text-white hover:bg-black hover:shadow-sm' 
-                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
                     }`}
                   >
-                    Add
+                    {!woItemImage && woItemName.trim() ? 'Photo Required *' : 'Add Item'}
                   </button>
                 </div>
               </div>
@@ -11277,7 +11251,7 @@ export default function App() {
                       onClick={handleWOSaveDetails}
                       className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer animate-pulse hover:animate-none"
                     >
-                      <Save size={14} /> Save Collected Cargo List
+                      <Save size={14} /> Save
                     </button>
                   </div>
                 )}
@@ -11541,7 +11515,7 @@ export default function App() {
                   onClick={handleWOSaveDetails}
                   className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer"
                 >
-                  <Save size={14} /> Save KYC Progress
+                  <Save size={14} /> Save
                 </button>
               </div>
             </div>
@@ -14134,12 +14108,12 @@ export default function App() {
                                     const isChecked = e.target.checked;
                                     setProvideDestinationLater(isChecked);
                                     if (isChecked) {
-                                      toast.info("You can provide the destination later. We'll contact you before shipping.");
+                                      toast.info("You can share the receiver and destination details directly with our executive during pickup.");
                                     }
                                   }}
                                 />
                                 <label htmlFor="provide-destination-later-desktop" className="text-xs font-bold text-slate-800 cursor-pointer select-none">
-                                  I don't know the destination yet
+                                  I will provide the details during pickup
                                 </label>
                               </div>
 
@@ -14148,7 +14122,7 @@ export default function App() {
                                   <div className="flex items-center gap-3 text-amber-900">
                                     <Clock size={20} className="shrink-0 text-amber-600" />
                                     <p className="text-xs font-bold leading-snug">
-                                      You can provide the destination later. We'll contact you before shipping.
+                                      You can share the receiver and destination details directly with our executive during pickup.
                                     </p>
                                   </div>
                                   
@@ -18108,8 +18082,6 @@ export default function App() {
                       ? 'Almost There!' 
                       : loginTriggerSource === 'pickup' 
                       ? 'One Last Step!' 
-                      : loginTriggerSource === 'support'
-                      ? 'Sign in to Call Support'
                       : 'Welcome to Jiffex'}
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-500 mt-2 leading-relaxed">
@@ -18117,8 +18089,6 @@ export default function App() {
                       ? 'Sign in or create an account to complete your secure checkout' 
                       : loginTriggerSource === 'pickup'
                       ? 'Verify your identity to confirm your pickup'
-                      : loginTriggerSource === 'support'
-                      ? 'Please sign in to your Jiffex account to speak with customer care.'
                       : 'Sign in or create an account to continue'}
                   </p>
                 </div>

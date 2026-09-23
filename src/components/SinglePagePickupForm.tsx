@@ -354,7 +354,7 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
               </div>
               <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">Schedule a Home Pickup</h2>
               <p className="text-slate-300 text-xs font-medium">
-                Review your pickup details below and confirm your doorstep collection.
+                Review your pickup details below and confirm your pickup.
               </p>
             </div>
           </div>
@@ -437,7 +437,7 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
             {provideDestinationLater ? (
               <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200/60 text-[11px] text-amber-900 font-medium flex items-center gap-2">
                 <Info size={14} className="text-amber-600 shrink-0" />
-                <span>Destination details will be provided later to agent during doorstep inspection.</span>
+                <span>Destination details will be provided during pickup.</span>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -516,29 +516,11 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
               <Truck className="w-6 h-6 md:w-8 md:h-8" />
             </div>
             <div>
-              <div className="hidden md:inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-black uppercase tracking-wider mb-2 border border-amber-500/30">
-                <Sparkles size={12} /> Doorstep Collection
-              </div>
               <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white tracking-tight">Schedule a Home Pickup</h2>
               <p className="text-slate-300 text-xs sm:text-sm font-medium mt-0.5 md:mt-1">
                 Tell us what you're shipping, when you'd like pickup, and where we should collect it.
               </p>
             </div>
-          </div>
-          
-          <div className="hidden md:flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => setShowRequirementsModal(true)}
-              className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/10 flex items-center gap-2 cursor-pointer"
-            >
-              <ShieldCheck size={16} className="text-amber-400" /> Documents Needed
-            </button>
-            <button
-              onClick={() => setShowProhibitedModal(true)}
-              className="px-4 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold transition-all border border-amber-500/30 flex items-center gap-2 cursor-pointer"
-            >
-              <AlertTriangle size={16} /> Prohibited Items
-            </button>
           </div>
         </div>
       </div>
@@ -715,46 +697,11 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
               </div>
             </div>
 
-            {/* Time Window Selector */}
+            {/* Time Window Selector - Exactly 3 time slots */}
             <div className="space-y-3">
               <label className="block text-xs font-black text-slate-700 uppercase tracking-wider">Select Time Window</label>
               
-              {/* Desktop / Laptop / Tablet (md and above) - All time windows */}
-              <div className="hidden md:grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {PICKUP_SLOTS.find(s => s.date === selectedPickupDate)?.times.map(time => {
-                  const isSelected = selectedPickupTime === time;
-                  let isPast = false;
-                  if (selectedPickupDate < istDateStr) {
-                    isPast = true;
-                  } else if (selectedPickupDate === istDateStr) {
-                    const hourMap: Record<string, number> = {
-                      '9–11 AM': 9, '11–1 PM': 11, '1–3 PM': 13,
-                      '3–5 PM': 15, '5–7 PM': 17, '7–9 PM': 19
-                    };
-                    const startHour = hourMap[time];
-                    if (istNow.getHours() >= startHour) isPast = true;
-                  }
-
-                  return (
-                    <button
-                      key={time}
-                      type="button"
-                      disabled={isPast}
-                      onClick={() => setSelectedPickupTime(time)}
-                      className={`py-3 px-3 rounded-2xl border-2 transition-all text-center ${
-                        isPast ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-100 text-slate-300' :
-                        isSelected ? 'border-amber-500 bg-amber-500/10 text-amber-900 font-black shadow-sm' : 
-                        'border-slate-100 bg-slate-50 text-slate-600 hover:border-slate-200'
-                      }`}
-                    >
-                      <span className="text-xs font-black">{time}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Mobile View Only - Exactly 3 time windows */}
-              <div className="grid grid-cols-3 gap-2 md:hidden">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {['9–11 AM', '1–3 PM', '5–7 PM'].map(time => {
                   const isSelected = selectedPickupTime === time;
                   let isPast = false;
@@ -774,13 +721,13 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                       type="button"
                       disabled={isPast}
                       onClick={() => setSelectedPickupTime(time)}
-                      className={`py-3 px-1 rounded-2xl border-2 transition-all text-center flex flex-col items-center justify-center ${
+                      className={`py-3 px-2 sm:px-4 rounded-2xl border-2 transition-all text-center flex flex-col items-center justify-center cursor-pointer ${
                         isPast ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-100 text-slate-300' :
                         isSelected ? 'border-amber-500 bg-amber-500/10 text-amber-900 font-black shadow-sm' : 
                         'border-slate-100 bg-slate-50 text-slate-600 hover:border-slate-200'
                       }`}
                     >
-                      <span className="text-xs font-black whitespace-nowrap">{time}</span>
+                      <span className="text-xs sm:text-sm font-black whitespace-nowrap">{time}</span>
                     </button>
                   );
                 })}
@@ -947,12 +894,12 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                   const isChecked = e.target.checked;
                   setProvideDestinationLater(isChecked);
                   if (isChecked) {
-                    toast.info("You can provide the destination later. We'll contact you before shipping.");
+                    toast.info("Destination details will be collected during pickup.");
                   }
                 }}
               />
               <label htmlFor="provide-destination-later-single" className="text-xs font-bold text-slate-900 cursor-pointer select-none">
-                I don't know the destination yet
+                I will provide the details during pickup
               </label>
             </div>
 
@@ -961,7 +908,7 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
                 <div className="flex items-center gap-2.5 text-amber-900">
                   <Clock size={18} className="shrink-0 text-amber-600" />
                   <p className="text-xs font-bold text-amber-900 leading-snug">
-                    You can provide the destination later. We'll contact you before shipping.
+                    You can share the receiver and destination details directly with our executive during pickup.
                   </p>
                 </div>
                 <div className="space-y-1 pt-1">

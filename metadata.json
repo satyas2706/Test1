@@ -1,9 +1,7 @@
 {
   "name": "Jiffex | India to USA Shipping & International Courier",
   "description": "Ship from India to the USA with Jiffex. Schedule a pickup, consolidate packages, shop in India, get shipping quotes and track your international shipments.",
-  "requestFramePermissions": [
-    "microphone"
-  ],
+  "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
