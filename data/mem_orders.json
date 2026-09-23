@@ -1,1 +1,42 @@
-[]
+[
+  {
+    "id": "PH-00118",
+    "customer_id": "guest_srikanth_satya2706_zohomail_in",
+    "items": [],
+    "total_weight": 5,
+    "total_cost": 0,
+    "status": "Scheduled",
+    "destination": {
+      "fullName": "To Be Provided Later",
+      "email": "srikanth.satya2706@zohomail.in",
+      "phone": "7032334999",
+      "addressLine1": "Address details will be provided later (Pending Dispatch)",
+      "city": "To Be Provided Later",
+      "state": "To Be Provided Later",
+      "zipCode": "000000",
+      "country": "USA",
+      "itemCount": 0,
+      "totalItems": 0,
+      "pickupType": "AllAgent",
+      "assignedAgent": {
+        "id": "10001",
+        "name": "Rahul Sharma",
+        "phone": "+91 98765 43210",
+        "email": "10001.agent@jiffex.com",
+        "status": "Active",
+        "vehicleNumber": "KA-01-AB-1234"
+      },
+      "assignedAgentId": "10001",
+      "languagePreference": "English",
+      "itemType": "Packages & Parcels",
+      "vehicleType": "Less than 5 kg",
+      "customerName": "Srikanth",
+      "date": "2026-09-24",
+      "time": "Flexible",
+      "address": "Address details will be provided later (Pending Dispatch)"
+    },
+    "payment_status": "Pending",
+    "shipping_date": "2026-09-24",
+    "created_at": "2026-09-23T14:03:35.498702+00:00"
+  }
+]

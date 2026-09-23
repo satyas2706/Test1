@@ -58,6 +58,7 @@ interface MobilePickupFlowProps {
   setShopItemsShippingDestination?: (dest: 'home' | 'custom' | 'warehouse') => void;
   hasShopItems?: boolean;
   handleSchedulePickup: () => void;
+  isSubmitting?: boolean;
   currentUser: any;
   activePickup: any;
   lastBookingRef: string;
@@ -107,6 +108,7 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
   setShopItemsShippingDestination,
   hasShopItems = false,
   handleSchedulePickup,
+  isSubmitting = false,
   currentUser,
   activePickup,
   lastBookingRef,
@@ -257,6 +259,7 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
         setShopItemsShippingDestination={setShopItemsShippingDestination || (() => {})}
         hasShopItems={hasShopItems}
         handleSchedulePickup={handleSchedulePickup}
+        isSubmitting={isSubmitting}
         currentUser={currentUser}
         shippingRates={shippingRates || {}}
         shippingDiscounts={shippingDiscounts || {}}
@@ -863,13 +866,15 @@ export const MobilePickupFlow: React.FC<MobilePickupFlowProps> = ({
                 Edit
               </button>
               <button 
+                disabled={isSubmitting}
                 onClick={() => {
+                  if (isSubmitting) return;
                   handleSchedulePickup();
                   window.scrollTo(0, 0);
                 }}
-                className="flex-[2] py-3.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 active:scale-95 transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer"
+                className="flex-[2] py-3.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 active:scale-95 transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {currentUser ? 'Confirm Booking' : 'Sign in (OTP-based)'}
+                {isSubmitting ? 'Booking...' : (currentUser ? 'Confirm Booking' : 'Sign in (OTP-based)')}
               </button>
             </div>
           </div>

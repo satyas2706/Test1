@@ -67,6 +67,7 @@ interface SinglePagePickupFormProps {
   setShopItemsShippingDestination: (dest: 'home' | 'custom' | 'warehouse') => void;
   hasShopItems: boolean;
   handleSchedulePickup: () => void;
+  isSubmitting?: boolean;
   currentUser: any;
   shippingRates: Record<string, number>;
   shippingRateBands?: Record<string, RateBand[]>;
@@ -110,6 +111,7 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
   setShopItemsShippingDestination,
   hasShopItems,
   handleSchedulePickup,
+  isSubmitting = false,
   currentUser,
   shippingRates,
   shippingRateBands,
@@ -490,13 +492,15 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
 
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={() => {
+                if (isSubmitting) return;
                 handleSchedulePickup();
               }}
-              className="flex-1 py-3.5 rounded-xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20 cursor-pointer active:scale-95"
+              className="flex-1 py-3.5 rounded-xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20 cursor-pointer active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <CheckCircle2 size={18} />
-              Confirm & Schedule Pickup
+              {isSubmitting ? 'Booking...' : 'Confirm & Schedule Pickup'}
             </button>
           </div>
 

@@ -2198,14 +2198,140 @@ app.post("/api/items", async (req, res) => {
   }
 });
 
+// ==================================================
+// SERVER-SIDE DUPLICATE REQUEST PROTECTION
+// If the same customer submits the same pickup payload within 30 seconds,
+// return the existing order instead of creating a new one.
+// ==================================================
+interface RecentPickupEntry {
+  customerKey: string;
+  payloadKey: string;
+  timestamp: number;
+  order: any;
+  orderPromise?: Promise<any>;
+}
+
+const recentPickupCache = new Map<string, RecentPickupEntry>();
+
+const getNormalizedPickupSignature = (body: any): string => {
+  if (!body) return '';
+  const dest = typeof body.destination === 'object' && body.destination !== null ? body.destination : {};
+  const addr = String(body.pickup_address || body.address || dest.address || dest.addressLine1 || '').trim().toLowerCase();
+  const date = String(body.shipping_date || body.shippingDate || dest.date || body.date || '').trim().toLowerCase();
+  const phone = String(body.phone || dest.phone || '').replace(/\D/g, '');
+  const itemType = String(body.item_type || body.itemType || dest.itemType || '').trim().toLowerCase();
+  const vehicleType = String(body.vehicle_type || body.vehicleType || dest.vehicleType || '').trim().toLowerCase();
+  const weight = Number(body.total_weight || body.totalWeight || 0);
+  return `${addr}|${date}|${phone}|${itemType}|${vehicleType}|${weight}`;
+};
+
 // Example API: Create an order/appointment
 app.post("/api/orders", async (req, res) => {
   const providedId = req.body.id || req.body.orderId || req.body.appointmentId;
   const finalId = providedId && String(providedId).trim() !== "" ? providedId : crypto.randomUUID();
+
+  const isPickup = req.body.status === 'Scheduled' || 
+                   req.body.status === 'Pending Pickup' || 
+                   String(finalId).toUpperCase().startsWith('PH-') || 
+                   Boolean(req.body.pickup_type || req.body.pickupType || (req.body.destination && (req.body.destination.pickupType || req.body.destination.itemType)));
+
+  const customerKey = (
+    req.body.customer_id || 
+    req.body.customerId || 
+    req.body.phone || 
+    req.body.destination?.phone || 
+    req.body.email || 
+    req.body.destination?.email || 
+    ''
+  ).toString().trim().toLowerCase();
+
+  const now = Date.now();
+
+  // Prune entries older than 30 seconds
+  for (const [k, entry] of recentPickupCache.entries()) {
+    if (now - entry.timestamp > 30000) {
+      recentPickupCache.delete(k);
+    }
+  }
+
+  let resolveOrderPromise: (order: any) => void = () => {};
+  let cacheKey = '';
+
+  if (isPickup && customerKey) {
+    const payloadKey = getNormalizedPickupSignature(req.body);
+    cacheKey = `${customerKey}:::${payloadKey}`;
+
+    // 1. Check recent in-memory cache
+    const cachedEntry = recentPickupCache.get(cacheKey);
+    if (cachedEntry && (now - cachedEntry.timestamp <= 30000)) {
+      if (cachedEntry.order) {
+        console.log(`[DUPLICATE PROTECTION] Returning existing order for customer ${customerKey} (ID: ${cachedEntry.order.id}): within 30s.`);
+        return res.json(cachedEntry.order);
+      }
+      if (cachedEntry.orderPromise) {
+        console.log(`[DUPLICATE PROTECTION] In-flight identical order detected for customer ${customerKey}. Awaiting response.`);
+        try {
+          const inFlightOrder = await cachedEntry.orderPromise;
+          if (inFlightOrder) {
+            return res.json(inFlightOrder);
+          }
+        } catch (e) {}
+      }
+    }
+
+    // 2. Check memOrders for identical order submitted within 30s
+    const existingMemOrder = memOrders.find(o => {
+      const oCust = (o.customer_id || o.customerId || o.phone || o.destination?.phone || o.email || o.destination?.email || '').toString().trim().toLowerCase();
+      if (oCust !== customerKey) return false;
+      const oTime = new Date(o.created_at || o.createdAt || 0).getTime();
+      if (isNaN(oTime) || (now - oTime > 30000)) return false;
+      return getNormalizedPickupSignature(o) === payloadKey;
+    });
+
+    if (existingMemOrder) {
+      console.log(`[DUPLICATE PROTECTION] Returning existing memOrder ${existingMemOrder.id} for customer ${customerKey} within 30s.`);
+      return res.json(existingMemOrder);
+    }
+
+    // 3. Check Supabase recent orders for this customer within 30s
+    if (supabase && (req.body.customer_id || req.body.customerId)) {
+      try {
+        const thirtySecAgo = new Date(now - 30000).toISOString();
+        const { data: recentDbOrders } = await supabase
+          .from('orders')
+          .select()
+          .eq('customer_id', req.body.customer_id || req.body.customerId)
+          .gte('created_at', thirtySecAgo)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        if (recentDbOrders && recentDbOrders.length > 0) {
+          const match = recentDbOrders.find(o => getNormalizedPickupSignature(o) === payloadKey);
+          if (match) {
+            console.log(`[DUPLICATE PROTECTION] Returning existing Supabase order ${match.id} within 30s.`);
+            const transformed = typeof transformDbOrder === 'function' ? transformDbOrder(match) : match;
+            return res.json(transformed);
+          }
+        }
+      } catch (err) {
+        console.warn('[DUPLICATE PROTECTION] Supabase recent check failed:', err);
+      }
+    }
+
+    // Register active in-flight request
+    const orderPromise = new Promise(resolve => { resolveOrderPromise = resolve; });
+    recentPickupCache.set(cacheKey, {
+      customerKey,
+      payloadKey,
+      timestamp: now,
+      order: null,
+      orderPromise
+    });
+  }
   
   if (!supabase) {
     console.log(`[MEMDB] Creating order with ID: ${finalId}`);
-    const newOrder = { ...req.body, id: finalId };
+    const newOrder = { ...req.body, id: finalId, created_at: new Date().toISOString() };
     const idx = memOrders.findIndex(o => o.id === finalId);
     if (idx > -1) {
       memOrders[idx] = newOrder;
@@ -2213,6 +2339,15 @@ app.post("/api/orders", async (req, res) => {
       memOrders.push(newOrder);
     }
     saveDb();
+    if (isPickup && customerKey && cacheKey) {
+      recentPickupCache.set(cacheKey, {
+        customerKey,
+        payloadKey: getNormalizedPickupSignature(req.body),
+        timestamp: Date.now(),
+        order: newOrder
+      });
+      resolveOrderPromise(newOrder);
+    }
     return res.json(newOrder);
   }
 
@@ -2310,6 +2445,33 @@ app.post("/api/orders", async (req, res) => {
       lastError = error;
       
       if (isDuplicateKeyError(error)) {
+        console.warn(`[SUPABASE] Attempt ${attempt} hit duplicate key for ID ${currentId}. Checking if identical order already exists...`);
+        try {
+          const { data: existingRecord } = await supabase.from('orders').select().eq('id', currentId).single();
+          if (existingRecord) {
+            const existingCustId = existingRecord.customer_id || existingRecord.customerId;
+            const incomingCustId = req.body.customer_id || req.body.customerId;
+            const isSameCustomer = existingCustId && incomingCustId && existingCustId === incomingCustId;
+            const isSamePayload = getNormalizedPickupSignature(existingRecord) === getNormalizedPickupSignature(req.body);
+            if (isSameCustomer || isSamePayload) {
+              console.log(`[SUPABASE] Existing identical order ${currentId} found for customer. Returning existing order response.`);
+              const formatted = typeof transformDbOrder === 'function' ? transformDbOrder(existingRecord) : existingRecord;
+              if (isPickup && customerKey && cacheKey) {
+                recentPickupCache.set(cacheKey, {
+                  customerKey,
+                  payloadKey: getNormalizedPickupSignature(req.body),
+                  timestamp: Date.now(),
+                  order: formatted
+                });
+                resolveOrderPromise(formatted);
+              }
+              return res.json(formatted);
+            }
+          }
+        } catch (checkErr) {
+          console.warn('[SUPABASE] Failed to check existing order on duplicate key:', checkErr);
+        }
+
         console.warn(`[SUPABASE] Attempt ${attempt} failed with duplicate key for ID ${currentId}. Incrementing ID and retrying...`);
         currentId = incrementSequentialId(currentId);
         continue;
@@ -2341,6 +2503,33 @@ app.post("/api/orders", async (req, res) => {
       
       lastError = fbError;
       if (isDuplicateKeyError(fbError)) {
+        console.warn(`[SUPABASE] Schema fallback hit duplicate key for ID ${currentId}. Checking if identical order already exists...`);
+        try {
+          const { data: existingRecord } = await supabase.from('orders').select().eq('id', currentId).single();
+          if (existingRecord) {
+            const existingCustId = existingRecord.customer_id || existingRecord.customerId;
+            const incomingCustId = req.body.customer_id || req.body.customerId;
+            const isSameCustomer = existingCustId && incomingCustId && existingCustId === incomingCustId;
+            const isSamePayload = getNormalizedPickupSignature(existingRecord) === getNormalizedPickupSignature(req.body);
+            if (isSameCustomer || isSamePayload) {
+              console.log(`[SUPABASE] Existing identical order ${currentId} found for customer. Returning existing order response.`);
+              const formatted = typeof transformDbOrder === 'function' ? transformDbOrder(existingRecord) : existingRecord;
+              if (isPickup && customerKey && cacheKey) {
+                recentPickupCache.set(cacheKey, {
+                  customerKey,
+                  payloadKey: getNormalizedPickupSignature(req.body),
+                  timestamp: Date.now(),
+                  order: formatted
+                });
+                resolveOrderPromise(formatted);
+              }
+              return res.json(formatted);
+            }
+          }
+        } catch (checkErr) {
+          console.warn('[SUPABASE] Failed to check existing order on duplicate key:', checkErr);
+        }
+
         console.warn(`[SUPABASE] Schema fallback failed with duplicate key for ID ${currentId}. Incrementing ID and retrying...`);
         currentId = incrementSequentialId(currentId);
         continue;
@@ -2360,6 +2549,34 @@ app.post("/api/orders", async (req, res) => {
         memOrders.push(preOrder);
       }
       saveDb();
+      if (isPickup && customerKey && cacheKey) {
+        const out = typeof transformDbOrder === 'function' ? transformDbOrder(preOrder) : preOrder;
+        recentPickupCache.set(cacheKey, {
+          customerKey,
+          payloadKey: getNormalizedPickupSignature(req.body),
+          timestamp: Date.now(),
+          order: out
+        });
+        resolveOrderPromise(out);
+      }
+      
+      // Auto-send confirmation email for home pickup if email is provided
+      const pickupCustomerEmail = String(
+        req.body.email || 
+        req.body.customer_email || 
+        req.body.customerEmail || 
+        req.body.destination?.email || 
+        req.body.pickup_address?.email || 
+        req.body.pickupAddress?.email || 
+        ''
+      ).trim();
+
+      if (isPickup && pickupCustomerEmail && pickupCustomerEmail.includes('@') && pickupCustomerEmail !== 'user@example.com') {
+        sendOrderConfirmationInternal(pickupCustomerEmail, preOrder).catch(err =>
+          console.warn(`[Auto Pickup Confirmation] Warning sending email to ${pickupCustomerEmail}:`, err.message)
+        );
+      }
+
       return res.json(transformDbOrder(preOrder));
     }
 
@@ -2392,8 +2609,40 @@ app.post("/api/orders", async (req, res) => {
       cachedAllOrders.unshift(trPreOrder);
     }
 
+    const finalResult = savedData || trPreOrder;
+    if (isPickup && customerKey && cacheKey) {
+      recentPickupCache.set(cacheKey, {
+        customerKey,
+        payloadKey: getNormalizedPickupSignature(req.body),
+        timestamp: Date.now(),
+        order: finalResult
+      });
+      resolveOrderPromise(finalResult);
+    }
+
+    // Auto-send confirmation email for home pickup if email is provided
+    const pickupCustomerEmail = String(
+      req.body.email || 
+      req.body.customer_email || 
+      req.body.customerEmail || 
+      req.body.destination?.email || 
+      req.body.pickup_address?.email || 
+      req.body.pickupAddress?.email || 
+      ''
+    ).trim();
+
+    if (isPickup && pickupCustomerEmail && pickupCustomerEmail.includes('@') && pickupCustomerEmail !== 'user@example.com') {
+      sendOrderConfirmationInternal(pickupCustomerEmail, finalResult || preOrder).catch(err =>
+        console.warn(`[Auto Pickup Confirmation] Warning sending email to ${pickupCustomerEmail}:`, err.message)
+      );
+    }
+
     res.json(savedData);
   } catch (err: any) {
+    if (isPickup && customerKey && cacheKey) {
+      recentPickupCache.delete(cacheKey);
+      resolveOrderPromise(null);
+    }
     console.error("Create Order Error:", err.message);
     res.status(500).json({ error: err.message });
   }
@@ -3134,157 +3383,188 @@ www.jiffex.shop
   }
 });
 
-// API: Send Order Confirmation for Pay at Home & General checkouts
-app.post("/api/order-confirmation", async (req, res) => {
-  const { email, order, companyDetails } = req.body;
+// In-memory cache to prevent duplicate order confirmation emails within 60 seconds
+const recentConfirmationEmailCache = new Map<string, number>();
+
+// Internal Helper: Send Order Confirmation Email
+async function sendOrderConfirmationInternal(
+  email: string, 
+  order: any, 
+  companyDetailsInput?: any
+): Promise<{ success: boolean; emailSent: boolean; message?: string }> {
   if (!order) {
-    return res.status(400).json({ error: "Order details are missing" });
+    return { success: false, emailSent: false, message: "Order details are missing" };
   }
-  console.log(`[Order Confirmation] Request received for order ${order.id} to email: ${email}`);
-  
+
+  const cleanEmail = String(email || '').trim();
+  if (!cleanEmail || !cleanEmail.includes('@') || cleanEmail === 'user@example.com') {
+    return { success: false, emailSent: false, message: "Invalid email address" };
+  }
+
   if (!mailTransporter || (!process.env.SMTP_FROM && !process.env.SMTP_USER)) {
     console.error('[Order Confirmation] Email service not configured');
-    return res.status(503).json({ error: "Email service not configured" });
+    return { success: false, emailSent: false, message: "Email service not configured" };
   }
 
-  if (!email || !email.includes('@') || email === 'user@example.com') {
-    return res.status(400).json({ error: "Invalid email address" });
+  const orderIdStr = String(order.id || '');
+  const cacheKey = `${orderIdStr}::${cleanEmail.toLowerCase()}`;
+  const lastSent = recentConfirmationEmailCache.get(cacheKey);
+  const now = Date.now();
+  if (lastSent && now - lastSent < 60000) {
+    console.log(`[Order Confirmation] Skipped duplicate confirmation email for order ${orderIdStr} to ${cleanEmail}`);
+    return { success: true, emailSent: true, message: "Confirmation email already sent recently" };
   }
 
-  try {
-    const orderIdStr = String(order.id || '');
-    const isPrefixed = ['SH-', 'SW-', 'PH-', 'BB-'].some(p => orderIdStr.startsWith(p));
-    const trackingId = isPrefixed ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
-    const appUrl = process.env.APP_URL || "https://www.jiffex.shop";
-    const trackingUrl = `${appUrl}?tab=track&id=${trackingId}`;
-    
-    const isPaid = order.paymentStatus === 'Paid' || order.payment_status === 'Paid';
-    const isPayAtHome = order.paymentStatus === 'Pay at Home' || order.payment_status === 'Pay at Home';
-    const isPending = order.paymentStatus === 'Pending' || order.payment_status === 'Pending';
-    const isShopOrder = orderIdStr.startsWith('SH-') || 
-                        (order.items && Array.isArray(order.items) && order.items.some((i: any) => i.source === 'Store' || i.source === 'shop'));
+  const companyDetails = companyDetailsInput || {
+    name: "Jiffex",
+    email: "support@jiffex.shop"
+  };
 
-    let subject = isPaid ? `Order Confirmed & Paid: ${trackingId}` : `Order Confirmed: ${trackingId}`;
-    if (isShopOrder && isPaid) {
-      subject = `Tax Invoice & Order Confirmation: ${trackingId}`;
+  const isPrefixed = ['SH-', 'SW-', 'PH-', 'BB-'].some(p => orderIdStr.startsWith(p));
+  const trackingId = isPrefixed ? orderIdStr : `BB-${orderIdStr.slice(0, 8).toUpperCase()}`;
+  const appUrl = process.env.APP_URL || "https://www.jiffex.shop";
+  const trackingUrl = `${appUrl}?tab=track&id=${trackingId}`;
+  
+  const isPaid = order.paymentStatus === 'Paid' || order.payment_status === 'Paid';
+  const isPayAtHome = order.paymentStatus === 'Pay at Home' || order.payment_status === 'Pay at Home';
+  const isPending = order.paymentStatus === 'Pending' || order.payment_status === 'Pending';
+  const isShopOrder = orderIdStr.startsWith('SH-') || 
+                      (order.items && Array.isArray(order.items) && order.items.some((i: any) => i.source === 'Store' || i.source === 'shop'));
+
+  let subject = isPaid ? `Order Confirmed & Paid: ${trackingId}` : `Order Confirmed: ${trackingId}`;
+  if (isShopOrder && isPaid) {
+    subject = `Tax Invoice & Order Confirmation: ${trackingId}`;
+  }
+  
+  let paymentBlockText = `Payment Status: Pending\nAmount: ₹${(order.totalCost || order.total_cost || 0).toLocaleString()}`;
+  let paymentBlockHtml = `
+  <div style="background-color: #fffbeb; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #fef3c7;">
+    <p style="margin: 0; font-weight: bold; color: #b45309;">Payment Status: Pending</p>
+    <p style="margin: 5px 0 0 0; color: #78350f;">The total amount of <strong>₹${(order.totalCost || order.total_cost || 0).toLocaleString()}</strong> is pending and will be collected or billed once the shipment is processed.</p>
+  </div>`;
+
+  if (isPaid) {
+    paymentBlockText = `Payment Status: Paid\nWe have successfully received your payment of ₹${(order.totalCost || order.total_cost || 0).toLocaleString()}.`;
+    paymentBlockHtml = `
+    <div style="background-color: #f0fdf4; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #bbf7d0;">
+      <p style="margin: 0; font-weight: bold; color: #15803d;">Payment Confirmed</p>
+      <p style="margin: 5px 0 0 0; color: #166534;">We have successfully received your payment of <strong>₹${(order.totalCost || order.total_cost || 0).toLocaleString()}</strong>.</p>
+    </div>`;
+  } else if (isPayAtHome) {
+    paymentBlockText = `Payment Method: Pay at Home\nThe total amount of ₹${(order.totalCost || order.total_cost || 0).toLocaleString()} will be collected by our executive during the scheduled pickup.`;
+    paymentBlockHtml = `
+    <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
+      <p style="margin: 0; font-weight: bold; color: #1e293b;">Payment Method: Pay at Home</p>
+      <p style="margin: 5px 0 0 0; color: #334155;">The total amount of <strong>₹${(order.totalCost || order.total_cost || 0).toLocaleString()}</strong> will be collected by our executive during the scheduled pickup.</p>
+    </div>`;
+  }
+
+  // Generate invoice PDF attachment if Shop & Ship or Paid
+  let attachments: any[] = [];
+  if (isShopOrder || isPaid) {
+    try {
+      console.log(`[Order Confirmation] Generating tax invoice PDF for order ${order.id}...`);
+      const pdfBuffer = await generateInvoicePDF(order, companyDetails);
+      if (pdfBuffer && pdfBuffer.length > 0) {
+        attachments.push({
+          filename: `Invoice_${trackingId}.pdf`,
+          content: pdfBuffer
+        });
+        console.log(`[Order Confirmation] Tax invoice PDF generated (${pdfBuffer.length} bytes) for order ${order.id}`);
+      }
+    } catch (pdfErr) {
+      console.error(`[Order Confirmation] Error generating invoice PDF for order ${order.id}:`, pdfErr);
     }
-    
-    let paymentBlockText = `Payment Status: Pending\nAmount: ₹${(order.totalCost || order.total_cost || 0).toLocaleString()}`;
-    let paymentBlockHtml = `
-    <div style="background-color: #fffbeb; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #fef3c7;">
-      <p style="margin: 0; font-weight: bold; color: #b45309;">Payment Status: Pending</p>
-      <p style="margin: 5px 0 0 0; color: #78350f;">The total amount of <strong>₹${(order.totalCost || order.total_cost || 0).toLocaleString()}</strong> is pending and will be collected or billed once the shipment is processed.</p>
+  }
+
+  // Notice text: Shop & Ship orders receive an attached invoice, NOT a consolidation notice
+  const invoiceNoticeHtml = isShopOrder 
+    ? `
+<p style="background-color: #f0fdf4; padding: 12px; border-radius: 8px; border: 1px solid #bbf7d0; font-size: 13px; color: #166534; margin: 15px 0;">
+  <strong>Tax Invoice:</strong> Your official tax invoice for order <strong>${trackingId}</strong> has been generated and is attached to this email.
+</p>`
+    : `
+<p style="background-color: #eff6ff; padding: 10px; border-radius: 8px; border: 1px solid #bfdbfe; font-size: 13px; color: #1e40af; margin: 15px 0;">
+  <strong>Invoice Notice:</strong> To avoid multiple separate emails, we will generate and email a single consolidated tax invoice once all of your active orders are successfully completed.
+</p>`;
+
+  const invoiceNoticeText = isShopOrder
+    ? `Your official tax invoice for order ${trackingId} has been generated and is attached to this email.`
+    : `Your final tax invoice will be generated and emailed as a consolidated invoice once all your active orders are completed.`;
+
+  // Safely resolve destination and customer identity without throwing TypeError
+  const dest = (order.destination && typeof order.destination === 'object')
+    ? order.destination
+    : (order.pickup_address && typeof order.pickup_address === 'object')
+      ? order.pickup_address
+      : (order.pickupAddress && typeof order.pickupAddress === 'object')
+        ? order.pickupAddress
+        : {};
+  const customerFullName = dest.fullName || dest.customerName || order.customer_name || order.customerName || 'Valued Customer';
+  const customerPhone = dest.phone || order.phone || '';
+  const destinationCity = dest.city || 'Your Location';
+  const destinationCountry = dest.country || 'India';
+
+  // Check if this is a Home Pickup order or already has an authorization OTP
+  const isHomePickup = Boolean(
+    order.pickupType || 
+    order.pickup_type || 
+    order.pickupAddress || 
+    order.pickup_address || 
+    orderIdStr.startsWith('PH-') || 
+    orderIdStr.startsWith('SW-') || 
+    orderIdStr.startsWith('PKP-')
+  );
+
+  const authorizationOtp = order.cargo_authorization_otp || 
+    order.cargoAuthorizationOtp || 
+    (isHomePickup ? Math.floor(100000 + Math.random() * 900000).toString() : null);
+
+  let authorizationOtpBlockHtml = '';
+  let authorizationOtpBlockText = '';
+
+  if (authorizationOtp) {
+    // Store in memory OTP map for later verification during doorstep pickup
+    cargoAuthorizationOtps.set(orderIdStr, {
+      code: authorizationOtp,
+      orderId: orderIdStr,
+      customerName: customerFullName,
+      customerPhone: customerPhone,
+      customerEmail: cleanEmail,
+      createdAt: Date.now()
+    });
+
+    // Update in memory collections
+    const memOrd = memOrders.find(o => o.id === orderIdStr);
+    if (memOrd) {
+      (memOrd as any).cargo_authorization_otp = authorizationOtp;
+      (memOrd as any).cargo_authorization_status = 'pending';
+    }
+    const memPkp = memPickups.find(p => p.id === orderIdStr);
+    if (memPkp) {
+      (memPkp as any).cargo_authorization_otp = authorizationOtp;
+      (memPkp as any).cargo_authorization_status = 'pending';
+    }
+
+    authorizationOtpBlockHtml = `
+    <div style="background: #f0fdf4; border: 2px solid #16a34a; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: #15803d; text-transform: uppercase;">Customer Authorization OTP (Doorstep Home Pickup)</div>
+      <div style="font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #166534; margin: 10px 0; font-family: monospace; user-select: all;">${authorizationOtp}</div>
+      <p style="margin: 0; font-size: 13px; color: #166534; line-height: 1.5;">
+        <strong>Doorstep Security Notice:</strong> Please keep this 6-digit OTP confidential. When our visiting Jiffex pickup executive arrives at your doorstep, verify your collected items and then share this PIN to authorize the cargo collection.
+      </p>
     </div>`;
 
-    if (isPaid) {
-      paymentBlockText = `Payment Status: Paid\nWe have successfully received your payment of ₹${(order.totalCost || order.total_cost || 0).toLocaleString()}.`;
-      paymentBlockHtml = `
-      <div style="background-color: #f0fdf4; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #bbf7d0;">
-        <p style="margin: 0; font-weight: bold; color: #15803d;">Payment Confirmed</p>
-        <p style="margin: 5px 0 0 0; color: #166534;">We have successfully received your payment of <strong>₹${(order.totalCost || order.total_cost || 0).toLocaleString()}</strong>.</p>
-      </div>`;
-    } else if (isPayAtHome) {
-      paymentBlockText = `Payment Method: Pay at Home\nThe total amount of ₹${(order.totalCost || order.total_cost || 0).toLocaleString()} will be collected by our executive during the scheduled pickup.`;
-      paymentBlockHtml = `
-      <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
-        <p style="margin: 0; font-weight: bold; color: #1e293b;">Payment Method: Pay at Home</p>
-        <p style="margin: 5px 0 0 0; color: #334155;">The total amount of <strong>₹${(order.totalCost || order.total_cost || 0).toLocaleString()}</strong> will be collected by our executive during the scheduled pickup.</p>
-      </div>`;
-    }
-
-    // Generate invoice PDF attachment if Shop & Ship or Paid
-    let attachments: any[] = [];
-    if (isShopOrder || isPaid) {
-      try {
-        console.log(`[Order Confirmation] Generating tax invoice PDF for order ${order.id}...`);
-        const pdfBuffer = await generateInvoicePDF(order, companyDetails);
-        if (pdfBuffer && pdfBuffer.length > 0) {
-          attachments.push({
-            filename: `Invoice_${trackingId}.pdf`,
-            content: pdfBuffer
-          });
-          console.log(`[Order Confirmation] Tax invoice PDF generated (${pdfBuffer.length} bytes) for order ${order.id}`);
-        }
-      } catch (pdfErr) {
-        console.error(`[Order Confirmation] Error generating invoice PDF for order ${order.id}:`, pdfErr);
-      }
-    }
-
-    // Notice text: Shop & Ship orders receive an attached invoice, NOT a consolidation notice
-    const invoiceNoticeHtml = isShopOrder 
-      ? `
-  <p style="background-color: #f0fdf4; padding: 12px; border-radius: 8px; border: 1px solid #bbf7d0; font-size: 13px; color: #166534; margin: 15px 0;">
-    <strong>Tax Invoice:</strong> Your official tax invoice for order <strong>${trackingId}</strong> has been generated and is attached to this email.
-  </p>`
-      : `
-  <p style="background-color: #eff6ff; padding: 10px; border-radius: 8px; border: 1px solid #bfdbfe; font-size: 13px; color: #1e40af; margin: 15px 0;">
-    <strong>Invoice Notice:</strong> To avoid multiple separate emails, we will generate and email a single consolidated tax invoice once all of your active orders are successfully completed.
-  </p>`;
-
-    const invoiceNoticeText = isShopOrder
-      ? `Your official tax invoice for order ${trackingId} has been generated and is attached to this email.`
-      : `Your final tax invoice will be generated and emailed as a consolidated invoice once all your active orders are completed.`;
-
-    // Check if this is a Home Pickup order or already has an authorization OTP
-    const isHomePickup = Boolean(
-      order.pickupType || 
-      order.pickup_type || 
-      order.pickupAddress || 
-      order.pickup_address || 
-      orderIdStr.startsWith('PH-') || 
-      orderIdStr.startsWith('SW-') || 
-      orderIdStr.startsWith('PKP-')
-    );
-
-    const authorizationOtp = order.cargo_authorization_otp || 
-      order.cargoAuthorizationOtp || 
-      (isHomePickup ? Math.floor(100000 + Math.random() * 900000).toString() : null);
-
-    let authorizationOtpBlockHtml = '';
-    let authorizationOtpBlockText = '';
-
-    if (authorizationOtp) {
-      // Store in memory OTP map for later verification during doorstep pickup
-      cargoAuthorizationOtps.set(String(order.id), {
-        code: authorizationOtp,
-        orderId: String(order.id),
-        customerName: order.destination?.fullName || order.pickupAddress?.fullName || order.customerName || 'Valued Customer',
-        customerPhone: order.destination?.phone || order.pickupAddress?.phone || '',
-        customerEmail: email,
-        createdAt: Date.now()
-      });
-
-      // Update in memory collections
-      const memOrd = memOrders.find(o => o.id === order.id);
-      if (memOrd) {
-        (memOrd as any).cargo_authorization_otp = authorizationOtp;
-        (memOrd as any).cargo_authorization_status = 'pending';
-      }
-      const memPkp = memPickups.find(p => p.id === order.id);
-      if (memPkp) {
-        (memPkp as any).cargo_authorization_otp = authorizationOtp;
-        (memPkp as any).cargo_authorization_status = 'pending';
-      }
-
-      authorizationOtpBlockHtml = `
-      <div style="background: #f0fdf4; border: 2px solid #16a34a; border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
-        <div style="font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: #15803d; text-transform: uppercase;">Customer Authorization OTP (Doorstep Home Pickup)</div>
-        <div style="font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #166534; margin: 10px 0; font-family: monospace; user-select: all;">${authorizationOtp}</div>
-        <p style="margin: 0; font-size: 13px; color: #166534; line-height: 1.5;">
-          <strong>Doorstep Security Notice:</strong> Please keep this 6-digit OTP confidential. When our visiting Jiffex pickup executive arrives at your doorstep, verify your collected items and then share this PIN to authorize the cargo collection.
-        </p>
-      </div>`;
-
-      authorizationOtpBlockText = `
+    authorizationOtpBlockText = `
 --------------------------------------------------
 CUSTOMER AUTHORIZATION OTP (HOME PICKUP):
 PIN: ${authorizationOtp}
 Please keep this 6-digit OTP confidential. When our visiting Jiffex pickup executive arrives at your doorstep, verify your collected items and then share this PIN to authorize the cargo collection.
 --------------------------------------------------`;
-    }
+  }
 
-    const bodyText = `
-Dear ${order.destination.fullName},
+  const bodyText = `
+Dear ${customerFullName},
 
 Thank you for choosing Jiffex. Your order ${trackingId} has been confirmed.
 
@@ -3292,7 +3572,7 @@ ${paymentBlockText}
 ${authorizationOtpBlockText}
 
 Pickup/Shipping Date: ${order.shippingDate || order.shipping_date || 'As scheduled'}
-Destination: ${order.destination.city}, ${order.destination.country}
+Destination: ${destinationCity}, ${destinationCountry}
 
 Track your shipment here: ${trackingUrl}
 
@@ -3302,11 +3582,11 @@ If you have any questions, please contact our support team at ${companyDetails.e
 
 Best regards,
 The Jiffex Team
-    `.trim();
+  `.trim();
 
-    const bodyHtml = `
+  const bodyHtml = `
 <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0; border: 1px solid #eee; padding: 20px; border-radius: 10px; text-align: left;">
-  <p>Dear <strong>${order.destination.fullName}</strong>,</p>
+  <p>Dear <strong>${customerFullName}</strong>,</p>
   <p>Thank you for choosing <strong>Jiffex</strong>. Your order <strong>${trackingId}</strong> has been confirmed.</p>
   
   ${paymentBlockHtml}
@@ -3314,7 +3594,7 @@ The Jiffex Team
 
   <p><strong>Order Summary:</strong><br>
   Shipping Date: ${order.shippingDate || order.shipping_date || 'As scheduled'}<br>
-  Destination: ${order.destination.city}, ${order.destination.country}</p>
+  Destination: ${destinationCity}, ${destinationCountry}</p>
   
   <p>You can track your shipment anytime using this link: 
     <a href="${trackingUrl}" style="color: #4f46e5; font-weight: bold; text-decoration: underline;">
@@ -3333,39 +3613,63 @@ The Jiffex Team
     <strong>The Jiffex Team</strong>
   </p>
 </div>
-    `.trim();
+  `.trim();
 
-    console.log(`[Order Confirmation] Sending email to ${email}...`);
-    await mailTransporter.sendMail({
-      from: getSenderAddress(process.env.SMTP_FROM),
-      to: email,
-      subject: subject,
-      text: bodyText,
-      html: bodyHtml,
-      attachments: attachments.length > 0 ? attachments : undefined
-    });
+  console.log(`[Order Confirmation] Sending confirmation email for order ${orderIdStr} to ${cleanEmail}...`);
+  await mailTransporter.sendMail({
+    from: getSenderAddress(process.env.SMTP_FROM),
+    to: cleanEmail,
+    subject: subject,
+    text: bodyText,
+    html: bodyHtml,
+    attachments: attachments.length > 0 ? attachments : undefined
+  });
 
-    // Send Admin Backup copy if authorization OTP is generated for Home Pickup
-    if (authorizationOtp) {
-      for (const adminEmail of ADMIN_EMAILS) {
-        mailTransporter.sendMail({
-          from: getSenderAddress(process.env.SMTP_FROM),
-          to: adminEmail,
-          subject: `[ADMIN BACKUP] Home Pickup Scheduled: ${trackingId} - Auth PIN: ${authorizationOtp}`,
-          text: `Admin Backup: New Home Pickup scheduled for ${order.destination?.fullName || order.pickupAddress?.fullName || 'Customer'}.\nOrder: ${trackingId}\nAuthorization OTP PIN: ${authorizationOtp}\nCustomer Email: ${email}\nCustomer Phone: ${order.destination?.phone || order.pickupAddress?.phone || 'N/A'}\nPickup Date: ${order.shippingDate || 'Scheduled'}`,
-          html: `<div style="font-family: Arial, sans-serif; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
-            <h3 style="color: #4338ca; margin-top: 0;">Admin Backup: Home Pickup Scheduled</h3>
-            <p><strong>Order ID:</strong> ${trackingId}</p>
-            <p><strong>Customer:</strong> ${order.destination?.fullName || order.pickupAddress?.fullName || 'Customer'} (${email})</p>
-            <p><strong>Customer Authorization OTP:</strong> <span style="font-family: monospace; font-size: 20px; font-weight: bold; background: #e0e7ff; color: #3730a3; padding: 4px 8px; border-radius: 4px;">${authorizationOtp}</span></p>
-            <p style="font-size: 12px; color: #666;">This PIN was sent to the customer in their pickup confirmation email. It is for administrative emergency backup only and is masked from field agents.</p>
-          </div>`
-        }).catch(err => console.warn(`[Admin OTP Backup Email] Error sending to ${adminEmail}:`, err.message));
-      }
+  recentConfirmationEmailCache.set(cacheKey, now);
+
+  // Send Admin Backup copy if authorization OTP is generated for Home Pickup
+  if (authorizationOtp) {
+    for (const adminEmail of ADMIN_EMAILS) {
+      mailTransporter.sendMail({
+        from: getSenderAddress(process.env.SMTP_FROM),
+        to: adminEmail,
+        subject: `[ADMIN BACKUP] Home Pickup Scheduled: ${trackingId} - Auth PIN: ${authorizationOtp}`,
+        text: `Admin Backup: New Home Pickup scheduled for ${customerFullName}.\nOrder: ${trackingId}\nAuthorization OTP PIN: ${authorizationOtp}\nCustomer Email: ${cleanEmail}\nCustomer Phone: ${customerPhone || 'N/A'}\nPickup Date: ${order.shippingDate || 'Scheduled'}`,
+        html: `<div style="font-family: Arial, sans-serif; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+          <h3 style="color: #4338ca; margin-top: 0;">Admin Backup: Home Pickup Scheduled</h3>
+          <p><strong>Order ID:</strong> ${trackingId}</p>
+          <p><strong>Customer:</strong> ${customerFullName} (${cleanEmail})</p>
+          <p><strong>Customer Authorization OTP:</strong> <span style="font-family: monospace; font-size: 20px; font-weight: bold; background: #e0e7ff; color: #3730a3; padding: 4px 8px; border-radius: 4px;">${authorizationOtp}</span></p>
+          <p style="font-size: 12px; color: #666;">This PIN was sent to the customer in their pickup confirmation email. It is for administrative emergency backup only and is masked from field agents.</p>
+        </div>`
+      }).catch(err => console.warn(`[Admin OTP Backup Email] Error sending to ${adminEmail}:`, err.message));
     }
+  }
 
-    console.log(`[Order Confirmation] Confirmation for order ${order.id} successfully sent to ${email}`);
-    res.json({ success: true });
+  console.log(`[Order Confirmation] Confirmation for order ${orderIdStr} successfully sent to ${cleanEmail}`);
+  return { success: true, emailSent: true };
+}
+
+// API: Send Order Confirmation for Pay at Home & General checkouts
+app.post("/api/order-confirmation", async (req, res) => {
+  const { email, order, companyDetails } = req.body;
+  if (!order) {
+    return res.status(400).json({ error: "Order details are missing" });
+  }
+  console.log(`[Order Confirmation] Request received for order ${order.id} to email: ${email}`);
+  
+  if (!mailTransporter || (!process.env.SMTP_FROM && !process.env.SMTP_USER)) {
+    console.error('[Order Confirmation] Email service not configured');
+    return res.status(503).json({ error: "Email service not configured" });
+  }
+
+  if (!email || !String(email).includes('@') || email === 'user@example.com') {
+    return res.status(400).json({ error: "Invalid email address" });
+  }
+
+  try {
+    const result = await sendOrderConfirmationInternal(email, order, companyDetails);
+    res.json(result);
   } catch (err: any) {
     console.error(`[Order Confirmation] CRITICAL ERROR for order ${order?.id}:`, err);
     res.status(500).json({ 
@@ -5215,47 +5519,17 @@ app.post("/api/agent/cargo-authorization-otp", async (req, res) => {
     console.warn("[OTP Admin Backup] Failed to dispatch admin email:", err.message);
   }
 
-  // 3. Dispatch Email to Customer if email is provided
-  if (record.customerEmail && record.customerEmail.includes('@')) {
-    try {
-      const customerSubject = `Cargo Collection Authorization PIN: ${code} - Jiffex`;
-      const customerEmailHtml = `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px;">
-          <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">Your Jiffex Cargo Collection PIN</h2>
-          <p style="font-size: 14px; color: #475569;">
-            Dear <strong>${record.customerName}</strong>,<br>
-            Our field agent is currently at your location to collect your cargo for Order <strong>#${cleanOrderId}</strong>.
-          </p>
-          <div style="background: #f0fdf4; border: 2px solid #22c55e; border-radius: 8px; padding: 18px; text-align: center; margin: 20px 0;">
-            <div style="font-size: 11px; font-weight: bold; color: #166534; text-transform: uppercase;">YOUR AUTHORIZATION PIN</div>
-            <div style="font-size: 32px; font-weight: 900; letter-spacing: 6px; color: #15803d; margin: 6px 0; font-family: monospace;">${code}</div>
-            <div style="font-size: 12px; color: #166534;">Share this 6-digit PIN with the agent only after you inspect the collected items list and weight.</div>
-          </div>
-          <p style="font-size: 12px; color: #64748b;">
-            Total weight: <strong>${record.totalWeight.toFixed(1)} kg</strong> | Total estimated: <strong>₹${record.totalCost.toFixed(2)}</strong>
-          </p>
-        </div>
-      `;
-      mailTransporter.sendMail({
-        from: getSenderAddress(process.env.SMTP_FROM),
-        to: record.customerEmail,
-        subject: customerSubject,
-        text: `Your Jiffex Cargo Collection Authorization PIN is: ${code}. Share this with your visiting agent to authorize pickup.`,
-        html: customerEmailHtml
-      }).catch(err => console.warn(`[Customer OTP Email] Failed to send to ${record.customerEmail}:`, err.message));
-    } catch (err: any) {
-      console.warn("[Customer OTP Email] Error:", err.message);
-    }
-  }
+  // 3. Customer Email for 'Cargo Collection Authorization PIN' is not required during agent pickup
+  // (Customer already received their confirmation email with the Authorization OTP upon booking).
 
-  // 4. Send Twilio WhatsApp message if configured
+  // 4. Send Twilio WhatsApp message if configured (items list summary only, without authorization PIN)
   if (record.customerPhone && twilioClient && process.env.TWILIO_WHATSAPP_NUMBER) {
     try {
       const normalizedPhone = record.customerPhone.replace(/\D/g, '');
       if (normalizedPhone.length >= 10) {
         const toWhatsApp = `whatsapp:+${normalizedPhone.startsWith('91') ? normalizedPhone : '91' + normalizedPhone}`;
         twilioClient.messages.create({
-          body: `📌 *CARGO COLLECTION SUMMARY & ITEMS LIST*\n\nOrder: ${cleanOrderId}\nCustomer: ${record.customerName}\nTotal Weight: ${record.totalWeight.toFixed(1)} kg\nEstimated Cost: ₹${record.totalCost.toFixed(2)}\n\nPlease review your items and share the 6-digit Customer Authorization OTP from your pickup confirmation email with our visiting agent to authorize collection.`,
+          body: `📌 *CARGO COLLECTION SUMMARY & ITEMS LIST*\n\nOrder: ${cleanOrderId}\nCustomer: ${record.customerName}\nTotal Weight: ${record.totalWeight.toFixed(1)} kg\nEstimated Cost: ₹${record.totalCost.toFixed(2)}\n\nPlease review your collected items list above. Thank you for choosing Jiffex!`,
           to: toWhatsApp,
           from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`
         }).catch((err: any) => console.warn(`[Twilio WhatsApp items summary] Error:`, err.message));

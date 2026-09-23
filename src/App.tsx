@@ -5535,6 +5535,7 @@ export default function App() {
 
   const [lastBookingRef, setLastBookingRef] = useState<string | null>(null);
   const [lastBookingOtp, setLastBookingOtp] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const userAppointments = useMemo(() => {
     return appointments.filter(a => {
       if (!currentUser || !session?.user) {
@@ -6186,6 +6187,9 @@ export default function App() {
     overrideEmail?: string,
     overrideName?: string
   ) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
     const assignedAgent = (isAutoAssignAgentEnabled && type === 'AllAgent') ? agents[Math.floor(Math.random() * agents.length)] : undefined;
     const fullAddress = `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}, ${pickupAddress.city}, ${pickupAddress.state} ${pickupAddress.zip}`;
     
@@ -6215,7 +6219,19 @@ export default function App() {
 
     const resolvedCustomerId = overrideCustomerId || currentUser?.id || sessionGuestId;
     const resolvedName = pickupName || overrideName || currentUser?.name || 'Guest User';
-    const resolvedEmail = pickupEmail || overrideEmail || currentUser?.email || '';
+    
+    // Comprehensive email resolution to guarantee confirmation email delivery for Home Pickup
+    const sessionEmail = session?.user?.email || (getValidActiveSession()?.email) || '';
+    let savedLocalEmail = '';
+    try {
+      const savedSession = localStorage.getItem('jiffex_active_session');
+      if (savedSession) {
+        const parsed = JSON.parse(savedSession);
+        if (parsed?.email) savedLocalEmail = parsed.email;
+      }
+    } catch (_) {}
+
+    const resolvedEmail = pickupEmail || overrideEmail || currentUser?.email || pickupDestination?.email || sessionEmail || savedLocalEmail || '';
 
     // Generate 6-digit Customer Authorization OTP for this Home Pickup appointment
     const authorizationOtp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -6369,9 +6385,13 @@ export default function App() {
     }
 
     setShowPickupChoiceModal(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSchedulePickup = () => {
+    if (isSubmitting) return;
     const missingFields = [];
     if (!pickupName) missingFields.push('Your Name');
     if (!pickupPhone) missingFields.push('Contact Number');
@@ -13526,6 +13546,7 @@ export default function App() {
                         setShopItemsShippingDestination={setShopItemsShippingDestination}
                         hasShopItems={items.some(i => i.source === 'Store')}
                         handleSchedulePickup={handleSchedulePickup}
+                        isSubmitting={isSubmitting}
                         currentUser={currentUser}
                         activePickup={activePickup}
                         lastBookingRef={lastBookingRef}
@@ -14618,10 +14639,11 @@ export default function App() {
                                     Edit Details
                                   </button>
                                   <button 
-                                    onClick={handleSchedulePickup}
-                                    className="flex-[2] py-5 bg-jiffex-orange text-white rounded-[2rem] text-lg font-black hover:bg-amber-600 transition-all shadow-2xl shadow-jiffex-orange/20 flex items-center justify-center gap-3"
+                                    disabled={isSubmitting}
+                                    onClick={isSubmitting ? undefined : handleSchedulePickup}
+                                    className="flex-[2] py-5 bg-jiffex-orange text-white rounded-[2rem] text-lg font-black hover:bg-amber-600 transition-all shadow-2xl shadow-jiffex-orange/20 flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
                                   >
-                                    {currentUser ? 'Confirm Booking' : 'Sign in (OTP-based)'}
+                                    {isSubmitting ? 'Booking...' : (currentUser ? 'Confirm Booking' : 'Sign in (OTP-based)')}
                                   </button>
                                 </div>
                               </div>
@@ -18250,6 +18272,7 @@ export default function App() {
                   } else if (isAgent) {
                     navigateTo('agent');
                   } else if (loginTriggerSource === 'pickup') {
+                    if (isSubmitting) return;
                     // Start guest/member session and direct synchronous confirmation to next step (Step 5)
                     const guestId = email ? `guest_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : sessionGuestId;
                     confirmPickup('AllAgent', guestId, email, name || pickupName);
@@ -18446,13 +18469,15 @@ export default function App() {
 
                 <div className="flex flex-col gap-3 pt-4">
                   <button 
+                    disabled={isSubmitting}
                     onClick={() => {
+                      if (isSubmitting) return;
                       setShowPickupConfirmModal(false);
                       confirmPickup('AllAgent');
                     }}
-                    className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] text-lg font-black hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-200 flex items-center justify-center gap-3"
+                    className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] text-lg font-black hover:bg-indigo-700 transition-all shadow-2xl shadow-indigo-200 flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <CheckCircle2 size={24} /> Confirm & Schedule
+                    <CheckCircle2 size={24} /> {isSubmitting ? 'Booking...' : 'Confirm & Schedule'}
                   </button>
                   <button 
                     onClick={() => setShowPickupConfirmModal(false)}
