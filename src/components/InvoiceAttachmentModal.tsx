@@ -54,12 +54,132 @@ export const InvoiceAttachmentModal: React.FC<InvoiceAttachmentModalProps> = ({
 
   const invoiceDate = formatDate(activeOrder.createdAt || (activeOrder as any).created_at || Date.now());
 
+  // Resolve Home Pickup Address for Billing Address
+  let pickup = (activeOrder as any).pickupAddress || 
+               (activeOrder as any).pickup_address || 
+               activeOrder.destination?.pickupAddress || 
+               activeOrder.destination?.pickup_address || 
+               (activeOrder as any).sourceAddress || 
+               (activeOrder as any).source_address || 
+               {};
+
+  let billingName = '';
+  let billingAddrStr = '';
+  let billingPhone = '';
+  let billingEmail = '';
+
+  if (typeof pickup === 'object' && Object.keys(pickup).length > 0) {
+    billingName = pickup.fullName || pickup.name || pickup.customerName || (activeOrder as any).customerName || (activeOrder as any).customer_name || '';
+    billingPhone = pickup.phone || (activeOrder as any).customerPhone || (activeOrder as any).phone || '';
+    billingEmail = pickup.email || (activeOrder as any).customerEmail || (activeOrder as any).email || '';
+    const parts = [
+      pickup.addressLine1 || pickup.address || pickup.street,
+      pickup.apartment,
+      pickup.city,
+      pickup.state,
+      pickup.zipCode || pickup.zip,
+      pickup.country || 'India'
+    ].filter(Boolean);
+    billingAddrStr = parts.join(', ');
+  } else if (typeof pickup === 'string' && pickup.trim()) {
+    billingAddrStr = pickup.trim();
+    billingName = (activeOrder as any).customerName || (activeOrder as any).customer_name || '';
+    billingPhone = (activeOrder as any).customerPhone || (activeOrder as any).phone || '';
+    billingEmail = (activeOrder as any).customerEmail || (activeOrder as any).email || '';
+  }
+
+  if (!billingAddrStr && (activeOrder as any).address) {
+    billingAddrStr = String((activeOrder as any).address);
+  }
+  if (!billingAddrStr && (activeOrder as any).destination?.address) {
+    billingAddrStr = String((activeOrder as any).destination.address);
+  }
+
+  // Check localStorage for scheduled pickups or appointments
+  if (!billingAddrStr && typeof window !== 'undefined') {
+    try {
+      const ordId = String(activeOrder.id || '');
+      const sources = ['jiffex_pickups', 'jiffex_appointments', 'jiffex_orders'];
+      for (const src of sources) {
+        const raw = localStorage.getItem(src);
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const match = list.find((it: any) => it && (it.id === ordId || it.orderId === ordId || it.appointmentId === ordId));
+            if (match) {
+              const matchedAddr = match.address || match.pickup_address || match.pickupAddress || match.destination?.address;
+              if (matchedAddr) {
+                if (typeof matchedAddr === 'string') {
+                  billingAddrStr = matchedAddr;
+                } else if (typeof matchedAddr === 'object') {
+                  billingAddrStr = [matchedAddr.addressLine1 || matchedAddr.address || matchedAddr.street, matchedAddr.city, matchedAddr.state, matchedAddr.zipCode || matchedAddr.zip].filter(Boolean).join(', ');
+                }
+              }
+              if (!billingName) billingName = match.customerName || match.customer_name || match.name || '';
+              if (!billingPhone) billingPhone = match.phone || '';
+              if (!billingEmail) billingEmail = match.email || '';
+              if (billingAddrStr) break;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Fallback to customer profile address if available
+  if (!billingAddrStr && typeof window !== 'undefined') {
+    try {
+      const savedProfile = localStorage.getItem('jiffex_user_profile') || localStorage.getItem('jiffex_active_session');
+      if (savedProfile) {
+        const parsed = JSON.parse(savedProfile);
+        if (parsed?.address) billingAddrStr = parsed.address;
+        if (!billingPhone && parsed?.phone) billingPhone = parsed.phone;
+        if (!billingEmail && parsed?.email) billingEmail = parsed.email;
+        if (!billingName && parsed?.name) billingName = parsed.name;
+      }
+    } catch (_) {}
+  }
+
+  if (!billingName) {
+    billingName = (activeOrder as any).customerName || (activeOrder as any).customer_name || 'Valued Customer';
+  }
+  if (!billingPhone && (activeOrder as any).phone) {
+    billingPhone = (activeOrder as any).phone;
+  }
+  if (!billingEmail && (activeOrder as any).email) {
+    billingEmail = (activeOrder as any).email;
+  }
+
+  // Resolve Destination Address for Shipping Address (Leave blank if provided later; don't give 'To Be Provided Later')
   const dest = activeOrder.destination || {};
-  const destName = dest.fullName || dest.name || (activeOrder as any).customerName || 'Valued Customer';
-  const destAddressParts = [dest.addressLine1, dest.city, dest.state, dest.zipCode, dest.country].filter(Boolean);
-  const destAddrStr = destAddressParts.length > 0 ? destAddressParts.join(', ') : 'Destination Address on file';
-  const destPhone = dest.phone || (activeOrder as any).customerPhone || (activeOrder as any).phone || 'N/A';
-  const destEmail = dest.email || (activeOrder as any).customerEmail || (activeOrder as any).email || 'N/A';
+  const rawDestAddr1 = String(dest.addressLine1 || dest.address || '');
+  const rawDestCity = String(dest.city || '');
+  const rawDestState = String(dest.state || '');
+  const rawDestName = String(dest.fullName || dest.name || '');
+  const rawDestZip = String(dest.zipCode || '');
+
+  const isDestProvidedLater = Boolean(
+    (activeOrder as any).provideDestinationLater ||
+    (activeOrder as any).provide_destination_later ||
+    rawDestAddr1.toLowerCase().includes('provided later') ||
+    rawDestCity.toLowerCase().includes('to be provided later') ||
+    rawDestName.toLowerCase().includes('to be provided later') ||
+    (!rawDestAddr1 && !rawDestCity && !dest.country)
+  );
+
+  const destName = isDestProvidedLater || rawDestName.toLowerCase().includes('to be provided later') ? '' : rawDestName;
+  const destPhone = isDestProvidedLater || String(dest.phone || '').toLowerCase().includes('to be provided later') ? '' : (dest.phone || '');
+  const destEmail = isDestProvidedLater || String(dest.email || '').toLowerCase().includes('to be provided later') ? '' : (dest.email || '');
+
+  const cleanDestParts = [
+    rawDestAddr1,
+    rawDestCity,
+    rawDestState,
+    rawDestZip === '000000' ? '' : rawDestZip,
+    dest.country
+  ].filter(p => p && !p.toLowerCase().includes('to be provided later') && !p.toLowerCase().includes('provided later'));
+
+  const destAddrStr = isDestProvidedLater ? '' : cleanDestParts.join(', ');
 
   // Normalize items array
   let rawItems = activeOrder.items;
@@ -303,13 +423,13 @@ export const InvoiceAttachmentModal: React.FC<InvoiceAttachmentModalProps> = ({
               <div className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-200">
                 <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5 flex items-center justify-between">
                   <span>Billing Address</span>
-                  {isOnlyShopShip && (
+                  {isOnlyShopShip && !billingAddrStr && (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border border-indigo-100">
                       Office Address
                     </span>
                   )}
                 </div>
-                {isOnlyShopShip ? (
+                {isOnlyShopShip && !billingAddrStr ? (
                   <>
                     <div className="font-bold text-slate-900 mb-1">{COMPANY_DETAILS.name}</div>
                     <div className="text-slate-600 leading-relaxed text-[11px] mb-1.5">{COMPANY_DETAILS.address}</div>
@@ -319,23 +439,31 @@ export const InvoiceAttachmentModal: React.FC<InvoiceAttachmentModalProps> = ({
                   </>
                 ) : (
                   <>
-                    <div className="font-bold text-slate-900 mb-1">{destName}</div>
-                    <div className="text-slate-600 leading-relaxed text-[11px] mb-2">{destAddrStr}</div>
-                    <div className="text-[11px] text-slate-500">Phone: <strong className="text-slate-700">{destPhone}</strong></div>
-                    <div className="text-[11px] text-slate-500">Email: <strong className="text-slate-700">{destEmail}</strong></div>
+                    <div className="font-bold text-slate-900 mb-1">{billingName}</div>
+                    {billingAddrStr && <div className="text-slate-600 leading-relaxed text-[11px] mb-2">{billingAddrStr}</div>}
+                    {billingPhone && <div className="text-[11px] text-slate-500">Phone: <strong className="text-slate-700">{billingPhone}</strong></div>}
+                    {billingEmail && <div className="text-[11px] text-slate-500">Email: <strong className="text-slate-700">{billingEmail}</strong></div>}
                   </>
                 )}
               </div>
 
               {/* Shipping Address */}
-              <div className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-200">
+              <div className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-200 min-h-[110px]">
                 <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
                   Shipping Address
                 </div>
-                <div className="font-bold text-slate-900 mb-1">{destName}</div>
-                <div className="text-slate-600 leading-relaxed text-[11px] mb-2">{destAddrStr}</div>
-                <div className="text-[11px] text-slate-500">Phone: <strong className="text-slate-700">{destPhone}</strong></div>
-                <div className="text-[11px] text-slate-500">Email: <strong className="text-slate-700">{destEmail}</strong></div>
+                {isDestProvidedLater || (!destName && !destAddrStr) ? (
+                  <div className="text-slate-400 text-[11px] italic min-h-[50px]">
+                    {/* Left blank if provided later */}
+                  </div>
+                ) : (
+                  <>
+                    {destName && <div className="font-bold text-slate-900 mb-1">{destName}</div>}
+                    {destAddrStr && <div className="text-slate-600 leading-relaxed text-[11px] mb-2">{destAddrStr}</div>}
+                    {destPhone && <div className="text-[11px] text-slate-500">Phone: <strong className="text-slate-700">{destPhone}</strong></div>}
+                    {destEmail && <div className="text-[11px] text-slate-500">Email: <strong className="text-slate-700">{destEmail}</strong></div>}
+                  </>
+                )}
               </div>
             </div>
 

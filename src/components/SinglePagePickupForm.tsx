@@ -134,6 +134,12 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  useEffect(() => {
+    if (!pickupEmail && currentUser?.email) {
+      setPickupEmail(currentUser.email);
+    }
+  }, [currentUser?.email, pickupEmail, setPickupEmail]);
+
   const reviewRef = React.useRef<HTMLDivElement>(null);
 
   const forceScrollToTop = React.useCallback(() => {
@@ -351,7 +357,7 @@ export const SinglePagePickupForm: React.FC<SinglePagePickupFormProps> = ({
               <Truck size={24} />
             </div>
             <div>
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase tracking-wider mb-1 border border-amber-500/30">
+              <div className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase tracking-wider mb-1 border border-amber-500/30">
                 <Sparkles size={11} /> Step 2 of 2: Review &amp; Confirm
               </div>
               <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">Schedule a Home Pickup</h2>

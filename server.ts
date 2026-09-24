@@ -2367,12 +2367,19 @@ app.post("/api/orders", async (req, res) => {
 
     const isExplicitNonPickupOrder = finalId && (String(finalId).toUpperCase().startsWith('SH-') || String(finalId).toUpperCase().startsWith('WH-') || String(finalId).toUpperCase().startsWith('SW-'));
 
+    const rawPickupAddr = req.body.pickup_address || req.body.pickupAddress || req.body.source_address || req.body.sourceAddress || parsedDestination.pickupAddress || parsedDestination.pickup_address;
+    const resolvedFullPickupAddr = req.body.address || 
+      (typeof rawPickupAddr === 'string' ? rawPickupAddr : (rawPickupAddr?.addressLine1 || rawPickupAddr?.address)) || 
+      parsedDestination.address || '';
+
     // Merge extra details inside the JSONB destination mapping to preserve them completely
     const sanitizedDestination = {
       ...parsedDestination,
       itemCount: totalItemQty,
       totalItems: totalItemQty,
       pickupType: isExplicitNonPickupOrder ? undefined : (req.body.pickup_type || req.body.pickupType || parsedDestination.pickupType),
+      pickupAddress: rawPickupAddr,
+      pickup_address: rawPickupAddr,
       assignedAgent: req.body.assigned_agent || req.body.assignedAgent || parsedDestination.assignedAgent,
       assignedAgentId: req.body.assigned_agent_id || req.body.assignedAgentId || parsedDestination.assignedAgentId,
       languagePreference: req.body.language_preference || req.body.languagePreference || parsedDestination.languagePreference,
@@ -2382,7 +2389,7 @@ app.post("/api/orders", async (req, res) => {
       phone: req.body.phone || req.body.destination?.phone || parsedDestination.phone,
       date: req.body.date || req.body.shipping_date || req.body.shippingDate || parsedDestination.date,
       time: req.body.time || parsedDestination.time || 'Flexible',
-      address: req.body.address || req.body.destination?.addressLine1 || parsedDestination.address || parsedDestination.addressLine1
+      address: resolvedFullPickupAddr || req.body.destination?.addressLine1 || parsedDestination.address || parsedDestination.addressLine1
     };
 
     const databaseOrderData = {
@@ -3407,13 +3414,30 @@ async function sendOrderConfirmationInternal(
   }
 
   const orderIdStr = String(order.id || '');
-  const cacheKey = `${orderIdStr}::${cleanEmail.toLowerCase()}`;
-  const lastSent = recentConfirmationEmailCache.get(cacheKey);
+  const cleanEmailLower = cleanEmail.toLowerCase();
+  const cacheKey = `${orderIdStr}::${cleanEmailLower}`;
   const now = Date.now();
+  const lastSent = recentConfirmationEmailCache.get(cacheKey);
   if (lastSent && now - lastSent < 60000) {
     console.log(`[Order Confirmation] Skipped duplicate confirmation email for order ${orderIdStr} to ${cleanEmail}`);
     return { success: true, emailSent: true, message: "Confirmation email already sent recently" };
   }
+
+  // De-duplicate recent pickup bookings for the same customer phone or email within 30 seconds
+  const customerKey = (order.customer_id || order.customerId || order.phone || order.pickup_address?.phone || order.pickupAddress?.phone || cleanEmailLower).toString().toLowerCase();
+  const pickupKey = `recent_pickup_mail::${customerKey}`;
+  const isPickupCheck = Boolean(order.pickupType || order.pickup_type || order.pickupAddress || order.pickup_address || orderIdStr.startsWith('PH-'));
+  if (isPickupCheck) {
+    const lastPickupSent = recentConfirmationEmailCache.get(pickupKey);
+    if (lastPickupSent && now - lastPickupSent < 30000) {
+      console.log(`[Order Confirmation] Skipped duplicate confirmation email for pickup customer ${customerKey}`);
+      return { success: true, emailSent: true, message: "Pickup confirmation email already sent recently" };
+    }
+    recentConfirmationEmailCache.set(pickupKey, now);
+  }
+
+  // Reserve immediately to block concurrent duplicate executions
+  recentConfirmationEmailCache.set(cacheKey, now);
 
   const companyDetails = companyDetailsInput || {
     name: "Jiffex",
@@ -4251,45 +4275,129 @@ async function generateConsolidatedInvoicePDF(orders: any[], companyDetails: any
 
     // Billing & Shipping Address side-by-side
     const addrTop = metaDivY + 10;
-    const dest = primaryOrder?.destination || {};
-    const destName = dest.fullName || 'Valued Customer';
-    const destPhone = dest.phone || 'N/A';
-    const destEmail = dest.email || 'N/A';
-    const destAddrStr = [dest.addressLine1, dest.city, dest.state, dest.zipCode, dest.country].filter(Boolean).join(', ');
+    
+    // Resolve Home Pickup Address for Billing Address
+    const pkp = primaryOrder?.pickup_address || primaryOrder?.pickupAddress || primaryOrder?.source_address || primaryOrder?.sourceAddress || {};
+    let billingName = '';
+    let billingPhone = '';
+    let billingEmail = '';
+    let billingAddrStr = '';
+
+    if (typeof pkp === 'object' && Object.keys(pkp).length > 0) {
+      billingName = pkp.fullName || pkp.customerName || pkp.name || primaryOrder?.customer_name || primaryOrder?.customerName || '';
+      billingPhone = pkp.phone || primaryOrder?.phone || '';
+      billingEmail = pkp.email || primaryOrder?.email || '';
+      const parts = [pkp.addressLine1 || pkp.address, pkp.city, pkp.state, pkp.zipCode || pkp.zip, pkp.country || 'India'].filter(p => p && !String(p).toLowerCase().includes('to be provided later'));
+      billingAddrStr = parts.join(', ');
+    } else if (typeof pkp === 'string' && pkp.trim()) {
+      billingAddrStr = pkp.trim();
+      billingName = primaryOrder?.customer_name || primaryOrder?.customerName || '';
+      billingPhone = primaryOrder?.phone || '';
+      billingEmail = primaryOrder?.email || '';
+    }
+
+    if (!billingAddrStr && primaryOrder?.address) {
+      billingAddrStr = String(primaryOrder.address);
+    }
+    if (!billingAddrStr && primaryOrder?.destination?.address) {
+      billingAddrStr = String(primaryOrder.destination.address);
+    }
+    if (!billingAddrStr && primaryOrder?.id) {
+      const matchPkp = memPickups.find(p => p.id === primaryOrder.id || p.order_id === primaryOrder.id);
+      if (matchPkp && matchPkp.address) {
+        billingAddrStr = matchPkp.address;
+        if (!billingName) billingName = matchPkp.customer_name || matchPkp.customerName || '';
+        if (!billingPhone) billingPhone = matchPkp.phone || '';
+        if (!billingEmail) billingEmail = matchPkp.email || '';
+      }
+    }
+    if (!billingName) {
+      billingName = primaryOrder?.customer_name || primaryOrder?.customerName || 'Valued Customer';
+    }
+    if (!billingPhone && primaryOrder?.phone) {
+      billingPhone = primaryOrder.phone;
+    }
+    if (!billingEmail && (primaryOrder?.email || primaryOrder?.customerEmail)) {
+      billingEmail = primaryOrder.email || primaryOrder.customerEmail;
+    }
 
     const isAllShopShip = Array.isArray(orders) && orders.length > 0 && orders.every(o => isOnlyShopAndShipOrder(o));
-    const billingName = isAllShopShip ? compName : destName;
-    const billingAddrStr = isAllShopShip ? compAddress : (destAddrStr || 'Same as destination address');
-    const billingPhone = isAllShopShip ? (companyDetails?.phone || "+91 99999 00000") : destPhone;
-    const billingEmail = isAllShopShip ? compEmail : destEmail;
+    const finalBillingName = isAllShopShip && !billingAddrStr ? compName : billingName;
+    const finalBillingAddrStr = isAllShopShip && !billingAddrStr ? compAddress : billingAddrStr;
+    const finalBillingPhone = isAllShopShip && !billingAddrStr ? (companyDetails?.phone || "+91 99999 00000") : billingPhone;
+    const finalBillingEmail = isAllShopShip && !billingAddrStr ? compEmail : billingEmail;
+
+    // Resolve Destination Address for Shipping Address (Leave blank if provided later; don't give 'To Be Provided Later')
+    const dest = primaryOrder?.destination || {};
+    const rawDestAddr1 = String(dest.addressLine1 || dest.address || '');
+    const rawDestCity = String(dest.city || '');
+    const rawDestState = String(dest.state || '');
+    const rawDestName = String(dest.fullName || dest.name || '');
+    const rawDestZip = String(dest.zipCode || '');
+
+    const isDestProvidedLater = Boolean(
+      primaryOrder?.provideDestinationLater || 
+      primaryOrder?.provide_destination_later ||
+      rawDestAddr1.toLowerCase().includes('provided later') ||
+      rawDestCity.toLowerCase().includes('to be provided later') ||
+      rawDestName.toLowerCase().includes('to be provided later') ||
+      (!rawDestAddr1 && !rawDestCity && !dest.country)
+    );
+
+    let shippingName = '';
+    let shippingAddrStr = '';
+    let shippingPhone = '';
+    let shippingEmail = '';
+
+    if (!isDestProvidedLater) {
+      shippingName = rawDestName.toLowerCase().includes('to be provided later') ? '' : rawDestName;
+      shippingPhone = dest.phone && !String(dest.phone).toLowerCase().includes('to be provided later') ? dest.phone : '';
+      shippingEmail = dest.email && !String(dest.email).toLowerCase().includes('to be provided later') ? dest.email : '';
+      
+      const cleanParts = [
+        rawDestAddr1,
+        rawDestCity,
+        rawDestState,
+        rawDestZip === '000000' ? '' : rawDestZip,
+        dest.country
+      ].filter(p => p && !String(p).toLowerCase().includes('to be provided later') && !String(p).toLowerCase().includes('provided later'));
+      
+      shippingAddrStr = cleanParts.join(', ');
+    }
 
     // Billing Address Box
     const boxHeight = 94;
     doc.rect(50, addrTop, 240, boxHeight).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
     doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold").text("BILLING ADDRESS", 60, addrTop + 8);
-    if (isAllShopShip) {
+    if (isAllShopShip && !billingAddrStr) {
       doc.fillColor("#4f46e5").fontSize(7).font("Helvetica-Bold").text("(OFFICE ADDRESS)", 168, addrTop + 9);
     }
-    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(billingName, 60, addrTop + 23, { width: 220 });
+    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(finalBillingName, 60, addrTop + 23, { width: 220 });
     doc.font("Helvetica").fontSize(8.5).fillColor("#475569");
-    doc.text(billingAddrStr, 60, addrTop + 36, { width: 220, lineGap: 1 });
-    if (isAllShopShip) {
+    doc.text(finalBillingAddrStr, 60, addrTop + 36, { width: 220, lineGap: 1 });
+    if (isAllShopShip && !billingAddrStr) {
       doc.fontSize(8).font("Helvetica-Bold").fillColor("#334155").text(`GSTIN: ${compGst}`, 60, addrTop + 63, { width: 220 });
-      doc.fontSize(7.5).font("Helvetica").fillColor("#64748b").text(`Ph: ${billingPhone}  |  ${billingEmail}`, 60, addrTop + 76, { width: 220 });
+      doc.fontSize(7.5).font("Helvetica").fillColor("#64748b").text(`Ph: ${finalBillingPhone}  |  ${finalBillingEmail}`, 60, addrTop + 76, { width: 220 });
     } else {
       doc.fontSize(8.5).font("Helvetica").fillColor("#475569");
-      doc.text(`Phone: ${destPhone}`, 60, addrTop + 63, { width: 220 });
-      doc.text(`Email: ${destEmail}`, 60, addrTop + 76, { width: 220 });
+      if (finalBillingPhone) doc.text(`Phone: ${finalBillingPhone}`, 60, addrTop + 63, { width: 220 });
+      if (finalBillingEmail) doc.text(`Email: ${finalBillingEmail}`, 60, addrTop + 76, { width: 220 });
     }
 
     // Shipping Address Box
     doc.rect(305, addrTop, 240, boxHeight).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
     doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold").text("SHIPPING ADDRESS", 315, addrTop + 8);
-    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(destName, 315, addrTop + 23, { width: 220 });
-    doc.font("Helvetica").fontSize(8.5).fillColor("#475569");
-    doc.text(destAddrStr || 'N/A', 315, addrTop + 36, { width: 220, lineGap: 1 });
-    doc.text(`Phone: ${destPhone}`, 315, addrTop + 63, { width: 220 });
-    doc.text(`Email: ${destEmail}`, 315, addrTop + 76, { width: 220 });
+    if (!isDestProvidedLater && (shippingName || shippingAddrStr)) {
+      if (shippingName) {
+        doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(shippingName, 315, addrTop + 23, { width: 220 });
+      }
+      doc.font("Helvetica").fontSize(8.5).fillColor("#475569");
+      if (shippingAddrStr) {
+        doc.text(shippingAddrStr, 315, addrTop + 36, { width: 220, lineGap: 1 });
+      }
+      if (shippingPhone) doc.text(`Phone: ${shippingPhone}`, 315, addrTop + 63, { width: 220 });
+      if (shippingEmail) doc.text(`Email: ${shippingEmail}`, 315, addrTop + 76, { width: 220 });
+    }
 
     // Order Details Table
     const tableTop = addrTop + boxHeight + 14;
@@ -4505,45 +4613,129 @@ async function generateInvoicePDF(order: any, companyDetails: any): Promise<Buff
 
     // Billing & Shipping Address side-by-side
     const addrTop = metaDivY + 10;
-    const dest = order.destination || {};
-    const destName = dest.fullName || 'Valued Customer';
-    const destPhone = dest.phone || 'N/A';
-    const destEmail = dest.email || 'N/A';
-    const destAddrStr = [dest.addressLine1, dest.city, dest.state, dest.zipCode, dest.country].filter(Boolean).join(', ');
+    
+    // Resolve Home Pickup Address for Billing Address
+    const pkp = order?.pickup_address || order?.pickupAddress || order?.source_address || order?.sourceAddress || {};
+    let billingName = '';
+    let billingPhone = '';
+    let billingEmail = '';
+    let billingAddrStr = '';
+
+    if (typeof pkp === 'object' && Object.keys(pkp).length > 0) {
+      billingName = pkp.fullName || pkp.customerName || pkp.name || order?.customer_name || order?.customerName || '';
+      billingPhone = pkp.phone || order?.phone || '';
+      billingEmail = pkp.email || order?.email || '';
+      const parts = [pkp.addressLine1 || pkp.address, pkp.city, pkp.state, pkp.zipCode || pkp.zip, pkp.country || 'India'].filter(p => p && !String(p).toLowerCase().includes('to be provided later'));
+      billingAddrStr = parts.join(', ');
+    } else if (typeof pkp === 'string' && pkp.trim()) {
+      billingAddrStr = pkp.trim();
+      billingName = order?.customer_name || order?.customerName || '';
+      billingPhone = order?.phone || '';
+      billingEmail = order?.email || '';
+    }
+
+    if (!billingAddrStr && order?.address) {
+      billingAddrStr = String(order.address);
+    }
+    if (!billingAddrStr && order?.destination?.address) {
+      billingAddrStr = String(order.destination.address);
+    }
+    if (!billingAddrStr && order?.id) {
+      const matchPkp = memPickups.find(p => p.id === order.id || p.order_id === order.id);
+      if (matchPkp && matchPkp.address) {
+        billingAddrStr = matchPkp.address;
+        if (!billingName) billingName = matchPkp.customer_name || matchPkp.customerName || '';
+        if (!billingPhone) billingPhone = matchPkp.phone || '';
+        if (!billingEmail) billingEmail = matchPkp.email || '';
+      }
+    }
+    if (!billingName) {
+      billingName = order?.customer_name || order?.customerName || 'Valued Customer';
+    }
+    if (!billingPhone && order?.phone) {
+      billingPhone = order.phone;
+    }
+    if (!billingEmail && (order?.email || order?.customerEmail)) {
+      billingEmail = order.email || order.customerEmail;
+    }
 
     const isOnlyShopShip = isOnlyShopAndShipOrder(order);
-    const billingName = isOnlyShopShip ? compName : destName;
-    const billingAddrStr = isOnlyShopShip ? compAddress : (destAddrStr || 'Same as destination address');
-    const billingPhone = isOnlyShopShip ? (companyDetails?.phone || "+91 99999 00000") : destPhone;
-    const billingEmail = isOnlyShopShip ? compEmail : destEmail;
+    const finalBillingName = isOnlyShopShip && !billingAddrStr ? compName : billingName;
+    const finalBillingAddrStr = isOnlyShopShip && !billingAddrStr ? compAddress : billingAddrStr;
+    const finalBillingPhone = isOnlyShopShip && !billingAddrStr ? (companyDetails?.phone || "+91 99999 00000") : billingPhone;
+    const finalBillingEmail = isOnlyShopShip && !billingAddrStr ? compEmail : billingEmail;
+
+    // Resolve Destination Address for Shipping Address (Leave blank if provided later; don't give 'To Be Provided Later')
+    const dest = order.destination || {};
+    const rawDestAddr1 = String(dest.addressLine1 || dest.address || '');
+    const rawDestCity = String(dest.city || '');
+    const rawDestState = String(dest.state || '');
+    const rawDestName = String(dest.fullName || dest.name || '');
+    const rawDestZip = String(dest.zipCode || '');
+
+    const isDestProvidedLater = Boolean(
+      order.provideDestinationLater || 
+      order.provide_destination_later ||
+      rawDestAddr1.toLowerCase().includes('provided later') ||
+      rawDestCity.toLowerCase().includes('to be provided later') ||
+      rawDestName.toLowerCase().includes('to be provided later') ||
+      (!rawDestAddr1 && !rawDestCity && !dest.country)
+    );
+
+    let shippingName = '';
+    let shippingAddrStr = '';
+    let shippingPhone = '';
+    let shippingEmail = '';
+
+    if (!isDestProvidedLater) {
+      shippingName = rawDestName.toLowerCase().includes('to be provided later') ? '' : rawDestName;
+      shippingPhone = dest.phone && !String(dest.phone).toLowerCase().includes('to be provided later') ? dest.phone : '';
+      shippingEmail = dest.email && !String(dest.email).toLowerCase().includes('to be provided later') ? dest.email : '';
+      
+      const cleanParts = [
+        rawDestAddr1,
+        rawDestCity,
+        rawDestState,
+        rawDestZip === '000000' ? '' : rawDestZip,
+        dest.country
+      ].filter(p => p && !String(p).toLowerCase().includes('to be provided later') && !String(p).toLowerCase().includes('provided later'));
+      
+      shippingAddrStr = cleanParts.join(', ');
+    }
 
     // Billing Address Box
     const boxHeight = 94;
     doc.rect(50, addrTop, 240, boxHeight).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
     doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold").text("BILLING ADDRESS", 60, addrTop + 8);
-    if (isOnlyShopShip) {
+    if (isOnlyShopShip && !billingAddrStr) {
       doc.fillColor("#4f46e5").fontSize(7).font("Helvetica-Bold").text("(OFFICE ADDRESS)", 168, addrTop + 9);
     }
-    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(billingName, 60, addrTop + 23, { width: 220 });
+    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(finalBillingName, 60, addrTop + 23, { width: 220 });
     doc.font("Helvetica").fontSize(8.5).fillColor("#475569");
-    doc.text(billingAddrStr, 60, addrTop + 36, { width: 220, lineGap: 1 });
-    if (isOnlyShopShip) {
+    doc.text(finalBillingAddrStr, 60, addrTop + 36, { width: 220, lineGap: 1 });
+    if (isOnlyShopShip && !billingAddrStr) {
       doc.fontSize(8).font("Helvetica-Bold").fillColor("#334155").text(`GSTIN: ${compGst}`, 60, addrTop + 63, { width: 220 });
-      doc.fontSize(7.5).font("Helvetica").fillColor("#64748b").text(`Ph: ${billingPhone}  |  ${billingEmail}`, 60, addrTop + 76, { width: 220 });
+      doc.fontSize(7.5).font("Helvetica").fillColor("#64748b").text(`Ph: ${finalBillingPhone}  |  ${finalBillingEmail}`, 60, addrTop + 76, { width: 220 });
     } else {
       doc.fontSize(8.5).font("Helvetica").fillColor("#475569");
-      doc.text(`Phone: ${destPhone}`, 60, addrTop + 63, { width: 220 });
-      doc.text(`Email: ${destEmail}`, 60, addrTop + 76, { width: 220 });
+      if (finalBillingPhone) doc.text(`Phone: ${finalBillingPhone}`, 60, addrTop + 63, { width: 220 });
+      if (finalBillingEmail) doc.text(`Email: ${finalBillingEmail}`, 60, addrTop + 76, { width: 220 });
     }
 
     // Shipping Address Box
     doc.rect(305, addrTop, 240, boxHeight).lineWidth(0.5).strokeColor("#e2e8f0").fillAndStroke("#f8fafc", "#e2e8f0");
     doc.fillColor("#1e293b").fontSize(10).font("Helvetica-Bold").text("SHIPPING ADDRESS", 315, addrTop + 8);
-    doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(destName, 315, addrTop + 23, { width: 220 });
-    doc.font("Helvetica").fontSize(8.5).fillColor("#475569");
-    doc.text(destAddrStr || 'N/A', 315, addrTop + 36, { width: 220, lineGap: 1 });
-    doc.text(`Phone: ${destPhone}`, 315, addrTop + 63, { width: 220 });
-    doc.text(`Email: ${destEmail}`, 315, addrTop + 76, { width: 220 });
+    if (!isDestProvidedLater && (shippingName || shippingAddrStr)) {
+      if (shippingName) {
+        doc.fillColor("#334155").fontSize(9).font("Helvetica-Bold").text(shippingName, 315, addrTop + 23, { width: 220 });
+      }
+      doc.font("Helvetica").fontSize(8.5).fillColor("#475569");
+      if (shippingAddrStr) {
+        doc.text(shippingAddrStr, 315, addrTop + 36, { width: 220, lineGap: 1 });
+      }
+      if (shippingPhone) doc.text(`Phone: ${shippingPhone}`, 315, addrTop + 63, { width: 220 });
+      if (shippingEmail) doc.text(`Email: ${shippingEmail}`, 315, addrTop + 76, { width: 220 });
+    }
 
     // Order Details Table
     const tableTop = addrTop + boxHeight + 14;
@@ -4815,10 +5007,21 @@ const transformDbOrder = (o: any) => {
     const isExplicitNonPickup = (o.id && (String(o.id).toUpperCase().startsWith('SH-') || String(o.id).toUpperCase().startsWith('WH-') || String(o.id).toUpperCase().startsWith('SW-')));
     const resolvedPickupType = isExplicitNonPickup ? undefined : (o.pickup_type !== undefined && o.pickup_type !== null ? o.pickup_type : (o.pickupType !== undefined && o.pickupType !== null ? o.pickupType : (dest?.pickupType || dest?.pickup_type || undefined)));
 
+    const rawPickup = o.pickup_address || o.pickupAddress || dest?.pickup_address || dest?.pickupAddress || dest?.sourceAddress || dest?.source_address;
+    let resolvedAddress = o.address || dest?.address || (typeof rawPickup === 'string' ? rawPickup : (rawPickup?.addressLine1 || rawPickup?.address)) || '';
+    if (!resolvedAddress && o.id) {
+      const matchPkp = memPickups.find(p => p.id === o.id || p.order_id === o.id);
+      if (matchPkp && matchPkp.address) {
+        resolvedAddress = matchPkp.address;
+      }
+    }
+
     return {
       ...o,
       items: Array.isArray(o.items) ? o.items : (o.items ? o.items : []),
       destination: dest,
+      pickupAddress: rawPickup,
+      pickup_address: rawPickup,
       customerId: o.customer_id || o.customerId || dest?.customerId || dest?.customer_id,
       totalWeight: o.total_weight !== undefined && o.total_weight !== null ? o.total_weight : (o.totalWeight !== undefined ? o.totalWeight : (dest?.totalWeight || dest?.total_weight || 0)),
       totalCost: o.total_cost !== undefined && o.total_cost !== null ? o.total_cost : (o.totalCost !== undefined ? o.totalCost : (dest?.totalCost || dest?.total_cost || 0)),
@@ -4833,7 +5036,7 @@ const transformDbOrder = (o: any) => {
       vehicleType: o.vehicle_type !== undefined && o.vehicle_type !== null ? o.vehicle_type : (o.vehicleType !== undefined && o.vehicleType !== null ? o.vehicleType : (dest?.vehicleType || dest?.vehicle_type || 'Two-Wheeler')),
       customerName: o.customer_name !== undefined && o.customer_name !== null ? o.customer_name : (o.customerName !== undefined && o.customerName !== null ? o.customerName : (dest?.customerName || dest?.customer_name || dest?.fullName)),
       phone: o.phone !== undefined && o.phone !== null ? o.phone : dest?.phone,
-      address: o.address !== undefined && o.address !== null ? o.address : dest?.address || dest?.addressLine1,
+      address: resolvedAddress || dest?.addressLine1,
       date: o.date !== undefined && o.date !== null ? o.date : (dest?.date || o.shipping_date || o.shipping_date),
       time: o.time !== undefined && o.time !== null ? o.time : (dest?.time || 'Flexible'),
       trackingNumber: o.tracking_number || o.trackingNumber,

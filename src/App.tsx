@@ -6191,7 +6191,12 @@ export default function App() {
     setIsSubmitting(true);
     try {
     const assignedAgent = (isAutoAssignAgentEnabled && type === 'AllAgent') ? agents[Math.floor(Math.random() * agents.length)] : undefined;
-    const fullAddress = `${pickupAddress.street}${pickupAddress.apartment ? ', ' + pickupAddress.apartment : ''}, ${pickupAddress.city}, ${pickupAddress.state} ${pickupAddress.zip}`;
+    const fullAddress = [
+      pickupAddress.street,
+      pickupAddress.apartment,
+      pickupAddress.city,
+      pickupAddress.state ? (pickupAddress.zip ? `${pickupAddress.state} ${pickupAddress.zip}` : pickupAddress.state) : pickupAddress.zip
+    ].filter(Boolean).join(', ');
     
     let newAppointmentId = generateNewOrderId('Pickup');
     try {
@@ -6247,15 +6252,16 @@ export default function App() {
       createdAt: new Date().toISOString(),
       shippingDate: selectedPickupDate,
       destination: {
-        fullName: provideDestinationLater ? (pickupDestination.fullName || 'To Be Provided Later') : (pickupDestination.fullName || resolvedName),
+        fullName: provideDestinationLater ? '' : (pickupDestination.fullName || resolvedName),
         email: pickupDestination.email || resolvedEmail,
         phone: pickupDestination.phone || pickupPhone,
-        addressLine1: provideDestinationLater ? 'Address details will be provided later (Pending Dispatch)' : (pickupDestination.addressLine1 || ''),
-        city: provideDestinationLater ? 'To Be Provided Later' : (pickupDestination.city || ''),
-        state: provideDestinationLater ? 'To Be Provided Later' : (pickupDestination.state || ''),
-        zipCode: provideDestinationLater ? '000000' : (pickupDestination.zipCode || ''),
+        addressLine1: provideDestinationLater ? '' : (pickupDestination.addressLine1 || ''),
+        city: provideDestinationLater ? '' : (pickupDestination.city || ''),
+        state: provideDestinationLater ? '' : (pickupDestination.state || ''),
+        zipCode: provideDestinationLater ? '' : (pickupDestination.zipCode || ''),
         country: pickupDestination.country || COUNTRIES[0]
       },
+      provideDestinationLater: Boolean(provideDestinationLater),
       pickupAddress: {
         fullName: resolvedName,
         email: resolvedEmail,
@@ -6266,6 +6272,7 @@ export default function App() {
         zipCode: pickupAddress.zip,
         country: 'India'
       },
+      address: fullAddress,
       paymentStatus: 'Pending',
       pickupType: type,
       assignedAgent: assignedAgent,
@@ -6296,9 +6303,9 @@ export default function App() {
       })
     }).catch(err => console.warn('Failed to register cargo authorization OTP:', err));
 
-    // Send confirmation email (includes Customer Authorization OTP)
+    // Send confirmation email only if in offline mode (in normal mode, api.createOrder sends it from the backend to prevent duplicate emails)
     const recipientEmail = resolvedEmail;
-    if (recipientEmail && recipientEmail.includes('@') && recipientEmail !== 'user@example.com') {
+    if (!dbStatus.checked && recipientEmail && recipientEmail.includes('@') && recipientEmail !== 'user@example.com') {
       api.sendOrderConfirmationEmail(recipientEmail, newOrder, COMPANY_DETAILS)
         .then(() => toast.success(`Pickup confirmation email with Authorization OTP sent to ${recipientEmail}`))
         .catch(err => {
@@ -6341,8 +6348,15 @@ export default function App() {
           customer_id: resolvedCustomerId,
           total_weight: newOrder.totalWeight || 3,
           total_cost: 0,
-          destination: newOrder.destination,
+          destination: {
+            ...newOrder.destination,
+            address: fullAddress,
+            pickupAddress: newOrder.pickupAddress,
+            pickup_address: newOrder.pickupAddress
+          },
+          address: fullAddress,
           pickup_address: newOrder.pickupAddress,
+          pickupAddress: newOrder.pickupAddress,
           payment_status: 'Pending',
           shipping_date: selectedPickupDate,
           cargo_authorization_otp: authorizationOtp,
@@ -6350,6 +6364,9 @@ export default function App() {
         } as any;
 
         const savedOrder = await api.createOrder(orderData);
+        if (savedOrder) {
+          toast.success(recipientEmail ? `Pickup scheduled! Confirmation email sent to ${recipientEmail}` : 'Pickup scheduled successfully!');
+        }
         if (savedOrder && savedOrder.id && savedOrder.id !== newOrder.id) {
           console.log(`[Pickup] Self-healed unique ID from backend: ${savedOrder.id}`);
           setLastBookingRef(savedOrder.id);
@@ -6392,12 +6409,15 @@ export default function App() {
 
   const handleSchedulePickup = () => {
     if (isSubmitting) return;
+    const isMobileView = typeof window !== 'undefined' ? (window.innerWidth < 768 || isMobile) : isMobile;
     const missingFields = [];
     if (!pickupName) missingFields.push('Your Name');
     if (!pickupPhone) missingFields.push('Contact Number');
-    if (!pickupAddress.street) missingFields.push('Street Address');
-    if (!pickupAddress.city) missingFields.push('City');
-    if (!pickupAddress.zip) missingFields.push('ZIP Code');
+    if (!pickupAddress.street) missingFields.push(isMobileView ? 'Address' : 'Street Address');
+    if (!isMobileView) {
+      if (!pickupAddress.city) missingFields.push('City');
+      if (!pickupAddress.zip) missingFields.push('ZIP Code');
+    }
 
     if (missingFields.length > 0) {
       toast.error(`${missingFields.join(', ')} is not entered. Enter to schedule.`);
@@ -8530,6 +8550,11 @@ export default function App() {
 
   const handleWOComplete = () => {
     if (!activeWorkOrder) return;
+    if (woDocuments.length === 0) {
+      toast.error("KYC Verification proof is mandatory. Please add at least one KYC document before completing.");
+      setWoStep(2);
+      return;
+    }
     const newOrderId = activeWorkOrder.id; // Correctly align work order ID with invoice ID
     setWoOrderId(newOrderId);
     setIsWOPaid(true);
@@ -10936,9 +10961,19 @@ export default function App() {
                   key={s.step}
                   type="button"
                   onClick={() => {
-                    if (s.step < woStep || woItems.length > 0) {
-                      setWoStep(s.step);
+                    if (s.step > 1 && woItems.length === 0) {
+                      toast.error("Please add at least 1 collected item to the cargo list first.");
+                      return;
                     }
+                    if (s.step > 2 && woDocuments.length === 0) {
+                      toast.error("KYC Verification proof is mandatory. Please add the document before proceeding.");
+                      return;
+                    }
+                    if (s.step === 4 && (!woAddress.fullName.trim() || !woAddress.addressLine1.trim())) {
+                      toast.error("Please provide recipient destination details first.");
+                      return;
+                    }
+                    setWoStep(s.step);
                   }}
                   className="flex-1 flex flex-col gap-2 text-left focus:outline-none cursor-pointer group"
                 >
@@ -11602,7 +11637,11 @@ export default function App() {
               </div>
 
               <div className="pt-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-100 mt-4">
-                <span className="text-[10px] text-slate-400 font-bold">Keep KYC documents synchronized with servers.</span>
+                <span className={`text-[10px] font-bold ${woDocuments.length === 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {woDocuments.length === 0 
+                    ? '⚠️ KYC proof mandatory: Snap or upload ID document above to continue.' 
+                    : `✓ ${woDocuments.length} KYC document(s) uploaded successfully.`}
+                </span>
                 <button
                   type="button"
                   onClick={handleWOSaveDetails}
@@ -11753,10 +11792,10 @@ export default function App() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <MessageCircle size={18} className="text-emerald-600 shrink-0" /> WhatsApp Items Summary & Authorization
+                        <MessageCircle size={18} className="text-emerald-600 shrink-0" /> WhatsApp Items Summary
                       </h4>
                       <p className="text-xs text-slate-500 mt-1">
-                        Send the collected items list directly to the customer's WhatsApp in one click. Customer provides their 6-digit Customer Authorization OTP from their pickup confirmation email.
+                        Send the collected items list directly to the customer's WhatsApp in one click.
                       </p>
                     </div>
                     {woOtpVerified ? (
@@ -11808,7 +11847,7 @@ export default function App() {
                           })
                         }).catch(err => console.warn('Failed to dispatch cargo authorization OTP to admin backup:', err));
 
-                        // Note: As specified, Customer Authorization OTP is NOT sent in WhatsApp message. It was sent in the pickup confirmation email!
+                        // Customer WhatsApp message contains ONLY items list and summary (NO Cargo Collection Authorization PIN)
                         const whatsappMsg = `📌 *CARGO COLLECTION SUMMARY & ITEMS LIST*\n\n` +
                           `*Work Order:* ${activeWorkOrder?.id || 'NEW'}\n` +
                           `*Customer Name:* ${woAddress.fullName}\n\n` +
@@ -11817,14 +11856,14 @@ export default function App() {
                           `*Total Weight:* ${woTotalWeight.toFixed(1)} kg\n` +
                           `*Estimated Cost:* ₹${woTotalCost.toFixed(2)}\n` +
                           `--------------------------------\n\n` +
-                          `Please review your collected items above. To authorize collection, please share the 6-digit Customer Authorization OTP from your pickup confirmation email with our visiting executive. Thank you!`;
+                          `Please review your collected items above. Thank you for shipping with Jiffex!`;
 
                         const whatsappUrl = `https://api.whatsapp.com/send?phone=${encodeURIComponent(customerPhoneNumber)}&text=${encodeURIComponent(whatsappMsg)}`;
                         
                         // Instantly open the WhatsApp API URL to send
                         window.open(whatsappUrl, '_blank');
                         
-                        toast.success(`Items list dispatched to ${woAddress.fullName || 'Customer'}'s WhatsApp! Ask customer for their Customer Authorization OTP received via email.`);
+                        toast.success(`Items list dispatched to ${woAddress.fullName || 'Customer'}'s WhatsApp!`);
                       }}
                       className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer transition-all border border-emerald-500"
                     >
@@ -12034,14 +12073,6 @@ export default function App() {
                           <div className="border-t border-dashed my-1 border-slate-200" />
                           <p className="text-[9px] text-slate-700">Total weight: <b>{woTotalWeight.toFixed(1)} kg</b></p>
                           <p className="text-[9px] text-slate-750">Estimated Bill: <b>₹{woTotalCost.toFixed(2)}</b></p>
-                          <div className="bg-sky-50 p-2.5 rounded-md border border-sky-200 mt-2 text-center text-slate-800">
-                            <p className="text-[8.5px] font-black text-sky-800 uppercase tracking-wider flex items-center justify-center gap-1">
-                              <Mail size={10} className="text-sky-600" /> Authorization OTP in Email
-                            </p>
-                            <p className="text-[8px] text-sky-700 font-medium leading-tight mt-1">
-                              ✉️ Your 6-digit Customer Authorization OTP was sent to your pickup confirmation email. Please share it with our visiting executive.
-                            </p>
-                          </div>
                         </div>
 
                         <div className="flex items-center justify-between mt-1 text-[8px] text-slate-400">
@@ -12086,6 +12117,10 @@ export default function App() {
                     toast.error("Please add at least 1 collected item to the cargo list first.");
                     return;
                   }
+                  if (woStep === 2 && woDocuments.length === 0) {
+                    toast.error("KYC Verification proof is mandatory. Please add the document before proceeding.");
+                    return;
+                  }
                   setWoStep(prev => prev + 1);
                 }}
                 className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all text-xs flex items-center gap-1.5 cursor-pointer shadow-sm shadow-indigo-100"
@@ -12114,7 +12149,7 @@ export default function App() {
               <button 
                 type="button"
                 onClick={handleWOComplete}
-                disabled={woItems.length === 0 || !woAddress.email || !woAddress.fullName || !woOtpVerified}
+                disabled={woItems.length === 0 || woDocuments.length === 0 || !woAddress.email || !woAddress.fullName || !woOtpVerified}
                 className="px-5 py-2.5 sm:px-6 sm:py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-250 cursor-pointer flex items-center justify-center gap-2"
               >
                 <CheckCircle2 size={15} className="shrink-0" /> {!woOtpVerified ? 'Awaiting Customer OTP Verification...' : 'Collect Payment & Complete'}
@@ -12124,7 +12159,7 @@ export default function App() {
         </div>
       </div>
     );
-  }, [activeWorkOrder, woItems, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, woAddress, address, currentUser, handleWOSaveDetails, woStatusInput, setWoStatusInput, woStep, setWoStep, woIsEditingItems, setWoIsEditingItems, woOtpCode, woOtpSent, woOtpVerified, woOtpInput, showSimulatedWhatsapp]);
+  }, [activeWorkOrder, woItems, woDocuments, woItemName, woItemWeight, isWOPaid, woOrderId, woPaymentMethod, woShippingDate, orders, appointments, setActiveWorkOrder, setOrders, woAddress, address, currentUser, handleWOSaveDetails, woStatusInput, setWoStatusInput, woStep, setWoStep, woIsEditingItems, setWoIsEditingItems, woOtpCode, woOtpSent, woOtpVerified, woOtpInput, showSimulatedWhatsapp]);
 
   const AgentSection = useMemo(() => {
     if (!currentUser) return null;
